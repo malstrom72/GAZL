@@ -1,4 +1,0 @@
-; A real definition of WORD_SIZE, as a float - contradicting the `int` a declaring unit compiled
-; against. Authoritative, so the declaration is what is wrong.
-; signatures version=1
-WORD_SIZE:	! DEFf #4.0	; signature const WORD_SIZE : float @ const-extern-def.gazl:4:1

@@ -1,14 +1,14 @@
-; Compiled with Impala version 1.0
+; Compiled with Impala version 2.0
 
 ; signatures version=1
-DEBUG:	! DEFi #1	; signature const DEBUG : int @ 14:1
-; signature extern struct Grid { n : int, cells : int[], tag : float } @ 16:1
-; signature extern native printInt() -> unknown @ 18:1
-; signature extern native printFloat() -> unknown @ 19:1
-; signature extern native printLF() -> unknown @ 20:1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ externStructArrayField.impala:26:1
+; signature extern struct Grid { n : int, cells : int[], m : int[], tag : float } @ externStructArrayField.impala:28:1
+; signature extern native printInt() -> unknown @ externStructArrayField.impala:30:1
+; signature extern native printFloat() -> unknown @ externStructArrayField.impala:31:1
+; signature extern native printLF() -> unknown @ externStructArrayField.impala:32:1
 
 ;-----------------------------------------------------------------------------
-sum:	FUNC	; signature func sum(Grid-ptr g) -> int @ 22:1
+sum:	FUNC	; signature func sum(Grid-ptr g) -> int @ externStructArrayField.impala:34:1
 	$total:	OUTi
 	$g:	INPp
 	$i:	LOCi
@@ -24,7 +24,7 @@ sum:	FUNC	; signature func sum(Grid-ptr g) -> int @ 22:1
 
 
 ;-----------------------------------------------------------------------------
-poke:	FUNC	; signature func poke(Grid-ptr g, int i, int v) -> void @ 29:1
+poke:	FUNC	; signature func poke(Grid-ptr g, int i, int v) -> void @ externStructArrayField.impala:41:1
 		PARA *1
 	$g:	INPp
 	$i:	INPi
@@ -36,10 +36,10 @@ poke:	FUNC	; signature func poke(Grid-ptr g, int i, int v) -> void @ 29:1
 
 
 ;-----------------------------------------------------------------------------
-main:	FUNC	; signature func main() -> void @ 31:1
+main:	FUNC	; signature func main() -> void @ externStructArrayField.impala:43:1
 		PARA *1
-.x.main.raw:	! DEFi #10
-	$raw:	LOCA *.x.main.raw
+.z.main.raw:	! DEFi #12
+	$raw:	LOCA *.z.main.raw
 	$g:	LOCp
 ;-----------------------------------------------------------------------------
 		ADRL $g $raw:0 *0	; g = (Grid pointer)&raw[0]
@@ -48,27 +48,41 @@ main:	FUNC	; signature func main() -> void @ 31:1
 		MOVp %1 $g 	; poke(g, 0, 10)
 		MOVi %2 #0 
 		MOVi %3 #10 
-		CALL &poke %0 *4	; expects poke(Grid-ptr, int, int) -> void @ 36:16
+		CALL &poke %0 *4	; expects poke(Grid-ptr, int, int) -> void @ externStructArrayField.impala:48:16
 		MOVp %1 $g 	; poke(g, 1, 20)
 		MOVi %2 #1 
 		MOVi %3 #20 
-		CALL &poke %0 *4	; expects poke(Grid-ptr, int, int) -> void @ 36:32
+		CALL &poke %0 *4	; expects poke(Grid-ptr, int, int) -> void @ externStructArrayField.impala:48:32
 		MOVp %1 $g 	; poke(g, 2, 30)
 		MOVi %2 #2 
 		MOVi %3 #30 
-		CALL &poke %0 *4	; expects poke(Grid-ptr, int, int) -> void @ 36:48
+		CALL &poke %0 *4	; expects poke(Grid-ptr, int, int) -> void @ externStructArrayField.impala:48:48
 		MOVp %1 $g 	; poke(g, 3, 40)
 		MOVi %2 #3 
 		MOVi %3 #40 
-		CALL &poke %0 *4	; expects poke(Grid-ptr, int, int) -> void @ 36:64
+		CALL &poke %0 *4	; expects poke(Grid-ptr, int, int) -> void @ externStructArrayField.impala:48:64
 		MOVp %2 $g 	; printInt(sum(g))
-		CALL &sum %1 *2	; expects sum(Grid-ptr) -> int @ 37:17
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 37:18
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 37:29
+		CALL &sum %1 *2	; expects sum(Grid-ptr) -> int @ externStructArrayField.impala:49:17
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ externStructArrayField.impala:49:18
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ externStructArrayField.impala:49:29
 		PEEK %1 $g #.o.Grid.n	; printInt(g->n)
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 38:16
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 38:27
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ externStructArrayField.impala:50:16
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ externStructArrayField.impala:50:27
+		! MULi <A> #1 #.d.Grid.m.0	; g->m[1, 2] = 77
+		! ADDi <A> <A> #2
+		! ADDi <B> #.o.Grid.m #<A>
+		! LSSi #1 #.d.Grid.m.1 @.g0
+		! FAIL index 1 outside Grid.m axis 1 (resolved only at assembly)  
+	.g0:	! LSSi #2 #.d.Grid.m.0 @.g1
+		! FAIL index 2 outside Grid.m axis 0 (resolved only at assembly)  
+	.g1:	POKE $g #<B> #77
+		! MULi <B> #1 #.d.Grid.m.0	; printInt(g->m[1, 2])
+		! ADDi <B> <B> #2
+		! ADDi <A> #.o.Grid.m #<B>
+		PEEK %1 $g #<A>
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ externStructArrayField.impala:52:22
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ externStructArrayField.impala:52:33
 		PEEK %1 $g #.o.Grid.tag	; printFloat(g->tag)
-		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 39:20
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 39:31
+		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ externStructArrayField.impala:53:20
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ externStructArrayField.impala:53:31
 		RETU   	; }

@@ -1,23 +1,23 @@
-; Compiled with Impala version 1.0
+; Compiled with Impala version 2.0
 
 ; signatures version=1
-DEBUG:	! DEFi #1	; signature const DEBUG : int @ 10:1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ externStructNested.impala:10:1
 	! MOVi <a> #0	; layout of struct Point
 .o.Point.x:	! DEFi #<a>
 	! ADDi <a> #<a> #1
 .o.Point.y:	! DEFi #<a>
 	! ADDi <a> #<a> #1
 .z.Point:	! DEFi #<a>
-; signature struct Point { x : int, y : int } @ 12:1
-; signature extern struct Frame { origin : Point, w : int } @ 13:1
-; signature extern native printInt() -> unknown @ 15:1
-; signature extern native printLF() -> unknown @ 16:1
+; signature struct Point { x : int, y : int } @ externStructNested.impala:12:1
+; signature extern struct Frame { origin : Point, w : int } @ externStructNested.impala:13:1
+; signature extern native printInt() -> unknown @ externStructNested.impala:15:1
+; signature extern native printLF() -> unknown @ externStructNested.impala:16:1
 
 ;-----------------------------------------------------------------------------
-main:	FUNC	; signature func main() -> void @ 18:1
+main:	FUNC	; signature func main() -> void @ externStructNested.impala:18:1
 		PARA *1
-.x.main.raw:	! DEFi #8
-	$raw:	LOCA *.x.main.raw
+.z.main.raw:	! DEFi #8
+	$raw:	LOCA *.z.main.raw
 	$f:	LOCp
 ;-----------------------------------------------------------------------------
 		ADRL $f $raw:0 *0	; f = (Frame pointer) &raw[0]
@@ -26,9 +26,9 @@ main:	FUNC	; signature func main() -> void @ 18:1
 		POKE $f #.o.Frame.w #7	; f->w = 7
 		! ADDi <A> #.o.Frame.origin #.o.Point.x	; printInt(f->origin.x)
 		PEEK %1 $f #<A>
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 24:23
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 24:34
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ externStructNested.impala:24:23
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ externStructNested.impala:24:34
 		PEEK %1 $f #.o.Frame.w	; printInt(f->w)
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 25:16
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 25:27
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ externStructNested.impala:25:16
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ externStructNested.impala:25:27
 		RETU   	; }

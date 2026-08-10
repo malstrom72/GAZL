@@ -1,7 +1,7 @@
-; Compiled with Impala version 1.0
+; Compiled with Impala version 2.0
 
 ; signatures version=1
-DEBUG:	! DEFi #1	; signature const DEBUG : int @ 7:1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ structPointers.impala:7:1
 	! MOVi <a> #0	; layout of struct Filter
 .o.Filter.mode:	! DEFi #<a>
 	! ADDi <a> #<a> #1
@@ -10,16 +10,16 @@ DEBUG:	! DEFi #1	; signature const DEBUG : int @ 7:1
 .o.Filter.resonance:	! DEFi #<a>
 	! ADDi <a> #<a> #1
 .z.Filter:	! DEFi #<a>
-; signature struct Filter { mode : int, cutoff : float, resonance : float } @ 9:1
-; signature extern native printInt() -> unknown @ 15:1
-; signature extern native printFloat() -> unknown @ 16:1
-; signature extern native printLF() -> unknown @ 17:1
-FILTER_WORDS:	! DEFi #.z.Filter	; signature const FILTER_WORDS : int @ 19:1
-.x.store:	! DEFi #6
-store:	GLOB *.x.store	; signature array store[6] : unknown @ 21:1
+; signature struct Filter { mode : int, cutoff : float, resonance : float } @ structPointers.impala:9:1
+; signature extern native printInt() -> unknown @ structPointers.impala:15:1
+; signature extern native printFloat() -> unknown @ structPointers.impala:16:1
+; signature extern native printLF() -> unknown @ structPointers.impala:17:1
+FILTER_WORDS:	! DEFi #.z.Filter	; signature const FILTER_WORDS : int @ structPointers.impala:19:1
+.z.store:	! DEFi #6
+store:	GLOB *.z.store	; signature array store[6] : unknown @ structPointers.impala:21:1
 
 ;-----------------------------------------------------------------------------
-setup:	FUNC	; signature func setup(Filter-ptr f, int m, float c) -> void @ 23:1
+setup:	FUNC	; signature func setup(Filter-ptr f, int m, float c) -> void @ structPointers.impala:23:1
 		PARA *1
 	$f:	INPp
 	$m:	INPi
@@ -33,7 +33,7 @@ setup:	FUNC	; signature func setup(Filter-ptr f, int m, float c) -> void @ 23:1
 
 
 ;-----------------------------------------------------------------------------
-copyMode:	FUNC	; signature func copyMode(Filter-ptr dst, Filter-ptr src) -> void @ 30:1
+copyMode:	FUNC	; signature func copyMode(Filter-ptr dst, Filter-ptr src) -> void @ structPointers.impala:30:1
 		PARA *1
 	$dst:	INPp
 	$src:	INPp
@@ -45,33 +45,33 @@ copyMode:	FUNC	; signature func copyMode(Filter-ptr dst, Filter-ptr src) -> void
 
 
 ;-----------------------------------------------------------------------------
-main:	FUNC	; signature func main() -> void @ 35:1
+main:	FUNC	; signature func main() -> void @ structPointers.impala:35:1
 		PARA *1
 	$a:	LOCp
 	$b:	LOCp
 ;-----------------------------------------------------------------------------
 		MOVi %1 #FILTER_WORDS 	; printInt(FILTER_WORDS)
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 38:24
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 38:35
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ structPointers.impala:38:24
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structPointers.impala:38:35
 		MOVp $a &store:0 	; a = (Filter pointer) &global store[0]
 		MOVp $b &store:3 	; b = (Filter pointer) &global store[3]
 		MOVp %1 $a 	; setup(a, 2, 0.5)
 		MOVi %2 #2 
 		MOVf %3 #0.5 
-		CALL &setup %0 *4	; expects setup(Filter-ptr, int, float) -> void @ 43:18
+		CALL &setup %0 *4	; expects setup(Filter-ptr, int, float) -> void @ structPointers.impala:43:18
 		PEEK %1 $a #.o.Filter.mode	; printInt(a->mode)
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 44:19
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 44:30
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ structPointers.impala:44:19
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structPointers.impala:44:30
 		PEEK %1 $a #.o.Filter.cutoff	; printFloat(a->cutoff)
-		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 45:23
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 45:34
+		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ structPointers.impala:45:23
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structPointers.impala:45:34
 		PEEK %1 $a #.o.Filter.resonance	; printFloat(a->resonance)
-		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 46:26
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 46:37
+		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ structPointers.impala:46:26
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structPointers.impala:46:37
 		MOVp %1 $b 	; copyMode(b, a)
 		MOVp %2 $a 
-		CALL &copyMode %0 *3	; expects copyMode(Filter-ptr, Filter-ptr) -> void @ 48:16
+		CALL &copyMode %0 *3	; expects copyMode(Filter-ptr, Filter-ptr) -> void @ structPointers.impala:48:16
 		PEEK %1 $b #.o.Filter.mode	; printInt(b->mode)
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 49:19
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 49:30
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ structPointers.impala:49:19
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structPointers.impala:49:30
 		RETU   	; }

@@ -1,18 +1,18 @@
-; Compiled with Impala version 1.0
+; Compiled with Impala version 2.0
 
 ; signatures version=1
-PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #1	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int @ 1:1
-.x.panelTextRows:	! DEFi #8
-panelTextRows:	GLOB *.x.panelTextRows	; signature array panelTextRows[8] : unknown @ 3:1
+PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #1	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int @ patchTapeTest_code.impala:1:1
+.z.panelTextRows:	! DEFi #8
+panelTextRows:	GLOB *.z.panelTextRows	; signature array panelTextRows[8] : unknown @ patchTapeTest_code.impala:3:1
 	DATA &.s__4d2 &.s__4d2 &.s__4d2 &.s__4d2 &.s__4d2 &.s__4d2
 	DATA &.s__4d2 &.s__4d2
-.x.config:	! DEFi #80
-config:	GLOB *.x.config	; signature array config[80] : unknown @ 8:1
-.x.positions:	! DEFi #2
-positions:	GLOB *.x.positions	; signature array positions[2] : unknown @ 9:1
+.z.config:	! DEFi #80
+config:	GLOB *.z.config	; signature array config[80] : unknown @ patchTapeTest_code.impala:8:1
+.z.positions:	! DEFi #2
+positions:	GLOB *.z.positions	; signature array positions[2] : unknown @ patchTapeTest_code.impala:9:1
 
 ;-----------------------------------------------------------------------------
-init:	FUNC	; signature func init() -> void @ 11:1
+init:	FUNC	; signature func init() -> void @ patchTapeTest_code.impala:11:1
 		PARA *1
 	$i:	LOCi
 	$p:	LOCp
@@ -29,7 +29,7 @@ init:	FUNC	; signature func init() -> void @ 11:1
 
 
 ;-----------------------------------------------------------------------------
-operate1:	FUNC	; signature func operate1() -> int @ 21:1
+operate1:	FUNC	; signature func operate1() -> int @ patchTapeTest_code.impala:21:1
 	$r:	OUTi
 ;-----------------------------------------------------------------------------
 		MOVi $r #0 	; r = 0

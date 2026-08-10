@@ -1,42 +1,42 @@
-; Compiled with Impala version 1.0
+; Compiled with Impala version 2.0
 
 ; signatures version=1
-DEBUG:	! DEFi #1	; signature const DEBUG : int @ 7:1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ structAccessKinds.impala:7:1
 	! MOVi <a> #0	; layout of struct P
 .o.P.x:	! DEFi #<a>
 	! ADDi <a> #<a> #1
 .o.P.y:	! DEFi #<a>
 	! ADDi <a> #<a> #1
 .z.P:	! DEFi #<a>
-; signature struct P { x : int, y : float } @ 8:1
-g:	GLOB *.z.P	; signature global g : P @ 9:1
-; signature extern native printInt() -> unknown @ 10:1
-; signature extern native printFloat() -> unknown @ 11:1
-; signature extern native printLF() -> unknown @ 12:1
+; signature struct P { x : int, y : float } @ structAccessKinds.impala:8:1
+g:	GLOB *.z.P	; signature global g : P @ structAccessKinds.impala:9:1
+; signature extern native printInt() -> unknown @ structAccessKinds.impala:10:1
+; signature extern native printFloat() -> unknown @ structAccessKinds.impala:11:1
+; signature extern native printLF() -> unknown @ structAccessKinds.impala:12:1
 
 ;-----------------------------------------------------------------------------
-main:	FUNC	; signature func main() -> void @ 13:1
+main:	FUNC	; signature func main() -> void @ structAccessKinds.impala:13:1
 		PARA *1
 	$v:	LOCA *.z.P
 	$p:	LOCp
 ;-----------------------------------------------------------------------------
 		MOVi $v:.o.P.x #1 	; v.x = 1
 		MOVf $v:.o.P.y #2.5 	; v.y = 2.5
-		ADRL $p $v *.z.P	; p = &v
+		ADRL $p $v *0	; p = &v
 		PEEK %0 $p #.o.P.x	; p->x = p->x + 9
 		ADDi %0 %0 #9
 		POKE $p #.o.P.x %0
 		POKE &g:.o.P.y #4.0 	; global g.y = 4.0
 		MOVi %1 $v:.o.P.x 	; printInt(v.x)
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 19:15
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 19:26
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ structAccessKinds.impala:19:15
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structAccessKinds.impala:19:26
 		PEEK %1 $p #.o.P.y	; printFloat(p->y)
-		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 20:18
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 20:29
+		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ structAccessKinds.impala:20:18
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structAccessKinds.impala:20:29
 		PEEK %1 &g:.o.P.y 	; printFloat(global g.y)
-		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 21:24
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 21:35
+		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ structAccessKinds.impala:21:24
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structAccessKinds.impala:21:35
 		MOVi %1 #.z.P 	; printInt(sizeof(P))
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 22:21
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 22:32
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ structAccessKinds.impala:22:21
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structAccessKinds.impala:22:32
 		RETU   	; }

@@ -7,8 +7,8 @@
 > `impala compile` drives import-as-linking with `export` and `--dead-strip`.
 >
 > **Step 4 (multiple return values), destructuring, and passing/returning STRUCTS BY VALUE were
-> implemented and then deliberately parked for Impala 3.0** - the work is preserved on the
-> `Impala3-byvalue-multireturn` branch. Impala 2.0 rejects them (`E426`-`E429`); results come back
+> implemented and then deliberately parked for Impala 3.0** - the work is preserved at the
+> `Impala3-byvalue-multireturn-park` tag. Impala 2.0 rejects them (`E426`-`E429`); results come back
 > through pointer out-parameters instead. Struct locals/globals, struct pointers, field access,
 > `sizeof`, whole-struct assignment and single named returns are all unaffected. See
 > [`design/ParkedFeatures.md`](../../design/ParkedFeatures.md) for what is parked, where, and why.
@@ -19,7 +19,8 @@
 > covers the function and global cases and adding the pre-pass later only removes the need for it, so
 > this is a relaxation waiting to happen, not a compatibility question. See [Cycles](#cycles) for the
 > rule and [Deferred to 3.0: collect mode](#deferred-to-30-collect-mode-the-declaration-pre-pass) for the
-> design. Smaller items left: `.gazl` blob imports, richer parse errors.
+> design. `.gazl` blob imports were deferred to 3.0 the same way (2026-08-04). Smaller item left: richer
+> parse errors.
 
 Impala 1.0 is a deliberately minimal "high-level assembler" for the GAZL virtual machine: four
 word-sized primitive types (`int`, `float`, `pointer`, `funcptr`), one composite type (`array`),
@@ -78,6 +79,19 @@ These are the constraints every 2.0 feature is measured against.
    always with a compile-time argument (`--legacy`) that downgrades the errors to warnings.
    Behavior never varies per file: no version markers, no pragmas, no dialect inference - one
    language, one set of rules, one escape flag at the invocation.
+
+5. **One flat namespace for top-level names.** A `global`, `function`, `const`, `struct` or `functype`
+   name may be used by exactly one of them (`E401`). GAZL has a single symbol space and Impala emits
+   into it, so this is not a style rule: `global int S` beside `function S()` used to clear every
+   per-table check and then fail to assemble with `Symbol already defined: S`, and `struct S` beside
+   `functype S` was rejected in one declaration order and accepted in the other. It also keeps the
+   compiler's own minted symbols unambiguous, since every family is keyed on a user name
+   (`.z.S`, `.z.S.a`, `.z.S`) - see [`SymbolNamespace.md`](../../design/gazl/SymbolNamespace.md).
+
+   The rule covers TOP-LEVEL names only. A local may shadow a global, and a struct field may share a
+   struct's name, because neither is emitted under a bare name (`$v`, `.o.S.f`). Re-declaring the SAME
+   kind stays legal - that is how `extern` meets a definition, and how an import closure sees one unit
+   twice - so only a clash between DIFFERENT kinds is an error.
 
 ## Roadmap
 
@@ -171,7 +185,7 @@ function findSmallest(int n, int pointer vector) returns int j locals int i { /*
   `pointer int`, `pointer float`, and `pointer pointer` all have **stride 1 word**. Typed pointers
   therefore change pointer arithmetic **not at all** - `p + 3` is still three words. (Stride only
   stops being 1 when elements become multi-word, i.e. structs - which is precisely why structs come
-  later. A struct pointer does not do arithmetic at all: it moves by scaled subscript, `&p[[3]]`.
+  later. A struct pointer does not do arithmetic at all: it moves by subscript, `&p[3]`.
   See the cost model below.)
 - **The compiler selects the typed instruction from the element type.** Reading `a[i]` where `a` is
   `int array` yields an `int` and emits the int-typed peek; where `a` is `float array` it yields a
@@ -202,18 +216,18 @@ This is the payoff, and it's a direct hit on the biggest 1.0 pain. From the demo
 ```impala
 // 1.0 - every untyped element access needs a cast
 function findSmallest(int n, pointer vector) returns int j locals int i {
-    j = 0
+    j = 0;
     for (i = 1 to n)
         if ((int) vector[i] < (int) vector[j])   // casts required
-            j = i
+            j = i;
 }
 
 // 2.0 - the element type is known
 function findSmallest(int n, int pointer vector) returns int j locals int i {
-    j = 0
+    j = 0;
     for (i = 1 to n)
         if (vector[i] < vector[j])               // no casts
-            j = i
+            j = i;
 }
 ```
 
@@ -226,11 +240,14 @@ casts vanish at every use site - while the emitted GAZL is identical.
 A cast names a type using the same grammar, so it extends naturally:
 
 ```impala
-p = (int pointer) raw          // reinterpret raw words as a pointer to int
-h = (funcptr array) table      // ... and (Filter pointer) once structs exist
+p = (int pointer) raw;         // reinterpret raw words as a pointer to int
+q = (Filter pointer) raw;      // a struct type is a type name like any other
 ```
 
 `(pointer)` and `(int)` continue to mean exactly what they mean in 1.0 (the zero-modifier cases).
+
+**`array` is not a cast modifier.** `pointer` is the only one, so `(funcptr array) table` is `E001` -
+a cast never produces an array type. Cast to a pointer and index that instead.
 
 ### The typed-untyped boundary
 
@@ -438,19 +455,78 @@ outside float literals, so the member operator is collision-free too.
 
 *(decided)* Global and readonly struct variables (and struct arrays) take **nested-brace
 initializers**, one brace group per struct or array field, each value checked against the field's
-type. Values must be compile-time constants, as for 1.0 globals; trailing fields may be omitted
-and are zero-filled (the 1.0 array rule). Uninitialized struct storage is zero-filled.
+type. Values must be compile-time constants, as for 1.0 globals.
+
+A struct value is initialized **by field name**, `field: value`. Any field may be omitted and is
+zero-filled, and the entries may appear in any order - the words are always emitted in layout order.
+Array levels stay **positional**, both for a struct's array field and for an array *of* structs,
+because there the index already does the naming; a `field:` in an array slot is `E458`.
 
 ```impala
-global Filter voice = { 0.5, 0.7, { 0.0, 0.0, 0.0, 0.0 }, 2, null }
+global Filter voice = { cutoff: 0.5, resonance: 0.7, state: { 0.0, 0.0, 0.0, 0.0 }, mode: 2 }
 readonly Voice array PRESETS[2] = {
-	{ { 0.1, 0.0, 0.0, 0.0 }, { 0.2, 0.0, 0.0, 0.0 }, 1.0 },
-	{ { 0.3, 0.0, 0.0, 0.0 }, { 0.4, 0.0, 0.0, 0.0 }, 0.5 }
+	{ low: { b0: 0.1 }, high: { b0: 0.2 }, gain: 1.0 },
+	{ low: { b0: 0.3 }, high: { b0: 0.4 }, gain: 0.5 }
 }
 ```
 
-The lowering is the flat `DATA` row the braces describe - the nesting exists for readability and
-per-field type checking, not for any runtime structure.
+Note `next` and the unset `Biquad` fields are simply left out rather than padded with `null`/`0.0`.
+
+The 1.0 **positional** form (`{ 0.5, 0.7, ... }`) is `E455`. It was silently order-dependent: inserting,
+removing or reordering a struct field changed what every existing initializer meant, with nothing in
+those initializers needing to change for it to happen. `--legacy` still maps positionally, so 1.x
+sources keep building.
+
+**Two shapes cannot be statically initialized in 2.0, and both are errors rather than guesses.** A
+`DATA` row is positional and GAZL 1 has no way to place a word at an offset it only learns at assembly
+time, so an initializer is only emitted where Impala knows which word each value lands in:
+
+| Shape | Code | Why |
+|---|---|---|
+| a field placed **after** a struct array field whose extent is symbolic | `E454` | the array's unfilled words are a symbolic count, and `DATA` cannot skip them, so the next field's position is unknown |
+| any field of an **`extern struct`** | `E459` | the host owns field order, `.z.`, and possibly fields Impala never saw; a positional row guesses all three |
+
+In both cases **zero is still fine**, because zero is what the region fills with under any layout - so
+`{ }`, an omitted field, and an explicit `0` all compile and simply emit nothing. Both are planned for
+Impala 3.0 on GAZL 2; see [`ParkedFeatures.md`](../../design/ParkedFeatures.md) ("Placing static data at a symbolic
+offset"). For an extern struct the host owns the layout, so the host is also the right place for the
+initial contents.
+
+**A symbolically-sized array field is itself fillable**, which is the part that does NOT need GAZL 2.
+Its words start where Impala already knows, so only the ones it did not fill are unplaceable:
+
+    const int N = 5
+    struct S { int array v[N] }
+    global S s = { v: { 7, 8, 9 } }     // fine - emits three words, the rest zero-fills
+
+What Impala cannot do is check `3` against `N`, and neither can the assembler see anything wrong with
+the row: `v[N]` with `N` 2, given three values and a `z` behind it, emits four words that fit `1+N+1`
+EXACTLY - which is how `z` used to receive the array's third value in silence. So the comparison is
+handed to the one stage that knows the extent, as a compile-time directive that costs nothing at run
+time:
+
+    s:      GLOB *.z.S
+            ! LEQi #3 #.z.S.v @.g0
+            ! FAIL too many initializer values for S.v: 3 given, room for .z.S.v
+    .g0:    !
+            DATA #7 #8 #9
+
+It fits, nothing happens. It does not, and the assembler stops with that `! FAIL` text. The guard sits
+ABOVE the rows deliberately: GAZL checks only the whole allocation, so below them a field spill that
+still fits the struct total would go unreported. That is
+rule 4 of [`TwoStageConstants.md`](../../design/impala/TwoStageConstants.md), and `.z.S.v` is the field-extent constant
+described in [`StructLayoutConstants.md`](../../design/impala/StructLayoutConstants.md). The cost is honest and worth
+stating: the error surfaces at GAZL assembly time, which in a shipped module means the end user's
+machine, with no caret. That is the correct place for it, because with a host-supplied `N` the answer
+genuinely differs per host.
+
+Uninitialized **global** struct storage is zero-filled - the globals and consts regions are cleared
+once at load (`src/GAZL.cpp:880`). **Locals are not.** A `call` only bumps the frame pointer, so an
+uninitialized struct local holds whatever the previous frame left there. Initialize struct locals
+before reading them.
+
+The lowering is the flat `DATA` row the braces describe - the nesting and the names exist for
+readability and per-field checking, not for any runtime structure.
 
 ### Field access: `.` and `->`
 
@@ -468,7 +544,7 @@ Multi-level pointers compose from existing pieces; nothing new is invented:
 
 ```impala
 Filter pointer pointer pp
-x = pp[0]->cutoff                   // or (*pp)->cutoff - 2 markers, 2 loads
+x = pp[0]->cutoff;                  // or (*pp)->cutoff - 2 markers, 2 loads
 ```
 
 ### The cost model: dots are free
@@ -482,8 +558,11 @@ it is a cost annotation with exact GAZL meaning):
 
 Combined with the existing markers, every memory access in an expression is visible in the source:
 
-> **Instruction count = marker count.** Each `global`, `*`, `->`, and `[]`-on-a-pointer costs one
-> load. Each `[[ ]]` costs one load plus one `MULi`. Dots are free.
+> **Instruction count = marker count**, with one exception, stated rather than hidden. Each `global`,
+> `*`, `->`, and `[]`-on-a-pointer costs one load, and dots are free. A subscript on a STRUCT element
+> also pays one `MULi` - but only when the index is not constant, since a constant one folds at
+> assembly time. That exception is what sank `[ ]`, the marker this section used to require for it:
+> a marker that is wrong in the common case teaches the wrong cost. See "One subscript" below.
 
 ```impala
 f.cutoff                    // 0 loads - direct operand
@@ -493,59 +572,81 @@ global gfp->cutoff          // 2 loads - one for the global pointer, one through
 head->next->next->value     // 3 loads - each hop visible
 ```
 
-(The one grandfathered exception: 1.0's `p[i]` PEEKs without a distinct marker vs `a[i]`'s local
-access - nailed by backward compatibility. New syntax is held to the stricter rule.)
+The principle used to be stated as "instruction count = marker count", which is no longer literally
+true and was reworded for that reason. Two exceptions:
 
-Structs are what makes a subscript able to cost more than one instruction, and that is exactly why
-they get their own bracket. `[i]` strides one word; `[[i]]` strides `sizeof(element)` and pays one
-`MULi` for it. Each is an error where the other is correct, so there is one legal spelling per access
-and the stride is never something you have to look up:
+- **1.0's `p[i]`** PEEKs without a distinct marker, unlike `a[i]`'s local access - grandfathered by
+  backward compatibility. New syntax is held to the stricter rule.
+- ~~**An `inline` call site carries no marker at all**~~ - moot in 2.0, since `inline` is parked
+  (`E439`). It is recorded because it is the exception that returns the moment the feature does: an
+  expansion emits an arbitrary number of instructions with no marker at the call site, and argument
+  substitution deletes marshalling moves a normal call would emit. That is why the rule below is worded
+  as *predictable* rather than *countable*. See "Inline functions" below.
+
+### One subscript
+
+`a[i]` strides by `a`'s declared element size - one word for a scalar element, `.z.Struct` for a struct
+one. There is one spelling and it works everywhere:
 
 ```impala
 words[i]                    // 1 instruction  - stride 1
-voices[[i]]                 // 2 instructions - stride sizeof(Voice)
-&voices[[i]]                // the only way to move a Voice pointer
+voices[i]                   // 2 instructions - stride sizeof(Voice)
+&voices[i]                  // the only way to move a Voice pointer
 ```
 
 The residual multiply is the **floor**, not overhead: the address of element `i` of a 3-word struct
-genuinely is `base + i*3`, and no language or ISA can form it without a multiply. A constant index
-folds at assembly time (`! MULi`), so it costs nothing at run time - but **today that fold only fires
-for a bare decimal literal** (`impala.jspeg:2158` tests `/^#[0-9]+$/`). `bank[[2]]` folds to
-`! MULi <A> #2 #.z.S`; `bank[[K]]` for `const int K = 2`, `bank[[HOST_I]]`, `bank[[K + 1]]` and
-`p[[-1]]` all fall through to a RUNTIME `MULi` + `ADDp`, even though `! MULi` accepts every one of
-those operands (the compiler itself emits `! MULi <A> #HOST_N #.z.S` when sizing an array). Measured:
-identical programs differing only in `2` vs `K` assemble to code size 3 vs 5. See `design/impala/Impala2Review.md`,
-"the scaled subscript is spelled `[[ ]]`", for why arithmetic on a struct pointer is rejected rather
-than scaled.
+genuinely is `base + i*3`, and no language or ISA can form it without a multiply. **Any** constant
+index folds at GAZL assembly time, so it costs nothing at run time: `bank[2]`, `bank[K]` for a
+named `const`, `bank[HOST_I]` for a host-supplied one, `bank[K + 1]` and `p[-1]` all emit
+`! MULi` + `! ADDi` and no runtime instruction beyond the access itself.
+
+**A second spelling `[ ]` was required here until 2026-08-04**, reserved for struct elements so the
+multiply had a marker at the use site, with `E204`/`E205` making each bracket an error where the other
+was correct. It was removed for three reasons, in increasing order of weight. It carried no information:
+because each form was an error where the other belonged, the compiler always knew which was meant, and
+the fix-it was purely mechanical. It was usually *wrong*: the paragraph above is the reason - 35 of the
+49 uses in this repo's corpus were constant indices, where the multiply is an assemble-time `!` line and
+free at run time, so the marker announced a cost that was not there. And it would not have survived
+multidimensional arrays, where `a[3, 5, 6]` must scale by construction with no marker available to say
+so - a notation that the next feature has to break is already wrong. Pointer arithmetic had meanwhile
+settled on scaling by element size silently; subscripting now agrees with it instead of contradicting it.
+
+Removing it changed no emitted code. The corpus regolded with byte-identical instruction streams -
+only the echoed source text in trailing comments and the column numbers moved. See
+`design/impala/Impala2Review.md` for why arithmetic on a struct pointer is rejected rather than scaled; that
+reasoning is unaffected, and `&p[i]` is still how you move one.
 
 ### Verified lowering
 
 Checked against the GAZL operand grammar and live usage in `src/UnitTest.gazl`. The key mechanisms:
 the `local:const` operand form (a local plus compile-time offset is a *direct operand* - no address
 materialization), `GETL`/`SETL` (local access with runtime offset, no pointer involved), and
-`PEEK`/`POKE` with a constant-offset immediate.
+`PEEK`/`POKE` with a constant-offset immediate. Every size and offset below is a **symbolic**
+`.z.`/`.o.` operand, never a baked decimal (`design/impala/StructLayoutConstants.md`):
 
 ```gazl
 ; A) local value, constant field - direct operand, zero extra instructions
-$f: LOCA *8
-MOVf $f:1 #0.5              ; f.resonance = 0.5
-MOVf $x  $f:1              ; x = f.resonance
+$f: LOCA *.z.Filter
+MOVf $f:.o.Filter.resonance #0.5    ; f.resonance = 0.5
+MOVf $x $f:.o.Filter.resonance      ; x = f.resonance
 
 ; B) local struct array, dynamic index - GETL with the field offset folded into the
 ;    BASE OPERAND (precedent: UnitTest.gazl:794 "GETL i0 lArray:4 i1"). No ADDi.
-$voices: LOCA *64
-MULi %0 $i #8              ; i * sizeof(Filter) - the stride multiply, marked by [[ ]]
-GETL $x $voices:6 %0      ; x = voices[[i]].mode   (constant :6 rides the operand)
+              ! MULi <A> #8 #.z.Filter
+.z.b.voices:  ! DEFi #<A>
+$voices: LOCA *.z.b.voices
+MULi %0 $i #.z.Filter               ; the stride multiply
+GETL $x $voices:.o.Filter.mode %0   ; x = voices[i].mode  (the field offset rides the operand)
 
 ; C) through a pointer - one real load, constant offset immediate
-PEEK $x $fp #6            ; x = fp->mode
-POKE $fp #6 $val         ; fp->mode = val
+PEEK $x $fp #.o.Filter.mode         ; x = fp->mode
+POKE $fp #.o.Filter.mode $val       ; fp->mode = val
 
-; D) dynamic index through a pointer - the one place an ADDi survives,
-;    because PEEK's offset operand is spent on the computed index
-MULi %0 $i #8
-ADDi %0 %0 #6
-PEEK $x $fp %0            ; x = fp[i].mode
+; D) dynamic index through a pointer - the stride multiply plus one ADDp to move the
+;    pointer; the field offset still rides PEEK's immediate
+MULi %1 $i #.z.Filter               ; x = fp[i].mode
+ADDp %0 $fp %1
+PEEK $x %0 #.o.Filter.mode
 ```
 
 Honest cost summary (the claim is "no worse than hand-rolled offsets, casts deleted" - *not*
@@ -556,7 +657,7 @@ Honest cost summary (the claim is "no worse than hand-rolled offsets, casts dele
 | Local value, constant field | identical - single direct instruction |
 | Local array, dynamic index | identical - stride `MULi` + `GETL`/`SETL` |
 | Pointer, constant field | identical - one `PEEK`/`POKE` |
-| Pointer, dynamic index | identical - `MULi` + `ADDi` + `PEEK` |
+| Pointer, dynamic index | identical - `MULi` + `ADDp` + `PEEK` |
 
 The stride `MULi` is real and is the only cost flat untyped arrays don't pay; it exists in the
 hand-rolled `voices[i*8 + 6]` version too. A local struct is always one contiguous `LOCA` (fields
@@ -565,8 +666,8 @@ codegen never depends on how the struct is used elsewhere in the function.
 
 ### Passing, returning, copying
 
-> **Passing and returning a struct BY VALUE is PARKED for Impala 3.0** (`E426`, `E427`); preserved on
-> the `Impala3-byvalue-multireturn` branch. Whole-struct assignment (`a = b`, `*p = v`), struct
+> **Passing and returning a struct BY VALUE is PARKED for Impala 3.0** (`E426`, `E427`); preserved at
+> the `Impala3-byvalue-multireturn-park` tag. Whole-struct assignment (`a = b`, `*p = v`), struct
 > locals/globals, struct pointers, field access and `sizeof` are all still supported. Pass and return
 > structs through pointers. See [`design/ParkedFeatures.md`](../../design/ParkedFeatures.md).
 
@@ -612,23 +713,51 @@ working *for* us.
 
 ### Identity across concatenation
 
-Impala has no `#include`: sharing a struct between separately compiled units means **textually
-re-declaring it** in each source (the established copy-paste model). Nothing in the assembled
-output forces the copies to agree - types erase completely - so offset drift between two copies of
-a struct is silent runtime garbage unless the metadata channel catches it. It does:
+Impala has no `#include`, so a struct shared between separately compiled units has to be spelled in
+each source. **A struct is defined exactly once in a linked set** *(decided)* - in an import-driven
+build (Step 5) that is the closure; under manual concatenation it is the set of units you assemble
+together. Every other unit declares it `extern`.
 
-**In an import-driven build (Step 5), the rule is stricter and simpler: a struct is defined
-exactly once in the closure** *(decided)* - a second definition anywhere is an error, agreeing or
-not. Single source of truth, enforced. Everything below applies only to the **legacy
-manual-concatenation workflow**, where units may still carry textual copies:
+This is no longer just a rule, it is the only thing that links. The **copy-paste model - textually
+re-declaring the same `struct` in each unit - is dead**, because since Phase 2a every non-extern
+`struct` emits `! DEFi` layout rows. (Copy-paste is what early 2.0 work did before Step 5, not a 1.0
+practice: 1.0 has no structs, so there was never anything to copy.)
+
+```gazl
+                    ! MOVi <a> #0            ; layout of struct Filter
+.o.Filter.cutoff:   ! DEFi #<a>
+                    ! ADDi <a> #<a> #1
+.o.Filter.mode:     ! DEFi #<a>
+                    ! ADDi <a> #<a> #1
+.z.Filter:          ! DEFi #<a>
+```
+
+Two units carrying byte-identical copies of that struct now fail to assemble at all, with
+`Symbol already defined: .o.Filter.cutoff`. Agreement is not the question; the second copy never gets
+that far.
+
+**The working pattern.** Exactly one unit writes the definition; the others write a **body-carrying
+`extern struct`**:
+
+```impala
+// filter.impala - the one definition
+struct Filter { float cutoff; int mode }
+
+// voice.impala - every other unit
+extern struct Filter { float cutoff; int mode }
+```
+
+The `extern` form emits no layout rows - only a `; signature extern struct Filter { cutoff : float,
+mode : int }` row plus symbolic references to `.o.Filter.*` and `.z.Filter` - so it cannot collide, and
+it adapts if the definition's layout changes. It is the same mechanism as a host-owned layout
+(`design/impala/StructLayoutConstants.md`), pointed at another Impala unit instead of at a host.
 
 **Identity is nominal, layout-verified.** The struct *name* is the identity. GAZL's namespace is
 already flat (function and global names collide across concatenated units today; struct names join
-that club), and every definition of the same struct name in a linked set must agree **exactly**:
-field count, field order, per-field name, per-field type, and array sizes. Any disagreement is a
-validator error citing both source locations. Field *names* are deliberately part of the match: in
-a copy-paste culture, a renamed field is drift evidence even when the layout still happens to
-agree.
+that club), and every `extern struct` declaration of a name must agree **exactly** with the definition
+and with every other declaration of it: field count, field order, per-field name, per-field type, and
+array sizes. Any disagreement is `E438`, citing both source locations. Field *names* are deliberately
+part of the match: a renamed field is drift evidence even when the layout still happens to agree.
 
 Structural identity (same layout ⇒ same type, names irrelevant) is rejected: a `Filter` and a
 `Voice` that both happen to be `{float, float, int}` must not silently interchange - accidental
@@ -638,24 +767,29 @@ compatibility hides bugs, and no language the agent audience is trained on works
 standalone comment row (the channel already has standalone rows for externs):
 
 ```gazl
-; signature struct Filter { float cutoff, float resonance, int mode } @ a.impala:3:1
+; signature struct Filter { cutoff : float, resonance : float, mode : int } @ 1:1
 ```
 
-Function rows reference struct names as new type atoms - `; signature func setMode(Filter pointer)
--> void` - and the validator resolves them against the merged struct rows using today's machinery.
+Fields render as `name : type`, matching the element-chain notation used everywhere else in the
+channel; the `a.impala:` filename prefix on the position appears only in multi-unit builds, a
+single-unit compile emits the bare `line:col`. Function rows reference struct names as new type
+atoms - `; signature func setMode(Filter-ptr f) -> void @ 5:1` - and the validator resolves them
+against the merged struct rows using today's machinery.
 Nested struct references (`Filter pointer next`) resolve by name, recursively.
 
-**Opaque structs.** A unit that only passes a `Filter pointer` *through* - no field access, no
-`sizeof` - does not need the layout copy:
+**Opaque structs.** A unit that only passes a `Filter pointer` *through* - no field access - does
+not need the layout copy:
 
 ```impala
 extern struct Filter                 // incomplete type: pointers only
 ```
 
-Pointer declarations and pass-through are legal; field access and `sizeof(Filter)` are compile
-errors (the layout is absent). This is C's incomplete-type pattern: it minimizes the copy-paste
-surface, its metadata row (`; signature extern struct Filter`) is a name-only wildcard matched
-against any full definition, and handle/token APIs get real encapsulation for free.
+Pointer declarations, pass-through and `sizeof(Filter)` are all legal: `sizeof` emits the symbolic
+`MOVi $r #.z.Filter`, which the definition or the host supplies, so the E419 incomplete-type guard
+exempts extern structs deliberately. Field access is `E417: Struct Filter has no field cutoff` - a
+bodyless declaration states that the struct has no fields, which is a different complaint from an
+absent layout. This is C's incomplete-type pattern: it minimizes the copy-paste surface, and
+handle/token APIs get real encapsulation for free.
 
 The same construct doubles as the **forward declaration** for mutually-referencing structs within
 a unit (see *Definition* above): `extern struct B` before `struct A { B pointer next }`, with
@@ -690,7 +824,10 @@ global TickFn onTick = tickHandler  // checked: tickHandler must match TickFn's 
 - **Bare `funcptr fp` stays valid** - untyped signature, 1.0 behaviour, the escape hatch parallel
   to bare `pointer`/`array`. `funcptr` never introduces types; `functype` never declares
   variables.
-- Parameter names are optional (types-only allowed), mirroring `extern`/`function`.
+- Parameter names are optional (types-only allowed). This is the one place they are: `function` and
+  `extern function` require a name on **every parameter and on the return**, so `function f(int)` and
+  `function h(int a) returns int` are both `E001`. The three signature grammars do **not** mirror each
+  other, and a `functype` is the only types-only form.
 - Assignments and indirect calls through a named type are checked against its signature; the
   contract rides the existing `; signature` metadata channel for cross-unit checking. `nullfunc`
   remains assignable and testable.
@@ -703,8 +840,8 @@ global TickFn onTick = tickHandler  // checked: tickHandler must match TickFn's 
 
 ## Step 4: Multiple return values (parked)
 
-> **PARKED for Impala 3.0.** Implemented and then removed; the work is preserved on the
-> `Impala3-byvalue-multireturn` branch. Impala 2.0 rejects a second return value (`E428`) and
+> **PARKED for Impala 3.0.** Implemented and then removed; the work is preserved at the
+> `Impala3-byvalue-multireturn-park` tag. Impala 2.0 rejects a second return value (`E428`) and
 > destructuring assignment (`E429`). Return extra results through pointer out-parameters instead.
 > This section is kept as the design record. See [`design/ParkedFeatures.md`](../../design/ParkedFeatures.md).
 
@@ -736,8 +873,8 @@ start; only the Impala surface was missing.
 function polarToRect(float mag, float phase)
 returns float x, float y
 {
-	x = mag * cosApprox(phase)
-	y = mag * sinApprox(phase)
+	x = mag * cosApprox(phase);
+	y = mag * sinApprox(phase);
 }
 ```
 
@@ -807,8 +944,8 @@ resolve with no header drift (visited-set dedups diamonds and breaks cycles). `e
 host-visible symbols in the `; signature` metadata, and `--dead-strip` drops any FUNC/data block not
 reachable from an export. VM-verified in `tests/impala/sources/import/` and `tests/impala/sources/deadstrip/`.
 The one deviation from the design below: the builder concatenates and compiles the sources rather than
-emitting each unit separately. Two consequences - `.gazl` (precompiled-blob) imports are not yet
-supported, and import cycles only half-resolve; see [Cycles](#cycles) and
+emitting each unit separately. Two consequences - `.gazl` (precompiled-blob) imports are deferred to 3.0,
+and import cycles only half-resolve; see [Cycles](#cycles) and
 [Deferred to 3.0: collect mode](#deferred-to-30-collect-mode-the-declaration-pre-pass).)*
 
 ### The problem
@@ -846,7 +983,7 @@ list is redundancy with failure modes: a forgotten unit, a stale artifact, a wro
 the build is driven from a root unit:
 
 ```
-impala compile main.impala → main.gazl      (the complete, linked program)
+node impala/impala.node.js compile main.impala main.gazl      (the complete, linked program)
 ```
 
 The toolchain walks the import closure (visited-set, cycles legal), compiles each unit exactly
@@ -855,12 +992,16 @@ it.** The GAZL assembler and loader are untouched; the transliterator property i
 Consequences:
 
 - **Staleness vanishes** for source imports: everything is compiled from source, together.
-- `import "x.gazl"` drops a precompiled or hand-written unit into the closure as-is - its
+- ~~`import "x.gazl"` drops a precompiled or hand-written unit into the closure as-is - its
   interface read from the `; signature` rows (and structural facts: `! DEF` values, `GLOB`
-  sizes), its text emitted verbatim into the linked output. This is how third-party blobs,
-  hand-written GAZL, and a precompiled stdlib participate.
+  sizes), its text emitted verbatim into the linked output.~~ **DEFERRED TO IMPALA 3.0**
+  (2026-08-04). The builder concatenates its units and compiles them in one pass, so a
+  pre-assembled blob has no seam to enter through; `import "x.gazl"` is parsed as Impala source
+  and fails there. Nothing needs it - source imports plus `export`/`--dead-strip` cover sharing,
+  linking and hiding. See [`ParkedFeatures.md`](../../design/ParkedFeatures.md#precompiled-gazl-blob-imports).
 - **The validator becomes internal to the build** - the link set *is* the closure, checked during
-  compilation. The standalone `gazl-validate` remains for the legacy workflow only.
+  compilation. The standalone `gazl-validate` was retired once that was true (2026-08-05); a host's
+  native table is Impala prototypes now (`impala/natives.impala`), checked at the call site.
 - **Single definition, enforced**: any symbol - and in particular any struct - defined more than
   once in the closure is an error. The copy-paste model and its layout-agreement machinery apply
   only to the legacy manual workflow.
@@ -925,13 +1066,23 @@ exactly once; an `import` naming an already-visited file is skipped. The self-im
 > The diagnostic names the unit the text actually came from (multi-unit builds used to report the
 > root unit and a line number that only indexed the concatenation) and adds a note pointing at the
 > definition it cannot see yet, with the remedy that applies - a forward `extern` for a function or
-> global, and for a type, that there isn't one short of breaking the cycle.
+> global, and an **opaque** `extern struct` for a type.
 >
 > **The 2.0 answer is a hand-written forward `extern`** in whichever unit is emitted first. It is
 > the one place this feature does not remove boilerplate, but it is boilerplate 1.0 users already
 > write, and since E437 it is checked against the real definition rather than silently trusted
-> (`design/impala/ExternPrototypes.md`). A cross-cycle *struct type* is the one case with no workaround
-> short of breaking the cycle.
+> (`design/impala/ExternPrototypes.md`). For a *struct type* the workaround is the **opaque** form
+> (`extern struct AA`, pointers only): it compiles, assembles and runs across the cycle.
+>
+> The BODY-CARRYING form (`extern struct AA { int x }`) across a cycle is **`E464`**, reported at the
+> use, in the unit that made it. It used to be the one cycle shape that failed silently: it compiled
+> clean and produced a module that died at GAZL assembly with `Symbol not previously defined (in
+> expected scope): .o.AA.x`, a symbol the user never wrote. The cause is emission order, not semantics -
+> a struct definition emits its layout as `! DEFi` constants at the point of definition, those resolve
+> strictly top-down (unlike code labels, they get no forward-reference pass), and in a cycle the unit
+> needing the layout can be emitted first. The check covers both ways a unit can need it: a field
+> (`.o.AA.x`) and a value of the type (`.z.AA`, from a local or global). A genuinely host-owned
+> `extern struct` is untouched - it emits no layout block at all, so nothing can precede it.
 >
 > **Where this is heading: collect mode, in 3.0.** See "Deferred to 3.0: collect mode" below. An
 > `extern` written today stays valid and keeps compiling once it lands - the pre-pass makes it
@@ -1072,6 +1223,62 @@ ever needs to exist in the legacy validator path.
 
 ---
 
+## Inline functions (PARKED for 3.0 - not in Impala 2.0)
+
+> **Status: parked, not available.** `inline function` was implemented, reviewed, and then taken back
+> out; it now lives on the `GAZL2` branch. Writing `inline` is **`E439`**. An expansion has to place its
+> locals with GAZL 2 `SCOP` / `ENDS`, and Impala 2 must keep running on GAZL 1.0 engines, which reject
+> `SCOP` with `Unknown mnemonic`. See [`ParkedFeatures.md`](../../design/ParkedFeatures.md) and
+> [`Inlining.md`](../../design/impala/Inlining.md). **The codes below are retired with the feature and must not be
+> reused - except `E432`, RE-ALLOCATED 2026-08-05 to the host-owned-array rank rule**, and its fixtures (`inlineEquivalence*`, `inlineFunctions`, `inlineReview*`) were
+> removed. What follows is the design record for the parked feature, not 2.0 behaviour.
+
+`inline` before `function` makes a function expand at each call site instead of being emitted once and
+called:
+
+```impala
+inline function clamp(int v, int lo, int hi) returns int r {
+	r = v;
+	if (r < lo) r = lo;
+	if (r > hi) r = hi;
+}
+```
+
+The declaration is the whole interface. There is **no out-of-line copy** - no `FUNC` label, no body, no
+`; signature` row - so the name exists only to expand. Every direct call is replaced by the captured
+body; there is no size budget, no heuristic and no fall back to a real call. A call that cannot expand
+is a diagnostic, never a silent reversion.
+
+This is why `inline` does not violate design principle #1 ("2.0 adds no hidden optimization passes"):
+it is an optimization pass, but it is opt-in by keyword and stated at the callee, not inferred. It is
+also the reason the cost model above is worded as *predictable* rather than *countable* - see "The cost
+model: dots are free".
+
+Arguments are **substituted** where that is safe (literals, transparent caller locals) and
+**materialized** otherwise; a global still pays its `PEEK`, and a computed argument keeps its window
+slot. Locals become caller transients, which is what forces the compile-time size rule below. Nesting
+is free - an inner inline is already expanded inside the outer's captured body - and an inline function
+imported from another unit works, because the closure concatenates the defining unit first.
+
+What is rejected:
+
+| Shape | Code |
+|---|---|
+| Direct recursion | `E432` an inline function cannot call itself |
+| `&f`, or using it as a funcptr value | `E435` cannot take the address of an inline function |
+| `export inline function` | `E434` an inline function cannot be exported |
+| Forward-declared, redeclared, or also declared `extern` | `E436` the inline function was already declared |
+| ~~A local whose array extent is not a literal~~ | ~~`E433`~~ - deleted by the extent-naming rework; every extent is a named constant now |
+| A call placed **before** the definition | `E403` undeclared identifier - there is no forward form to add |
+
+Struct locals and array locals are fine; only a *non-literal* extent is not. The design spec is
+[`design/impala/Inlining.md`](../../design/impala/Inlining.md); the behavioural oracle was the fixture pair
+`tests/impala/sources/inlineEquivalence.impala` and `inlineEquivalenceCall.impala`, which had to produce
+identical output inlined and not. Both were removed when the feature was parked - restoring that oracle
+(and the fuzzer's inline differential, which went with it) is part of unparking.
+
+---
+
 ## Strict expressions: mixed bitwise operators
 
 1.0 flattens `<< >> >>> & ^ |` into a single left-associative level; C ladders them internally
@@ -1082,7 +1289,8 @@ tighter than `&`). The silent divergence is only **within the bitwise/shift fami
 ```impala
 a | b & c        // C: a | (b & c)     Impala: (a | b) & c    - divergent
 a & b << 2       // C: a & (b << 2)    Impala: (a & b) << 2   - divergent
-a & b | c        // (a & b) | c in both - left-assoc happens to match
+a & b | c        // (a & b) | c in both - but still E101: the rule is DIFFERENT
+                 // operators, not divergent parses
 ```
 
 **Rule:** mixing *different* operators from `{<< >> >>> & ^ |}` at the same parenthesization level
@@ -1144,6 +1352,162 @@ readers would assume it's the same, which is its own trap.)
 
 ---
 
+## Array bounds
+
+Three tiers, because an index is knowable at three different times and Impala should complain at the
+earliest one that can actually decide.
+
+**Tier 1 - constant index, numeric extent: `E461`, at Impala compile time.** Free, and it fires in every
+build. The rule is about the USE, not the index:
+
+| | address (`&a[k]`) | dereference (`a[k]`) |
+|---|---|---|
+| `k` in range | legal | legal |
+| `k` past the end, any distance | **legal** | `E461` |
+| `k` negative | `E461` | `E461` |
+
+Address formation past the end is deliberately unrestricted - an out-of-range address is a value like any
+other, GAZL's own check fires on access operands rather than on address-taking, and `&a[4]` on `a[4]` is
+the ordinary end pointer. Verified as far as `&g[1000000]`. **This is why Impala needs no one-past-the-end
+carve-out where C does**: the end pointer is not a special case, it is just an address.
+
+A NEGATIVE index is the exception, and it is not a distance rule - it is that a negative offset is not an
+address GAZL will take. `MOVp $p &g:-1` and `ADRL $p $a:-1` are both rejected at assembly, while on a
+struct field `.o.S.pad + (-1)` folds to a valid offset naming the PREVIOUS field, so it assembles, runs
+and silently aliases a neighbour. One mistake with three outcomes; `E461` gives it one.
+
+Only a LITERAL index is decidable here - `g[2 + 7]` is not folded before the subscript sees it, and falls
+through to tier 3. A SYMBOLIC constant index (`b[KONST]`) is not decidable here either, but it is not a
+runtime value: it goes to tier 2, at both ends, since neither bound is knowable at Impala compile time.
+
+**Tier 2 - constant index, symbolic extent (`v[SN]`): a DEFERRED assertion, at GAZL assembly time.** The
+question is real but not answerable at Impala compile time, so it is asked of the assembler in the
+canonical `! LSSi` / `! FAIL` / skip-label form (`design/impala/TwoStageConstants.md` rule 4, the same shape
+`assertFitsExtent` uses for an over-filled initializer):
+
+```gazl
+      ! ADDi <A> #.o.T.v #5
+      ! LSSi #5 #.z.T.v @.g0
+      ! FAIL index 5 outside T.v (resolved only at assembly)
+.g0:  PEEK $r &t:<A>
+```
+
+The guard itself costs zero runtime instructions, and its skip label rides the access it guards. It is
+emitted at the DEREFERENCE, so `&t.v[9]` stays legal here exactly as in tier 1.
+
+**Scoped to a struct array FIELD, deliberately.** That is the only place nothing else looks: the overrun
+stays inside the struct's allocation, so `Symbols::resolve` sees a legal offset. A plain array is already
+caught natively - `const int SN = 4; global int array a[SN]; global a[7] = 1;` gives
+`Offset out of bounds: a` - and re-checking it here would put three assemble-time lines into the shipped
+text of the commonest idiom in the corpus to say what the assembler says for free. Measured: **15 of 87
+goldens grew when this was not scoped, versus 1 when it was.**
+
+A struct-ELEMENT array field is covered too, with the index scaled first, because `.z.` counts WORDS
+while the index counts elements:
+
+```gazl
+      ! MULi <A> #3 #.z.E          ; the address copy
+      ! MULi <B> #3 #.z.E          ; the guard's own: 3 elements -> words
+      ! LSSi #<B> #.z.O.e @.g0
+      ! FAIL index 3 outside O.e (resolved only at assembly)
+.g0:  ! ADDi <B> #.o.O.e #<A>
+```
+
+`o.e[3]` on `E array e[SN]` is the case that earns it: it lands in the field AFTER `e`, still inside
+the struct's allocation, so the assembler sees a legal offset and nothing else looks. (Index far enough
+past the end to leave the allocation - `o.e[7]` - is caught by the assembler first, as `Offset out of
+bounds`; the guard is for the near miss.)
+
+The guard sits IMMEDIATELY BEFORE the access it guards, and its skip label rides the guarded instruction.
+It briefly did not - it was queued and flushed at the end of the function, because `declare` writes to the
+output stream and flushes pending metacode first, which a mid-expression call cannot survive. `emit` has
+neither problem. The only thing deferral bought was collapsing several indices into one array down to the
+largest, and that never fired on the corpus: every duplicate was the same index accessed twice, which a
+per-function seen-set removes just as well. A guard four lines from its access reads as no guard at all.
+
+A SYMBOLIC index needs BOTH bounds, since a named const may be negative, and gets two plain comparisons.
+The low one falls through into the `FAIL`, which the second label RIDES:
+
+```gazl
+! ADDi <A> #.o.Test.b #KONST   ; the index folds into the offset, like any other constant
+! LSSi #KONST #0 @.g1          ; below the start -> fall through to the FAIL
+! LSSi #KONST #.z.Test.b @.g0  ; inside the extent -> ok
+.g1:  ! FAIL index KONST outside Test.b
+.g0:  MOVi $j $xxx:<A>
+```
+
+A label may ride an assemble-time line only when nothing branches to it at RUN time: the assembler
+resolves `! LSSi .. @L` against a line that folds away, but a runtime `GOTO @L` then reports `Symbol not
+found (in expected scope)`. `flushMetaCode` decides per label - an unreferenced one keeps its `NOOP`,
+because a switch case label is reached by `SWCH` spelling the name out of a table base and never appears
+as an operand. This briefly was `(extent - 1 - k) | k >= 0` instead, three extra ALU ops bought purely to
+avoid a second label, on the belief that one landing on a `!` line always cost a runtime `NOOP`. It does
+not: a `NOOP` is removed during assembly and costs no cycles, so the price was a line of shipped text, and
+the label did not need one anyway. `deadStrip` removes a dead function's guards with it.
+
+**The index itself must fold into the compile-time offset**, which is a separate question from whether it
+can be checked. `GETL`/`SETL` take a *variable* index, so an immediate has no encoding there - and Impala
+folded only literals, so `b[KONST]`, `b[H - 1]` and `b[-1]` all emitted `GETL $j $xxx:.o.Test.b #KONST`
+and friends: accepted by the compiler, refused outright by the assembler. `indexKind` names four operand
+shapes so the two questions can disagree. A folded `<X>` scratch is the case that forces them apart: it is
+an assemble-time value and folds like any other, but the name is RECYCLED, so it can never key a guard
+(which dedups by index text and would answer for whichever value landed last).
+
+So the guard takes its OWN copy - one assemble-time `! MOVi`, no runtime cost - at the subscript, while
+the value is still live. It has to: the pushed value is folded into the offset and freed inside the
+subscript, long before the USE decides whether this is a dereference at all. Whichever side consumes the
+finding returns the copy - `checkIndexUse` after emitting, `reference` when it discards it because an
+address is never bounds-checked. The copy is never deduplicated and never scaled: it was taken from the
+value already pushed into the offset, which is in `.z.` units, and its name identifies nothing.
+
+```gazl
+! SUBi <A> #H #1               ; s.b[H - 1]
+! MOVi <B> #<A>                ; the guard's own copy
+! ADDi <C> #.o.S.b #<A>
+! LSSi #<B> #0 @.g10
+! LSSi #<B> #.z.S.b @.g9
+.g10: ! FAIL a computed index outside S.b
+.g9:  MOVi %1 $s:<C>
+```
+
+On an address-formation site the copy is taken and then not needed, so `reference` RETRACTS it - it nulls
+the `! MOVi` record as well as returning the scratch, and `flushMetaCode` skips a null operator. Deferring
+the copy to the use is impossible (that is the whole problem), but un-emitting it afterwards is two lines.
+
+**Tier 3 - dynamic index: `--range-checks`, off by default.** The only tier that can see `a[i]`. It emits
+a `DEBUG`-gated test per subscript, bounded by the array's `.z.` extent symbol - so it works unchanged for
+a symbolic extent - and calls the host's `assertFail` on failure, exactly as `assert` does:
+
+```gazl
+! EQUi #DEBUG #0 @.r0        ; assemble-time: DEBUG 0 drops everything below
+  LSSi $i #0 @.r1            ; below the start -> fail
+  LSSi $i #.z.S.v @.r0       ; inside the extent -> ok
+.r1:
+  MOVp %2 &.a_indexo_4d2
+  CALL ^assertFail %1 *1
+.r0:
+```
+
+**Two compares and no arithmetic**, because the index is the only value not known until run time: the
+bound is a SYMBOL, so it is an assemble-time immediate that costs no instruction to produce. Four runtime
+instructions, two of them on the cold path - so an in-range access pays exactly two compares.
+
+(An earlier version was branchless - `(extent - 1 - i) | i` has its sign bit set exactly when `i` is out
+of range, which is one conditional branch instead of two. That is the wrong trade: three ALU instructions
+to save one branch, and it computed `extent - 1` at RUN time from a constant the assembler already knew.)
+
+Covered shapes are every array whose extent Impala knows - global and local scalar arrays, struct array
+fields, and arrays of structs. A bare pointer (`p[i]`) has no extent and is not checked.
+
+**Why two switches.** `DEBUG` decides whether the assembler EMITS the instructions; `--range-checks`
+decides whether they are in the `.gazl` TEXT at all. They are not redundant: the text is the shipped
+artifact - `tools/gazlCompactor` strips it and `textToCpp` embeds it in a C++ string literal - and
+`DEBUG 0` removes nothing from it. Measured, 20 asserts took a compacted module from 372 to 2282 bytes,
+~95 bytes per check that `DEBUG 0` does not reclaim. Hence off by default: a shipping build carries zero
+bytes, a dev build carries them and can still toggle them at assembly without recompiling Impala.
+
+---
+
 ## Diagnostics
 
 The error format is part of the language's contract with its audience - AI agents iterate against
@@ -1164,7 +1528,8 @@ foo.impala:12:9: note: use a cast: (int pointer)
 - **First-error stop.** The compiler is single-pass with immediate code generation; error recovery
   in that architecture produces cascading nonsense. One correct error beats five speculative ones.
 - A structured `--json` output mode can be added later if tooling demands it; the line format is
-  the contract.
+  the contract. **It does not exist today** - the complete flag set is `--legacy`, `--dead-strip`
+  and `--range-checks`.
 
 ### Code registry
 
@@ -1173,29 +1538,87 @@ foo.impala:12:9: note: use a cast: (int pointer)
 | E001 | syntax error (parse failure; expected-set reporting is future JSPEG work) |
 | E101 | mixed bitwise operators require parentheses |
 | E102 | comparison mixed with bitwise operators requires parentheses |
+| E103 | `!` binds below comparison; its operand must be parenthesised (`!(a == b)`) |
 | E201 | pointer element type mismatch in assignment |
 | E202 | pointer element type mismatch in call argument |
 | E203 | element type mismatch with previous declaration |
-| E204 | plain `[]` on a struct element - write `[[ ]]` |
-| E205 | scaled `[[ ]]` on a one-word element - write `[]` |
 | E301 | invalid operand types for operator |
 | E302 | invalid operand type for unary operator |
 | E303 | incompatible types for assignment |
 | E304 | return type disagreement (mismatch / conflicting expectations / previous uses) |
 | E305 | `for` variable must be a local modifiable int or pointer |
 | E306 | `switch` expression must be int |
-| E307 | arithmetic on a struct pointer - move it with `&p[[i]]` |
+| E307 | arithmetic on a struct pointer - move it with `&p[i]` |
 | E308 | difference between struct pointers - divide by `sizeof` yourself |
 | E309 | `for` variable is a struct pointer - `FORp` cannot stride |
-| E401 | identifier already declared |
+| E401 | a name is already used by another top-level declaration - one flat namespace covers globals, functions, consts, structs and functypes |
 | E402 | type mismatch with previous declaration |
 | E403 | undeclared identifier |
-| E404 | invalid lvalue |
+| E404 | invalid lvalue, or a write to a `readonly` scalar, array element or struct field |
 | E405 | invalid argument count |
 | E406 | argument type mismatch |
 | E407 | constant expression expected |
 | E408 | invalid type for function call |
 | E409 | `default` case already defined |
+| E410 | struct already defined |
+| E411 | duplicate field in struct |
+| E412 | field has an incomplete struct type (define it, or use a pointer) |
+| E413 | unknown type |
+| E414 | an initialized struct-element array needs a literal size |
+| E415 | field access requires a struct or struct pointer |
+| E416 | wrong field operator (`.` on a pointer, or `->` on a value) |
+| E417 | struct has no such field |
+| E419 | `sizeof` of an incomplete struct |
+| E420 | whole-struct assignment needs a struct on both sides / struct type mismatch |
+| E421 | a struct value needs a brace initializer / struct type mismatch in a call argument |
+| E422 | malformed brace initializer (too many braces, type mismatch, or missing nesting) |
+| E426 | passing a struct by value is not supported in Impala 2.0 |
+| E427 | returning a struct by value is not supported in Impala 2.0 |
+| E428 | multiple return values are not supported in Impala 2.0 |
+| E429 | destructuring assignment is not supported in Impala 2.0 |
+| E430 | an `extern struct` array field must not state a size |
+| E431 | array needs a size |
+| E432 | a host-owned array must state its rank - `[]` for one axis, `[,]` for two (re-allocated 2026-08-05; was inline recursive expansion) |
+| E433 | *retired with `inline function`* - do not reuse |
+| E434 | *retired with `inline function`* - do not reuse |
+| E435 | *retired with `inline function`* - do not reuse |
+| E436 | *retired with `inline function`* - do not reuse |
+| E437 | `extern` declaration of a function disagrees with its definition, or with another `extern` |
+| E438 | `extern struct` declarations disagree, or disagree with the definition |
+| E439 | `inline function` is parked for 3.0; it needs GAZL 2 `SCOP`/`ENDS` |
+| E440 | `functype` redeclared with a different shape (a name CLASH with a struct is E401) |
+| E441 | function or value does not match the funcptr type |
+| E442 | malformed argument list |
+| E443 | duplicate `case` value |
+| E444 | `case` value outside the switch range |
+| E445 | `goto` to an undefined label |
+| E446 | a label is defined twice in one function |
+| E447 | a `const` cannot be a struct value (use a struct pointer) |
+| E448 | `return` does not take a value; assign to the named return variable, then `return;` |
+| E449 | `return`/`break`/`continue` is a reserved word and cannot name a label, variable, array, function, struct or const (a warning under `--legacy`) |
+| E450 | `break`/`continue` is not supported; exit or repeat a loop with `goto` to a label |
+| E451 | a `;` after an `if` body leaves the following `else` with nothing to attach to |
+| E452 | a `global` prefix on a function or a const (a warning under `--legacy`) |
+| E453 | `export` on a valueless `const`; the two contradict (a valued `export const` is fine) |
+| E454 | a non-zero initializer for a field placed after a struct array field whose extent is symbolic (the array itself may be filled) |
+| E455 | a struct initializer must name its fields, and must not mix named with positional (`--legacy` maps by position) |
+| E456 | a struct initializer names a field the struct does not have |
+| E457 | a struct initializer names the same field twice |
+| E458 | a `field:` name in an array slot, where the index already does the naming |
+| E459 | a non-zero initializer for an `extern struct` - the host owns the layout, so Impala cannot place it |
+| E460 | more initializer values than the array holds (they used to be dropped silently) |
+| E461 | a constant array index out of bounds: any DEREFERENCE past the end, or ANY use of a negative one (see [Array bounds](#array-bounds)) |
+| E462 | an array extent is negative - a struct field with one runs the layout backwards and aliases its neighbours |
+
+E418, E424 and E425 are **not allocated to anything that fires**. They were reserved for extern-struct
+guards that were never needed once the features shipped (`design/impala/StructLayoutConstants.md` records the
+correction); they stay burned rather than reused, per "stable error codes, never reused".
+
+E433-E436 are a different case: they DID fire, and were retired when `inline function` was parked. They
+are burned. **E432 was in that set and has been RE-ALLOCATED** (2026-08-05) to the host-owned-array rank
+rule - `inline` never reached a release, so no artifact carries the old meaning, and burning codes from an
+unreleased feature costs more than it protects. (This paragraph used to list **E439** as unallocated - that is now wrong: E439 is the
+live diagnostic that rejects `inline`.)
 
 ---
 

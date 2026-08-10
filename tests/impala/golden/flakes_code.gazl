@@ -1,58 +1,58 @@
-; Compiled with Impala version 1.0
+; Compiled with Impala version 2.0
 
 ; signatures version=1
-PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #2	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int @ 17:1
-FALSE:	! DEFi #0	; signature const FALSE : int @ 18:1
-TRUE:	! DEFi #1	; signature const TRUE : int @ 19:1
-.x.panelTextRows:	! DEFi #8
-panelTextRows:	CNST *.x.panelTextRows	; signature array panelTextRows[8] : unknown @ 27:1
+PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #2	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int @ flakes_code.impala:17:1
+FALSE:	! DEFi #0	; signature const FALSE : int @ flakes_code.impala:18:1
+TRUE:	! DEFi #1	; signature const TRUE : int @ flakes_code.impala:19:1
+.z.panelTextRows:	! DEFi #8
+panelTextRows:	CNST *.z.panelTextRows	; signature array panelTextRows[8] : unknown @ flakes_code.impala:27:1
 	DATA &.s_SAMPLE_4d2 &.s_SQUARE_4d3 &.s_GRAIN_4d4
 	DATA &.s_COMBCC_4d5 &.s_MIDIMo_4d6 &.s_Oct2_4d7
 	DATA &.s_ARPTri_4d8 &.s_RNDEuc_4d9
-; signature extern native abort() -> unknown @ 38:1
-; signature extern native trace() -> unknown @ 39:1
-; signature extern native yield() -> unknown @ 40:1
-; signature extern native write() -> unknown @ 41:1
-; signature extern native read() -> unknown @ 42:1
-; signature extern const DEBUG : int @ 44:1
-; signature extern const OPERATOR_1_NOP : int @ 46:1
-; signature extern const OPERATOR_1_AND : int @ 47:1
-; signature extern const OPERATOR_1_MUL : int @ 48:1
-; signature extern const OPERATOR_1_OSC : int @ 49:1
-; signature extern const OPERATOR_1_RND : int @ 50:1
-; signature extern const OPERATOR_1_COUNT : int @ 51:1
-; signature extern const OPERATOR_2_NOP : int @ 53:1
-; signature extern const OPERATOR_2_OR : int @ 54:1
-; signature extern const OPERATOR_2_XOR : int @ 55:1
-; signature extern const OPERATOR_2_MSK : int @ 56:1
-; signature extern const OPERATOR_2_SUB : int @ 57:1
-; signature extern const OPERATOR_2_COUNT : int @ 58:1
-; signature extern const SWITCHES_SYNC_MASK : int @ 60:1
-; signature extern const SWITCHES_TRIPLET_MASK : int @ 61:1
-; signature extern const SWITCHES_DOTTED_MASK : int @ 62:1
-; signature extern const SWITCHES_WRITE_PROTECT_MASK : int @ 63:1
-; signature extern const SWITCHES_REVERSE_MASK : int @ 64:1
-; signature extern const CLOCK_FREQ_PARAM_INDEX : int @ 66:1
-; signature extern const SWITCHES_PARAM_INDEX : int @ 67:1
-; signature extern const OPERATOR_1_PARAM_INDEX : int @ 68:1
-; signature extern const OPERAND_1_HIGH_PARAM_INDEX : int @ 69:1
-; signature extern const OPERAND_1_LOW_PARAM_INDEX : int @ 70:1
-; signature extern const OPERATOR_2_PARAM_INDEX : int @ 71:1
-; signature extern const OPERAND_2_HIGH_PARAM_INDEX : int @ 72:1
-; signature extern const OPERAND_2_LOW_PARAM_INDEX : int @ 73:1
-; signature extern const PARAM_COUNT : int @ 74:1
-; signature extern const POSITION_INT_BITS : int @ 76:1
-; signature extern const POSITION_FRACT_BITS : int @ 77:1
+; signature extern native abort() -> unknown @ flakes_code.impala:38:1
+; signature extern native trace() -> unknown @ flakes_code.impala:39:1
+; signature extern native yield() -> unknown @ flakes_code.impala:40:1
+; signature extern native write() -> unknown @ flakes_code.impala:41:1
+; signature extern native read() -> unknown @ flakes_code.impala:42:1
+; signature extern const DEBUG : int @ flakes_code.impala:44:1
+; signature extern const OPERATOR_1_NOP : int @ flakes_code.impala:46:1
+; signature extern const OPERATOR_1_AND : int @ flakes_code.impala:47:1
+; signature extern const OPERATOR_1_MUL : int @ flakes_code.impala:48:1
+; signature extern const OPERATOR_1_OSC : int @ flakes_code.impala:49:1
+; signature extern const OPERATOR_1_RND : int @ flakes_code.impala:50:1
+; signature extern const OPERATOR_1_COUNT : int @ flakes_code.impala:51:1
+; signature extern const OPERATOR_2_NOP : int @ flakes_code.impala:53:1
+; signature extern const OPERATOR_2_OR : int @ flakes_code.impala:54:1
+; signature extern const OPERATOR_2_XOR : int @ flakes_code.impala:55:1
+; signature extern const OPERATOR_2_MSK : int @ flakes_code.impala:56:1
+; signature extern const OPERATOR_2_SUB : int @ flakes_code.impala:57:1
+; signature extern const OPERATOR_2_COUNT : int @ flakes_code.impala:58:1
+; signature extern const SWITCHES_SYNC_MASK : int @ flakes_code.impala:60:1
+; signature extern const SWITCHES_TRIPLET_MASK : int @ flakes_code.impala:61:1
+; signature extern const SWITCHES_DOTTED_MASK : int @ flakes_code.impala:62:1
+; signature extern const SWITCHES_WRITE_PROTECT_MASK : int @ flakes_code.impala:63:1
+; signature extern const SWITCHES_REVERSE_MASK : int @ flakes_code.impala:64:1
+; signature extern const CLOCK_FREQ_PARAM_INDEX : int @ flakes_code.impala:66:1
+; signature extern const SWITCHES_PARAM_INDEX : int @ flakes_code.impala:67:1
+; signature extern const OPERATOR_1_PARAM_INDEX : int @ flakes_code.impala:68:1
+; signature extern const OPERAND_1_HIGH_PARAM_INDEX : int @ flakes_code.impala:69:1
+; signature extern const OPERAND_1_LOW_PARAM_INDEX : int @ flakes_code.impala:70:1
+; signature extern const OPERATOR_2_PARAM_INDEX : int @ flakes_code.impala:71:1
+; signature extern const OPERAND_2_HIGH_PARAM_INDEX : int @ flakes_code.impala:72:1
+; signature extern const OPERAND_2_LOW_PARAM_INDEX : int @ flakes_code.impala:73:1
+; signature extern const PARAM_COUNT : int @ flakes_code.impala:74:1
+; signature extern const POSITION_INT_BITS : int @ flakes_code.impala:76:1
+; signature extern const POSITION_FRACT_BITS : int @ flakes_code.impala:77:1
 	GLOB *1
-clock:	DATi #0	; signature global clock : int @ 79:1
-.x.params:	! DEFi #PARAM_COUNT
-params:	GLOB *.x.params	; signature array params[PARAM_COUNT] : unknown @ 80:1
-.x.displayLEDs:	! DEFi #4
-displayLEDs:	GLOB *.x.displayLEDs	; signature array displayLEDs[4] : unknown @ 81:1
+clock:	DATi #0	; signature global clock : int @ flakes_code.impala:79:1
+.z.params:	! DEFi #PARAM_COUNT
+params:	GLOB *.z.params	; signature array params[PARAM_COUNT] : unknown @ flakes_code.impala:80:1
+.z.displayLEDs:	! DEFi #4
+displayLEDs:	GLOB *.z.displayLEDs	; signature array displayLEDs[4] : unknown @ flakes_code.impala:81:1
 	CNST *1
-clockFreqLimit:	DATi #132300	; signature readonly clockFreqLimit : int @ 83:1
-.x.signal:	! DEFi #2
-signal:	GLOB *.x.signal	; signature array signal[2] : unknown @ 86:1
+clockFreqLimit:	DATi #132300	; signature readonly clockFreqLimit : int @ flakes_code.impala:83:1
+.z.signal:	! DEFi #2
+signal:	GLOB *.z.signal	; signature array signal[2] : unknown @ flakes_code.impala:86:1
 	CNST *1
 	! SHLi <A> #1 #OPERAND_1_HIGH_PARAM_INDEX
 	! SHLi <B> #1 #OPERAND_1_LOW_PARAM_INDEX
@@ -63,22 +63,22 @@ signal:	GLOB *.x.signal	; signature array signal[2] : unknown @ 86:1
 	! IORi <A> <A> <B>
 	! SHLi <B> #1 #OPERATOR_2_PARAM_INDEX
 	! IORi <A> <A> <B>
-updateMask:	DATi <A>	; signature readonly updateMask : int @ 88:1
-LOG2:	! DEFf #0.69314718055994530942	; signature const LOG2 : float @ 97:1
+updateMask:	DATi <A>	; signature readonly updateMask : int @ flakes_code.impala:88:1
+LOG2:	! DEFf #0.69314718055994530942	; signature const LOG2 : float @ flakes_code.impala:97:1
 
 ;-----------------------------------------------------------------------------
-error:	FUNC	; signature func error(ptr s) -> void @ 99:1
+error:	FUNC	; signature func error(ptr s) -> void @ flakes_code.impala:99:1
 		PARA *1
 	$s:	INPp
 ;-----------------------------------------------------------------------------
 		MOVp %1 $s 	; trace(s)
-		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 101:10
-		CALL ^abort %0 *1	; expects abort() -> unknown @ 102:9
+		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ flakes_code.impala:101:10
+		CALL ^abort %0 *1	; expects abort() -> unknown @ flakes_code.impala:102:9
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-exp:	FUNC	; signature func exp(float x) -> float @ 130:1
+exp:	FUNC	; signature func exp(float x) -> float @ flakes_code.impala:130:1
 	$y:	OUTf
 	$x:	INPf
 	$a:	LOCf
@@ -102,14 +102,14 @@ exp:	FUNC	; signature func exp(float x) -> float @ 130:1
 
 
 ;-----------------------------------------------------------------------------
-sqrt:	FUNC	; signature func sqrt(float x) -> float @ 150:1
+sqrt:	FUNC	; signature func sqrt(float x) -> float @ flakes_code.impala:150:1
 	$y:	OUTf
 	$x:	INPf
 	$t:	LOCf
 ;-----------------------------------------------------------------------------
 		GEQf $x #0.0 @.f0	; if (x < 0.0) error("Domain error")
 		MOVp %1 &.s_Domain_4da 	; error("Domain error")
-		CALL &error %0 *2	; expects error(ptr) -> void @ 154:36
+		CALL &error %0 *2	; expects error(ptr) -> void @ flakes_code.impala:154:36
 	.f0:	MOVf $y $x 	; y = x
 		MOVf $t #0.0 	; t = 0.0
 	.l1:	EQUf $y $t @.e2	; while (y != t) 
@@ -121,12 +121,12 @@ sqrt:	FUNC	; signature func sqrt(float x) -> float @ 150:1
 	.e2:	RETU   	; }
 
 	GLOB *1
-rndSeedX:	DATi #123456789	; signature global rndSeedX : int @ 163:1
+rndSeedX:	DATi #123456789	; signature global rndSeedX : int @ flakes_code.impala:163:1
 	GLOB *1
-rndSeedY:	DATi #362436069	; signature global rndSeedY : int @ 164:1
+rndSeedY:	DATi #362436069	; signature global rndSeedY : int @ flakes_code.impala:164:1
 
 ;-----------------------------------------------------------------------------
-seedRandom:	FUNC	; signature func seedRandom(int seed) -> void @ 166:1
+seedRandom:	FUNC	; signature func seedRandom(int seed) -> void @ flakes_code.impala:166:1
 		PARA *1
 	$seed:	INPi
 	$x:	LOCi
@@ -145,7 +145,7 @@ seedRandom:	FUNC	; signature func seedRandom(int seed) -> void @ 166:1
 
 
 ;-----------------------------------------------------------------------------
-randomFloat:	FUNC	; signature func randomFloat() -> float @ 177:1
+randomFloat:	FUNC	; signature func randomFloat() -> float @ flakes_code.impala:177:1
 	$f:	OUTf
 	$x:	LOCi
 	$y:	LOCi
@@ -167,53 +167,53 @@ randomFloat:	FUNC	; signature func randomFloat() -> float @ 177:1
 		POKE &rndSeedY $y 	; global rndSeedY = y
 		RETU   	; }
 
-C3_FREQUENCY:	! DEFf #261.6255653005986346778499935233	; signature const C3_FREQUENCY : float @ 193:1
-NOP_MODE:	! DEFi #0	; signature const NOP_MODE : int @ 194:1
-SAMPLE_MODE:	! DEFi #1	; signature const SAMPLE_MODE : int @ 195:1
-SQUARE_MODE:	! DEFi #2	; signature const SQUARE_MODE : int @ 196:1
-GRAIN_MODE:	! DEFi #3	; signature const GRAIN_MODE : int @ 197:1
-COMB_MODE:	! DEFi #4	; signature const COMB_MODE : int @ 198:1
-KEY_LOW_MODE:	! DEFi #1	; signature const KEY_LOW_MODE : int @ 199:1
-KEY_HIGH_MODE:	! DEFi #2	; signature const KEY_HIGH_MODE : int @ 200:1
-ARPEG_MODE:	! DEFi #3	; signature const ARPEG_MODE : int @ 201:1
-RANDOM_MODE:	! DEFi #4	; signature const RANDOM_MODE : int @ 202:1
-.x.EUCLIDEAN:	! DEFi #16
-EUCLIDEAN:	CNST *.x.EUCLIDEAN	; signature array EUCLIDEAN[16] : unknown @ 203:1
+C3_FREQUENCY:	! DEFf #261.6255653005986346778499935233	; signature const C3_FREQUENCY : float @ flakes_code.impala:193:1
+NOP_MODE:	! DEFi #0	; signature const NOP_MODE : int @ flakes_code.impala:194:1
+SAMPLE_MODE:	! DEFi #1	; signature const SAMPLE_MODE : int @ flakes_code.impala:195:1
+SQUARE_MODE:	! DEFi #2	; signature const SQUARE_MODE : int @ flakes_code.impala:196:1
+GRAIN_MODE:	! DEFi #3	; signature const GRAIN_MODE : int @ flakes_code.impala:197:1
+COMB_MODE:	! DEFi #4	; signature const COMB_MODE : int @ flakes_code.impala:198:1
+KEY_LOW_MODE:	! DEFi #1	; signature const KEY_LOW_MODE : int @ flakes_code.impala:199:1
+KEY_HIGH_MODE:	! DEFi #2	; signature const KEY_HIGH_MODE : int @ flakes_code.impala:200:1
+ARPEG_MODE:	! DEFi #3	; signature const ARPEG_MODE : int @ flakes_code.impala:201:1
+RANDOM_MODE:	! DEFi #4	; signature const RANDOM_MODE : int @ flakes_code.impala:202:1
+.z.EUCLIDEAN:	! DEFi #16
+EUCLIDEAN:	CNST *.z.EUCLIDEAN	; signature array EUCLIDEAN[16] : unknown @ flakes_code.impala:203:1
 	DATA #0x8000 #0x8080 #0x8420 #0x8888 #0x9248 #0x9494
 	DATA #0x952a #0xaaaa #0xb56a #0xb5b5 #0xb6db #0xbbbb
 	DATA #0xbdef #0xbfbf #0xfffe #0xffff
-GRAIN_DRIFT:	! DEFi #TRUE	; signature const GRAIN_DRIFT : int @ 207:1
-PITCHED_REVERSED:	! DEFi #TRUE	; signature const PITCHED_REVERSED : int @ 208:1
-ALSO_SHIFT_NOTES:	! DEFi #FALSE	; signature const ALSO_SHIFT_NOTES : int @ 209:1
-CROSSFADE_INPUT:	! DEFi #FALSE	; signature const CROSSFADE_INPUT : int @ 210:1
-CROSSFADE_SAMPLES:	! DEFi #FALSE	; signature const CROSSFADE_SAMPLES : int @ 211:1
-SLOW_RELEASE:	! DEFi #0x40	; signature const SLOW_RELEASE : int @ 212:1
-FAST_RELEASE:	! DEFi #0x800	; signature const FAST_RELEASE : int @ 213:1
-STANDARD_ATTACK:	! DEFi #0x2000	; signature const STANDARD_ATTACK : int @ 214:1
-COMB_ATTACK:	! DEFi #0xA000	; signature const COMB_ATTACK : int @ 215:1
-.x.NOTE_RATES:	! DEFi #64
-NOTE_RATES:	GLOB *.x.NOTE_RATES	; signature array NOTE_RATES[64] : unknown @ 219:1
-.x.SQRT_TABLE:	! DEFi #4097
-SQRT_TABLE:	GLOB *.x.SQRT_TABLE	; signature array SQRT_TABLE[4097] : unknown @ 220:1
+GRAIN_DRIFT:	! DEFi #TRUE	; signature const GRAIN_DRIFT : int @ flakes_code.impala:207:1
+PITCHED_REVERSED:	! DEFi #TRUE	; signature const PITCHED_REVERSED : int @ flakes_code.impala:208:1
+ALSO_SHIFT_NOTES:	! DEFi #FALSE	; signature const ALSO_SHIFT_NOTES : int @ flakes_code.impala:209:1
+CROSSFADE_INPUT:	! DEFi #FALSE	; signature const CROSSFADE_INPUT : int @ flakes_code.impala:210:1
+CROSSFADE_SAMPLES:	! DEFi #FALSE	; signature const CROSSFADE_SAMPLES : int @ flakes_code.impala:211:1
+SLOW_RELEASE:	! DEFi #0x40	; signature const SLOW_RELEASE : int @ flakes_code.impala:212:1
+FAST_RELEASE:	! DEFi #0x800	; signature const FAST_RELEASE : int @ flakes_code.impala:213:1
+STANDARD_ATTACK:	! DEFi #0x2000	; signature const STANDARD_ATTACK : int @ flakes_code.impala:214:1
+COMB_ATTACK:	! DEFi #0xA000	; signature const COMB_ATTACK : int @ flakes_code.impala:215:1
+.z.NOTE_RATES:	! DEFi #64
+NOTE_RATES:	GLOB *.z.NOTE_RATES	; signature array NOTE_RATES[64] : unknown @ flakes_code.impala:219:1
+.z.SQRT_TABLE:	! DEFi #4097
+SQRT_TABLE:	GLOB *.z.SQRT_TABLE	; signature array SQRT_TABLE[4097] : unknown @ flakes_code.impala:220:1
 	GLOB *1
-doReset:	DATi #TRUE	; signature global doReset : int @ 221:1
+doReset:	DATi #TRUE	; signature global doReset : int @ flakes_code.impala:221:1
 	GLOB *1
-updateBits:	DATi #TRUE	; signature global updateBits : int @ 222:1
+updateBits:	DATi #TRUE	; signature global updateBits : int @ flakes_code.impala:222:1
 
 ;-----------------------------------------------------------------------------
-init:	FUNC	; signature func init() -> void @ 231:1
+init:	FUNC	; signature func init() -> void @ flakes_code.impala:231:1
 		PARA *1
 	$i:	LOCi
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_init_4db 	; trace("init")
-		CALL ^trace %0 *2	; expects trace(int-ptr) -> unknown @ 234:15
+		CALL ^trace %0 *2	; expects trace(int-ptr) -> unknown @ flakes_code.impala:234:15
 		EQUi #CROSSFADE_SAMPLES #FALSE @.f0	; if (CROSSFADE_SAMPLES != FALSE) 
 		MOVi $i #0 	; for (i = 0 to 4097) 
 		GEQi #0 #4097 @.f0
 	.l2:	NOOP
 		! DIVf <A> #1.0 #4096.0	; global SQRT_TABLE[i] = ftoi((float) sqrt(itof(i) * (1.0 / 4096.0)) * 65536.0)
 		iTOf %1 $i <A>
-		CALL &sqrt %0 *2	; expects sqrt(float) -> float @ 237:71
+		CALL &sqrt %0 *2	; expects sqrt(float) -> float @ flakes_code.impala:237:71
 		fTOi %0 %0 #65536.0
 		POKE &SQRT_TABLE $i %0
 		FORi $i #4097 @.l2	; }
@@ -222,34 +222,34 @@ init:	FUNC	; signature func init() -> void @ 231:1
 	.l4:	SUBi %1 $i #36	; global NOTE_RATES[i] = (float) exp(itof(i - 36) * (LOG2 / 12.0))
 		! DIVf <A> #LOG2 #12.0
 		iTOf %1 %1 <A>
-		CALL &exp %0 *2	; expects exp(float) -> float @ 241:67
+		CALL &exp %0 *2	; expects exp(float) -> float @ flakes_code.impala:241:67
 		POKE &NOTE_RATES $i %0
 		FORi $i #64 @.l4	; }
 	.e3:	RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-reset:	FUNC	; signature func reset() -> void @ 251:1
+reset:	FUNC	; signature func reset() -> void @ flakes_code.impala:251:1
 		PARA *1
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_reset_4dc 	; trace("reset")
-		CALL ^trace %0 *2	; expects trace(int-ptr) -> unknown @ 253:16
+		CALL ^trace %0 *2	; expects trace(int-ptr) -> unknown @ flakes_code.impala:253:16
 		POKE &doReset #TRUE 	; global doReset = TRUE
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-update:	FUNC	; signature func update() -> void @ 264:1
+update:	FUNC	; signature func update() -> void @ flakes_code.impala:264:1
 		PARA *1
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_update_4dd 	; trace("update")
-		CALL ^trace %0 *2	; expects trace(int-ptr) -> unknown @ 266:17
+		CALL ^trace %0 *2	; expects trace(int-ptr) -> unknown @ flakes_code.impala:266:17
 		POKE &updateBits #TRUE 	; global updateBits = TRUE
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-process:	FUNC	; signature func process() -> void @ 285:1
+process:	FUNC	; signature func process() -> void @ flakes_code.impala:285:1
 		PARA *1
 	$i:	LOCi
 	$j:	LOCi
@@ -272,21 +272,21 @@ process:	FUNC	; signature func process() -> void @ 285:1
 	$bL:	LOCi
 	$bR:	LOCi
 	$clock:	LOCi
-.x.process.bSamples:	! DEFi #4
-	$bSamples:	LOCA *.x.process.bSamples
-.x.process.aSamples:	! DEFi #4
-	$aSamples:	LOCA *.x.process.aSamples
+.z.process.bSamples:	! DEFi #4
+	$bSamples:	LOCA *.z.process.bSamples
+.z.process.aSamples:	! DEFi #4
+	$aSamples:	LOCA *.z.process.aSamples
 	$step:	LOCi
 	$nextStep:	LOCi
 	$subStep:	LOCi
 	$xpose:	LOCi
 	$noteBits:	LOCi
 	$euclideanBits:	LOCi
-.x.process.semisList:	! DEFi #12
-	$semisList:	LOCA *.x.process.semisList
+.z.process.semisList:	! DEFi #12
+	$semisList:	LOCA *.z.process.semisList
 	$semisCount:	LOCi
-.x.process.octsList:	! DEFi #4
-	$octsList:	LOCA *.x.process.octsList
+.z.process.octsList:	! DEFi #4
+	$octsList:	LOCA *.z.process.octsList
 	$octsCount:	LOCi
 	$op1LowBits:	LOCi
 	$op1HighBits:	LOCi
@@ -301,14 +301,14 @@ process:	FUNC	; signature func process() -> void @ 285:1
 	$midiMode:	LOCi
 	$lastMidiNote:	LOCi
 	$midiNote:	LOCi
-.x.process.stepTrigs:	! DEFi #16
-	$stepTrigs:	LOCA *.x.process.stepTrigs
-.x.process.stepTies:	! DEFi #16
-	$stepTies:	LOCA *.x.process.stepTies
-.x.process.stepSemis:	! DEFi #16
-	$stepSemis:	LOCA *.x.process.stepSemis
-.x.process.stepOcts:	! DEFi #16
-	$stepOcts:	LOCA *.x.process.stepOcts
+.z.process.stepTrigs:	! DEFi #16
+	$stepTrigs:	LOCA *.z.process.stepTrigs
+.z.process.stepTies:	! DEFi #16
+	$stepTies:	LOCA *.z.process.stepTies
+.z.process.stepSemis:	! DEFi #16
+	$stepSemis:	LOCA *.z.process.stepSemis
+.z.process.stepOcts:	! DEFi #16
+	$stepOcts:	LOCA *.z.process.stepOcts
 	$env:	LOCi
 	$gk:	LOCi
 	$g0:	LOCi
@@ -363,9 +363,9 @@ process:	FUNC	; signature func process() -> void @ 285:1
 	.f4:	ANDi $subStep $clock #0xFFF	; subStep = clock & 0xFFF
 		PEEK $oscModeOp &params:OPERATOR_1_PARAM_INDEX 	; oscModeOp = (int) global params[OPERATOR_1_PARAM_INDEX]
 		PEEK %0 &updateBits 	; if (global updateBits != FALSE) 
-		EQUi %0 #FALSE @.f5
+		EQUi %0 #FALSE @.e38
 		MOVp %1 &.s_bitsup_4de 	; trace("bits update")
-		CALL ^trace %0 *2	; expects trace(int-ptr) -> unknown @ 347:24
+		CALL ^trace %0 *2	; expects trace(int-ptr) -> unknown @ flakes_code.impala:347:24
 		POKE &updateBits #FALSE 	; global updateBits = FALSE
 		MOVi $i #0 	; for (i = 0 to 16) 
 		GEQi #0 #16 @.e6
@@ -377,7 +377,7 @@ process:	FUNC	; signature func process() -> void @ 285:1
 	.e6:	POKE &displayLEDs:2 #0 	; global displayLEDs[2] = 0
 		POKE &displayLEDs:3 #0 	; global displayLEDs[3] = 0
 		PEEK $noteModeOp &params:OPERATOR_2_PARAM_INDEX 	; noteModeOp = (int) global params[OPERATOR_2_PARAM_INDEX]
-		SWCH $noteModeOp *5 @.s8	; switch (noteModeOp == 0 to 5) 
+		SWCH $noteModeOp *5 @.e38	; switch (noteModeOp == 0 to 5) 
 	.s8#KEY_HIGH_MODE:	NOOP
 	.s8#KEY_LOW_MODE:	MOVi $midiMode #TRUE 	; midiMode = TRUE
 		PEEK %0 &params:OPERAND_1_HIGH_PARAM_INDEX 	; m = (int) global params[OPERAND_1_LOW_PARAM_INDEX]
@@ -394,13 +394,13 @@ process:	FUNC	; signature func process() -> void @ 285:1
 		MOVi $midiNote #8 	; for (midiNote = 8 to 40) 
 		GEQi #8 #40 @.e10
 	.l11:	GEQi $m #0 @.f12	; if (m < 0) 
-		NEQi $noteModeOp #KEY_HIGH_MODE @.e9	; if (noteModeOp == KEY_HIGH_MODE) 
+		NEQi $noteModeOp #KEY_HIGH_MODE @.e38	; if (noteModeOp == KEY_HIGH_MODE) 
 		ADDi $midiNote $midiNote #24	; midiNote = midiNote + 24
-		GOTO @.e9  	; goto foundNote
+		GOTO @.e38  	; goto foundNote
 	.f12:	SHLi $m $m #1	; m = m << 1
 		FORi $midiNote #40 @.l11	; }
 	.e10:	MOVi $midiNote #-1 	; midiNote = -1
-	foundNote:	GOTO @.e9  	; }
+	foundNote:	GOTO @.e38  	; }
 	.s8#RANDOM_MODE:	NOOP
 	.s8#ARPEG_MODE:	MOVi $midiMode #FALSE 	; midiMode = FALSE
 		MOVi $lastMidiNote #-1 	; lastMidiNote = -1
@@ -429,8 +429,8 @@ process:	FUNC	; signature func process() -> void @ 285:1
 	.f19:	FORi $i #4 @.l18	; }
 	.e17:	PEEK $op1LowBits &params:OPERAND_2_LOW_PARAM_INDEX 	; op1LowBits = (int) global params[OPERAND_2_LOW_PARAM_INDEX]
 		PEEK $op1HighBits &params:OPERAND_2_HIGH_PARAM_INDEX 	; op1HighBits = (int) global params[OPERAND_2_HIGH_PARAM_INDEX]
-		LEQi $semisCount #0 @.f5	; if (semisCount > 0 && octsCount > 0) 
-		LEQi $octsCount #0 @.f5
+		LEQi $semisCount #0 @.e38	; if (semisCount > 0 && octsCount > 0) 
+		LEQi $octsCount #0 @.e38
 		ANDi $xpose $op1LowBits #0xF	; xpose = op1LowBits & 0xF
 		NEQi $noteModeOp #RANDOM_MODE @.f22	; if (noteModeOp == RANDOM_MODE) 
 		ANDi $shift $op1HighBits #0xF	; shift = op1HighBits & 0xF
@@ -449,7 +449,7 @@ process:	FUNC	; signature func process() -> void @ 285:1
 	.e23:	MOVi $euclideanBits #0 	; euclideanBits = 0
 		ANDi %1 $op1LowBits #0xF0	; seedRandom((op1LowBits & 0xF0) + 192837463)
 		ADDi %1 %1 #192837463
-		CALL &seedRandom %0 *2	; expects seedRandom(int) -> void @ 413:51
+		CALL &seedRandom %0 *2	; expects seedRandom(int) -> void @ flakes_code.impala:413:51
 		MOVf $noteIndexFloat #0.0 	; noteIndexFloat = 0.0
 		MOVf $octaveIndexFloat #0.0 	; octaveIndexFloat = 0.0
 		MOVi $i #0 	; for (i = 0 to 16) 
@@ -477,11 +477,11 @@ process:	FUNC	; signature func process() -> void @ 285:1
 		fTOi %0 %0 #1.0
 		GETL %0 $octsList %0
 		SETL $stepOcts $j %0
-		CALL &randomFloat %0 *1	; expects randomFloat() -> float @ 425:67
+		CALL &randomFloat %0 *1	; expects randomFloat() -> float @ flakes_code.impala:425:67
 		MULf %0 %0 #2.0
 		SUBf %0 %0 #1.0
 		ADDf $noteIndexFloat $noteIndexFloat %0
-		CALL &randomFloat %0 *1	; expects randomFloat() -> float @ 426:71
+		CALL &randomFloat %0 *1	; expects randomFloat() -> float @ flakes_code.impala:426:71
 		MULf %0 %0 #2.0
 		SUBf %0 %0 #1.0
 		ADDf $octaveIndexFloat $octaveIndexFloat %0
@@ -489,14 +489,14 @@ process:	FUNC	; signature func process() -> void @ 285:1
 		IORi $euclideanBits $euclideanBits %0
 	.f31:	FORi $i #16 @.l27	; }
 	.e26:	ADDi %1 $op1HighBits #6734261	; seedRandom(op1HighBits + 6734261)
-		CALL &seedRandom %0 *2	; expects seedRandom(int) -> void @ 430:41
+		CALL &seedRandom %0 *2	; expects seedRandom(int) -> void @ flakes_code.impala:430:41
 		MOVi $l #0 	; l = 0
 		MOVi $i #0 	; for (i = 0 to 17) 
 		GEQi #0 #17 @.e38
 	.l33:	EQUi $i #16 @.t34	; if (i == 16 || (int) stepTrigs[i] != FALSE) 
 		GETL %0 $stepTrigs $i
 		EQUi %0 #FALSE @.f35
-	.t34:	CALL &randomFloat %0 *1	; expects randomFloat() -> float @ 434:45
+	.t34:	CALL &randomFloat %0 *1	; expects randomFloat() -> float @ flakes_code.impala:434:45
 		SUBi %1 $i $l
 		iTOf %1 %1 #1.0
 		MULf %0 %0 %1
@@ -528,9 +528,9 @@ process:	FUNC	; signature func process() -> void @ 285:1
 	.e43:	MOVi $i #0 	; for (i = 0 to 16) 
 		GEQi #0 #16 @.e44
 	.l45:	GETL %0 $stepTrigs $i	; if ((int) stepTrigs[i] != FALSE && semisCount > 0 && octsCount > 0) 
-		EQUi %0 #FALSE @.f47
-		LEQi $semisCount #0 @.f47
-		LEQi $octsCount #0 @.f47
+		EQUi %0 #FALSE @.e51
+		LEQi $semisCount #0 @.e51
+		LEQi $octsCount #0 @.e51
 		GETL %0 $semisList $noteIndex	; stepSemis[i] = semisList[noteIndex]
 		SETL $stepSemis $i %0
 		GETL %0 $octsList $octaveIndex	; stepOcts[i] = octsList[octaveIndex]
@@ -548,27 +548,23 @@ process:	FUNC	; signature func process() -> void @ 285:1
 		SUBi $octaveIndex $octsCount #1	; octaveIndex = octsCount - 1
 		GOTO @.e51  	; } else 
 	.f48:	ADDi $noteIndex $noteIndex #1	; noteIndex = noteIndex + 1
-		LSSi $noteIndex $semisCount @.f47	; if (noteIndex >= semisCount) 
+		LSSi $noteIndex $semisCount @.e51	; if (noteIndex >= semisCount) 
 		MOVi $noteIndex #0 	; noteIndex = 0
 		ADDi $octaveIndex $octaveIndex #1	; octaveIndex = octaveIndex + 1
-		LSSi $octaveIndex $octsCount @.f47	; if (octaveIndex >= octsCount) 
+		LSSi $octaveIndex $octsCount @.e51	; if (octaveIndex >= octsCount) 
 		MOVi $octaveIndex #0 	; octaveIndex = 0
-	.e51:	NOOP
-	.f47:	FORi $i #16 @.l45	; }
+	.e51:	FORi $i #16 @.l45	; }
 	.e44:	MOVi $i #0 	; for (i = 0 to 16) 
-		GEQi #0 #16 @.f5
+		GEQi #0 #16 @.e38
 	.l55:	ADDi %0 $i #1	; stepTies[i] = ((int) stepTrigs[(i + 1) & 15] ^ TRUE)
 		ANDi %0 %0 #15
 		GETL %0 $stepTrigs %0
 		XORi %0 %0 #TRUE
 		SETL $stepTies $i %0
 		FORi $i #16 @.l55	; }
-	.e38:	NOOP
-	.s8:	NOOP
-	.e9:	NOOP
-	.f5:	MOVi $trig #FALSE 	; trig = FALSE
+	.e38:	MOVi $trig #FALSE 	; trig = FALSE
 		NEQi $midiMode #FALSE @.f56	; if (midiMode == FALSE) 
-		NEQi $subStep #0 @.f57	; if (subStep == 0) 
+		NEQi $subStep #0 @.e60	; if (subStep == 0) 
 		GETL %0 $stepTrigs $step	; if ((int) stepTrigs[step] != FALSE) 
 		EQUi %0 #FALSE @.f58
 		GETL %0 $stepOcts $step	; key = xpose + (int) stepOcts[step] * 12 + (int) stepSemis[step]
@@ -601,8 +597,7 @@ process:	FUNC	; signature func process() -> void @ 285:1
 		POKE &displayLEDs:2 %0 
 		ANDi %0 $i #0xFF	; global displayLEDs[3] = i & 0xFF
 		POKE &displayLEDs:3 %0 
-	.e60:	NOOP
-	.f57:	NEQi $subStep #0x200 @.f62	; if (subStep == 0x200 && (int) stepTies[step] == FALSE) 
+	.e60:	NEQi $subStep #0x200 @.f62	; if (subStep == 0x200 && (int) stepTies[step] == FALSE) 
 		GETL %0 $stepTies $step
 		NEQi %0 #FALSE @.f62
 		MOVi $env #0 	; env = 0
@@ -613,7 +608,7 @@ process:	FUNC	; signature func process() -> void @ 285:1
 		MOVi $env #0 	; env = 0
 		MOVi $gk #FAST_RELEASE 	; gk = FAST_RELEASE
 		GOTO @.e65  	; } else 
-	.f56:	EQUi $midiNote $lastMidiNote @.f66	; if (midiNote != lastMidiNote) 
+	.f56:	EQUi $midiNote $lastMidiNote @.e68	; if (midiNote != lastMidiNote) 
 		LSSi $midiNote #0 @.f67	; if (midiNote >= 0) 
 		MOVi $key $midiNote 	; key = midiNote
 		POKE &displayLEDs:0 #0 	; global displayLEDs[0] = 0
@@ -622,9 +617,8 @@ process:	FUNC	; signature func process() -> void @ 285:1
 		GOTO @.e68  	; } else 
 	.f67:	MOVi $env #0 	; env = 0
 		MOVi $gk #SLOW_RELEASE 	; gk = SLOW_RELEASE
-	.e68:	NOOP
-	.f66:	MOVi $lastMidiNote $midiNote 	; lastMidiNote = midiNote
-	.e65:	EQUi $trig #FALSE @.f69	; if (trig != FALSE) 
+	.e68:	MOVi $lastMidiNote $midiNote 	; lastMidiNote = midiNote
+	.e65:	EQUi $trig #FALSE @.s70	; if (trig != FALSE) 
 		PEEK $rate &NOTE_RATES $key	; rate = (float) global NOTE_RATES[key]
 		PEEK %0 &params:CLOCK_FREQ_PARAM_INDEX 	; f = 65536.0 * C3_FREQUENCY / itof((int) global params[CLOCK_FREQ_PARAM_INDEX]) * rate
 		! MULf <A> #65536.0 #C3_FREQUENCY
@@ -646,10 +640,10 @@ process:	FUNC	; signature func process() -> void @ 285:1
 		SWCH $oscModeOp *5 @.s70	; switch (oscModeOp == 0 to 5) 
 	.s70#GRAIN_MODE:	MOVi $inPos $clock 	; inPos = clock
 		MOVi $phase #0x10000 	; phase = 0x10000
-		EQUi #GRAIN_DRIFT #FALSE @.e71	; if (GRAIN_DRIFT != FALSE) 
+		EQUi #GRAIN_DRIFT #FALSE @.s70	; if (GRAIN_DRIFT != FALSE) 
 		SHRi %0 $phaseInc #4	; phaseInc = phaseInc - (phaseInc >> 4)
 		SUBi $phaseInc $phaseInc %0
-		GOTO @.e71  	; }
+		GOTO @.s70  	; }
 	.s70#SAMPLE_MODE:	NOOP
 		! EQUi #DEBUG #0 @.a73	; assert(0 <= key && key < 64)
 		GRTi #0 $key @.f74
@@ -657,23 +651,21 @@ process:	FUNC	; signature func process() -> void @ 285:1
 	.f74:	MOVp %1 &.a_0keyke_4d2 
 		CALL ^assertFail %0 *1
 	.a73:	fTOi $pitchedRate $rate #131072.0	; pitchedRate = ftoi(131072.0 * rate)
-		LEQi $pitchedRate #0x10000 @.e71	; if (pitchedRate > 0x10000) 
+		LEQi $pitchedRate #0x10000 @.s70	; if (pitchedRate > 0x10000) 
 		EQUi #PITCHED_REVERSED #FALSE @.f76	; if (PITCHED_REVERSED != FALSE) 
 		SUBi $pitchedRate #0 $pitchedRate	; pitchedRate = -pitchedRate
-		GOTO @.e71  	; } else 
+		GOTO @.s70  	; } else 
 	.f76:	ADDi $pos $pos #0x10000	; pos = pos + 0x10000
-	.e77:	GOTO @.e71  	; }
+	.e77:	GOTO @.s70  	; }
 	.s70#COMB_MODE:	MOVi $gk #COMB_ATTACK 	; gk = COMB_ATTACK
-	.s70:	NOOP
-	.e71:	NOOP
-	.f69:	MOVi %1 $clock 	; write(clock, 1, global signal)
+	.s70:	MOVi %1 $clock 	; write(clock, 1, global signal)
 		MOVi %2 #1 
 		MOVp %3 &signal 
-		CALL ^write %0 *4	; expects write(int, int, ptr) -> unknown @ 565:33
+		CALL ^write %0 *4	; expects write(int, int, ptr) -> unknown @ flakes_code.impala:565:33
 		MOVi %1 $clock 	; read(clock, 1, global signal)
 		MOVi %2 #1 
 		MOVp %3 &signal 
-		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ 566:32
+		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ flakes_code.impala:566:32
 		PEEK $inL &signal:0 	; inL = (int) global signal[0]
 		PEEK $inR &signal:1 	; inR = (int) global signal[1]
 		SUBi %0 $env $g0	; g0 = g0 + ((env - g0) * gk >> 16)
@@ -687,14 +679,14 @@ process:	FUNC	; signature func process() -> void @ 285:1
 		SWCH $oscModeOp *5 @.s78	; switch (oscModeOp == 0 to 5) 
 	.s78#NOP_MODE:	MOVi $left $inL 	; left = inL
 		MOVi $right $inR 	; right = inR
-		GOTO @.e79  	; }
+		GOTO @.s78  	; }
 	.s78#SQUARE_MODE:	MOVi $left #0x200 	; left = 0x200
 		GEQi $phase #0x4000 @.f80	; if (phase < 0x4000) 
 		MOVi $left #-0x200 	; left = -0x200
 	.f80:	MOVi $right $left 	; right = left
 		ADDi %0 $phase $phaseInc	; phase = (phase + phaseInc) & 0xFFFF
 		ANDi $phase %0 #0xFFFF
-		GOTO @.e79  	; }
+		GOTO @.s78  	; }
 	.s78#GRAIN_MODE:	LSSi $phase #0x10000 @.f81	; if (phase >= 0x10000) 
 		SUBi $pos $pos $period	; pos = pos - period
 		SUBi $phase $phase #0x10000	; phase = phase - 0x10000
@@ -703,12 +695,12 @@ process:	FUNC	; signature func process() -> void @ 285:1
 	.f81:	MOVi %1 $inPos 	; read(inPos, 1, bSamples)
 		MOVi %2 #1 
 		ADRL %3 $bSamples *0
-		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ 595:29
+		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ flakes_code.impala:595:29
 		ADDi $inPos $inPos #1	; inPos = inPos + 1
 		MOVi %1 $outPos 	; read(outPos, 1, aSamples)
 		MOVi %2 #1 
 		ADRL %3 $aSamples *0
-		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ 597:30
+		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ flakes_code.impala:597:30
 		ADDi $outPos $outPos #1	; outPos = outPos + 1
 		SUBi %0 $bSamples:0 $aSamples:0	; left = ((int) aSamples[0] + (((int) bSamples[0] - (int) aSamples[0]) * phase >> 16))
 		MULi %0 %0 $phase
@@ -720,12 +712,12 @@ process:	FUNC	; signature func process() -> void @ 285:1
 		ADDi $right $aSamples:1 %0
 		ADDi $pos $pos #0x10000	; pos = pos + 0x10000
 		ADDi $phase $phase $phaseInc	; phase = phase + phaseInc
-		GOTO @.e79  	; }
+		GOTO @.s78  	; }
 	.s78#SAMPLE_MODE:	SHRi $i $pos #16	; i = pos >> 16
 		MOVi %1 $i 	; read(i, 2, aSamples)
 		MOVi %2 #2 
 		ADRL %3 $aSamples *0
-		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ 607:25
+		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ flakes_code.impala:607:25
 		ANDi $x $pos #0xFFFF	; x = pos & 0xFFFF
 		ADDi $pos $pos $pitchedRate	; pos = pos + pitchedRate
 		SUBi %0 $aSamples:2 $aSamples:0	; left = ((int) aSamples[0] + (((int) aSamples[2] - (int) aSamples[0]) * x >> 16))
@@ -736,11 +728,11 @@ process:	FUNC	; signature func process() -> void @ 285:1
 		MULi %0 %0 $x
 		SHRi %0 %0 #16
 		ADDi $right $aSamples:1 %0
-		EQUi #CROSSFADE_SAMPLES #FALSE @.e79	; if (CROSSFADE_SAMPLES != FALSE) 
+		EQUi #CROSSFADE_SAMPLES #FALSE @.s78	; if (CROSSFADE_SAMPLES != FALSE) 
 		SUBi %1 $i #0x8000	; read(i - 0x8000, 2, bSamples)
 		MOVi %2 #2 
 		ADRL %3 $bSamples *0
-		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ 613:35
+		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ flakes_code.impala:613:35
 		SUBi %0 $bSamples:2 $bSamples:0	; bL = ((int) bSamples[0] + (((int) bSamples[2] - (int) bSamples[0]) * x >> 16))
 		MULi %0 %0 $x
 		SHRi %0 %0 #16
@@ -765,13 +757,13 @@ process:	FUNC	; signature func process() -> void @ 285:1
 		MULi %1 $right $x
 		ADDi %0 %0 %1
 		SHRi $right %0 #16
-		GOTO @.e79  	; }
+		GOTO @.s78  	; }
 	.s78#COMB_MODE:	SUBi %1 $clock #1	; read(clock - 1 - (period >> 16), 2, aSamples)
 		SHRi %2 $period #16
 		SUBi %1 %1 %2
 		MOVi %2 #2 
 		ADRL %3 $aSamples *0
-		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ 629:50
+		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ flakes_code.impala:629:50
 		ANDi $x $period #0xFFFF	; x = period & 0xFFFF
 		SUBi %0 $aSamples:0 $aSamples:2	; fbL = (int) aSamples[2] + (((int) aSamples[0] - (int) aSamples[2]) * x >> 16)
 		MULi %0 %0 $x
@@ -802,9 +794,8 @@ process:	FUNC	; signature func process() -> void @ 285:1
 		MOVi %1 $clock 	; write(clock, 1, bSamples)
 		MOVi %2 #1 
 		ADRL %3 $bSamples *0
-		CALL ^write %0 *4	; expects write(int, int, ptr) -> unknown @ 646:30
-	.s78:	NOOP
-	.e79:	EQUi #CROSSFADE_INPUT #FALSE @.f85	; if (CROSSFADE_INPUT != FALSE) 
+		CALL ^write %0 *4	; expects write(int, int, ptr) -> unknown @ flakes_code.impala:646:30
+	.s78:	EQUi #CROSSFADE_INPUT #FALSE @.f85	; if (CROSSFADE_INPUT != FALSE) 
 		SUBi %0 $left $inL	; left = inL + ((left - inL) * g1 >> 12)
 		MULi %0 %0 $g1
 		SHRi %0 %0 #12
@@ -820,7 +811,7 @@ process:	FUNC	; signature func process() -> void @ 285:1
 		SHRi $right %0 #12
 	.e86:	POKE &signal:0 $left 	; global signal[0] = left
 		POKE &signal:1 $right 	; global signal[1] = right
-		CALL ^yield %0 *1	; expects yield() -> unknown @ 659:10
+		CALL ^yield %0 *1	; expects yield() -> unknown @ flakes_code.impala:659:10
 		GOTO @.l0  	; }
 		RETU   	; }
 

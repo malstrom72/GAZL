@@ -1,40 +1,40 @@
-; Compiled with Impala version 1.0
+; Compiled with Impala version 2.0
 
 ; signatures version=1
-DEBUG:	! DEFi #1	; signature const DEBUG : int @ 1:1
-MAX_GRAVITY:	! DEFf #40.0	; signature const MAX_GRAVITY : float @ 2:1
-MIN_SPEED:	! DEFf #0.01	; signature const MIN_SPEED : float @ 3:1
-MAX_SPEED:	! DEFf #20.0	; signature const MAX_SPEED : float @ 4:1
-GRAVITY_PARAM:	! DEFi #0	; signature const GRAVITY_PARAM : int @ 5:1
-BUMPER_FORCE_PARAM:	! DEFi #1	; signature const BUMPER_FORCE_PARAM : int @ 6:1
-PARAM_COUNT:	! DEFi #2	; signature const PARAM_COUNT : int @ 7:1
-BALL_COUNT:	! DEFi #3	; signature const BALL_COUNT : int @ 8:1
-BALL_ACTIVE_PARAM:	! DEFi #0	; signature const BALL_ACTIVE_PARAM : int @ 9:1
-BALL_X_PARAM:	! DEFi #1	; signature const BALL_X_PARAM : int @ 10:1
-BALL_Y_PARAM:	! DEFi #2	; signature const BALL_Y_PARAM : int @ 11:1
-BALL_DX_PARAM:	! DEFi #3	; signature const BALL_DX_PARAM : int @ 12:1
-BALL_DY_PARAM:	! DEFi #4	; signature const BALL_DY_PARAM : int @ 13:1
-BALL_PARAMS_COUNT:	! DEFi #5	; signature const BALL_PARAMS_COUNT : int @ 14:1
-PI:	! DEFf #3.14159265358979323846	; signature const PI : float @ 16:1
-; signature extern native printLF() -> unknown @ 18:1
-; signature extern native abort() -> unknown @ 19:1
-; signature extern native atan2() -> unknown @ 21:1
-; signature extern native log() -> unknown @ 22:1
-; signature extern native sqrt() -> unknown @ 23:1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ jingleBalls.impala:1:1
+MAX_GRAVITY:	! DEFf #40.0	; signature const MAX_GRAVITY : float @ jingleBalls.impala:2:1
+MIN_SPEED:	! DEFf #0.01	; signature const MIN_SPEED : float @ jingleBalls.impala:3:1
+MAX_SPEED:	! DEFf #20.0	; signature const MAX_SPEED : float @ jingleBalls.impala:4:1
+GRAVITY_PARAM:	! DEFi #0	; signature const GRAVITY_PARAM : int @ jingleBalls.impala:5:1
+BUMPER_FORCE_PARAM:	! DEFi #1	; signature const BUMPER_FORCE_PARAM : int @ jingleBalls.impala:6:1
+PARAM_COUNT:	! DEFi #2	; signature const PARAM_COUNT : int @ jingleBalls.impala:7:1
+BALL_COUNT:	! DEFi #3	; signature const BALL_COUNT : int @ jingleBalls.impala:8:1
+BALL_ACTIVE_PARAM:	! DEFi #0	; signature const BALL_ACTIVE_PARAM : int @ jingleBalls.impala:9:1
+BALL_X_PARAM:	! DEFi #1	; signature const BALL_X_PARAM : int @ jingleBalls.impala:10:1
+BALL_Y_PARAM:	! DEFi #2	; signature const BALL_Y_PARAM : int @ jingleBalls.impala:11:1
+BALL_DX_PARAM:	! DEFi #3	; signature const BALL_DX_PARAM : int @ jingleBalls.impala:12:1
+BALL_DY_PARAM:	! DEFi #4	; signature const BALL_DY_PARAM : int @ jingleBalls.impala:13:1
+BALL_PARAMS_COUNT:	! DEFi #5	; signature const BALL_PARAMS_COUNT : int @ jingleBalls.impala:14:1
+PI:	! DEFf #3.14159265358979323846	; signature const PI : float @ jingleBalls.impala:16:1
+; signature extern native printLF() -> unknown @ jingleBalls.impala:18:1
+; signature extern native abort() -> unknown @ jingleBalls.impala:19:1
+; signature extern native atan2() -> unknown @ jingleBalls.impala:21:1
+; signature extern native log() -> unknown @ jingleBalls.impala:22:1
+; signature extern native sqrt() -> unknown @ jingleBalls.impala:23:1
 
 ;-----------------------------------------------------------------------------
-error:	FUNC	; signature func error(ptr s) -> void @ 25:1
+error:	FUNC	; signature func error(ptr s) -> void @ jingleBalls.impala:25:1
 		PARA *1
 	$s:	INPp
 ;-----------------------------------------------------------------------------
 		MOVp %1 $s 	; printLF(s)
-		CALL ^printLF %0 *2	; expects printLF(ptr) -> unknown @ 27:12
-		CALL ^abort %0 *1	; expects abort() -> unknown @ 28:9
+		CALL ^printLF %0 *2	; expects printLF(ptr) -> unknown @ jingleBalls.impala:27:12
+		CALL ^abort %0 *1	; expects abort() -> unknown @ jingleBalls.impala:28:9
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-cube:	FUNC	; signature func cube(float x) -> float @ 31:1
+cube:	FUNC	; signature func cube(float x) -> float @ jingleBalls.impala:31:1
 	$y:	OUTf
 	$x:	INPf
 ;-----------------------------------------------------------------------------
@@ -44,7 +44,7 @@ cube:	FUNC	; signature func cube(float x) -> float @ 31:1
 
 
 ;-----------------------------------------------------------------------------
-clamp:	FUNC	; signature func clamp(float x, float min, float max) -> float @ 37:1
+clamp:	FUNC	; signature func clamp(float x, float min, float max) -> float @ jingleBalls.impala:37:1
 	$y:	OUTf
 	$x:	INPf
 	$min:	INPf
@@ -53,15 +53,14 @@ clamp:	FUNC	; signature func clamp(float x, float min, float max) -> float @ 37:
 		MOVf $y $x 	; y = x
 		GEQf $y $min @.f0	; if (y < min) y = min
 		MOVf $y $min 	; y = min
-		GOTO @.e1  
+		RETU   
 	.f0:	LEQf $y $max @.f2	; if (y > max) y = max
 		MOVf $y $max 	; y = max
-	.f2:	NOOP
-	.e1:	RETU   	; }
+	.f2:	RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-floorMod:	FUNC	; signature func floorMod(float a, float n) -> float @ 45:1
+floorMod:	FUNC	; signature func floorMod(float a, float n) -> float @ jingleBalls.impala:45:1
 	$r:	OUTf
 	$a:	INPf
 	$n:	INPf
@@ -74,7 +73,7 @@ floorMod:	FUNC	; signature func floorMod(float a, float n) -> float @ 45:1
 
 
 ;-----------------------------------------------------------------------------
-round:	FUNC	; signature func round(float x) -> float @ 51:1
+round:	FUNC	; signature func round(float x) -> float @ jingleBalls.impala:51:1
 	$y:	OUTf
 	$x:	INPf
 ;-----------------------------------------------------------------------------
@@ -82,14 +81,14 @@ round:	FUNC	; signature func round(float x) -> float @ 51:1
 		FLOf $y %0 
 		RETU   	; }
 
-.x.params:	! DEFi #PARAM_COUNT
-params:	GLOB *.x.params	; signature array params[PARAM_COUNT] : unknown @ 57:1
+.z.params:	! DEFi #PARAM_COUNT
+params:	GLOB *.z.params	; signature array params[PARAM_COUNT] : unknown @ jingleBalls.impala:57:1
 	! MULi <A> #BALL_COUNT #BALL_PARAMS_COUNT
-.x.balls:	! DEFi #<A>
-balls:	GLOB *.x.balls	; signature array balls[] : unknown @ 58:1
+.z.balls:	! DEFi #<A>
+balls:	GLOB *.z.balls	; signature array balls[] : unknown @ jingleBalls.impala:58:1
 
 ;-----------------------------------------------------------------------------
-tick:	FUNC	; signature func tick(int sampleFrames, float sampleRate) -> void @ 60:1
+tick:	FUNC	; signature func tick(int sampleFrames, float sampleRate) -> void @ jingleBalls.impala:60:1
 		PARA *1
 	$sampleFrames:	INPi
 	$sampleRate:	INPf
@@ -109,12 +108,12 @@ tick:	FUNC	; signature func tick(int sampleFrames, float sampleRate) -> void @ 6
 	$midiVel:	LOCi
 	$octave:	LOCi
 	$note:	LOCi
-.x.tick.ballParams:	! DEFi #BALL_PARAMS_COUNT
-	$ballParams:	LOCA *.x.tick.ballParams
+.z.tick.ballParams:	! DEFi #BALL_PARAMS_COUNT
+	$ballParams:	LOCA *.z.tick.ballParams
 ;-----------------------------------------------------------------------------
 		DIVf $rsr16 #16.0 $sampleRate	; rsr16 = 16.0 / sampleRate
 		PEEK %1 &params:GRAVITY_PARAM 	; gravity = (float) cube((float) global params[GRAVITY_PARAM]) * MAX_GRAVITY
-		CALL &cube %0 *2	; expects cube(float) -> float @ 67:63
+		CALL &cube %0 *2	; expects cube(float) -> float @ jingleBalls.impala:67:63
 		MULf $gravity %0 #MAX_GRAVITY
 		PEEK %0 &params:BUMPER_FORCE_PARAM 	; bumperForce = (float) global params[BUMPER_FORCE_PARAM] * 2.0
 		MULf $bumperForce %0 #2.0
@@ -139,7 +138,7 @@ tick:	FUNC	; signature func tick(int sampleFrames, float sampleRate) -> void @ 6
 		MOVf $ballParams:BALL_Y_PARAM $ny 	; ballParams[BALL_Y_PARAM] = ny
 		MULf %1 $gravity $rsr16	; ballParams[BALL_DY_PARAM] = (float) ballParams[BALL_DY_PARAM] + gravity * rsr16
 		ADDf $ballParams:BALL_DY_PARAM $ballParams:BALL_DY_PARAM %1
-		GOTO @.e6  	; } else 
+		GOTO @.e12  	; } else 
 	.f5:	MOVf $dx $ballParams:BALL_DX_PARAM 	; dx = (float) ballParams[BALL_DX_PARAM]
 		MOVf $dy $ballParams:BALL_DY_PARAM 	; dy = (float) ballParams[BALL_DY_PARAM]
 		MULf %1 $dx $ny	; ballParams[BALL_DX_PARAM] = (dx * ny * ny - dx * nx * nx - 2.0 * nx * ny * dy) / d
@@ -164,23 +163,23 @@ tick:	FUNC	; signature func tick(int sampleFrames, float sampleRate) -> void @ 6
 		DIVf $ballParams:BALL_DY_PARAM %1 $d
 		MOVf %1 $ballParams:BALL_Y_PARAM 	; a = (float) atan2((float) ballParams[BALL_Y_PARAM], (float) ballParams[BALL_X_PARAM])
 		MOVf %2 $ballParams:BALL_X_PARAM 
-		CALL ^atan2 %0 *3	; expects atan2(float, float) -> unknown @ 86:91
+		CALL ^atan2 %0 *3	; expects atan2(float, float) -> unknown @ jingleBalls.impala:86:91
 		MOVf $a %0 
 		MULf %1 $ballParams:BALL_DX_PARAM $ballParams:BALL_DX_PARAM	; v = (float) sqrt((float) ballParams[BALL_DX_PARAM] * (float) ballParams[BALL_DX_PARAM] + (float) ballParams[BALL_DY_PARAM] * (float) ballParams[BALL_DY_PARAM])
 		MULf %2 $ballParams:BALL_DY_PARAM $ballParams:BALL_DY_PARAM
 		ADDf %1 %1 %2
-		CALL ^sqrt %0 *2	; expects sqrt(float) -> unknown @ 87:165
+		CALL ^sqrt %0 *2	; expects sqrt(float) -> unknown @ jingleBalls.impala:87:165
 		MOVf $v %0 
 		MOVi $midiVel #0 	; midiVel = 0
 		LEQf $v #0.00001 @.f7	; if (v > 0.00001) midiVel = ftoi((float) clamp((float) round(50.0 * (float) log(v) + 127.0), 0.0, 127.0))
 		MOVf %3 $v 	; midiVel = ftoi((float) clamp((float) round(50.0 * (float) log(v) + 127.0), 0.0, 127.0))
-		CALL ^log %2 *2	; expects log(float) -> unknown @ 89:88
+		CALL ^log %2 *2	; expects log(float) -> unknown @ jingleBalls.impala:89:88
 		MULf %2 #50.0 %2
 		ADDf %2 %2 #127.0
-		CALL &round %1 *2	; expects round(float) -> float @ 89:96
+		CALL &round %1 *2	; expects round(float) -> float @ jingleBalls.impala:89:96
 		MOVf %2 #0.0 
 		MOVf %3 #127.0 
-		CALL &clamp %0 *4	; expects clamp(float, float, float) -> float @ 89:109
+		CALL &clamp %0 *4	; expects clamp(float, float, float) -> float @ jingleBalls.impala:89:109
 		fTOi $midiVel %0 #1.0
 	.f7:	LEQi $midiVel #0 @.f8	; if (midiVel > 0) 
 		ADDi %0 $i #1	; octave = 4 + (i + 1) % 3
@@ -190,9 +189,9 @@ tick:	FUNC	; signature func tick(int sampleFrames, float sampleRate) -> void @ 6
 		! DIVf <A> #12.0 <A>
 		MULf %2 $a <A>
 		ADDf %2 %2 #9.0
-		CALL &round %1 *2	; expects round(float) -> float @ 92:80
+		CALL &round %1 *2	; expects round(float) -> float @ jingleBalls.impala:92:80
 		MOVf %2 #12.0 
-		CALL &floorMod %0 *3	; expects floorMod(float, float) -> float @ 92:87
+		CALL &floorMod %0 *3	; expects floorMod(float, float) -> float @ jingleBalls.impala:92:87
 		fTOi %0 %0 #1.0
 		MULi %1 $octave #12
 		ADDi $note %0 %1
@@ -200,7 +199,7 @@ tick:	FUNC	; signature func tick(int sampleFrames, float sampleRate) -> void @ 6
 		GEQf %0 #MIN_SPEED @.f9
 		MOVf $ballParams:BALL_DX_PARAM #0.0 	; ballParams[BALL_DX_PARAM] = 0.0
 		MOVf $ballParams:BALL_DY_PARAM #0.0 	; ballParams[BALL_DY_PARAM] = 0.0
-		GOTO @.e10  	; } else if (v * bumperForce > MAX_SPEED) 
+		GOTO @.e12  	; } else if (v * bumperForce > MAX_SPEED) 
 	.f9:	MULf %0 $v $bumperForce	; if (v * bumperForce > MAX_SPEED) 
 		LEQf %0 #MAX_SPEED @.f11
 		MULf %0 $ballParams:BALL_DX_PARAM #MAX_SPEED	; ballParams[BALL_DX_PARAM] = (float) ballParams[BALL_DX_PARAM] * MAX_SPEED / v
@@ -210,9 +209,7 @@ tick:	FUNC	; signature func tick(int sampleFrames, float sampleRate) -> void @ 6
 		GOTO @.e12  	; } else 
 	.f11:	MULf $ballParams:BALL_DX_PARAM $ballParams:BALL_DX_PARAM $bumperForce	; ballParams[BALL_DX_PARAM] = (float) ballParams[BALL_DX_PARAM] * bumperForce
 		MULf $ballParams:BALL_DY_PARAM $ballParams:BALL_DY_PARAM $bumperForce	; ballParams[BALL_DY_PARAM] = (float) ballParams[BALL_DY_PARAM] * bumperForce
-	.e12:	NOOP
-	.e10:	NOOP
-	.e6:	MULi %0 $i #BALL_PARAMS_COUNT	; copy (BALL_PARAMS_COUNT from ballParams to &global balls[i * BALL_PARAMS_COUNT])
+	.e12:	MULi %0 $i #BALL_PARAMS_COUNT	; copy (BALL_PARAMS_COUNT from ballParams to &global balls[i * BALL_PARAMS_COUNT])
 		ADDp %0 &balls %0
 		ADRL %1 $ballParams *0
 		COPY %0 %1 *BALL_PARAMS_COUNT
@@ -223,7 +220,7 @@ tick:	FUNC	; signature func tick(int sampleFrames, float sampleRate) -> void @ 6
 
 
 ;-----------------------------------------------------------------------------
-init:	FUNC	; signature func init() -> void @ 136:1
+init:	FUNC	; signature func init() -> void @ jingleBalls.impala:136:1
 		PARA *1
 	$i:	LOCi
 	$o:	LOCi
@@ -251,15 +248,15 @@ init:	FUNC	; signature func init() -> void @ 136:1
 
 
 ;-----------------------------------------------------------------------------
-main:	FUNC	; signature func main() -> void @ 151:1
+main:	FUNC	; signature func main() -> void @ jingleBalls.impala:151:1
 		PARA *1
 	$i:	LOCi
 ;-----------------------------------------------------------------------------
-		CALL &init %0 *1	; expects init() -> void @ 154:8
+		CALL &init %0 *1	; expects init() -> void @ jingleBalls.impala:154:8
 		MOVi $i #0 	; for (i = 0 to 100000000) tick(64, 44100.0)
 		GEQi #0 #100000000 @.e0
 	.l1:	MOVi %1 #64 	; tick(64, 44100.0)
 		MOVf %2 #44100.0 
-		CALL &tick %0 *3	; expects tick(int, float) -> void @ 155:44
+		CALL &tick %0 *3	; expects tick(int, float) -> void @ jingleBalls.impala:155:44
 		FORi $i #100000000 @.l1
 	.e0:	RETU   	; }

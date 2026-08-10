@@ -1,16 +1,16 @@
-; Compiled with Impala version 1.0
+; Compiled with Impala version 2.0
 
 ; signatures version=1
-; signature extern native print() -> unknown @ 1:1
-; signature extern native printInt() -> unknown @ 2:1
-; signature extern native printLF() -> unknown @ 3:1
-; signature extern native abort() -> unknown @ 4:1
-; signature extern native input() -> unknown @ 5:1
-; signature extern native inputEOF() -> unknown @ 6:1
-; signature extern native launch() -> unknown @ 7:1
+; signature extern native print() -> unknown @ prawnOS.impala:1:1
+; signature extern native printInt() -> unknown @ prawnOS.impala:2:1
+; signature extern native printLF() -> unknown @ prawnOS.impala:3:1
+; signature extern native abort() -> unknown @ prawnOS.impala:4:1
+; signature extern native input() -> unknown @ prawnOS.impala:5:1
+; signature extern native inputEOF() -> unknown @ prawnOS.impala:6:1
+; signature extern native launch() -> unknown @ prawnOS.impala:7:1
 
 ;-----------------------------------------------------------------------------
-strcmp:	FUNC	; signature func strcmp(ptr s0, ptr s1) -> int @ 9:1
+strcmp:	FUNC	; signature func strcmp(ptr s0, ptr s1) -> int @ prawnOS.impala:9:1
 	$d:	OUTi
 	$s0:	INPp
 	$s1:	INPp
@@ -34,31 +34,31 @@ strcmp:	FUNC	; signature func strcmp(ptr s0, ptr s1) -> int @ 9:1
 
 
 ;-----------------------------------------------------------------------------
-main:	FUNC	; signature func main() -> void @ 22:1
+main:	FUNC	; signature func main() -> void @ prawnOS.impala:22:1
 		PARA *1
-.x.main.inp:	! DEFi #256
-	$inp:	LOCA *.x.main.inp
+.z.main.inp:	! DEFi #256
+	$inp:	LOCA *.z.main.inp
 ;-----------------------------------------------------------------------------
 	mainLoop:	MOVp %1 &.s__4d2 	; mainLoop:
-		CALL ^print %0 *2	; expects print(int-ptr) -> unknown @ 27:14
+		CALL ^print %0 *2	; expects print(int-ptr) -> unknown @ prawnOS.impala:27:14
 		MOVi %1 #255 	; input(255, inp)
 		ADRL %2 $inp *0
-		CALL ^input %0 *3	; expects input(int, ptr) -> unknown @ 28:18
+		CALL ^input %0 *3	; expects input(int, ptr) -> unknown @ prawnOS.impala:28:18
 		ADRL %1 $inp *0	; if ((int)strcmp(inp, "logon") == 0) 
 		MOVp %2 &.s_logon_4d3 
-		CALL &strcmp %0 *3	; expects strcmp(ptr, ptr) -> int @ 30:33
+		CALL &strcmp %0 *3	; expects strcmp(ptr, ptr) -> int @ prawnOS.impala:30:33
 		NEQi %0 #0 @mainLoop
 	.l1:	MOVp %1 &.s_Enteru_4d4 	; print("Enter username: ")
-		CALL ^print %0 *2	; expects print(int-ptr) -> unknown @ 32:30
+		CALL ^print %0 *2	; expects print(int-ptr) -> unknown @ prawnOS.impala:32:30
 		MOVi %1 #255 	; input(255, inp)
 		ADRL %2 $inp *0
-		CALL ^input %0 *3	; expects input(int, ptr) -> unknown @ 33:20
+		CALL ^input %0 *3	; expects input(int, ptr) -> unknown @ prawnOS.impala:33:20
 		ADRL %1 $inp *0	; } while ((int)strcmp(inp, "username") != 0)
 		MOVp %2 &.s_userna_4d5 
-		CALL &strcmp %0 *3	; expects strcmp(ptr, ptr) -> int @ 34:42
+		CALL &strcmp %0 *3	; expects strcmp(ptr, ptr) -> int @ prawnOS.impala:34:42
 		NEQi %0 #0 @.l1
 		MOVp %1 &.s_advent_4d6 	; launch("advent")
-		CALL ^launch %0 *2	; expects launch(int-ptr) -> unknown @ 35:20
+		CALL ^launch %0 *2	; expects launch(int-ptr) -> unknown @ prawnOS.impala:35:20
 		GOTO @mainLoop  	; goto mainLoop
 		RETU   	; }
 

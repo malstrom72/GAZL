@@ -1,59 +1,59 @@
-; Compiled with Impala version 1.0
+; Compiled with Impala version 2.0
 
 ; signatures version=1
-PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #2	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int @ 17:1
-FALSE:	! DEFi #0	; signature const FALSE : int @ 18:1
-TRUE:	! DEFi #1	; signature const TRUE : int @ 19:1
-.x.panelTextRows:	! DEFi #8
-panelTextRows:	CNST *.x.panelTextRows	; signature array panelTextRows[8] : unknown @ 27:1
+PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #2	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int @ rpm16_code.impala:17:1
+FALSE:	! DEFi #0	; signature const FALSE : int @ rpm16_code.impala:18:1
+TRUE:	! DEFi #1	; signature const TRUE : int @ rpm16_code.impala:19:1
+.z.panelTextRows:	! DEFi #8
+panelTextRows:	CNST *.z.panelTextRows	; signature array panelTextRows[8] : unknown @ rpm16_code.impala:27:1
 	DATA &.s__4d2 &.s__4d2 &.s__4d2 &.s_LEFTDE_4d3 &.s__4d2
 	DATA &.s__4d2 &.s__4d2 &.s_RINGMO_4d4
-; signature extern native abort() -> unknown @ 38:1
-; signature extern native trace() -> unknown @ 39:1
-; signature extern native yield() -> unknown @ 40:1
-; signature extern native write() -> unknown @ 41:1
-; signature extern native read() -> unknown @ 42:1
-; signature extern const DEBUG : int @ 44:1
-; signature extern const OPERATOR_1_NOP : int @ 46:1
-; signature extern const OPERATOR_1_AND : int @ 47:1
-; signature extern const OPERATOR_1_MUL : int @ 48:1
-; signature extern const OPERATOR_1_OSC : int @ 49:1
-; signature extern const OPERATOR_1_RND : int @ 50:1
-; signature extern const OPERATOR_1_COUNT : int @ 51:1
-; signature extern const OPERATOR_2_NOP : int @ 53:1
-; signature extern const OPERATOR_2_OR : int @ 54:1
-; signature extern const OPERATOR_2_XOR : int @ 55:1
-; signature extern const OPERATOR_2_MSK : int @ 56:1
-; signature extern const OPERATOR_2_SUB : int @ 57:1
-; signature extern const OPERATOR_2_COUNT : int @ 58:1
-; signature extern const SWITCHES_SYNC_MASK : int @ 60:1
-; signature extern const SWITCHES_TRIPLET_MASK : int @ 61:1
-; signature extern const SWITCHES_DOTTED_MASK : int @ 62:1
-; signature extern const SWITCHES_WRITE_PROTECT_MASK : int @ 63:1
-; signature extern const SWITCHES_REVERSE_MASK : int @ 64:1
-; signature extern const CLOCK_FREQ_PARAM_INDEX : int @ 66:1
-; signature extern const SWITCHES_PARAM_INDEX : int @ 67:1
-; signature extern const OPERATOR_1_PARAM_INDEX : int @ 68:1
-; signature extern const OPERAND_1_HIGH_PARAM_INDEX : int @ 69:1
-; signature extern const OPERAND_1_LOW_PARAM_INDEX : int @ 70:1
-; signature extern const OPERATOR_2_PARAM_INDEX : int @ 71:1
-; signature extern const OPERAND_2_HIGH_PARAM_INDEX : int @ 72:1
-; signature extern const OPERAND_2_LOW_PARAM_INDEX : int @ 73:1
-; signature extern const PARAM_COUNT : int @ 74:1
-; signature extern const POSITION_INT_BITS : int @ 76:1
-; signature extern const POSITION_FRACT_BITS : int @ 77:1
+; signature extern native abort() -> unknown @ rpm16_code.impala:38:1
+; signature extern native trace() -> unknown @ rpm16_code.impala:39:1
+; signature extern native yield() -> unknown @ rpm16_code.impala:40:1
+; signature extern native write() -> unknown @ rpm16_code.impala:41:1
+; signature extern native read() -> unknown @ rpm16_code.impala:42:1
+; signature extern const DEBUG : int @ rpm16_code.impala:44:1
+; signature extern const OPERATOR_1_NOP : int @ rpm16_code.impala:46:1
+; signature extern const OPERATOR_1_AND : int @ rpm16_code.impala:47:1
+; signature extern const OPERATOR_1_MUL : int @ rpm16_code.impala:48:1
+; signature extern const OPERATOR_1_OSC : int @ rpm16_code.impala:49:1
+; signature extern const OPERATOR_1_RND : int @ rpm16_code.impala:50:1
+; signature extern const OPERATOR_1_COUNT : int @ rpm16_code.impala:51:1
+; signature extern const OPERATOR_2_NOP : int @ rpm16_code.impala:53:1
+; signature extern const OPERATOR_2_OR : int @ rpm16_code.impala:54:1
+; signature extern const OPERATOR_2_XOR : int @ rpm16_code.impala:55:1
+; signature extern const OPERATOR_2_MSK : int @ rpm16_code.impala:56:1
+; signature extern const OPERATOR_2_SUB : int @ rpm16_code.impala:57:1
+; signature extern const OPERATOR_2_COUNT : int @ rpm16_code.impala:58:1
+; signature extern const SWITCHES_SYNC_MASK : int @ rpm16_code.impala:60:1
+; signature extern const SWITCHES_TRIPLET_MASK : int @ rpm16_code.impala:61:1
+; signature extern const SWITCHES_DOTTED_MASK : int @ rpm16_code.impala:62:1
+; signature extern const SWITCHES_WRITE_PROTECT_MASK : int @ rpm16_code.impala:63:1
+; signature extern const SWITCHES_REVERSE_MASK : int @ rpm16_code.impala:64:1
+; signature extern const CLOCK_FREQ_PARAM_INDEX : int @ rpm16_code.impala:66:1
+; signature extern const SWITCHES_PARAM_INDEX : int @ rpm16_code.impala:67:1
+; signature extern const OPERATOR_1_PARAM_INDEX : int @ rpm16_code.impala:68:1
+; signature extern const OPERAND_1_HIGH_PARAM_INDEX : int @ rpm16_code.impala:69:1
+; signature extern const OPERAND_1_LOW_PARAM_INDEX : int @ rpm16_code.impala:70:1
+; signature extern const OPERATOR_2_PARAM_INDEX : int @ rpm16_code.impala:71:1
+; signature extern const OPERAND_2_HIGH_PARAM_INDEX : int @ rpm16_code.impala:72:1
+; signature extern const OPERAND_2_LOW_PARAM_INDEX : int @ rpm16_code.impala:73:1
+; signature extern const PARAM_COUNT : int @ rpm16_code.impala:74:1
+; signature extern const POSITION_INT_BITS : int @ rpm16_code.impala:76:1
+; signature extern const POSITION_FRACT_BITS : int @ rpm16_code.impala:77:1
 	GLOB *1
-clock:	DATi #0	; signature global clock : int @ 79:1
-.x.params:	! DEFi #PARAM_COUNT
-params:	GLOB *.x.params	; signature array params[PARAM_COUNT] : unknown @ 80:1
-.x.displayLEDs:	! DEFi #4
-displayLEDs:	GLOB *.x.displayLEDs	; signature array displayLEDs[4] : unknown @ 81:1
+clock:	DATi #0	; signature global clock : int @ rpm16_code.impala:79:1
+.z.params:	! DEFi #PARAM_COUNT
+params:	GLOB *.z.params	; signature array params[PARAM_COUNT] : unknown @ rpm16_code.impala:80:1
+.z.displayLEDs:	! DEFi #4
+displayLEDs:	GLOB *.z.displayLEDs	; signature array displayLEDs[4] : unknown @ rpm16_code.impala:81:1
 	GLOB *1
-instance:	DATi #0	; signature global instance : int @ 82:1
+instance:	DATi #0	; signature global instance : int @ rpm16_code.impala:82:1
 	CNST *1
-clockFreqLimit:	DATi #132300	; signature readonly clockFreqLimit : int @ 83:1
-.x.signal:	! DEFi #2
-signal:	GLOB *.x.signal	; signature array signal[2] : unknown @ 86:1
+clockFreqLimit:	DATi #132300	; signature readonly clockFreqLimit : int @ rpm16_code.impala:83:1
+.z.signal:	! DEFi #2
+signal:	GLOB *.z.signal	; signature array signal[2] : unknown @ rpm16_code.impala:86:1
 	CNST *1
 	! SHLi <A> #1 #OPERAND_1_HIGH_PARAM_INDEX
 	! SHLi <B> #1 #OPERAND_1_LOW_PARAM_INDEX
@@ -64,36 +64,36 @@ signal:	GLOB *.x.signal	; signature array signal[2] : unknown @ 86:1
 	! IORi <A> <A> <B>
 	! SHLi <B> #1 #SWITCHES_PARAM_INDEX
 	! IORi <A> <A> <B>
-updateMask:	DATi <A>	; signature readonly updateMask : int @ 88:1
+updateMask:	DATi <A>	; signature readonly updateMask : int @ rpm16_code.impala:88:1
 
 ;-----------------------------------------------------------------------------
-init:	FUNC	; signature func init() -> void @ 111:1
+init:	FUNC	; signature func init() -> void @ rpm16_code.impala:111:1
 		PARA *1
 ;-----------------------------------------------------------------------------
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-reset:	FUNC	; signature func reset() -> void @ 121:1
+reset:	FUNC	; signature func reset() -> void @ rpm16_code.impala:121:1
 		PARA *1
 ;-----------------------------------------------------------------------------
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-update:	FUNC	; signature func update() -> void @ 132:1
+update:	FUNC	; signature func update() -> void @ rpm16_code.impala:132:1
 		PARA *1
 ;-----------------------------------------------------------------------------
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-process:	FUNC	; signature func process() -> void @ 151:1
+process:	FUNC	; signature func process() -> void @ rpm16_code.impala:151:1
 		PARA *1
 	$tmp:	LOCi
 	$clock:	LOCi
-.x.process.samps:	! DEFi #4
-	$samps:	LOCA *.x.process.samps
+.z.process.samps:	! DEFi #4
+	$samps:	LOCA *.z.process.samps
 	$diff:	LOCi
 ;-----------------------------------------------------------------------------
 		MOVi $clock #0 	; clock = 0
@@ -110,7 +110,7 @@ process:	FUNC	; signature func process() -> void @ 151:1
 		MOVi %1 $clock 	; read(clock, 1, samps)
 		MOVi %2 #1 
 		ADRL %3 $samps *0
-		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ 160:24
+		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ rpm16_code.impala:160:24
 		SUBi $diff $diff #0x8000	; diff = diff - 0x8000
 		GEQi $diff #0 @.f2	; if (diff < 0) 
 		MOVi $diff #0 	; diff = 0
@@ -129,25 +129,25 @@ process:	FUNC	; signature func process() -> void @ 151:1
 		MOVi %1 $clock 	; write(clock, 1, samps)
 		MOVi %2 #1 
 		ADRL %3 $samps *0
-		CALL ^write %0 *4	; expects write(int, int, ptr) -> unknown @ 167:25
+		CALL ^write %0 *4	; expects write(int, int, ptr) -> unknown @ rpm16_code.impala:167:25
 		ANDi %0 $clock #1	; if ((clock & 1) == 0) 
 		NEQi %0 #0 @.f3
 		DIVi %1 $clock #2	; read(clock / 2, 1, global signal)
 		MOVi %2 #1 
 		MOVp %3 &signal 
-		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ 169:37
+		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ rpm16_code.impala:169:37
 		GOTO @.e4  	; } else 
 	.f3:	DIVi %1 $clock #2	; read(clock / 2, 2, samps)
 		MOVi %2 #2 
 		ADRL %3 $samps *0
-		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ 171:29
+		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ rpm16_code.impala:171:29
 		ADDi %0 $samps:0 $samps:2	; global signal[0] = ((int) samps[0] + (int) samps[2]) >> 1
 		SHRi %0 %0 #1
 		POKE &signal:0 %0 
 		ADDi %0 $samps:1 $samps:3	; global signal[1] = ((int) samps[1] + (int) samps[3]) >> 1
 		SHRi %0 %0 #1
 		POKE &signal:1 %0 
-	.e4:	CALL ^yield %0 *1	; expects yield() -> unknown @ 175:10
+	.e4:	CALL ^yield %0 *1	; expects yield() -> unknown @ rpm16_code.impala:175:10
 		ADDi $clock $clock #1	; clock = clock + 1
 		GOTO @.l0  	; }
 		RETU   	; }

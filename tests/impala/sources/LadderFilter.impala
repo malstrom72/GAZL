@@ -67,6 +67,9 @@ locals float r, float k, float g0
 	global _ld1z = ld1z;
 	global _ld2z = ld2z;
 	global _ld3z = ld3z;
+
+	// A resonant ladder rings on after its input stops, so the output is never known to be silent.
+	hasSoundOut = 1;
 }
 
 temporary array audioBuffers[BATCH_SIZE * 2];

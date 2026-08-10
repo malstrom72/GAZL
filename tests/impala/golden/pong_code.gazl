@@ -1,60 +1,60 @@
-; Compiled with Impala version 1.0
+; Compiled with Impala version 2.0
 
 ; signatures version=1
-PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #2	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int @ 9:1
-FALSE:	! DEFi #0	; signature const FALSE : int @ 10:1
-TRUE:	! DEFi #1	; signature const TRUE : int @ 11:1
-.x.panelTextRows:	! DEFi #8
-panelTextRows:	CNST *.x.panelTextRows	; signature array panelTextRows[8] : unknown @ 19:1
+PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #2	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int @ pong_code.impala:9:1
+FALSE:	! DEFi #0	; signature const FALSE : int @ pong_code.impala:10:1
+TRUE:	! DEFi #1	; signature const TRUE : int @ pong_code.impala:11:1
+.z.panelTextRows:	! DEFi #8
+panelTextRows:	CNST *.z.panelTextRows	; signature array panelTextRows[8] : unknown @ pong_code.impala:19:1
 	DATA &.s_18PPVV_4d2 &.s_116AAO_4d3 &.s_132NNL_4d4
 	DATA &.s_164TAP_4d5 &.s_1PPVVT_4d6 &.s_2AAOOI_4d7
 	DATA &.s_12NNLL_4d8 &.s_contTA_4d9
-; signature extern native abort() -> unknown @ 30:1
-; signature extern native trace() -> unknown @ 31:1
-; signature extern native yield() -> unknown @ 32:1
-; signature extern native write() -> unknown @ 33:1
-; signature extern native read() -> unknown @ 34:1
-; signature extern const DEBUG : int @ 36:1
-; signature extern const OPERATOR_1_NOP : int @ 38:1
-; signature extern const OPERATOR_1_AND : int @ 39:1
-; signature extern const OPERATOR_1_MUL : int @ 40:1
-; signature extern const OPERATOR_1_OSC : int @ 41:1
-; signature extern const OPERATOR_1_RND : int @ 42:1
-; signature extern const OPERATOR_1_COUNT : int @ 43:1
-; signature extern const OPERATOR_2_NOP : int @ 45:1
-; signature extern const OPERATOR_2_OR : int @ 46:1
-; signature extern const OPERATOR_2_XOR : int @ 47:1
-; signature extern const OPERATOR_2_MSK : int @ 48:1
-; signature extern const OPERATOR_2_SUB : int @ 49:1
-; signature extern const OPERATOR_2_COUNT : int @ 50:1
-; signature extern const SWITCHES_SYNC_MASK : int @ 52:1
-; signature extern const SWITCHES_TRIPLET_MASK : int @ 53:1
-; signature extern const SWITCHES_DOTTED_MASK : int @ 54:1
-; signature extern const SWITCHES_WRITE_PROTECT_MASK : int @ 55:1
-; signature extern const SWITCHES_REVERSE_MASK : int @ 56:1
-; signature extern const CLOCK_FREQ_PARAM_INDEX : int @ 58:1
-; signature extern const SWITCHES_PARAM_INDEX : int @ 59:1
-; signature extern const OPERATOR_1_PARAM_INDEX : int @ 60:1
-; signature extern const OPERAND_1_HIGH_PARAM_INDEX : int @ 61:1
-; signature extern const OPERAND_1_LOW_PARAM_INDEX : int @ 62:1
-; signature extern const OPERATOR_2_PARAM_INDEX : int @ 63:1
-; signature extern const OPERAND_2_HIGH_PARAM_INDEX : int @ 64:1
-; signature extern const OPERAND_2_LOW_PARAM_INDEX : int @ 65:1
-; signature extern const PARAM_COUNT : int @ 66:1
-; signature extern const POSITION_INT_BITS : int @ 68:1
-; signature extern const POSITION_FRACT_BITS : int @ 69:1
+; signature extern native abort() -> unknown @ pong_code.impala:30:1
+; signature extern native trace() -> unknown @ pong_code.impala:31:1
+; signature extern native yield() -> unknown @ pong_code.impala:32:1
+; signature extern native write() -> unknown @ pong_code.impala:33:1
+; signature extern native read() -> unknown @ pong_code.impala:34:1
+; signature extern const DEBUG : int @ pong_code.impala:36:1
+; signature extern const OPERATOR_1_NOP : int @ pong_code.impala:38:1
+; signature extern const OPERATOR_1_AND : int @ pong_code.impala:39:1
+; signature extern const OPERATOR_1_MUL : int @ pong_code.impala:40:1
+; signature extern const OPERATOR_1_OSC : int @ pong_code.impala:41:1
+; signature extern const OPERATOR_1_RND : int @ pong_code.impala:42:1
+; signature extern const OPERATOR_1_COUNT : int @ pong_code.impala:43:1
+; signature extern const OPERATOR_2_NOP : int @ pong_code.impala:45:1
+; signature extern const OPERATOR_2_OR : int @ pong_code.impala:46:1
+; signature extern const OPERATOR_2_XOR : int @ pong_code.impala:47:1
+; signature extern const OPERATOR_2_MSK : int @ pong_code.impala:48:1
+; signature extern const OPERATOR_2_SUB : int @ pong_code.impala:49:1
+; signature extern const OPERATOR_2_COUNT : int @ pong_code.impala:50:1
+; signature extern const SWITCHES_SYNC_MASK : int @ pong_code.impala:52:1
+; signature extern const SWITCHES_TRIPLET_MASK : int @ pong_code.impala:53:1
+; signature extern const SWITCHES_DOTTED_MASK : int @ pong_code.impala:54:1
+; signature extern const SWITCHES_WRITE_PROTECT_MASK : int @ pong_code.impala:55:1
+; signature extern const SWITCHES_REVERSE_MASK : int @ pong_code.impala:56:1
+; signature extern const CLOCK_FREQ_PARAM_INDEX : int @ pong_code.impala:58:1
+; signature extern const SWITCHES_PARAM_INDEX : int @ pong_code.impala:59:1
+; signature extern const OPERATOR_1_PARAM_INDEX : int @ pong_code.impala:60:1
+; signature extern const OPERAND_1_HIGH_PARAM_INDEX : int @ pong_code.impala:61:1
+; signature extern const OPERAND_1_LOW_PARAM_INDEX : int @ pong_code.impala:62:1
+; signature extern const OPERATOR_2_PARAM_INDEX : int @ pong_code.impala:63:1
+; signature extern const OPERAND_2_HIGH_PARAM_INDEX : int @ pong_code.impala:64:1
+; signature extern const OPERAND_2_LOW_PARAM_INDEX : int @ pong_code.impala:65:1
+; signature extern const PARAM_COUNT : int @ pong_code.impala:66:1
+; signature extern const POSITION_INT_BITS : int @ pong_code.impala:68:1
+; signature extern const POSITION_FRACT_BITS : int @ pong_code.impala:69:1
 	GLOB *1
-clock:	DATi #0	; signature global clock : int @ 71:1
-.x.params:	! DEFi #PARAM_COUNT
-params:	GLOB *.x.params	; signature array params[PARAM_COUNT] : unknown @ 72:1
-.x.displayLEDs:	! DEFi #4
-displayLEDs:	GLOB *.x.displayLEDs	; signature array displayLEDs[4] : unknown @ 73:1
+clock:	DATi #0	; signature global clock : int @ pong_code.impala:71:1
+.z.params:	! DEFi #PARAM_COUNT
+params:	GLOB *.z.params	; signature array params[PARAM_COUNT] : unknown @ pong_code.impala:72:1
+.z.displayLEDs:	! DEFi #4
+displayLEDs:	GLOB *.z.displayLEDs	; signature array displayLEDs[4] : unknown @ pong_code.impala:73:1
 	GLOB *1
-instance:	DATi #0	; signature global instance : int @ 74:1
+instance:	DATi #0	; signature global instance : int @ pong_code.impala:74:1
 	CNST *1
-clockFreqLimit:	DATi #88200	; signature readonly clockFreqLimit : int @ 75:1
-.x.signal:	! DEFi #2
-signal:	GLOB *.x.signal	; signature array signal[2] : unknown @ 78:1
+clockFreqLimit:	DATi #88200	; signature readonly clockFreqLimit : int @ pong_code.impala:75:1
+.z.signal:	! DEFi #2
+signal:	GLOB *.z.signal	; signature array signal[2] : unknown @ pong_code.impala:78:1
 	CNST *1
 	! SHLi <A> #1 #OPERATOR_1_PARAM_INDEX
 	! SHLi <B> #1 #OPERAND_1_HIGH_PARAM_INDEX
@@ -67,15 +67,15 @@ signal:	GLOB *.x.signal	; signature array signal[2] : unknown @ 78:1
 	! IORi <A> <A> <B>
 	! SHLi <B> #1 #OPERAND_2_LOW_PARAM_INDEX
 	! IORi <A> <A> <B>
-updateMask:	DATi <A>	; signature readonly updateMask : int @ 80:1
-XOR_SHIFT_RANDOM_TO_FLOAT_FACTOR:	! DEFf #4.6566128730774e-10	; signature const XOR_SHIFT_RANDOM_TO_FLOAT_FACTOR : float @ 87:1
+updateMask:	DATi <A>	; signature readonly updateMask : int @ pong_code.impala:80:1
+XOR_SHIFT_RANDOM_TO_FLOAT_FACTOR:	! DEFf #4.6566128730774e-10	; signature const XOR_SHIFT_RANDOM_TO_FLOAT_FACTOR : float @ pong_code.impala:87:1
 	GLOB *1
-xorShiftRandomSeedX:	DATi #123456789	; signature global xorShiftRandomSeedX : int @ 89:1
+xorShiftRandomSeedX:	DATi #123456789	; signature global xorShiftRandomSeedX : int @ pong_code.impala:89:1
 	GLOB *1
-xorShiftRandomSeedY:	DATi #362436069	; signature global xorShiftRandomSeedY : int @ 90:1
+xorShiftRandomSeedY:	DATi #362436069	; signature global xorShiftRandomSeedY : int @ pong_code.impala:90:1
 
 ;-----------------------------------------------------------------------------
-xorShiftRandom:	FUNC	; signature func xorShiftRandom() -> int @ 91:1
+xorShiftRandom:	FUNC	; signature func xorShiftRandom() -> int @ pong_code.impala:91:1
 	$y:	OUTi
 	$x:	LOCi
 	$t:	LOCi
@@ -94,48 +94,48 @@ xorShiftRandom:	FUNC	; signature func xorShiftRandom() -> int @ 91:1
 		POKE &xorShiftRandomSeedY $y 	; global xorShiftRandomSeedY = y
 		RETU   	; }
 
-MAX_TAP_COUNT:	! DEFi #16	; signature const MAX_TAP_COUNT : int @ 107:1
-PAN_LEFT_BIT:	! DEFi #7	; signature const PAN_LEFT_BIT : int @ 109:1
-PAN_RIGHT_BIT:	! DEFi #6	; signature const PAN_RIGHT_BIT : int @ 110:1
-VOL_DEC_BIT:	! DEFi #5	; signature const VOL_DEC_BIT : int @ 111:1
-VOL_INC_BIT:	! DEFi #4	; signature const VOL_INC_BIT : int @ 112:1
-ACCELERATE_BIT:	! DEFi #3	; signature const ACCELERATE_BIT : int @ 113:1
-DEACCELERATE_BIT:	! DEFi #2	; signature const DEACCELERATE_BIT : int @ 114:1
-RANDOM_BIT:	! DEFi #1	; signature const RANDOM_BIT : int @ 115:1
-RECTIFIER_BIT:	! DEFi #0	; signature const RECTIFIER_BIT : int @ 116:1
-VOL_DEC_FACTOR:	! DEFf #0.70710678118655	; signature const VOL_DEC_FACTOR : float @ 118:1
-VOL_INC_FACTOR:	! DEFf #1.414213562373	; signature const VOL_INC_FACTOR : float @ 119:1
-TIME_DEC_FACTOR:	! DEFf #0.70710678118655	; signature const TIME_DEC_FACTOR : float @ 120:1
-TIME_INC_FACTOR:	! DEFf #1.414213562373	; signature const TIME_INC_FACTOR : float @ 121:1
-PAN_ATTENUATE:	! DEFf #0.25	; signature const PAN_ATTENUATE : float @ 122:1
-BATCH_SIZE:	! DEFi #64	; signature const BATCH_SIZE : int @ 124:1
-TAP_BITS:	! DEFi #0	; signature const TAP_BITS : int @ 128:1
-TAP_DELAY:	! DEFi #1	; signature const TAP_DELAY : int @ 129:1
-TAP_LEFT_GAIN:	! DEFi #2	; signature const TAP_LEFT_GAIN : int @ 130:1
-TAP_RIGHT_GAIN:	! DEFi #3	; signature const TAP_RIGHT_GAIN : int @ 131:1
-TAP_STRUCT_SIZE:	! DEFi #4	; signature const TAP_STRUCT_SIZE : int @ 132:1
+MAX_TAP_COUNT:	! DEFi #16	; signature const MAX_TAP_COUNT : int @ pong_code.impala:107:1
+PAN_LEFT_BIT:	! DEFi #7	; signature const PAN_LEFT_BIT : int @ pong_code.impala:109:1
+PAN_RIGHT_BIT:	! DEFi #6	; signature const PAN_RIGHT_BIT : int @ pong_code.impala:110:1
+VOL_DEC_BIT:	! DEFi #5	; signature const VOL_DEC_BIT : int @ pong_code.impala:111:1
+VOL_INC_BIT:	! DEFi #4	; signature const VOL_INC_BIT : int @ pong_code.impala:112:1
+ACCELERATE_BIT:	! DEFi #3	; signature const ACCELERATE_BIT : int @ pong_code.impala:113:1
+DEACCELERATE_BIT:	! DEFi #2	; signature const DEACCELERATE_BIT : int @ pong_code.impala:114:1
+RANDOM_BIT:	! DEFi #1	; signature const RANDOM_BIT : int @ pong_code.impala:115:1
+RECTIFIER_BIT:	! DEFi #0	; signature const RECTIFIER_BIT : int @ pong_code.impala:116:1
+VOL_DEC_FACTOR:	! DEFf #0.70710678118655	; signature const VOL_DEC_FACTOR : float @ pong_code.impala:118:1
+VOL_INC_FACTOR:	! DEFf #1.414213562373	; signature const VOL_INC_FACTOR : float @ pong_code.impala:119:1
+TIME_DEC_FACTOR:	! DEFf #0.70710678118655	; signature const TIME_DEC_FACTOR : float @ pong_code.impala:120:1
+TIME_INC_FACTOR:	! DEFf #1.414213562373	; signature const TIME_INC_FACTOR : float @ pong_code.impala:121:1
+PAN_ATTENUATE:	! DEFf #0.25	; signature const PAN_ATTENUATE : float @ pong_code.impala:122:1
+BATCH_SIZE:	! DEFi #64	; signature const BATCH_SIZE : int @ pong_code.impala:124:1
+TAP_BITS:	! DEFi #0	; signature const TAP_BITS : int @ pong_code.impala:128:1
+TAP_DELAY:	! DEFi #1	; signature const TAP_DELAY : int @ pong_code.impala:129:1
+TAP_LEFT_GAIN:	! DEFi #2	; signature const TAP_LEFT_GAIN : int @ pong_code.impala:130:1
+TAP_RIGHT_GAIN:	! DEFi #3	; signature const TAP_RIGHT_GAIN : int @ pong_code.impala:131:1
+TAP_STRUCT_SIZE:	! DEFi #4	; signature const TAP_STRUCT_SIZE : int @ pong_code.impala:132:1
 	GLOB *1
-tapCount:	DATi #0	; signature global tapCount : int @ 134:1
+tapCount:	DATi #0	; signature global tapCount : int @ pong_code.impala:134:1
 	! MULi <A> #TAP_STRUCT_SIZE #MAX_TAP_COUNT
-.x.tapData:	! DEFi #<A>
-tapData:	GLOB *.x.tapData	; signature array tapData[] : unknown @ 135:1
+.z.tapData:	! DEFi #<A>
+tapData:	GLOB *.z.tapData	; signature array tapData[] : unknown @ pong_code.impala:135:1
 
 ;-----------------------------------------------------------------------------
-init:	FUNC	; signature func init() -> void @ 142:1
+init:	FUNC	; signature func init() -> void @ pong_code.impala:142:1
 		PARA *1
 ;-----------------------------------------------------------------------------
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-reset:	FUNC	; signature func reset() -> void @ 150:1
+reset:	FUNC	; signature func reset() -> void @ pong_code.impala:150:1
 		PARA *1
 ;-----------------------------------------------------------------------------
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-maxi:	FUNC	; signature func maxi(int a, int b) -> int @ 154:1
+maxi:	FUNC	; signature func maxi(int a, int b) -> int @ pong_code.impala:154:1
 	$y:	OUTi
 	$a:	INPi
 	$b:	INPi
@@ -147,7 +147,7 @@ maxi:	FUNC	; signature func maxi(int a, int b) -> int @ 154:1
 
 
 ;-----------------------------------------------------------------------------
-calcGainsAndDelays:	FUNC	; signature func calcGainsAndDelays(int configBits, int stepBits, float initGain, float initDelay, ptr gains, ptr delays, ptr maxGain, ptr maxDelay, ptr endGain, ptr endDelay) -> void @ 161:1
+calcGainsAndDelays:	FUNC	; signature func calcGainsAndDelays(int configBits, int stepBits, float initGain, float initDelay, ptr gains, ptr delays, ptr maxGain, ptr maxDelay, ptr endGain, ptr endDelay) -> void @ pong_code.impala:161:1
 		PARA *1
 	$configBits:	INPi
 	$stepBits:	INPi
@@ -204,7 +204,7 @@ calcGainsAndDelays:	FUNC	; signature func calcGainsAndDelays(int configBits, int
 
 
 ;-----------------------------------------------------------------------------
-addTaps:	FUNC	; signature func addTaps(int op, int configBits, int stepBits, float offset, ptr gains, ptr delays, float gainScale, float delayScale, int firstStep) -> float @ 183:1
+addTaps:	FUNC	; signature func addTaps(int op, int configBits, int stepBits, float offset, ptr gains, ptr delays, float gainScale, float delayScale, int firstStep) -> float @ pong_code.impala:183:1
 	$o:	OUTf
 	$op:	INPi
 	$configBits:	INPi
@@ -251,7 +251,7 @@ addTaps:	FUNC	; signature func addTaps(int op, int configBits, int stepBits, flo
 		! SHLi <A> #1 #RANDOM_BIT	; if ((configBits & (1 << RANDOM_BIT)) != 0) r = itof((int) xorShiftRandom()) * (XOR_SHIFT_RANDOM_TO_FLOAT_FACTOR * (1.0/12.0)) * d
 		ANDi %0 $configBits <A>
 		EQUi %0 #0 @.f5
-		CALL &xorShiftRandom %0 *1	; expects xorShiftRandom() -> int @ 200:78
+		CALL &xorShiftRandom %0 *1	; expects xorShiftRandom() -> int @ pong_code.impala:200:78
 		! DIVf <A> #1.0 #12.0
 		! MULf <A> #XOR_SHIFT_RANDOM_TO_FLOAT_FACTOR <A>
 		iTOf %0 %0 <A>
@@ -264,7 +264,7 @@ addTaps:	FUNC	; signature func addTaps(int op, int configBits, int stepBits, flo
 		fTOi %1 %1 #1.0
 		SUBi %1 %1 #BATCH_SIZE
 		MOVi %2 #0 
-		CALL &maxi %0 *3	; expects maxi(int, int) -> int @ 202:52
+		CALL &maxi %0 *3	; expects maxi(int, int) -> int @ pong_code.impala:202:52
 		POKE $p #TAP_DELAY %0
 		fTOi %0 $lg #1.0	; p[TAP_LEFT_GAIN] = ftoi(lg)
 		POKE $p #TAP_LEFT_GAIN %0
@@ -280,20 +280,20 @@ addTaps:	FUNC	; signature func addTaps(int op, int configBits, int stepBits, flo
 
 
 ;-----------------------------------------------------------------------------
-update:	FUNC	; signature func update() -> void @ 216:1
+update:	FUNC	; signature func update() -> void @ pong_code.impala:216:1
 		PARA *1
-.x.update.localParams:	! DEFi #PARAM_COUNT
-	$localParams:	LOCA *.x.update.localParams
+.z.update.localParams:	! DEFi #PARAM_COUNT
+	$localParams:	LOCA *.z.update.localParams
 	$i:	LOCi
 	$v:	LOCi
 	$rebuild:	LOCi
 	$stepLength1:	LOCf
 	$stepLength2:	LOCf
 	$offset:	LOCf
-.x.update.gains:	! DEFi #16
-	$gains:	LOCA *.x.update.gains
-.x.update.delays:	! DEFi #16
-	$delays:	LOCA *.x.update.delays
+.z.update.gains:	! DEFi #16
+	$gains:	LOCA *.z.update.gains
+.z.update.delays:	! DEFi #16
+	$delays:	LOCA *.z.update.delays
 	$maxGain1:	LOCf
 	$maxDelay1:	LOCf
 	$maxGain2:	LOCf
@@ -324,17 +324,17 @@ update:	FUNC	; signature func update() -> void @ 216:1
 		ADRL %8 $maxDelay1 *0
 		ADRL %9 $endGain *0
 		ADRL %10 $endDelay *0
-		CALL &calcGainsAndDelays %0 *11	; expects calcGainsAndDelays(int, int, float, float, ptr, ptr, ptr, ptr, ptr, ptr) -> void @ 231:183
+		CALL &calcGainsAndDelays %0 *11	; expects calcGainsAndDelays(int, int, float, float, ptr, ptr, ptr, ptr, ptr, ptr) -> void @ pong_code.impala:231:183
 	.f0:	MOVf $stepLength2 $stepLength1 	; stepLength2 = stepLength1
 		MOVf $offset #0.0 	; offset = 0.0
 		SWCH $localParams:OPERATOR_2_PARAM_INDEX *5 @.s1	; switch ((int) localParams[OPERATOR_2_PARAM_INDEX] == 0 to 5) 
 	.s1#0:	GOTO @noSecond  	; goto noSecond
-		GOTO @.e2  
-	.s1#1:	GOTO @.e2  	; 
+		GOTO @.s1  
+	.s1#1:	GOTO @.s1  	; 
 	.s1#2:	MULf $stepLength2 $stepLength2 #0.5	; stepLength2 = stepLength2 * 0.5
-		GOTO @.e2  
+		GOTO @.s1  
 	.s1#3:	MULf $offset $stepLength2 #0.5	; offset = stepLength2 * 0.5
-		GOTO @.e2  
+		GOTO @.s1  
 	.s1#4:	MOVi %1 $localParams:OPERAND_2_LOW_PARAM_INDEX 	; calcGainsAndDelays((int) localParams[OPERAND_2_LOW_PARAM_INDEX], (int) localParams[OPERAND_2_HIGH_PARAM_INDEX], endGain, endDelay, &gains[8], &delays[8], &maxGain1, &maxDelay1, &endGain, &endDelay)
 		MOVi %2 $localParams:OPERAND_2_HIGH_PARAM_INDEX 
 		MOVf %3 $endGain 
@@ -345,7 +345,7 @@ update:	FUNC	; signature func update() -> void @ 216:1
 		ADRL %8 $maxDelay1 *0
 		ADRL %9 $endGain *0
 		ADRL %10 $endDelay *0
-		CALL &calcGainsAndDelays %0 *11	; expects calcGainsAndDelays(int, int, float, float, ptr, ptr, ptr, ptr, ptr, ptr) -> void @ 241:201
+		CALL &calcGainsAndDelays %0 *11	; expects calcGainsAndDelays(int, int, float, float, ptr, ptr, ptr, ptr, ptr, ptr) -> void @ pong_code.impala:241:201
 		MOVi %1 $localParams:OPERATOR_1_PARAM_INDEX 	; offset = (float) addTaps((int) localParams[OPERATOR_1_PARAM_INDEX], (int) localParams[OPERAND_1_LOW_PARAM_INDEX], (int) localParams[OPERAND_1_HIGH_PARAM_INDEX], 0.0, gains, delays, 256.0 / maxGain1, stepLength1 / maxDelay1, 0)
 		MOVi %2 $localParams:OPERAND_1_LOW_PARAM_INDEX 
 		MOVi %3 $localParams:OPERAND_1_HIGH_PARAM_INDEX 
@@ -355,7 +355,7 @@ update:	FUNC	; signature func update() -> void @ 216:1
 		DIVf %7 #256.0 $maxGain1
 		DIVf %8 $stepLength1 $maxDelay1
 		MOVi %9 #0 
-		CALL &addTaps %0 *10	; expects addTaps(int, int, int, float, ptr, ptr, float, float, int) -> float @ 242:230
+		CALL &addTaps %0 *10	; expects addTaps(int, int, int, float, ptr, ptr, float, float, int) -> float @ pong_code.impala:242:230
 		MOVf $offset %0 
 		MOVi %1 $localParams:OPERATOR_2_PARAM_INDEX 	; addTaps((int) localParams[OPERATOR_2_PARAM_INDEX], (int) localParams[OPERAND_2_LOW_PARAM_INDEX], (int) localParams[OPERAND_2_HIGH_PARAM_INDEX], offset, &gains[8], &delays[8], 256.0 / maxGain1, stepLength2 / maxDelay1, 8)
 		MOVi %2 $localParams:OPERAND_2_LOW_PARAM_INDEX 
@@ -366,10 +366,9 @@ update:	FUNC	; signature func update() -> void @ 216:1
 		DIVf %7 #256.0 $maxGain1
 		DIVf %8 $stepLength2 $maxDelay1
 		MOVi %9 #8 
-		CALL &addTaps %0 *10	; expects addTaps(int, int, int, float, ptr, ptr, float, float, int) -> float @ 243:224
-		GOTO @done  	; goto done
-	.s1:	NOOP
-	.e2:	MOVf $maxGain2 #0.00001 	; maxGain2 = 0.00001
+		CALL &addTaps %0 *10	; expects addTaps(int, int, int, float, ptr, ptr, float, float, int) -> float @ pong_code.impala:243:224
+		RETU   	; goto done
+	.s1:	MOVf $maxGain2 #0.00001 	; maxGain2 = 0.00001
 		MOVf $maxDelay2 #0.00001 	; maxDelay2 = 0.00001
 		MOVi %1 $localParams:OPERAND_2_LOW_PARAM_INDEX 	; calcGainsAndDelays((int) localParams[OPERAND_2_LOW_PARAM_INDEX], (int) localParams[OPERAND_2_HIGH_PARAM_INDEX], 1.0, 1.0, &gains[8], &delays[8], &maxGain2, &maxDelay2, &endGain, &endDelay)
 		MOVi %2 $localParams:OPERAND_2_HIGH_PARAM_INDEX 
@@ -381,7 +380,7 @@ update:	FUNC	; signature func update() -> void @ 216:1
 		ADRL %8 $maxDelay2 *0
 		ADRL %9 $endGain *0
 		ADRL %10 $endDelay *0
-		CALL &calcGainsAndDelays %0 *11	; expects calcGainsAndDelays(int, int, float, float, ptr, ptr, ptr, ptr, ptr, ptr) -> void @ 249:190
+		CALL &calcGainsAndDelays %0 *11	; expects calcGainsAndDelays(int, int, float, float, ptr, ptr, ptr, ptr, ptr, ptr) -> void @ pong_code.impala:249:190
 		MOVi %1 $localParams:OPERATOR_2_PARAM_INDEX 	; addTaps((int) localParams[OPERATOR_2_PARAM_INDEX], (int) localParams[OPERAND_2_LOW_PARAM_INDEX], (int) localParams[OPERAND_2_HIGH_PARAM_INDEX], offset, &gains[8], &delays[8], 256.0 / maxGain2, stepLength2 / maxDelay2, 8)
 		MOVi %2 $localParams:OPERAND_2_LOW_PARAM_INDEX 
 		MOVi %3 $localParams:OPERAND_2_HIGH_PARAM_INDEX 
@@ -391,8 +390,8 @@ update:	FUNC	; signature func update() -> void @ 216:1
 		DIVf %7 #256.0 $maxGain2
 		DIVf %8 $stepLength2 $maxDelay2
 		MOVi %9 #8 
-		CALL &addTaps %0 *10	; expects addTaps(int, int, int, float, ptr, ptr, float, float, int) -> float @ 250:222
-	noSecond:	LEQi $localParams:OPERATOR_1_PARAM_INDEX #0 @.f3	; if ((int) localParams[OPERATOR_1_PARAM_INDEX] > 0) 
+		CALL &addTaps %0 *10	; expects addTaps(int, int, int, float, ptr, ptr, float, float, int) -> float @ pong_code.impala:250:222
+	noSecond:	LEQi $localParams:OPERATOR_1_PARAM_INDEX #0 @done	; if ((int) localParams[OPERATOR_1_PARAM_INDEX] > 0) 
 		MOVi %1 $localParams:OPERATOR_1_PARAM_INDEX 	; addTaps((int) localParams[OPERATOR_1_PARAM_INDEX], (int) localParams[OPERAND_1_LOW_PARAM_INDEX], (int) localParams[OPERAND_1_HIGH_PARAM_INDEX], 0.0, gains, delays, 256.0 / maxGain1, stepLength1 / maxDelay1, 0)
 		MOVi %2 $localParams:OPERAND_1_LOW_PARAM_INDEX 
 		MOVi %3 $localParams:OPERAND_1_HIGH_PARAM_INDEX 
@@ -402,22 +401,21 @@ update:	FUNC	; signature func update() -> void @ 216:1
 		DIVf %7 #256.0 $maxGain1
 		DIVf %8 $stepLength1 $maxDelay1
 		MOVi %9 #0 
-		CALL &addTaps %0 *10	; expects addTaps(int, int, int, float, ptr, ptr, float, float, int) -> float @ 253:212
-	.f3:	NOOP
+		CALL &addTaps %0 *10	; expects addTaps(int, int, int, float, ptr, ptr, float, float, int) -> float @ pong_code.impala:253:212
 	done:	RETU   	; }
 
-.x.temp:	! DEFi #2
-temp:	GLOB *.x.temp	; signature array temp[2] : unknown @ 258:1
+.z.temp:	! DEFi #2
+temp:	GLOB *.z.temp	; signature array temp[2] : unknown @ pong_code.impala:258:1
 	! MULi <A> #BATCH_SIZE #2
-.x.buffer:	! DEFi #<A>
-buffer:	GLOB *.x.buffer	; signature array buffer[] : unknown @ 259:1
+.z.buffer:	! DEFi #<A>
+buffer:	GLOB *.z.buffer	; signature array buffer[] : unknown @ pong_code.impala:259:1
 
 ;-----------------------------------------------------------------------------
-process:	FUNC	; signature func process() -> void @ 276:1
+process:	FUNC	; signature func process() -> void @ pong_code.impala:276:1
 		PARA *1
 	! MULi <A> #BATCH_SIZE #2
-.x.process.tapData:	! DEFi #TAP_STRUCT_SIZE
-	$tapData:	LOCA *.x.process.tapData
+.z.process.tapData:	! DEFi #TAP_STRUCT_SIZE
+	$tapData:	LOCA *.z.process.tapData
 	$i:	LOCi
 	$clock:	LOCi
 	$l:	LOCi
@@ -425,8 +423,8 @@ process:	FUNC	; signature func process() -> void @ 276:1
 	$p:	LOCp
 	$bp:	LOCp
 	$bi:	LOCi
-.x.process.tapped:	! DEFi #<A>
-	$tapped:	LOCA *.x.process.tapped
+.z.process.tapped:	! DEFi #<A>
+	$tapped:	LOCA *.z.process.tapped
 	$tp:	LOCp
 	$ledBits:	LOCi
 	$dir:	LOCi
@@ -447,14 +445,14 @@ process:	FUNC	; signature func process() -> void @ 276:1
 		COPY &signal $bp *2	; copy (2 from bp to global signal)
 		COPY $bp &temp *2	; copy (2 from global temp to bp)
 		ADDp $bp $bp $dir	; bp = bp + dir
-		CALL ^yield %0 *1	; expects yield() -> unknown @ 295:11
+		CALL ^yield %0 *1	; expects yield() -> unknown @ pong_code.impala:295:11
 		FORi $bi #BATCH_SIZE @.l3	; }
 	.e2:	PEEK %0 &clock 	; clock = global clock - BATCH_SIZE
 		SUBi $clock %0 #BATCH_SIZE
 		MOVi %1 $clock 	; write(clock, BATCH_SIZE, global buffer)
 		MOVi %2 #BATCH_SIZE 
 		MOVp %3 &buffer 
-		CALL ^write %0 *4	; expects write(int, int, ptr) -> unknown @ 299:42
+		CALL ^write %0 *4	; expects write(int, int, ptr) -> unknown @ pong_code.impala:299:42
 		MOVp $bp &buffer 	; for (bp = global buffer to global buffer + BATCH_SIZE * 2) *bp = 0
 		! MULi <A> #BATCH_SIZE #2
 		ADDp %0 &buffer <A>
@@ -471,7 +469,7 @@ process:	FUNC	; signature func process() -> void @ 276:1
 		SUBi %2 $clock $tapData:TAP_DELAY	; read(clock - (int) tapData[TAP_DELAY], BATCH_SIZE, tapped)
 		MOVi %3 #BATCH_SIZE 
 		ADRL %4 $tapped *0
-		CALL ^read %1 *4	; expects read(int, int, ptr) -> unknown @ 306:62
+		CALL ^read %1 *4	; expects read(int, int, ptr) -> unknown @ pong_code.impala:306:62
 		! SHLi <A> #1 #RECTIFIER_BIT	; if (((int) tapData[TAP_BITS] & (1 << RECTIFIER_BIT)) != 0) 
 		ANDi %1 $tapData:TAP_BITS <A>
 		EQUi %1 #0 @.f8

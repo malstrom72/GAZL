@@ -1,5 +1,0 @@
-; A second unit declaring the SAME valueless const with a different type. Neither unit defines it, so
-; nothing could be checked before these rows were emitted at all - this is the conflict that was
-; previously invisible.
-; signatures version=1
-; signature extern const WORD_SIZE : float @ const-extern-conflict.gazl:4:1

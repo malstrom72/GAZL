@@ -8,6 +8,9 @@ IF "%~1"=="" (
 )
 IF NOT EXIST ..\output MKDIR ..\output
 CALL UpdateUnitTest.cmd
+REM Same lesson as below, one line earlier: UpdateUnitTest.cmd deliberately `EXIT /B 1`s on failure, and
+REM nothing was reading it - so a failed unit-test regeneration let the build carry on and report green.
+IF ERRORLEVEL 1 EXIT /B 1
 IF "%mode%"=="beta" (
     SET out=..\output\GAZLCmdBeta.exe
 ) ELSE (
@@ -32,4 +35,11 @@ IF "%jitarch%"=="x64" (
 ) ELSE (
     CALL BuildCpp.cmd %mode% native %out% -I.. GAZLCmd.cpp ..\src\GAZL.cpp ..\src\GAZLCpp.cpp
 )
+REM Propagate the compile result BEFORE anything else runs. A script's exit status is its LAST command,
+REM and the `IF EXIST`/`ATTRIB` below succeeds whatever happened - so a FAILED build reported success and
+REM `build.cmd` sailed straight past its own `IF ERRORLEVEL 1`. That is how a stale GAZLCmd.exe shipped
+REM while the build called itself green: the linker could not overwrite a copy still held open by an
+REM earlier run (LNK1104), printed the error, and nothing downstream noticed.
+IF ERRORLEVEL 1 EXIT /B 1
 IF EXIST %out% ATTRIB +x %out% >NUL 2>&1
+EXIT /B 0

@@ -1,3 +1,0 @@
-; The definition, whose pointer field is untyped (`ptr`). Compatible with any declared chain.
-; signatures version=1
-; signature struct Node { link : ptr, n : int } @ struct-field-ptrchain-def.gazl:3:1

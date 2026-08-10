@@ -1,8 +1,14 @@
 # Assembler-level function inlining: opportunity probe (2026-07-19)
 
+> **PARKED on this branch.** `inline` is rejected here with `E439`; the implementation lives on branch
+> `GAZL2`, which ships after Impala 2.0. Everything below is a measurement record and a design input, not
+> a description of what this compiler does - the same caveat [`Inlining.md`](Inlining.md) carries, which
+> this file was missing. Nothing in Impala 2.0 waits on it.
+
 > **Status update 2026-07-27.** The placement question at the bottom of this file ("OPEN DECISION") is
-> RESOLVED for the compiler half: Impala-level inlining is implemented behind an explicit `inline`
-> keyword. See `design/impala/Inlining.md` for the spec and the rules. Three findings from that work correct or
+> RESOLVED for the compiler half: Impala-level inlining was implemented behind an explicit `inline`
+> keyword (on `GAZL2` - see the banner above).
+> See `design/impala/Inlining.md` for the spec and the rules. Three findings from that work correct or
 > sharpen what is written below, all measured on x64/Windows with the GAZLCmd interpreter:
 >
 > 1. **The "roughly 60-70%" estimate for an assembler pass measures at 73%.** Same program, three

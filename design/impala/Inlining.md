@@ -1,5 +1,11 @@
 # Function inlining in Impala (spec)
 
+> **PARKED for Impala 3.0 on this branch.** `inline` is rejected with `E439`; the implementation lives on
+> the `GAZL2` branch. An expansion places its locals with GAZL 2 `SCOP` / `ENDS`, and Impala 2 has to stay
+> usable on GAZL 1.0 engines, which reject `SCOP` outright. See
+> [`design/ParkedFeatures.md`](../ParkedFeatures.md). Everything below describes the design as built and is
+> kept as the spec to restore from - it is not what this branch's compiler does.
+
 Status: SPEC. Explicit `inline` keyword, no heuristics. Targets FUTURE firmware - see the coverage note at
 the end for what this deliberately does not reach.
 
@@ -85,7 +91,9 @@ Two things worth keeping in mind:
   `impala compile` resolves the closure, so this needs no separate step.
 
 Rejected, each with its own diagnostic (section 7): recursion, taking the address, `export`, `extern`,
-forward declaration, and declaring an array or struct local.
+and forward declaration. Array and struct locals are **allowed**, and since the extent-naming rework named every
+extent, a NON-literal extent is allowed too - see section 8, which explains why `E433` no longer exists.
+(This paragraph used to say such a local was rejected, contradicting that section.)
 
 
 ## 3. What gets captured
@@ -325,7 +333,7 @@ already complete, and `B` cannot have inlined `A`.
 
 A callee's declared locals become REAL named locals of the caller, bracketed by `SCOP` / `ENDS`. The
 assembler owns their placement, exactly as it does for an ordinary local - which is the point: it
-resolves `*.z.Struct` and `*.x.f.name` before assigning offsets, so a host-owned size lands correctly,
+resolves `*.z.Struct` and `*.z.f.name` before assigning offsets, so a host-owned size lands correctly,
 where a compile-time slot count could only ever have been Impala's guess at it.
 
 Sibling expansions overlay, so a function's frame cost is its LARGEST expansion, not the sum. That is
@@ -345,12 +353,12 @@ CALL window's base must be a transient, so that block cannot be anything else.
 Nothing but a declaration line repeating the size operand verbatim:
 
     SCOP
-    $buf_i0:	LOCA *.x.sum3.buf
+    $buf_i0:	LOCA *.z.sum3.buf
     $i_i0:	LOCi
     ENDS
 
-Both size forms are SYMBOLS the assembler resolves - `*.z.Struct` for a struct local, `*.x.f.name` for
-an array (see `design/gazl/SymbolNamespace.md`). That is what makes the expansion trivial. An extent computed
+Both size forms are SYMBOLS the assembler resolves - `*.z.Struct` for a struct local, `*.z.f.name` for an array local
+(see `design/gazl/SymbolNamespace.md`). That is what makes the expansion trivial. An extent computed
 by folding (`t[H * N]`, or `count * .z.Ext` for an extern struct) lives in a recycled `<X>` scratch that
 belongs to wherever it was folded, so it can NOT be repeated at an expansion site - naming it once, at
 the callee's declaration, is what lets every site refer to it.

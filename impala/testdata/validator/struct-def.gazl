@@ -1,6 +1,0 @@
-; signatures version=1
-; the real, typed definition of Frame
-; signature struct Frame { w : float, h : int } @ struct-def.gazl:3:1
- .o.Frame.w:	! DEFi #0
- .o.Frame.h:	! DEFi #1
- .z.Frame:		! DEFi #2

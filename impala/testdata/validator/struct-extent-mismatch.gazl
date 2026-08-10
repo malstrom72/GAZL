@@ -1,4 +1,0 @@
-; A unit that DOES state `taps`, and states it wrong. Both sides claim a comparable extent, so the
-; disagreement is a real error rather than a skipped unknown.
-; signatures version=1
-; signature extern struct Bank { taps : int[8], raw : float[], n : int } @ struct-extent-mismatch.gazl:4:1

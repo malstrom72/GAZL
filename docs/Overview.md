@@ -66,31 +66,37 @@ The virtual machine and assembler are implemented in standard C++ in a single he
         - No need to support high-level language concepts like dynamic memory management, exceptions etc
 ```
 
-(See lines [10-33](../src/GAZL.h) in `GAZL.h`.)
+(See the `Goals` / `Non-goals` block in the header comment of [`src/GAZL.h`](../src/GAZL.h), lines 31-53.)
 
 ## Using from C++
 
-Use the `Assembler` class to parse assembly source and the `Processor` class to execute code. An example is found in `tools/GAZLCmd.cpp`:
+Use the `Assembler` class to parse assembly source and the `Processor` class to execute code. `Symbols` holds the native-function registrations and the symbol table both classes share; `functionTable` is filled in by `finalize` and handed straight to `Processor`. This is the sequence `tools/GAZLCmd.cpp` uses, condensed:
 
 ```cpp
-Assembler assem(100000, codeMemory, 100000, dataMemory, globals);
-assem.newUnit("file.gazl");
-const char* cp = source.c_str();
-while (*cp != 0) {
-    cp = assem.feed(cp);
-    if (*cp == 0) assem.finalize(codeSize, rwSize, constSize);
+Symbols globals;
+for (int i = 0; i < nativeCount; ++i) globals.registerNative(NATIVE_NAMES[i], i);
+
+UInt codeSize, globalsSize, constsSize, functionCount = 0;
+{
+    Assembler assem(CODE_MEMORY_SIZE, code, FUNCTION_TABLE_SIZE, functionTable,
+            DATA_MEMORY_SIZE, memory, globals);
+    assem.newUnit("file.gazl");
+    std::string line;
+    while (getline(gazlStream, line)) assem.feed(line.c_str());
+    assem.finalize(codeSize, globalsSize, constsSize, functionCount);
 }
 
-Processor vm(codeSize, codeMemory, memorySize, dataMemory,
-             rwSize + 30000, rwSize, 30000,
-             ipStackSize, callStack, nativeFuncs);
-vm.enterCall(globals.findFunction("main"));
-Status result = vm.run();
+Processor pmachine(codeSize, code, functionCount, functionTable, DATA_MEMORY_SIZE, memory,
+        globalsSize, constsSize, CALL_STACK_SIZE, callStack, NATIVE_TABLE, 0);
+Pointer mainFunction = globals.findFunction("main");
+Status status = pmachine.enterCall(mainFunction);
+pmachine.resetTimeOut(0x7FFFFFFF);
+status = pmachine.run();
 ```
 
-The processor exposes helpers to access memory and parameters (`accessMemory`, `accessParams`). Writing your own native functions involves the `Processor*` interface; see the unit tests for examples.
+`run()` returns `TIME_OUT` when the cycle budget set by `resetTimeOut` runs out; call `resetTimeOut` and `run()` again to continue. The processor exposes helpers to access memory and parameters (`accessMemory`, `accessParams`). Writing your own native functions involves the `Processor*` interface; see the unit tests for examples.
 
-For a smaller example, inspect the comments around the `Assembler` and `Processor` usage in `tools/GAZLCmd.cpp`.
+The full version, with the error handling and stream checks left out above, is in `tools/GAZLCmd.cpp` — the `Assembler` construction, `finalize` call and `Processor` construction in `main`.
 
 ## Textual Representation and Compile‑Time Constants
 

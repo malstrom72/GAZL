@@ -1,3 +1,0 @@
-; signatures version=1
-; a unit that compiled against the WRONG field types (w/h swapped)
-; signature extern struct Frame { w : int, h : float } @ struct-decl-typemismatch.gazl:3:1

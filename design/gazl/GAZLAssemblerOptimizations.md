@@ -10,6 +10,9 @@ the resolved value, so any transform keyed on it can only happen here. That sing
 
 Related but separate: [`design/FutureOptimizations.md`](../FutureOptimizations.md) covers Impala-side
 candidates (dead-arm elimination after a compile-time branch, and the `expandInline` folding restriction).
+[`design/gazl/TailCalls.md`](TailCalls.md) covers the one case that needs a NEW instruction rather than a
+peephole - `CALL f; RETU` cannot be collapsed here, because no GAZL form can enter a function without
+pushing a frame.
 
 
 ## What the assembler already does
@@ -24,8 +27,12 @@ From the operator table in `src/GAZL.cpp:299-306`:
 | `LOCAL_BOUNDS` | frame-bounds bookkeeping |
 | `CHECK_DIV_BY_0` | reject a constant zero divisor |
 
-The gap: **every fold requires ALL sources to be constant.** There is no transform for a
-variable-plus-constant instruction whose constant happens to be an identity.
+Two gaps follow from that table:
+
+- **Every fold requires ALL sources to be constant.** There is no transform for a variable-plus-constant
+  instruction whose constant happens to be an identity. Items 1-3 below.
+- **There is no control-flow peephole at all.** `GOTO_b__` carries a flag word of `0`, and there is no
+  threading, chaining or collapsing logic anywhere in `src/GAZL.cpp`. Items 4-5 below.
 
 
 ## 1. Identity folding on `_vvc` forms
@@ -101,7 +108,113 @@ Note also that `SHLi_vvc` / `SHRi_vvc` take `CONST_INT_P` - a POSITIVE constant 
 plain `CONST_INT`, so the rewrite has to respect the narrower operand class, not just the value.
 
 
-## 4. Not candidates
+## 4. Branch threading
+
+`GOTO @a` where `a:` holds `GOTO @b` becomes `GOTO @b`, applied transitively to a fixpoint.
+
+**Every hop is a real dispatch today.** Measured on this tree, 20M iterations of a loop whose body is a
+chain of three `GOTO`s versus one:
+
+| Body | Instructions/iteration | Median |
+|---|---|---|
+| `GOTO`->`GOTO`->`GOTO`->`FORi` | 4 | 126.4 ms |
+| `GOTO`->`FORi` | 2 | 63.9 ms |
+
+1.97x against an instruction-count ratio of exactly 2. Nothing is threaded; the cost is linear in the
+chain length and is paid on every execution.
+
+**Population is non-zero and structural.** Impala's `processBranches` does collapse chains, but the alias
+map is resolved at visit time during a single bottom-to-top walk and is NOT transitive, so a chain the
+walk meets in the wrong order survives into the output:
+
+```gazl
+        GOTO @second        ; goto first    <- followed one hop, then stopped
+second: GOTO @done
+first:  GOTO @second
+done:   ...
+```
+
+`aliases[first] = second` is recorded before `aliases[second] = done` exists, and nothing re-follows.
+
+## 5. Return duplication
+
+`GOTO @a` where `a:` holds `RETU` becomes `RETU`. This is NOT item 4 - the target is not a branch, so
+threading does not reach it.
+
+**This one is guaranteed to occur in every program with an early exit.** Impala has no `return`
+statement, so the sanctioned early-exit idiom is a `goto` to a label at the end of the body, which is
+exactly where the function's `RETU` sits:
+
+```gazl
+        NEQi $r #0 @.f0     ; if (v == 0) goto out
+        GOTO @out           ; goto out          <- should be RETU
+.f0:    MOVi $r $v
+out:    RETU
+```
+
+Correctness is unconditional: `RETU` takes no operands and does the same frame work wherever it appears,
+so duplicating it changes nothing but the dispatch count. After the rewrite the label may become
+unreferenced, which is a separate (and optional) cleanup.
+
+Note this one has a competing fix at the other end: a bare `return;` statement in Impala would lower
+straight to `RETU` and never emit the `GOTO` (see [`ParkedFeatures.md`](../ParkedFeatures.md)). The two are
+complementary rather than alternatives - the peephole also improves every program already written, and
+every hand-written GAZL module.
+
+**Why items 4 and 5 belong here and not in Impala.** Impala's own pass can and should emit fewer of
+these (see the rejected fixpoint restructure noted below), but the assembler is the layer that resolves
+labels, it is the only layer hand-written GAZL passes through, and there is no layer after it - a chain
+Impala leaves behind is currently paid forever. Both transforms also satisfy this document's own
+admission criterion: neither changes the number of memory accesses nor the order of side effects.
+
+**Related work on the Impala side. The NOOP half is DONE; the `GOTO` chains are still yours.**
+
+A prototyped `processBranches` restructure (record aliases during the walk, then a forward pass resolving
+every label operand to a fixpoint and dropping the unreferenced ones) cut corpus NOOPs 523 -> 379 but made
+`Priyome.impala` fail to assemble (`Symbol not found: .f5`, cause not isolated) and was rejected.
+
+What shipped instead is smaller and sits at the END of `processBranches`, after every alias and deletion
+that pass makes has settled - so nothing re-points afterwards, which is what sank the prototype. A run of
+`<--` records with nothing emitted between them all names ONE address, and only one LINE can carry a name,
+so each of the others was spent on a `NOOP` that existed for no other reason (`adventCode` had seven in a
+row). The run collapses onto one survivor - a user label in preference to a minted one, so a `goto` target
+never leaves the listing - and every reference is rewritten to it.
+
+Measured across `tests/impala/golden` (89 files, 36102 code lines): **NOOPs 516 -> 255**, 261 lines of
+shipped text. What remains is not recoverable this way and should not be chased:
+
+| remaining NOOP | count | why it stays |
+|----------------|-------|--------------|
+| label lands on a `!` line | 203 | a RUNTIME branch target - the line folds away and would take the label |
+| switch table entry (`.sN#k`) | 52 | the case VALUE is part of the name; two entries are two addresses |
+
+The other half of the old measurement - 99 `COMP ->A; GOTO B; A:` sites that should be `!COMP ->B` - is
+untouched, and is what items 4 and 5 recover from below.
+
+### The `.f5` failure, isolated (2026-08-03) - and it is a warning for item 4
+
+Both attempts at threading inside Impala died on `Priyome` with `Symbol not found (in expected scope):
+.f5`, and neither found the cause. It is not what the earlier notes guessed. Minimising it gives one
+changed line in `checkInvariant`:
+
+    good:  ! EQUi #DEBUG #0 @.a7
+    bad:   ! EQUi #DEBUG #0 @.a14      (because `.a7:` holds `GOTO @.a14`)
+
+**An assemble-time branch is not control flow.** `! EQUi #DEBUG #0 @L` tells the assembler to stop
+emitting until it reaches `L`; the target does not mean "continue here", it delimits a REGION OF TEXT
+that will not exist. Threading it to a later label silently WIDENS the skipped region, taking the label
+definitions inside it - so a symbol goes missing while sitting in plain sight in the listing, and the
+complaint surfaces against the NEXT function, where the scope closes with the reference still open.
+
+Excluding those records fixes it completely (Priyome assembles, corpus 0/87 goldens). It is still not
+shipped, because it then changes exactly ONE line across the whole corpus and that line is in a synthetic
+fixture: Impala's backward walk already collapses every chain running in the direction it scans.
+
+**For an assembler implementation this hazard cannot arise** - by `finalize` the `!` directives have
+already been consumed and every remaining target is an instruction index. That is a second, better reason
+to do item 4 here rather than in the compiler.
+
+## 6. Not candidates
 
 - **Anything requiring the assembler to know Impala's type model.** It sees words.
 - **Reassociation or factoring across instructions.** GAZL is a transliteration target; the instruction
@@ -117,3 +230,18 @@ Before any of this, get a number. `tools/bench.sh` / `.cmd` and `tools/genbench.
 first step is to count how often the affected shapes actually occur in `tests/impala/golden/*.gazl` and in
 real firmware, rather than assuming the multiply matters. Item 1's whole reachable surface is one-word
 structs with runtime indices, which may well be zero programs today.
+
+**Items 4 and 5 are the exception - their populations are counted.** Across the 94 fixtures in
+`tests/impala/golden/*.gazl`:
+
+| | count | share of all `GOTO`s |
+|---|---|---|
+| `GOTO` instructions | 1174 | - |
+| target is another `GOTO` (item 4) | 34 | 2.9% |
+| target is a `RETU` (item 5) | **271** | **23.1%** |
+| **removable** | **305** | **26.0%** |
+
+**A quarter of every `GOTO` in the corpus is removable, and item 5 is almost all of it** - which is the
+forced early-exit idiom showing up exactly as predicted. If only one thing on this page gets built, build
+item 5. It is the simplest transform here, it is unconditionally correct, and it is the only one whose
+benefit is already demonstrated on real programs rather than argued.

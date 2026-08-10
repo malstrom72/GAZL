@@ -1,9 +1,9 @@
-; Compiled with Impala version 1.0
+; Compiled with Impala version 2.0
 
 ; signatures version=1
 
 ;-----------------------------------------------------------------------------
-x:	FUNC	; signature func x() -> void @ 6:1
+x:	FUNC	; signature func x() -> void @ switchtest.impala:6:1
 		PARA *1
 	$i:	LOCi
 	$j:	LOCi
@@ -14,86 +14,91 @@ x:	FUNC	; signature func x() -> void @ 6:1
 	.s0#1:	NOOP
 	.s0#2:	NOOP
 	.s0#3:	MOVi $j $i 	; j = i
-		GOTO @.e1  
-	.s0#5:	CALL &x %0 *1	; expects x() -> void @ 9:13
-		GOTO @.e1  
+		RETU   
+	.s0#5:	CALL &x %0 *1	; expects x() -> void @ switchtest.impala:9:13
+		RETU   
 	.s0:	MOVi $i $j 	; i = j
-		GOTO @.e1  
+		RETU   
 	.s0#6:	NOOP
 	.s0#8:	MOVi $k $j 	; k = j
 	.e1:	RETU   	; }
 
-CONSTANT:	! DEFi #29	; signature const CONSTANT : int @ 15:1
+CONSTANT:	! DEFi #29	; signature const CONSTANT : int @ switchtest.impala:15:1
 
 ;-----------------------------------------------------------------------------
-y:	FUNC	; signature func y() -> void @ 16:1
+y:	FUNC	; signature func y() -> void @ switchtest.impala:16:1
 		PARA *1
 	$i:	LOCi
-.x.y.a:	! DEFi #5
-	$a:	LOCA *.x.y.a
+.z.y.a:	! DEFi #5
+	$a:	LOCA *.z.y.a
 ;-----------------------------------------------------------------------------
 		GETL %0 $a $i	; switch ((int) a[i] == 0 to 'a') 
 		SWCH %0 *'a' @.s0
 	.s0:	NOOP
-	.e1:	NOOP
 		! ADDi <A> #23 #5	; switch (i == 23+5 to 234 * 2) 
 		! MULi <B> #234 #2
 		! SUBi <B> <B> <A>
 		SUBi %0 $i <A>
 		SWCH %0 *<B> @.s2
 	.s2:	NOOP
-	.e3:	NOOP
 		! ADDi <A> #4 #1	; switch (i == 4+1 to 130) 
 		! SUBi <B> #130 <A>
 		SUBi %0 $i <A>
 		SWCH %0 *<B> @.s4
 		! ADDi <B> #23 #57	; case 23+57, 5, CONSTANT
 		! SUBi <B> <B> <A>
+		! LSSi <B> #0 @.g6
 	.s4#<B>:	NOOP
-		! SUBi <B> #5 <A>
+	.g6:	! SUBi <B> #5 <A>
+		! LSSi <B> #0 @.g7
 	.s4#<B>:	NOOP
-		! SUBi <B> #CONSTANT <A>
-	.s4#<B>:	ADDi $i $i #1234	; i=i+1234
-		GOTO @.e5  
+	.g7:	! SUBi <B> #CONSTANT <A>
+		! LSSi <B> #0 @.g8
+	.s4#<B>:	NOOP
+	.g8:	ADDi $i $i #1234	; i=i+1234
+		GOTO @.s4  
 		! SUBi <B> #'y' <A>	; case 'y'
-	.s4#<B>:	GOTO @.e5  	; 
+		! LSSi <B> #0 @.g9
+	.s4#<B>:	NOOP
+	.g9:	GOTO @.s4  	; 
 		! MULi <B> #4 #CONSTANT	; case 4*CONSTANT
 		! SUBi <B> <B> <A>
-	.s4#<B>:	MULi $i $i #100	; i = i * 100
-	.s4:	NOOP
-	.e5:	SUBi %0 $i #10	; switch (i == 10 to 100) 
-		SWCH %0 *90 @.s6
-	.s6#89:	CALL &x %0 *1	; expects x() -> void @ 20:40
-		GOTO @.e7  
-	.s6:	GOTO @.e7  	; 
-	.s6#10:	ADDi $i $i #1	; i = i + 1
-		GOTO @.e7  
+		! LSSi <B> #0 @.g10
+	.s4#<B>:	NOOP
+	.g10:	MULi $i $i #100	; i = i * 100
+	.s4:	SUBi %0 $i #10	; switch (i == 10 to 100) 
+		SWCH %0 *90 @.s11
+	.s11#89:	CALL &x %0 *1	; expects x() -> void @ switchtest.impala:20:40
+		RETU   
+	.s11:	RETU   	; 
+	.s11#10:	ADDi $i $i #1	; i = i + 1
+		RETU   
 		! SUBi <A> #'a' #10	; case 'a'
-	.s6#<A>:	GETL $i $a $i	; i = (int) a[i]
-	.e7:	RETU   	; }
+	.s11#<A>:	GETL $i $a $i	; i = (int) a[i]
+	.e12:	RETU   	; }
 
-; signature extern native printInt() -> unknown @ 23:1
-; signature extern native printLF() -> unknown @ 24:1
-MINUS_FIVE:	! DEFi #-5	; signature const MINUS_FIVE : int @ 25:1
-.x.gx:	! DEFi #10
-gx:	GLOB *.x.gx	; signature array gx[10] : unknown @ 26:1
+; signature extern native printInt() -> unknown @ switchtest.impala:23:1
+; signature extern native printLF() -> unknown @ switchtest.impala:24:1
+MINUS_FIVE:	! DEFi #-5	; signature const MINUS_FIVE : int @ switchtest.impala:25:1
+.z.gx:	! DEFi #10
+gx:	GLOB *.z.gx	; signature array gx[10] : unknown @ switchtest.impala:26:1
 
 ;-----------------------------------------------------------------------------
-test:	FUNC	; signature func test(int a, int b) -> int @ 28:1
+test:	FUNC	; signature func test(int a, int b) -> int @ switchtest.impala:28:1
 	$r:	OUTi
 	$a:	INPi
 	$b:	INPi
 ;-----------------------------------------------------------------------------
 		MOVi %1 $a 	; printInt(a)
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 29:13
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ switchtest.impala:29:13
 		MOVi %1 $b 	; printInt(b)
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 30:13
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ switchtest.impala:30:13
 		ADDi $r $a $b	; r = a + b
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-main:	FUNC	; signature func main() -> void @ 34:1
+main:	FUNC	; signature func main() -> void @ switchtest.impala:34:1
 		PARA *1
 	$i:	LOCi
 	$a:	LOCi
@@ -110,26 +115,26 @@ main:	FUNC	; signature func main() -> void @ 34:1
 		ADDi %1 %1 $a
 		ADDi %1 %1 #1
 		MOVi %2 $b 
-		CALL &test %0 *3	; expects test(int, int) -> int @ 41:22
+		CALL &test %0 *3	; expects test(int, int) -> int @ switchtest.impala:41:22
 		ADDi %1 #1 $b	; test(a+1+2/(1+b), b)
 		ADDi %2 $a #1
 		DIVi %1 #2 %1
 		ADDi %1 %2 %1
 		MOVi %2 $b 
-		CALL &test %0 *3	; expects test(int, int) -> int @ 42:22
+		CALL &test %0 *3	; expects test(int, int) -> int @ switchtest.impala:42:22
 		ADDi %1 #1 $b	; test(a+1+2/(1+b)+(int)(test(3,1)), a+1+2/(1+b))
 		ADDi %2 $a #1
 		DIVi %1 #2 %1
 		MOVi %4 #3 
 		MOVi %5 #1 
-		CALL &test %3 *3	; expects test(int, int) -> int @ 43:34
+		CALL &test %3 *3	; expects test(int, int) -> int @ switchtest.impala:43:34
 		ADDi %2 %2 %1
 		ADDi %1 %2 %3
 		ADDi %2 #1 $b
 		ADDi %3 $a #1
 		DIVi %2 #2 %2
 		ADDi %2 %3 %2
-		CALL &test %0 *3	; expects test(int, int) -> int @ 43:49
+		CALL &test %0 *3	; expects test(int, int) -> int @ switchtest.impala:43:49
 		MOVi $i #-5 	; for (i = -5 to 20) 
 		GEQi #-5 #20 @.e0
 	.l1:	NOOP
@@ -139,34 +144,42 @@ main:	FUNC	; signature func main() -> void @ 34:1
 		SUBi %0 $i <A>
 		SWCH %0 *<B> @.s2
 		! SUBi <B> #2 <A>	; case 2
-	.s2#<B>:	MOVi %1 #-2 	; printInt(-2)
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 47:24
+		! LSSi <B> #0 @.g4
+	.s2#<B>:	NOOP
+	.g4:	MOVi %1 #-2 	; printInt(-2)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ switchtest.impala:47:24
 		GOTO @.e3  
 		! SUBi <B> #11 #1	; case 11-1
 		! SUBi <B> <B> <A>
-	.s2#<B>:	MOVi %1 #10 	; printInt(10)
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 48:27
+		! LSSi <B> #0 @.g5
+	.s2#<B>:	NOOP
+	.g5:	MOVi %1 #10 	; printInt(10)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ switchtest.impala:48:27
 		GOTO @.e3  
 		! SUBi <B> #'a' #'a'	; case 'a'-'a'
 		! SUBi <B> <B> <A>
-	.s2#<B>:	MOVi %1 #0 	; printInt(0)
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 49:29
+		! LSSi <B> #0 @.g6
+	.s2#<B>:	NOOP
+	.g6:	MOVi %1 #0 	; printInt(0)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ switchtest.impala:49:29
 		GOTO @.e3  
 	.s2:	MULi %0 $i #2	; switch (i * 2 == 0 to 6) 
-		SWCH %0 *6 @.s4
-	.s4:	MOVi %1 #-1000 	; printInt(-1000)
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 52:34
+		SWCH %0 *6 @.s7
+	.s7:	MOVi %1 #-1000 	; printInt(-1000)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ switchtest.impala:52:34
 		GOTO @.e3  
-	.s4#2:	MOVi %1 #11111 	; printInt(11111)
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 53:30
+	.s7#2:	MOVi %1 #11111 	; printInt(11111)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ switchtest.impala:53:30
 		GOTO @.e3  
-	.s4#5:	NEQi #1 #1 @.e3	; if (1 == 1) printInt(5555)
+	.s7#5:	NEQi #1 #1 @.e3	; if (1 == 1) printInt(5555)
 		MOVi %1 #5555 	; printInt(5555)
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 54:41
-	.e5:	GOTO @.e3  	; }
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ switchtest.impala:54:41
+	.e8:	GOTO @.e3  	; }
 		! SUBi <B> #5 <A>	; case 5
-	.s2#<B>:	MOVi %1 #5 	; printInt(5)
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 58:23
-	.e3:	CALL ^printLF %0 *1	; expects printLF() -> unknown @ 60:12
+		! LSSi <B> #0 @.g10
+	.s2#<B>:	NOOP
+	.g10:	MOVi %1 #5 	; printInt(5)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ switchtest.impala:58:23
+	.e3:	CALL ^printLF %0 *1	; expects printLF() -> unknown @ switchtest.impala:60:12
 		FORi $i #20 @.l1	; }
 	.e0:	RETU   	; }

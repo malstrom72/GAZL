@@ -1,17 +1,17 @@
- ; Compiled with Impala version 1.0
+ ; Compiled with Impala version 2.0
 
  ; signatures version=1
  .s_ABCD_2a:		CNST *5
  					DATs ABCD
  					DATi #0
- SOURCE:			! DEFp &.s_ABCD_2a ; signature const SOURCE : ptr @ 1:1
+ SOURCE:			! DEFp &.s_ABCD_2a ; signature const SOURCE : ptr @ control.impala:1:1
  .s_WXYZ_2a:		CNST *5
  					DATs WXYZ
  					DATi #0
- TARGET:			! DEFp &.s_WXYZ_2a ; signature const TARGET : ptr @ 2:1
+ TARGET:			! DEFp &.s_WXYZ_2a ; signature const TARGET : ptr @ control.impala:2:1
 
  ;-----------------------------------------------------------------------------
- controlSample:		FUNC		; signature func controlSample() -> int @ 4:1
+ controlSample:		FUNC		; signature func controlSample() -> int @ control.impala:4:1
  					$result:	OUTi
  					$sum:		LOCi
  					$index:		LOCi
@@ -27,12 +27,11 @@
  								ADDi $sum $sum $index			; sum = sum + index
  								ADDi $index $index #1			; index = index + 1
  								GOTO @.l1  						; }
- 					.e2:		NOOP
- 					.l3:		LSSi $index #5 @.f4				; if (index >= 5) goto done
+ 					.e2:		LSSi $index #5 @.f4				; if (index >= 5) goto done
  								GOTO @done  					; goto done
  					.f4:		ADDi $sum $sum #1				; sum = sum + 1
  								ADDi $index $index #1			; index = index + 1
- 								GOTO @.l3  						; }
+ 								GOTO @.e2  						; }
  					done:		MOVi $index #0 					; done:
  								GEQi #0 #3 @.e5
  					.l6:		ADDi $sum $sum $index			; sum = sum + index

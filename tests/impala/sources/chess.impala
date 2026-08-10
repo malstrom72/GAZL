@@ -1229,7 +1229,7 @@ locals	int y, int lastI, array buffer[2], int i, int c, int x
 			}
 			buffer[0] = c;
 			output(buffer);
-			c = (int) global PIECE_CHARS[(int) global board[i] & (PIECE_MASK | BLACK)];
+			c = (int) PIECE_CHARS[(int) global board[i] & (PIECE_MASK | BLACK)];
 			if (c == ' ' && ((x ^ y) & 1) == 1) c = '.';
 			buffer[0] = c;
 			output(buffer);

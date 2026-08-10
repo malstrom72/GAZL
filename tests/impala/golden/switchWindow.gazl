@@ -1,0 +1,94 @@
+; Compiled with Impala version 2.0
+
+; signatures version=1
+DEBUG:	! DEFi #0	; signature const DEBUG : int @ switchWindow.impala:14:1
+; signature extern const LO : int @ switchWindow.impala:16:1
+; signature extern const HI : int @ switchWindow.impala:17:1
+
+;-----------------------------------------------------------------------------
+pick:	FUNC	; signature func pick(int x) -> int @ switchWindow.impala:20:1
+	$r:	OUTi
+	$x:	INPi
+;-----------------------------------------------------------------------------
+		MOVi $r #0 	; r = 0
+		! SUBi <A> #HI #LO	; switch (x == LO to HI) 
+		SUBi %0 $x #LO
+		SWCH %0 *<A> @.s0
+		! SUBi <A> #0 #LO	; case 0, 5
+		! LSSi <A> #0 @.g2
+	.s0#<A>:	NOOP
+	.g2:	! SUBi <A> #5 #LO
+		! LSSi <A> #0 @.g3
+	.s0#<A>:	NOOP
+	.g3:	MOVi $r #55 	; r = 55
+		RETU   
+	.s0:	MOVi $r #99 	; r = 99
+	.e1:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+pair:	FUNC	; signature func pair(int a, int b) -> int @ switchWindow.impala:30:1
+	$r:	OUTi
+	$a:	INPi
+	$b:	INPi
+;-----------------------------------------------------------------------------
+		MOVi $r #0 	; r = 0
+		! SUBi <A> #HI #LO	; switch (a == LO to HI) 
+		SUBi %0 $a #LO
+		SWCH %0 *<A> @.s0
+		! SUBi <A> #0 #LO	; case 0
+		! LSSi <A> #0 @.g2
+	.s0#<A>:	NOOP
+	.g2:	! SUBi <A> #HI #LO	; switch (b == LO to HI) 
+		SUBi %0 $b #LO
+		SWCH %0 *<A> @.s3
+		! SUBi <A> #0 #LO	; case 0
+		! LSSi <A> #0 @.g5
+	.s3#<A>:	NOOP
+	.g5:	MOVi $r #11 	; r = 11
+		RETU   
+		! SUBi <A> #3 #LO	; case 3
+		! LSSi <A> #0 @.g6
+	.s3#<A>:	NOOP
+	.g6:	MOVi $r #13 	; r = 13
+		RETU   
+	.s3:	MOVi $r #19 	; r = 19
+	.e4:	RETU   	; }
+		! SUBi <A> #3 #LO	; case 3
+		! LSSi <A> #0 @.g7
+	.s0#<A>:	NOOP
+	.g7:	MOVi $r #30 	; r = 30
+		RETU   
+	.s0:	MOVi $r #99 	; r = 99
+	.e1:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+fixed:	FUNC	; signature func fixed(int x) -> int @ switchWindow.impala:47:1
+	$r:	OUTi
+	$x:	INPi
+;-----------------------------------------------------------------------------
+		MOVi $r #0 	; r = 0
+		SWCH $x *4 @.s0	; switch (x == 0 to 4) 
+	.s0#1:	MOVi $r #1 	; r = 1
+		RETU   
+	.s0#3:	MOVi $r #3 	; r = 3
+		RETU   
+	.s0:	MOVi $r #0 	; r = 0
+	.e1:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+main:	FUNC	; signature func main() -> int @ switchWindow.impala:57:1
+	$m:	OUTi
+;-----------------------------------------------------------------------------
+		MOVi %1 #5 	; m = pick(5) + pair(0, 3) + fixed(3)
+		CALL &pick %0 *2	; expects pick(int) -> int @ switchWindow.impala:59:14
+		MOVi %2 #0 
+		MOVi %3 #3 
+		CALL &pair %1 *3	; expects pair(int, int) -> int @ switchWindow.impala:59:27
+		MOVi %3 #3 
+		CALL &fixed %2 *2	; expects fixed(int) -> int @ switchWindow.impala:59:37
+		ADDi %0 %0 %1
+		ADDi $m %0 %2
+		RETU   	; }

@@ -36,7 +36,28 @@ Both the **beta** and **release** targets are compiled with optimizations enable
 - `src/` - C++ VM implementation
 - `impala/` - Impala compiler and demo sources
 - `tools/` - build/maintenance scripts
-- `externals/` - third-party code such as `NuXJS`
+- `externals/` - vendored code from separate repositories, currently just `NuXJS` (also BSD 2-Clause, also
+  Magnus Lidström - see [`externals/NuXJS/VENDOR.md`](externals/NuXJS/VENDOR.md) for the upstream pin)
+
+### Which tool does what
+
+Two tools take a `.gazl` and it is easy to assume the wrong one is checking your work:
+
+| Tool | What it is |
+|---|---|
+| `output/GAZLCmd` | **The assembler and the VM.** The only thing that can tell you a module assembles and loads. |
+| `impala/gazlAssembleCheck.js` | The test gates' helper that feeds a `.gazl` to `GAZLCmd`. Not something you run directly. |
+
+`GAZLCmd` has **no assemble-only mode** — it enters `main`, which for a fixture that has one means
+running a whole program you did not ask for (one of them is an interactive chess game). To assemble
+without running, name an entry point that cannot exist: it assembles, prints its banner, and stops.
+
+```
+./output/GAZLCmd yourfile.gazl .no-entry-point
+```
+
+It prints the `Code size:` banner — that line is the proof it assembled — then
+`Could not locate function: .no-entry-point` and exits 1. So read the banner, not the exit code.
 
 ### Getting Started
 
@@ -50,9 +71,14 @@ Both the **beta** and **release** targets are compiled with optimizations enable
    	impala/ImpalaDemo.impala output/demo.gazl 0x4d2 impala/ImpalaDemo.impala
    ./output/GAZLCmd output/demo.gazl main
    ```
+   Step 1 is not optional: `output/` holds a *staged copy* of the compiler, and a stale one fails
+   here as `error[E001]: syntax error` inside `ImpalaDemo.impala` — a diagnosis that points at the
+   demo source when the real cause is the compiler sitting beside it.
+
    The output path is the *second* argument. Passing the random id there instead writes the
-   GAZL to a file named `0x4d2` and leaves `demo.gazl` empty, which `GAZLCmd` then reports as
-   `Code size: 0 ... Could not locate function: main`.
+   GAZL to a file literally named `0x4d2` and never creates `demo.gazl` at all — so `GAZLCmd`
+   either reports `Could not open input file`, or, worse, silently runs whatever stale
+   `demo.gazl` an earlier build left behind.
 3. To compile and run one of your own sources without staging anything, use the Node front end:
    ```
    node impala/impala.node.js run myprogram.impala
@@ -62,7 +88,7 @@ Both the **beta** and **release** targets are compiled with optimizations enable
 ## Helper Scripts
 
 - `build.sh` / `build.cmd` - build all tools and run the full test + demo sequence
-- `tools/test-js.sh` / `.cmd` - every gate that needs only node (~15s, no C++ toolchain); run this before committing a compiler-only change
+- `tools/test-js.sh` / `.cmd` - every gate that needs only node (~1-1.5 min, most of it a 3000-program fuzz run; no C++ toolchain); run this before committing a compiler-only change
 - `tools/buildGAZLCmd.sh` / `.cmd` - build just `GAZLCmd` (VM executable)
 - `tools/BuildNuXJS.sh` / `.cmd` - build the NuXJS command-line JavaScript runtime
 - `tools/BuildImpala.sh` / `.cmd` - build NuXJS and stage the JSPEG Impala compiler into `output/`
@@ -91,13 +117,15 @@ CPP_COMPILER=$(brew --prefix llvm)/bin/clang++ bash tools/buildGazlFuzz.sh
 
 ## Documentation
 
-Documentation is split by audience. **[design/README.md](design/README.md) indexes the end-user
+Documentation is split by audience. **[docs/README.md](docs/README.md) indexes the end-user
 documentation** for GAZL, Impala and the C++ embedding API; **[design/README.md](design/README.md)
-indexes the design notes, audits and internals** for working ON the toolchain rather than with it.
-The most-linked few:
+indexes the design notes, audits and internals** for working ON the toolchain rather than with it. Both
+say what each document is for and how much to trust it. The most-linked few:
 
+- [What's new in Impala 2.0](docs/impala/WhatsNewInImpala2.md) - **start here if you know Impala 1.0**: what the language gained, what it now refuses, and the four things that can break on upgrade
 - [Overview](docs/Overview.md) - general architecture and goals
 - [Impala Language Reference](docs/impala/Impala.md) - the language and toolchain
+- [The `impala/` directory](impala/README.md) - what each compiler file is, and the common commands
 - [Two-Stage Constants](design/impala/TwoStageConstants.md) - why GAZL ships as text, and why a constant is not always a number the compiler knows
 - [Instruction Set](docs/gazl/InstructionSet.md) - extracted opcode descriptions
 - [Memory Safety Model](docs/impala/MemorySafetyModel.md) - stack frames, what is bounds-checked and when, what `*size` is for

@@ -9,7 +9,6 @@ captures, tags, and inline JavaScript actions.
 - Self-hosting: `jspeg.jspeg` compiles to `jspegCompiler.js`, and the self-hosted compiler reproduces identical output.
 - Impala compiler: `impala.jspeg` compiles to `impalaCompiler.js`; parity checks pass against recorded output.
 - Regression suite: arithmetic and tag/capture grammars match across baseline and self-hosted compilers; Impala parity fixtures match expected `.gazl` outputs; compiler state recovers after aborted compiles.
-- Documentation and tasks: `TODO.md` items for the JS port are complete; this page documents the supported scripts and workflows below.
 
 ## Repository Layout
 
@@ -19,7 +18,6 @@ Core JSPEG files live in `impala/`:
 - `jspegCompiler.js` - checked-in compiler output for `jspeg.jspeg` (CommonJS export).
 - `jspegCompilerTests.js` - self-hosting and grammar equivalence tests for JSPEG.
 - `updateJSPEG.js` - regenerates or verifies compiler outputs; runs the JSPEG regression suite.
-- `TODO.md` - historical task list for the JSPEG port (now complete).
 
 Impala-on-JS (the compiler generated from `impala.jspeg`) has its own usage and tooling. See `design/jspeg/ImpalaJS.md` for those details (CLI, programmatic API, and parity tests).
 
@@ -51,7 +49,7 @@ If wired correctly, it prints `[ true, 11, 3 ]`.
 
 - Return shape: generated parsers return `[ success, value, endIndex ]`.
 - Value holder: internally the root rule creates a container and returns its `._` field as the `value` element. This is an implementation detail to carry the `$$` value between actions. You normally do not need to interact with it directly.
-  - See `impalaCompiler.js:52` and `impalaCompiler.js:53` for the `var _o={_:void 0}` initializer and the return of `_o._`.
+  - See `jspeg.jspeg:25`-`26` for the `var _o={_:void 0}` initializer and the return of `_o._`.
 - Actions and `$$`: within a grammar, references to `$$` are compiled to read/write that holder; tags and captures populate local temporaries as usual.
 
 ## `$$`, Tags, Captures, And `._`
@@ -59,10 +57,10 @@ If wired correctly, it prints `[ true, 11, 3 ]`.
 - **Concept:** In PPEG/JSPEG, `$$` is the semantic value threaded through rules. It is both input to a rule and output from that rule after actions run. Tags (`name:expr`) and captures (`name=expr`) introduce named temporaries that actions can read.
 - **Why `._`:** JavaScript does not have by-reference variables. JSPEG models each tagged/captured name as a small “holder” object whose `._` property contains its current value. This lets actions either treat a name as a container (`$name.field`) or as the value itself (`$name`), with the latter desugared to `$name._` by the code generator.
 - **Codegen rules:**
-- Bare `$$` inside actions is rewritten to `$._`, and writing `$$.` (optionally followed by a property) yields the holder `$`, so grammars can opt into container semantics without losing the default value rewrite. See `impala.jspeg:80`-`110`.
-  - The root parser initializes `var _o={_:void 0}` and returns `_o._` as the second element of the parser tuple. See `impala.jspeg:25` and `impala.jspeg:26`.
-  - Bare `$name` in actions refers to the name’s value and is rewritten to `$name._` unless immediately followed by a `.` (meaning field access on the container). This keeps container vs. value usage unambiguous without extra syntax. See the action rewriter heuristics in `impala.jspeg:73`-`126`.
-- The tokeniser special-cases both `$$.` (rewritten to holder-qualified names) and bare `$$` (rewritten to `'$._'`). See `impala.jspeg:204`-`207`.
+- Bare `$$` inside actions is rewritten to `$._`, and writing `$$.` (optionally followed by a property) yields the holder `$`, so grammars can opt into container semantics without losing the default value rewrite. See `jspeg.jspeg:80`-`110`.
+  - The root parser initializes `var _o={_:void 0}` and returns `_o._` as the second element of the parser tuple. See `jspeg.jspeg:25` and `jspeg.jspeg:26`.
+  - Bare `$name` in actions refers to the name’s value and is rewritten to `$name._` unless immediately followed by a `.` (meaning field access on the container). This keeps container vs. value usage unambiguous without extra syntax. See the action rewriter heuristics in `jspeg.jspeg:73`-`126`.
+- The tokeniser special-cases both `$$.` (rewritten to holder-qualified names) and bare `$$` (rewritten to `'$._'`). See `jspeg.jspeg:204`-`207`.
 - **Tags:** `name: expr` temporarily binds `$$` to `$name` while `expr` runs; on return, `$name` holds the produced value and remains visible to subsequent actions in the rule. This mirrors the original PPEG semantics.
 - **Captures:** `name=expr` stores the consumed substring into `$name` before any attached actions run. Actions can then use `$name` (value form) or `$name.…` (container form) within the same rule.
 

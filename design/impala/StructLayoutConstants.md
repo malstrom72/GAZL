@@ -1,7 +1,7 @@
 # Struct layout as GAZL constants (design note)
 
-Status: **IMPLEMENTED** (verified 2026-07-31 against the shipped compiler). This file began as a design
-note and the historical sections below are kept as the design record, but the scheme itself now ships:
+Status: **IMPLEMENTED** (verified 2026-07-31 against the compiler in this tree). This file began as a design
+note and the historical sections below are kept as the design record, but the scheme itself is now implemented:
 normal structs, extern structs, `sizeof`, field access AND allocation sizes are all symbolic. See
 [IMPLEMENTED (Phase 2a)](#implemented-phase-2a---normal-structs) and
 [IMPLEMENTED (extern struct v1)](#implemented-extern-struct-v1) for the details, and treat any
@@ -11,10 +11,16 @@ Observed today from `struct Local { int a  float b }` with a `Local` local:
 
     ! MOVi <a> #0 ; layout of struct Local
     .o.Local.a:  ! DEFi #<a>
+                 ! ADDi <a> #<a> #1
     .o.Local.b:  ! DEFi #<a>
+                 ! ADDi <a> #<a> #1
     .z.Local:    ! DEFi #<a>
     $v:          LOCA *.z.Local
                  MOVi $v:.o.Local.a #1
+
+The `! ADDi` lines are the whole point, and an earlier copy of this fragment elided them - which made `a`
+and `b` read as sharing an offset. Every `.o.` is a SNAPSHOT of the same rolling `<a>`; what separates two
+fields is the advance between the snapshots.
 
 Background: this note applies the two-stage constant model to struct layout. The model itself is
 specified in [`design/impala/TwoStageConstants.md`](TwoStageConstants.md).
@@ -33,7 +39,8 @@ would emit:
     .o.Voice.gain   ! DEFi #6
     .z.Voice        ! DEFi #8
 
-and then a field read `v->gain` lowers to `PEEK $x $v .o.Voice.gain` rather than `PEEK $x $v #6`.
+and then a field read `v->gain` lowers to `PEEK $x $v #.o.Voice.gain` rather than `PEEK $x $v #6`. The
+`#` is not optional: the operand is a CONSTANT, not an address.
 
 Why: it turns the struct layout into first-class assembler data with one source of truth. You can then
 conditionally add / remove / reorder fields directly in GAZL (driven by an assembly-time constant) and
@@ -42,7 +49,13 @@ It also makes the layout inspectable and greppable, and it composes with imports
 
 ## Naming (DECIDED): reserved leading tag, `.`-separated, hex-free
 
-Scheme: `.o.<Struct>.<field>` for a field offset, `.z.<Struct>` for a struct size.
+Scheme: `.o.<Struct>.<field>` for a field offset and `.z.<Struct>` for a struct size.
+
+`.z.` extends to `.z.<Struct>.<field>` for an ARRAY field's own extent in words. That is the same tag
+because it is the same quantity - `.z.<path>` is the words occupied by `<path>` - and it is what every
+OTHER array extent uses too (`.z.grid` for a global, `.z.main.buf` for a local); see
+[`SymbolNamespace.md`](../gazl/SymbolNamespace.md). Array fields only: a scalar is 1 word and a by-value field
+is `.z.Inner`, so those need no name minted.
 
 Rationale (this is the whole subtlety):
 - The leading tag is MANDATORY and the struct name can NEVER be the first segment. Struct names are
@@ -66,7 +79,7 @@ are safe here despite the crowded label namespace because a layout tag is ALWAYS
 `.s_...`). So `.o.Voice` cannot be confused with any `.oN` / `.o_...` label even if that letter were
 later reused.
 
-`.z` was chosen over the `.w` ("words") alternative and both `.o.*` and `.z.*` now SHIP - the paragraph
+`.z` was chosen over the `.w` ("words") alternative and both `.o.*` and `.z.*` are now IMPLEMENTED - the paragraph
 here used to record them as unused and the choice as open, which is no longer true. The full inventory
 of generated symbols, which letters remain free, and the rules for adding one live in
 [`design/gazl/SymbolNamespace.md`](../gazl/SymbolNamespace.md); consult that rather than this section, which only
@@ -133,11 +146,27 @@ fields, snapshotting the running offset into each `.o.*` and advancing by each f
 `<A>` across sections the same way). Scalar advances can be literals (`#1`) or symbolic (`#.z.int`);
 nested-struct and array advances MUST be symbolic so they track the referenced definition.
 
+**Why the accumulator is lowercase.** Compile-time scratches come from two places, and the case is what
+tells them apart. `borrow('<')` mints the POOL names, always uppercase `<A>`..`<Z>`, recycled as
+expressions finish with them. `<a>` (this accumulator) and `<t>` (its element-size temp) are hand-picked,
+live across the whole layout block, and sit outside that accounting - so they must not be names the
+allocator can hand out. A layout routinely has both live at once:
+
+    ! MULi <A> #23 #5                          ; a POOL scratch folding an extent
+    ! MOVi <a> #0                              ; the accumulator, untouched by it
+
+A new fixed scratch must therefore be lowercase, and must not collide with `<a>` or `<t>`.
+
 Field kinds and their advance line:
 - scalar (int/float/ptr): `! ADDi <a> #<a> #1` (the VM word-count of the scalar).
 - nested struct by value: `! ADDi <a> #<a> #.z.Inner`.
-- scalar array `int d[128]`: `! ADDi <a> #<a> #128` (count * 1).
-- struct array `Voice bank[8]`: `! MULi <t> #8 #.z.Voice` then `! ADDi <a> #<a> #<t>`.
+- scalar array `int d[128]`: `.z.S.d: ! DEFi #128` (count * 1) then `! ADDi <a> #<a> #.z.S.d`.
+- struct array `Voice bank[8]`: `! MULi <t> #8 #.z.Voice`, `.z.S.bank: ! DEFi #<t>`, then
+  `! ADDi <a> #<a> #.z.S.bank`.
+
+Both array forms name the extent BEFORE advancing by it, so an extent that folded into a `<X>` scratch
+outlives the scratch. That is what the deferred value-count assertion behind `E454` needs a handle on
+(see [`ParkedFeatures.md`](../ParkedFeatures.md)).
 
 ### The payoff: conditional fields adapt for free
 
@@ -179,7 +208,7 @@ fold at the site into a scratch slot (`! ADDi <t> #.o.Voice.lo #.o.Biquad.b0` th
 If a using unit's interface (field names + types) lives separately from the definition, they can
 disagree. The gazl-validator can cross-check the interface's field types against the definition's
 emitted layout, so a mismatch is a build error, not a silent lie - the same "verifiable contract" theme
-as extern prototypes (see [[design/impala/ExternPrototypes.md]]).
+as extern prototypes (see [design/impala/ExternPrototypes.md]).
 
 ### Array extents in a signature row (DECIDED, IMPLEMENTED)
 
@@ -215,7 +244,9 @@ field's extent borrow until `endStruct`, so two expression extents cannot fold i
 Every non-extern struct now emits its layout as GAZL compile-time constants: a rolling `<a>`
 accumulator (`! MOVi <a> #0`; `.o.Struct.field: ! DEFi #<a>`; `! ADDi <a> #<a> #<size>`; `.z.Struct:
 ! DEFi #<a>`), emitted at struct-definition time in dependency order (inner-before-outer, guaranteed by
-E412). Field access references `#.o.Struct.field`; `sizeof` references `#.z.Struct`. Nested struct and
+**E413** where the inner name is not declared yet - the ordinary "defined later in the same file" case -
+and by **E412** where it is declared but incomplete, as a bodyless `extern struct`). Field access
+references `#.o.Struct.field`; `sizeof` references `#.z.Struct`. Nested struct and
 array fields MATERIALIZE the sub-object address into a pointer place at offset 0 (via `ADDp`/`ADRL`), so
 every access uses a SINGLE symbol - no runtime offset accumulation and no compile-time folding through
 the lazy-meta model.
@@ -229,9 +260,11 @@ Verified: the playground demo (`Voice`/`Biquad`, nested access, whole-struct cop
 accumulator and runs; the dedicated fixture tests/impala/sources/structLayout.impala prints `4 2 0.75
 0.5`; all 10 struct fixtures + funcType + regTransientWindow produce byte-identical RUNTIME output to the
 pre-change baseline (old committed goldens run and matched), and their compiled goldens were regenerated
-to the symbolic form. Cost: nested/array access adds an `ADDp` (or `ADRL`+`ADDp`) per level vs the old
-single folded offset - a small runtime cost traded for symbolic, host-adaptable offsets; can be
-optimized later. Extern structs (below) reference the same symbols but emit no accumulator (host owns it).
+to the symbolic form. Cost: **none**. `d.outer.mid.inner.q`, four levels deep, emits three `! ADDi`
+assemble-time folds and one `MOVi` - the same single instruction a flat field costs. A dynamic index adds
+one `MULi` for the stride, which is what `a[i]` always paid. Symbolic, host-adaptable offsets turned out
+to be free rather than a trade. Extern structs (below) reference the same symbols but emit no accumulator
+(host owns it).
 
 ## IMPLEMENTED (extern struct v1)
 
@@ -244,16 +277,24 @@ recompile. Normal structs are unchanged (byte-identical goldens); only the exter
 Superseded scope note: this section used to list guards **E418** (fields must be scalar/pointer),
 **E425** (no by-value extern instances) and **E424** (no nested extern field access), and to defer
 by-value/nested/array extern fields to "v1.1". **None of those three codes exist in `impala.jspeg` any
-more** (verified 2026-07-31; only stale comment references survive near lines 1951 and 2245), and all
-three restrictions have been lifted: an extern struct with a nested array field compiles, and a
-by-value extern local emits `LOCA *.z.E` / `COPY *.z.E`.
+more** (re-verified 2026-08-04: E418 and E424 have zero occurrences of any kind; only E425 survives, in
+a comment on `structAllocSize` explaining that by-value params/returns are parked wholesale as E426/E427
+so the extern-specific code no longer fires). All three restrictions have been lifted: an extern struct
+with a nested array field compiles, and a by-value extern local emits `LOCA *.z.E` / `COPY *.z.E`.
 
-Still genuinely outstanding: the gazl-validator cross-check of host layout vs declared interface. And
-one thing this expansion opened up that is NOT sound yet - brace-initializing an extern struct emits
-positional `DATA` in declaration order while every read goes through `.o.*`, so the values land wrong
-under any host layout that is not Impala's guess. See the audit note in
-[`design/impala/TwoStageConstants.md`](TwoStageConstants.md) ("Emitting positional `DATA` for a type whose
-layout the host owns").
+Still genuinely outstanding: the gazl-validator cross-check of host layout vs declared interface.
+
+One thing this expansion opened up was NOT sound and is now **closed by refusing it** (`E459`,
+2026-08-01). Brace-initializing an extern struct emitted positional `DATA` in declaration order while
+every read goes through `.o.*`, so the values landed wrong under any host layout that was not Impala's
+guess - guessing field order, `.z.`, and whether the host had fields Impala never saw. A non-zero
+initializer for an extern struct is now an error; zero is the only word Impala can place without knowing
+the layout, so `{ }`, an omitted field and an explicit `0` still compile and emit nothing. If the host
+owns the layout it owns the initial contents too. Note that naming initializer fields (`E455`) did NOT
+fix this: it changed how the source reads, not where the words land. Restoring the capability needs
+GAZL 2; the evidence for that, the requirements and the alternatives that do not work are all in
+[`ParkedFeatures.md`](../ParkedFeatures.md) ("Placing static data at a symbolic offset"), which is the
+canonical home - the audit note is in [`design/impala/TwoStageConstants.md`](TwoStageConstants.md).
 (Superseded: this paragraph used to say Phase 2a was "still open". It landed - see the Phase 2a section
 above, which this sentence predates.)
 

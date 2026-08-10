@@ -17,7 +17,7 @@ readonly array PANEL_TEXT_ROWS[8] = {
 	"ABC 888777666555444333222111 888777666555444333222111",
 	"ABC 888777666555444333222111 888777666555444333222111",
 	"RM                                                   ",
-	"AM  ÐÐÐÐÐÐÐÐÐ RATE ÐÐÐÐÐÐÐÐÐ _______ NADA YET _______",
+	"AM  \u00D0\u00D0\u00D0\u00D0\u00D0\u00D0\u00D0\u00D0\u00D0 RATE \u00D0\u00D0\u00D0\u00D0\u00D0\u00D0\u00D0\u00D0\u00D0 _______ NADA YET _______",
 	" not used",
 	"   too lloooooooooooooooooooooooooooooooooooooooooooooooooong",
 	"7",
@@ -171,7 +171,7 @@ locals float x, float y, int e, float g, pointer dp, pointer pp, pointer ep, int
 				x = x * 0.1;
 			}
 						
-			if (pp < ep && y > SMALL_FLOAT && y < LARGE_FLOAT) goto break;
+			if (pp < ep && y > SMALL_FLOAT && y < LARGE_FLOAT) goto broke;
 			
 			// Exponential treatment of very small or large values.
 
@@ -185,7 +185,7 @@ locals float x, float y, int e, float g, pointer dp, pointer pp, pointer ep, int
 				y = y * 0.1;
 			}
 		}
-	break:
+	broke:
 		
 		// For values < 1, spit out leading 0's and increase precision.
 

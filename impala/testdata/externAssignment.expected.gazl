@@ -1,17 +1,17 @@
- ; Compiled with Impala version 1.0
+ ; Compiled with Impala version 2.0
 
  ; signatures version=1
- ; signature extern func produceFloat() -> unknown @ 1:1
- ; signature extern native printFloat() -> unknown @ 2:1
+ ; signature extern func produceFloat() -> unknown @ externAssignment.impala:1:1
+ ; signature extern native printFloat() -> unknown @ externAssignment.impala:2:1
 
  ;-----------------------------------------------------------------------------
- main:				FUNC		; signature func main() -> void @ 4:1
+ main:				FUNC		; signature func main() -> void @ externAssignment.impala:4:1
  								PARA *1
  					$value:		LOCf
  ;-----------------------------------------------------------------------------
- 								CALL &produceFloat %0 *1		; expects produceFloat() -> float @ 7:31
+ 								CALL &produceFloat %0 *1		; expects produceFloat() -> float @ externAssignment.impala:7:31
  								MOVf $value %0 
  								MOVf %1 $value 					; printFloat(value)
- 								CALL ^printFloat %0 *2			; expects printFloat(float) -> unknown @ 8:26
+ 								CALL ^printFloat %0 *2			; expects printFloat(float) -> unknown @ externAssignment.impala:8:26
  								RETU   							; }
 

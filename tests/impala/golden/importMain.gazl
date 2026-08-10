@@ -1,4 +1,4 @@
- ; Compiled with Impala version 1.0
+ ; Compiled with Impala version 2.0
 
  ; signatures version=1
  					! MOVi <a> #0 ; layout of struct Vec2
@@ -8,6 +8,23 @@
  					! ADDi <a> #<a> #1
  .z.Vec2:			! DEFi #<a>
  ; signature struct Vec2 { x : int, y : int } @ mathlib.impala:11:1
+
+ ;-----------------------------------------------------------------------------
+ clampi:			FUNC		; signature func clampi(int v, int lo, int hi) -> int @ mathlib.impala:16:1
+ 					$r:			OUTi
+ 					$v:			INPi
+ 					$lo:		INPi
+ 					$hi:		INPi
+ 					$t:			LOCi
+ ;-----------------------------------------------------------------------------
+ 								MOVi $t $v 						; t = v
+ 								GEQi $t $lo @.f0				; if (t < lo) 
+ 								MOVi $t $lo 					; t = lo
+ 					.f0:		LEQi $t $hi @.f1				; if (t > hi) 
+ 								MOVi $t $hi 					; t = hi
+ 					.f1:		MOVi $r $t 						; r = t
+ 								RETU   							; }
+
 
  ;-----------------------------------------------------------------------------
  makeVec:			FUNC		; signature func makeVec(Vec2-ptr v, int x, int y) -> void @ mathlib.impala:25:1
@@ -65,27 +82,18 @@
  					$s:			LOCA *.z.Vec2
  					$qt:		LOCi
  					$rm:		LOCi
- 								SCOP
- 					$t_i0:		LOCi
- 								ENDS
- 								SCOP
- 					$t_i1:		LOCi
- 								ENDS
- 								SCOP
- 					$t_i2:		LOCi
- 								ENDS
  ;-----------------------------------------------------------------------------
- 								ADRL %1 $p *.z.Vec2				; makeVec(&p, 3, 4)
+ 								ADRL %1 $p *0					; makeVec(&p, 3, 4)
  								MOVi %2 #3 
  								MOVi %3 #4 
  								CALL &makeVec %0 *4				; expects makeVec(Vec2-ptr, int, int) -> void @ main.impala:18:19
- 								ADRL %1 $q *.z.Vec2				; makeVec(&q, 10, 20)
+ 								ADRL %1 $q *0					; makeVec(&q, 10, 20)
  								MOVi %2 #10 
  								MOVi %3 #20 
  								CALL &makeVec %0 *4				; expects makeVec(Vec2-ptr, int, int) -> void @ main.impala:19:21
- 								ADRL %1 $s *.z.Vec2				; addVec(&s, &p, &q)
- 								ADRL %2 $p *.z.Vec2
- 								ADRL %3 $q *.z.Vec2
+ 								ADRL %1 $s *0					; addVec(&s, &p, &q)
+ 								ADRL %2 $p *0
+ 								ADRL %3 $q *0
  								CALL &addVec %0 *4				; expects addVec(Vec2-ptr, Vec2-ptr, Vec2-ptr) -> void @ main.impala:20:20
  								MOVi %1 $s:.o.Vec2.x 			; printInt(s.x)
  								CALL ^printInt %0 *2			; expects printInt(int) -> unknown @ main.impala:21:15
@@ -104,28 +112,22 @@
  								MOVi %1 $rm 					; printInt(rm)
  								CALL ^printInt %0 *2			; expects printInt(int) -> unknown @ main.impala:26:14
  								CALL ^printLF %0 *1				; expects printLF() -> unknown @ main.impala:26:25
- 								MOVi $t_i0 #-5 					; t = v
- 								GEQi $t_i0 #0 @.f0_i0			; if (t < lo) 
- 								MOVi $t_i0 #0 					; t = lo
- 					.f0_i0:		LEQi $t_i0 #9 @.f1_i0			; if (t > hi) 
- 								MOVi $t_i0 #9 					; t = hi
- 					.f1_i0:		MOVi %1 $t_i0 					; r = t
+ 								MOVi %2 #-5 					; printInt(clampi(-5, 0, 9))
+ 								MOVi %3 #0 
+ 								MOVi %4 #9 
+ 								CALL &clampi %1 *4				; expects clampi(int, int, int) -> int @ main.impala:28:27
  								CALL ^printInt %0 *2			; expects printInt(int) -> unknown @ main.impala:28:28
  								CALL ^printLF %0 *1				; expects printLF() -> unknown @ main.impala:28:39
- 								MOVi $t_i1 #20 					; t = v
- 								GEQi $t_i1 #0 @.f0_i1			; if (t < lo) 
- 								MOVi $t_i1 #0 					; t = lo
- 					.f0_i1:		LEQi $t_i1 #9 @.f1_i1			; if (t > hi) 
- 								MOVi $t_i1 #9 					; t = hi
- 					.f1_i1:		MOVi %1 $t_i1 					; r = t
+ 								MOVi %2 #20 					; printInt(clampi(20, 0, 9))
+ 								MOVi %3 #0 
+ 								MOVi %4 #9 
+ 								CALL &clampi %1 *4				; expects clampi(int, int, int) -> int @ main.impala:29:27
  								CALL ^printInt %0 *2			; expects printInt(int) -> unknown @ main.impala:29:28
  								CALL ^printLF %0 *1				; expects printLF() -> unknown @ main.impala:29:39
- 								MOVi $t_i2 #5 					; t = v
- 								GEQi $t_i2 #0 @.f0_i2			; if (t < lo) 
- 								MOVi $t_i2 #0 					; t = lo
- 					.f0_i2:		LEQi $t_i2 #9 @.f1_i2			; if (t > hi) 
- 								MOVi $t_i2 #9 					; t = hi
- 					.f1_i2:		MOVi %1 $t_i2 					; r = t
+ 								MOVi %2 #5 						; printInt(clampi(5, 0, 9))
+ 								MOVi %3 #0 
+ 								MOVi %4 #9 
+ 								CALL &clampi %1 *4				; expects clampi(int, int, int) -> int @ main.impala:30:26
  								CALL ^printInt %0 *2			; expects printInt(int) -> unknown @ main.impala:30:27
  								CALL ^printLF %0 *1				; expects printLF() -> unknown @ main.impala:30:38
  								RETU   							; }

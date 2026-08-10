@@ -1,14 +1,14 @@
-; Compiled with Impala version 1.0
+; Compiled with Impala version 2.0
 
 ; signatures version=1
-DEBUG:	! DEFi #1	; signature const DEBUG : int @ 8:1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ structInit.impala:8:1
 	! MOVi <a> #0	; layout of struct Biquad
 .o.Biquad.b0:	! DEFi #<a>
 	! ADDi <a> #<a> #1
 .o.Biquad.z1:	! DEFi #<a>
 	! ADDi <a> #<a> #1
 .z.Biquad:	! DEFi #<a>
-; signature struct Biquad { b0 : float, z1 : float } @ 10:1
+; signature struct Biquad { b0 : float, z1 : float } @ structInit.impala:10:1
 	! MOVi <a> #0	; layout of struct Voice
 .o.Voice.note:	! DEFi #<a>
 	! ADDi <a> #<a> #1
@@ -17,50 +17,50 @@ DEBUG:	! DEFi #1	; signature const DEBUG : int @ 8:1
 .o.Voice.gain:	! DEFi #<a>
 	! ADDi <a> #<a> #1
 .z.Voice:	! DEFi #<a>
-; signature struct Voice { note : int, lo : Biquad, gain : float } @ 11:1
-; signature extern native printInt() -> unknown @ 13:1
-; signature extern native printFloat() -> unknown @ 14:1
-; signature extern native printLF() -> unknown @ 15:1
-voice:	GLOB *.z.Voice	; signature global voice : Voice @ 17:1
+; signature struct Voice { note : int, lo : Biquad, gain : float } @ structInit.impala:11:1
+; signature extern native printInt() -> unknown @ structInit.impala:13:1
+; signature extern native printFloat() -> unknown @ structInit.impala:14:1
+; signature extern native printLF() -> unknown @ structInit.impala:15:1
+voice:	GLOB *.z.Voice	; signature global voice : Voice @ structInit.impala:17:1
 	DATA #60 #0.5 #0.1 #2.0
-preset:	CNST *.z.Voice	; signature readonly preset : Voice @ 18:1
+preset:	CNST *.z.Voice	; signature readonly preset : Voice @ structInit.impala:18:1
 	DATA #7 #1.5 #0.0 #9.0
 	! MULi <A> #2 #.z.Voice
-.x.bank:	! DEFi #<A>
-bank:	CNST *.x.bank	; signature array bank[2] : Voice @ 19:1
+.z.bank:	! DEFi #<A>
+bank:	CNST *.z.bank	; signature array bank[2] : Voice @ structInit.impala:19:1
 	DATA #1 #0.0 #0.0 #0.9 #2 #0.0 #0.0 #0.8
 
 ;-----------------------------------------------------------------------------
-main:	FUNC	; signature func main() -> void @ 21:1
+main:	FUNC	; signature func main() -> void @ structInit.impala:21:1
 		PARA *1
 ;-----------------------------------------------------------------------------
 		PEEK %1 &voice:.o.Voice.note 	; printInt(global voice.note)
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 23:29
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 23:40
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ structInit.impala:23:29
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structInit.impala:23:40
 		! ADDi <A> #.o.Voice.lo #.o.Biquad.b0	; printFloat(global voice.lo.b0)
 		PEEK %1 &voice:<A> 
-		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 24:32
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 24:43
+		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ structInit.impala:24:32
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structInit.impala:24:43
 		! ADDi <A> #.o.Voice.lo #.o.Biquad.z1	; printFloat(global voice.lo.z1)
 		PEEK %1 &voice:<A> 
-		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 25:32
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 25:43
+		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ structInit.impala:25:32
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structInit.impala:25:43
 		PEEK %1 &voice:.o.Voice.gain 	; printFloat(global voice.gain)
-		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 26:31
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 26:42
+		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ structInit.impala:26:31
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structInit.impala:26:42
 		PEEK %1 &preset:.o.Voice.note 	; printInt((int) global preset.note)
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 27:36
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 27:47
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ structInit.impala:27:36
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structInit.impala:27:47
 		! ADDi <A> #.o.Voice.lo #.o.Biquad.b0	; printFloat(global preset.lo.b0)
 		PEEK %1 &preset:<A> 
-		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 28:33
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 28:44
-		! MULi <A> #1 #.z.Voice	; printInt((int) global bank[[1]].note)
+		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ structInit.impala:28:33
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structInit.impala:28:44
+		! MULi <A> #1 #.z.Voice	; printInt((int) global bank[1].note)
 		! ADDi <B> #<A> #.o.Voice.note
 		PEEK %1 &bank:<B> 
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 29:39
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 29:50
-		PEEK %1 &bank:.o.Voice.gain 	; printFloat(global bank[[0]].gain)
-		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 30:35
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 30:46
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ structInit.impala:29:37
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structInit.impala:29:48
+		PEEK %1 &bank:.o.Voice.gain 	; printFloat(global bank[0].gain)
+		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ structInit.impala:30:33
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structInit.impala:30:44
 		RETU   	; }

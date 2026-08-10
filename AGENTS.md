@@ -38,6 +38,12 @@ timeout 180 ./build.sh
 
 Always execute this command before committing changes to verify that the build and regression tests succeed.
 
+## Code style
+
+The canonical coding style and design principles live in [`design/CodingStyle.md`](design/CodingStyle.md) and are
+shared across these projects, so there is one source of truth. Follow it for error handling, RAII, naming, class
+layout, comments, and formatting. This file holds only the operational notes specific to this repository.
+
 ## Repository layout
 The project uses a consistent folder structure. Build output is written to `output/` and no source files live there. Useful locations:
 

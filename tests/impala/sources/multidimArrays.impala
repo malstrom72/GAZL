@@ -1,0 +1,80 @@
+/*
+	A standalone array - `global` or local - may state a SHAPE exactly as a struct array field may:
+	`int array grid[3, 4]`, subscripted `grid[y, x]`. Same axes, same `.d.` constants, same three bounds
+	tiers; the only difference from a field is that the symbols are keyed on the OBJECT rather than on a
+	struct type, so `.d.grid.0` and `.d.main.b.0` belong to that one array and to nothing else.
+
+	The lowering is a different function from the field one - a plain array decays to a pointer at
+	lookup and reaches `binaryOp('=[]')`, which has no place record - so the Horner reduction is SHARED
+	rather than written twice: `foldAxes` produces the single linear index both paths already took.
+	`global grid[y, x] = v` is two instructions plus the POKE, and a constant subscript folds away
+	entirely at GAZL assembly time.
+
+	Covers a `global` shape, a LOCAL shape (whose axes hang off the owning function's name), symbolic
+	axes that only the assembler can resolve, and a 1-D array declared beside them to show its every
+	path is unchanged.
+
+	A SUBSCRIPT STATES EVERY AXIS, and that is checked for one index as well as for several. `grid[11]`
+	on a `[3, 4]` used to compile as a flat word offset - legal for the allocation, meaningless as a
+	coordinate - which was the whole of row-crossing let back in through the door with no comma in it.
+	It is E206 now, on the standalone path and on the struct-field path alike.
+
+	Expected (GAZLCmd multidimArrays.gazl main): 23 138 6 30 7 99 210
+*/
+
+const int DEBUG = 0
+const int H = 3
+const int W = 2
+
+extern native printInt
+extern native printLF
+
+global int array grid[3, 4]
+global int array sym[H, W * 2]					/* axes Impala cannot evaluate - deferred to assembly */
+global int array flat[5]						/* 1-D, sharing the file: no `.d.`, nothing changed */
+
+export function main()
+locals int array b[2, 3], int y, int x, int total
+{
+	for (y = 0 to 3) {
+		for (x = 0 to 4) {
+			global grid[y, x] = y * 10 + x;
+		}
+	}
+	printInt(global grid[2, 3]);				/* constant subscript, folds at assembly */
+	printLF();
+
+	total = 0;									/* runtime indices on both axes */
+	for (y = 0 to 3) {
+		for (x = 0 to 4) {
+			total = total + global grid[y, x];
+		}
+	}
+	printInt(total);							/* 6 + 46 + 86 = 138 */
+	printLF();
+
+	/* The two DEGENERATE Horner steps, which cost real runtime instructions until they were skipped.
+	   `[0, x]` is `0 * W + x`, so the MUL and the ADD both vanish and the subscript is `PEEK &grid $x`;
+	   `[x, 0]` is `acc * W + 0`, so the ADD vanishes. Both identities hold whatever W turns out to be,
+	   so a host-owned axis folds the same way and the stride stays the symbol `.d.grid.0`. */
+	total = 0;
+	for (x = 0 to 4) total = total + global grid[0, x];
+	printInt(total);							/* row 0: 0 + 1 + 2 + 3 = 6 */
+	printLF();
+	total = 0;
+	for (y = 0 to 3) total = total + global grid[y, 0];
+	printInt(total);							/* column 0: 0 + 10 + 20 = 30 */
+	printLF();
+
+	b[1, 2] = 7;								/* a LOCAL shape: `.d.main.b.<k>` */
+	printInt(b[1, 2]);
+	printLF();
+
+	global sym[2, 3] = 99;						/* both axes symbolic: checked at assembly, not here */
+	printInt(global sym[2, 3]);
+	printLF();
+
+	global flat[4] = 210;
+	printInt(global flat[4]);
+	printLF();
+}

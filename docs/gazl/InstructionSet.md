@@ -90,6 +90,13 @@ order, not a code address. Only equality (`EQUp` / `NEQp`) and calling are defin
 ordering (`LSSp`, `GEQp` etc.) and arithmetic (`ADDp`, `SUBp`, `DIFp`) applied to a function pointer yield an
 unspecified (but memory-safe) result.
 
+> **GAZL 1 does not enforce that contract, and GAZL 2 should.** All of those assemble today, because `p`
+> covers both data pointers and function pointers. `ADDp` is the one that bites: `&one + 1` is a valid
+> ordinal, so it does not trap - it silently calls a different function. "Memory-safe" is accurate and
+> still understates it. The fix is a distinct `t` (target) type with no arithmetic or ordering forms at
+> all, making the undefined operations unrepresentable rather than merely undefined. See
+> [`design/gazl/GAZL2FunctionPointers.md`](../../design/gazl/GAZL2FunctionPointers.md).
+
 ## CNST
 - `*size`
 
@@ -101,27 +108,38 @@ declarations in top of this file for examples.
 ## DATA
 - `#const #const #const ...`
 
-Define several constant values of mixed types in one statement.
+Define several constant values of MIXED types in one statement - `consts.mixed` in `src/UnitTest.gazl`
+is the canonical example. `DATA` is not "the multi-value one": `DATf`, `DATi` and `DATp` take as many
+operands as you like too. Mixing is the whole of what it adds, and it pays for that by giving up the
+type check - `DATA` accepts any constant, so nothing here catches a float written where an int was meant.
 
 ## DATf
-- `#float`
+- `#float #float ...`
 
-Float constant data item
+Float constant data items. Every operand on the line must be a float, `#NAME` included: a constant
+declared `! DEFi` is rejected as `Incompatible types`.
 
 ## DATi
-- `#int`
+- `#int #int ...`
 
-Integer constant data item
+Integer constant data items. Every operand on the line must be an int (see `DATf`).
 
 ## DATp
-- `&address`
+- `&address &address ...`
 
-Pointer constant data item
+Pointer constant data items. Every operand on the line must be an address (see `DATf`).
+
+Note `p` covers BOTH data pointers and function pointers, which are different things - a data pointer is a
+memory address, a function pointer is a declaration-order ordinal. So `DATp &func &data` assembles, and
+`ADDp` on a function pointer assembles without trapping. GAZL 2 is expected to split this into a `t`
+(target) type; see [`design/gazl/GAZL2FunctionPointers.md`](../../design/gazl/GAZL2FunctionPointers.md).
 
 ## DATs
 - `string`
 
-String constant data item
+String constant data item, one word per character. Unlike the four above `DATs` takes NO operands: the
+rest of the line is the literal, spaces and all, with trailing blanks stripped. It appends no terminating
+zero - follow it with `DATi #0` if you need one.
 
 ## DEFf
 - `#float`
