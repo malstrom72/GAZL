@@ -3,7 +3,7 @@
 ; signatures version=1
 
 ;-----------------------------------------------------------------------------
-returnsNumber:	FUNC	; signature func returnsNumber() -> int @ 1:1
+returnsNumber:	FUNC	; signature func returnsNumber() -> int @ returnContractProviderInt.impala:1:1
 	$value:	OUTi
 ;-----------------------------------------------------------------------------
 		MOVi $value #1 	; value = 1

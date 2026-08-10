@@ -103,6 +103,11 @@ Assigning a function whose signature does not match is `E441`, at a declaration 
 1.0 `funcptr` is still unchecked - declaring the type is what buys the check. `nullfunc` suits any of them,
 and you assign the bare name (`cb = tick`), never `&tick`.
 
+Between two named types, assignment is nominal and the cast is shape-checked: `(Other)cb` converts freely
+when the shapes agree and is `E465` when they differ - as is casting a non-funcptr (an int, a data
+pointer) to a named type at all. Untyped `funcptr` is the escape hatch - `(Other)(funcptr)cb` spells the
+deliberate conversion.
+
 ## `import` is linking
 
 ```impala

@@ -1,14 +1,14 @@
 ; Compiled with Impala version 2.0
 
 ; signatures version=1
-DEBUG:	! DEFi #1	; signature const DEBUG : int @ 23:1
-; signature extern native printInt() -> unknown @ 25:1
-; signature extern native printLF() -> unknown @ 26:1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ inlineFunctions.impala:23:1
+; signature extern native printInt() -> unknown @ inlineFunctions.impala:25:1
+; signature extern native printLF() -> unknown @ inlineFunctions.impala:26:1
 	GLOB *1
-g:	DATi #0	; signature global g : int @ 28:1
+g:	DATi #0	; signature global g : int @ inlineFunctions.impala:28:1
 
 ;-----------------------------------------------------------------------------
-main:	FUNC	; signature func main() -> void @ 40:1
+main:	FUNC	; signature func main() -> void @ inlineFunctions.impala:40:1
 		PARA *1
 	$i:	LOCi
 	$acc:	LOCi
@@ -22,26 +22,26 @@ main:	FUNC	; signature func main() -> void @ 40:1
 		ADDi $acc $acc %0	; }
 		FORi $i #4 @.l1
 	.e0:	MOVi %1 $acc 	; printInt(acc)
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 45:15
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 45:26
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ inlineFunctions.impala:45:15
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ inlineFunctions.impala:45:26
 		POKE &g #1 	; global g = 1
 		PEEK %2 &g 	; printInt(peek(global g))
 		POKE &g #99 	; global g = 99
 		MOVi %1 %2 	; r = a
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 48:26
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 48:37
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ inlineFunctions.impala:48:26
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ inlineFunctions.impala:48:37
 		PEEK %1 &g 	; printInt(global g)
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 49:20
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 49:31
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ inlineFunctions.impala:49:20
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ inlineFunctions.impala:49:31
 		MOVi $t #5 	; t = 5
 		MULi %2 $t #2	; printInt(mix(t * 2, 1))
 		MULi %4 %2 #3	; r = a * 3 + b
 		ADDi %1 %4 #1
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 52:25
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 52:36
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ inlineFunctions.impala:52:25
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ inlineFunctions.impala:52:36
 		! MULi <A> #2 #3	; r = a * 3 + b
 		! ADDi <B> <A> #1
 		MOVi %1 <B> 	; }
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 53:19
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 53:30
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ inlineFunctions.impala:53:19
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ inlineFunctions.impala:53:30
 		RETU   	; }

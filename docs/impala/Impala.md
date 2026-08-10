@@ -80,6 +80,13 @@ const pointer WELCOME = "Welcome to Impala!\n"
 The supported escape sequences are `\"`, `\\`, `\b`, `\f`, `\n`, `\r`, `\t`, and
 `\uXXXX` (exactly four hex digits).
 
+**Source must be ASCII.** A byte above 127 in a string or character literal is a syntax
+error — use `\uXXXX` instead. A raw high byte is not a portable way to name a byte
+*value*: what it becomes depends on how the tool reading the file decodes it, so the same
+source can compile to different data under different hosts. The escape names byte 208 and
+nothing else, from a file every tool agrees about. Comments are unrestricted — they never
+reach the output.
+
 ## Types
 
 There are four primitive types, all one VM word wide (standard configuration 32-bit):
@@ -218,6 +225,11 @@ load, so the same `.gazl` runs against any layout with no recompile. An array fi
 The body is a *claim* about someone else's layout, so it is checked against a real definition
 if the build has one (`E438`), and using it before that definition is emitted is `E464`.
 
+That check compares the two layouts field by field: names, types, pointer elements and the
+order they are declared in, since the order is what fixes the offsets. An array field's
+**rank** must agree, but its **extent** is compared only where both sides state one — which
+is what lets the host-owned `int array v[]` above meet a definition's `int array v[3]`.
+
 ### `functype`
 
 A `functype` names a function-pointer signature, so assignment can be checked:
@@ -234,6 +246,40 @@ Assigning a function whose signature does not match is `E441`, at a declaration 
 assignment. A bare 1.0 `funcptr` is still unchecked — declaring the type is what buys the
 check. `nullfunc` suits any of them, and you assign the bare name (`cb = tick`), never
 `&tick`.
+
+Assignment between two *named* types is nominal — same shape is not enough (`E441`), a
+cast is how you say you checked. The cast is itself shape-checked: `(Other)cb` converts
+freely when `Other` takes the same arguments and returns the same values, and is `E465`
+when it does not — a call through the result would read the wrong frame. Only a funcptr
+can take a funcptr type at all: `(Other)someInt` is `E465` too. Untyped `funcptr` is the
+escape hatch: `(funcptr)cb` erases the name and a named cast re-stamps it, so a
+deliberate conversion is spelled `(Other)(funcptr)cb`.
+
+### What you can do with a function pointer
+
+Comparison works, arithmetic does not — for both `funcptr` and named types:
+
+| | |
+|---|---|
+| `f == g`, `f != g` | yes — do these hold the same function? |
+| `f < g`, `f > g`, `f <= g`, `f >= g` | yes — a total, run-stable order |
+| `f - g` | yes — an `int`, the distance between the two ordinals |
+| `f + 1` | **`E301`** |
+| `f(args)` | yes — that is what it is for |
+
+A function pointer is not an address. It is a stable ordinal naming an entry in the
+program's function table, which is what lets one survive being written to a global and
+restored later. So the ordering is *total and stable within a run* — enough to sort a table
+of callbacks and binary-search it — but which function sorts before which follows
+declaration order and means nothing beyond that. Do not read significance into it, and do
+not expect it to survive adding a function or reordering a file. The same goes for the
+distance `f - g`.
+
+The rule for what is allowed is the shape of the *result*, not the name of the operation:
+comparison and difference **consume** function pointers and hand back an `int`, so they can
+never name a function. `f + 1` would **produce** one, and is rejected — the function table
+is not yours to index, so there is no "the next function". Unlike a data pointer difference,
+`f - g` needs no matching element types: ordinals are not scaled by anything.
 
 ## Declarations
 

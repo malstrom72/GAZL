@@ -111,6 +111,12 @@ all base-kind combinations, and read-back verification after every write.
 > place (`winBase`/`winWords`) freed by `freeStructWindow` once consumed (assign / arg / discard);
 > nested struct-return-as-arg is adopted in place (windows slide, no self-copy). E421/E423/E430.
 > VM-verified: structByValue, structReturn. gate 0/69.
+>
+> **The machinery described above was REMOVED from the compiler on 2026-08-07** (`winBase`/`winWords`,
+> `freeStructWindow`, the return-window `ADRL`, the multi-return window, and `E423`, which no longer
+> exists as a diagnostic). E427 rejects a struct return and E428 a second return value, both at the
+> DECLARATOR, so no call could reach any of it. Kept here as the design a 3.0 revival restarts from -
+> not as a description of code that is present.
 
 ## Step 4 + slice 2.5: returns and by-value - one window convention
 

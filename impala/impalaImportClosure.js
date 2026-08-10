@@ -162,7 +162,17 @@ function locateInUnit(spans, source, index) {
    the `; signature ... export ...` rows); any FUNC or labeled data/DEF block that is neither
    exported nor reachable from an export is dropped. Conservative: anything it cannot classify with
    confidence is kept, and it only runs when explicitly requested. */
-var TOP_LABEL_RE = /^\s*([A-Za-z_]\w*):\s+(\S.*)$/;   // a named top-level definition line
+var TOP_LABEL_RE = /^\s*([A-Za-z_]\w*):\s+(\S.*)$/;   // an ORDINARY named definition (FUNC/const/global - never dotted)
+// A definition may also carry a COMPILER-MINTED dotted label: `.s_<text>_<id>` (a string constant) and
+// `.a_<text>_<id>` (an assert message) are `CNST *n` blocks with `DATs`/`DATi` rows, just like an ordinary
+// data def. `TOP_LABEL_RE`'s `[A-Za-z_]` cannot match the leading dot, so these were invisible as blocks -
+// their rows were absorbed into a neighbouring FUNC (stripped with it -> a dangling `&.s_...` that will not
+// assemble) or orphaned into the "belongs to no data block" throw. Match the dot here; `isDataDef` then
+// decides which dotted lines are real blocks (`.s_`/`.a_` storage) and which stay absorbable extent folds
+// (`.z.`/`.o.` `! DEF`), so the layout-swallowing the tag-only match caused does NOT return.
+var DATA_LABEL_RE = /^\s*(\.[\w.]+|[A-Za-z_]\w*):\s+(\S.*)$/;
+var STORAGE_HEAD_RE = /^(?:DAT[ifps]?|DATA|GLOB|CNST|TEMP)\b/;   // a header that ALLOCATES storage and owns the DATA rows under it
+var DEF_FOLD_RE = /^!\s*DEF[ifp]?\b/;                            // a `! DEF` compile-time fold: a const value, or a `.z.`/`.o.` extent
 var ANON_ALLOC_RE = /^\s*(?:GLOB|CNST|TEMP)\s+\*/;    // an unlabeled section allocation
 var DATA_ROW_RE = /^\s*(?:DAT[ifps]?|DATA)\s/;        // an unlabeled initializer continuation row
 // A compile-time line that computes or names a data definition's extent: an unlabeled `!` fold, or the
@@ -200,11 +210,16 @@ function isFuncDef(line) {
 }
 
 function isDataDef(line) {
-	var m = TOP_LABEL_RE.exec(line);
+	var m = DATA_LABEL_RE.exec(line);
 	if (!m) {
 		return null;
 	}
-	return /^(?:DAT[ifps]?|DATA|GLOB|CNST|TEMP|!\s*DEF[ifp]?)\b/.test(m[2]) ? m[1] : null;
+	// A storage header owns the DATA rows beneath it, so it is always a block of its own - whether it wears
+	// an ordinary label or a minted `.s_`/`.a_` one. A `! DEF` fold is a definition ONLY under an ordinary
+	// label (a const like `FALSE: ! DEFi #0`); a DOTTED fold is a neighbour's `.z.`/`.o.` extent and must
+	// stay absorbable, not stand alone - which is what kept the tag-only match from swallowing struct layouts.
+	return STORAGE_HEAD_RE.test(m[2])
+			|| (DEF_FOLD_RE.test(m[2]) && m[1].charAt(0) !== ".") ? m[1] : null;
 }
 
 /* A function body ends only at the next named definition or a standalone `; signature` row (extern
@@ -324,9 +339,13 @@ function deadStrip(gazl) {
 		blocks[i].refs = [];
 		for (k = blocks[i].start; k < blocks[i].end; ++k) {
 			collectRefs(stripComment(lines[k]), blocks[i].refs);
-		}
-		if (/;\s*signature\s+export\b/.test(lines[blocks[i].start])) {
-			work[work.length] = blocks[i].name;
+			// The export signature rides the DEFINITION row, and that is NOT blocks[i].start once a preceding
+			// `.z.<name>: ! DEFi` extent (or an anonymous alloc) has been absorbed above it - the case of every
+			// exported global, `.z.arr: ! DEFi` then `arr: GLOB ... ; signature export`. Reading start alone
+			// therefore dropped exactly the roots the CLI promises to keep. Scan the whole block for it.
+			if (/;\s*signature\s+export\b/.test(lines[k])) {
+				work[work.length] = blocks[i].name;
+			}
 		}
 	}
 

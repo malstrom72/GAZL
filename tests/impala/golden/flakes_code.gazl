@@ -1,58 +1,58 @@
 ; Compiled with Impala version 2.0
 
 ; signatures version=1
-PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #2	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int @ 17:1
-FALSE:	! DEFi #0	; signature const FALSE : int @ 18:1
-TRUE:	! DEFi #1	; signature const TRUE : int @ 19:1
+PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #2	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int @ flakes_code.impala:17:1
+FALSE:	! DEFi #0	; signature const FALSE : int @ flakes_code.impala:18:1
+TRUE:	! DEFi #1	; signature const TRUE : int @ flakes_code.impala:19:1
 .z.panelTextRows:	! DEFi #8
-panelTextRows:	CNST *.z.panelTextRows	; signature array panelTextRows[8] : unknown @ 27:1
+panelTextRows:	CNST *.z.panelTextRows	; signature array panelTextRows[8] : unknown @ flakes_code.impala:27:1
 	DATA &.s_SAMPLE_4d2 &.s_SQUARE_4d3 &.s_GRAIN_4d4
 	DATA &.s_COMBCC_4d5 &.s_MIDIMo_4d6 &.s_Oct2_4d7
 	DATA &.s_ARPTri_4d8 &.s_RNDEuc_4d9
-; signature extern native abort() -> unknown @ 38:1
-; signature extern native trace() -> unknown @ 39:1
-; signature extern native yield() -> unknown @ 40:1
-; signature extern native write() -> unknown @ 41:1
-; signature extern native read() -> unknown @ 42:1
-; signature extern const DEBUG : int @ 44:1
-; signature extern const OPERATOR_1_NOP : int @ 46:1
-; signature extern const OPERATOR_1_AND : int @ 47:1
-; signature extern const OPERATOR_1_MUL : int @ 48:1
-; signature extern const OPERATOR_1_OSC : int @ 49:1
-; signature extern const OPERATOR_1_RND : int @ 50:1
-; signature extern const OPERATOR_1_COUNT : int @ 51:1
-; signature extern const OPERATOR_2_NOP : int @ 53:1
-; signature extern const OPERATOR_2_OR : int @ 54:1
-; signature extern const OPERATOR_2_XOR : int @ 55:1
-; signature extern const OPERATOR_2_MSK : int @ 56:1
-; signature extern const OPERATOR_2_SUB : int @ 57:1
-; signature extern const OPERATOR_2_COUNT : int @ 58:1
-; signature extern const SWITCHES_SYNC_MASK : int @ 60:1
-; signature extern const SWITCHES_TRIPLET_MASK : int @ 61:1
-; signature extern const SWITCHES_DOTTED_MASK : int @ 62:1
-; signature extern const SWITCHES_WRITE_PROTECT_MASK : int @ 63:1
-; signature extern const SWITCHES_REVERSE_MASK : int @ 64:1
-; signature extern const CLOCK_FREQ_PARAM_INDEX : int @ 66:1
-; signature extern const SWITCHES_PARAM_INDEX : int @ 67:1
-; signature extern const OPERATOR_1_PARAM_INDEX : int @ 68:1
-; signature extern const OPERAND_1_HIGH_PARAM_INDEX : int @ 69:1
-; signature extern const OPERAND_1_LOW_PARAM_INDEX : int @ 70:1
-; signature extern const OPERATOR_2_PARAM_INDEX : int @ 71:1
-; signature extern const OPERAND_2_HIGH_PARAM_INDEX : int @ 72:1
-; signature extern const OPERAND_2_LOW_PARAM_INDEX : int @ 73:1
-; signature extern const PARAM_COUNT : int @ 74:1
-; signature extern const POSITION_INT_BITS : int @ 76:1
-; signature extern const POSITION_FRACT_BITS : int @ 77:1
+; signature extern native abort() -> unknown @ flakes_code.impala:38:1
+; signature extern native trace() -> unknown @ flakes_code.impala:39:1
+; signature extern native yield() -> unknown @ flakes_code.impala:40:1
+; signature extern native write() -> unknown @ flakes_code.impala:41:1
+; signature extern native read() -> unknown @ flakes_code.impala:42:1
+; signature extern const DEBUG : int @ flakes_code.impala:44:1
+; signature extern const OPERATOR_1_NOP : int @ flakes_code.impala:46:1
+; signature extern const OPERATOR_1_AND : int @ flakes_code.impala:47:1
+; signature extern const OPERATOR_1_MUL : int @ flakes_code.impala:48:1
+; signature extern const OPERATOR_1_OSC : int @ flakes_code.impala:49:1
+; signature extern const OPERATOR_1_RND : int @ flakes_code.impala:50:1
+; signature extern const OPERATOR_1_COUNT : int @ flakes_code.impala:51:1
+; signature extern const OPERATOR_2_NOP : int @ flakes_code.impala:53:1
+; signature extern const OPERATOR_2_OR : int @ flakes_code.impala:54:1
+; signature extern const OPERATOR_2_XOR : int @ flakes_code.impala:55:1
+; signature extern const OPERATOR_2_MSK : int @ flakes_code.impala:56:1
+; signature extern const OPERATOR_2_SUB : int @ flakes_code.impala:57:1
+; signature extern const OPERATOR_2_COUNT : int @ flakes_code.impala:58:1
+; signature extern const SWITCHES_SYNC_MASK : int @ flakes_code.impala:60:1
+; signature extern const SWITCHES_TRIPLET_MASK : int @ flakes_code.impala:61:1
+; signature extern const SWITCHES_DOTTED_MASK : int @ flakes_code.impala:62:1
+; signature extern const SWITCHES_WRITE_PROTECT_MASK : int @ flakes_code.impala:63:1
+; signature extern const SWITCHES_REVERSE_MASK : int @ flakes_code.impala:64:1
+; signature extern const CLOCK_FREQ_PARAM_INDEX : int @ flakes_code.impala:66:1
+; signature extern const SWITCHES_PARAM_INDEX : int @ flakes_code.impala:67:1
+; signature extern const OPERATOR_1_PARAM_INDEX : int @ flakes_code.impala:68:1
+; signature extern const OPERAND_1_HIGH_PARAM_INDEX : int @ flakes_code.impala:69:1
+; signature extern const OPERAND_1_LOW_PARAM_INDEX : int @ flakes_code.impala:70:1
+; signature extern const OPERATOR_2_PARAM_INDEX : int @ flakes_code.impala:71:1
+; signature extern const OPERAND_2_HIGH_PARAM_INDEX : int @ flakes_code.impala:72:1
+; signature extern const OPERAND_2_LOW_PARAM_INDEX : int @ flakes_code.impala:73:1
+; signature extern const PARAM_COUNT : int @ flakes_code.impala:74:1
+; signature extern const POSITION_INT_BITS : int @ flakes_code.impala:76:1
+; signature extern const POSITION_FRACT_BITS : int @ flakes_code.impala:77:1
 	GLOB *1
-clock:	DATi #0	; signature global clock : int @ 79:1
+clock:	DATi #0	; signature global clock : int @ flakes_code.impala:79:1
 .z.params:	! DEFi #PARAM_COUNT
-params:	GLOB *.z.params	; signature array params[PARAM_COUNT] : unknown @ 80:1
+params:	GLOB *.z.params	; signature array params[PARAM_COUNT] : unknown @ flakes_code.impala:80:1
 .z.displayLEDs:	! DEFi #4
-displayLEDs:	GLOB *.z.displayLEDs	; signature array displayLEDs[4] : unknown @ 81:1
+displayLEDs:	GLOB *.z.displayLEDs	; signature array displayLEDs[4] : unknown @ flakes_code.impala:81:1
 	CNST *1
-clockFreqLimit:	DATi #132300	; signature readonly clockFreqLimit : int @ 83:1
+clockFreqLimit:	DATi #132300	; signature readonly clockFreqLimit : int @ flakes_code.impala:83:1
 .z.signal:	! DEFi #2
-signal:	GLOB *.z.signal	; signature array signal[2] : unknown @ 86:1
+signal:	GLOB *.z.signal	; signature array signal[2] : unknown @ flakes_code.impala:86:1
 	CNST *1
 	! SHLi <A> #1 #OPERAND_1_HIGH_PARAM_INDEX
 	! SHLi <B> #1 #OPERAND_1_LOW_PARAM_INDEX
@@ -63,22 +63,22 @@ signal:	GLOB *.z.signal	; signature array signal[2] : unknown @ 86:1
 	! IORi <A> <A> <B>
 	! SHLi <B> #1 #OPERATOR_2_PARAM_INDEX
 	! IORi <A> <A> <B>
-updateMask:	DATi <A>	; signature readonly updateMask : int @ 88:1
-LOG2:	! DEFf #0.69314718055994530942	; signature const LOG2 : float @ 97:1
+updateMask:	DATi <A>	; signature readonly updateMask : int @ flakes_code.impala:88:1
+LOG2:	! DEFf #0.69314718055994530942	; signature const LOG2 : float @ flakes_code.impala:97:1
 
 ;-----------------------------------------------------------------------------
-error:	FUNC	; signature func error(ptr s) -> void @ 99:1
+error:	FUNC	; signature func error(ptr s) -> void @ flakes_code.impala:99:1
 		PARA *1
 	$s:	INPp
 ;-----------------------------------------------------------------------------
 		MOVp %1 $s 	; trace(s)
-		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 101:10
-		CALL ^abort %0 *1	; expects abort() -> unknown @ 102:9
+		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ flakes_code.impala:101:10
+		CALL ^abort %0 *1	; expects abort() -> unknown @ flakes_code.impala:102:9
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-exp:	FUNC	; signature func exp(float x) -> float @ 130:1
+exp:	FUNC	; signature func exp(float x) -> float @ flakes_code.impala:130:1
 	$y:	OUTf
 	$x:	INPf
 	$a:	LOCf
@@ -102,14 +102,14 @@ exp:	FUNC	; signature func exp(float x) -> float @ 130:1
 
 
 ;-----------------------------------------------------------------------------
-sqrt:	FUNC	; signature func sqrt(float x) -> float @ 150:1
+sqrt:	FUNC	; signature func sqrt(float x) -> float @ flakes_code.impala:150:1
 	$y:	OUTf
 	$x:	INPf
 	$t:	LOCf
 ;-----------------------------------------------------------------------------
 		GEQf $x #0.0 @.f0	; if (x < 0.0) error("Domain error")
 		MOVp %1 &.s_Domain_4da 	; error("Domain error")
-		CALL &error %0 *2	; expects error(ptr) -> void @ 154:36
+		CALL &error %0 *2	; expects error(ptr) -> void @ flakes_code.impala:154:36
 	.f0:	MOVf $y $x 	; y = x
 		MOVf $t #0.0 	; t = 0.0
 	.l1:	EQUf $y $t @.e2	; while (y != t) 
@@ -121,12 +121,12 @@ sqrt:	FUNC	; signature func sqrt(float x) -> float @ 150:1
 	.e2:	RETU   	; }
 
 	GLOB *1
-rndSeedX:	DATi #123456789	; signature global rndSeedX : int @ 163:1
+rndSeedX:	DATi #123456789	; signature global rndSeedX : int @ flakes_code.impala:163:1
 	GLOB *1
-rndSeedY:	DATi #362436069	; signature global rndSeedY : int @ 164:1
+rndSeedY:	DATi #362436069	; signature global rndSeedY : int @ flakes_code.impala:164:1
 
 ;-----------------------------------------------------------------------------
-seedRandom:	FUNC	; signature func seedRandom(int seed) -> void @ 166:1
+seedRandom:	FUNC	; signature func seedRandom(int seed) -> void @ flakes_code.impala:166:1
 		PARA *1
 	$seed:	INPi
 	$x:	LOCi
@@ -145,7 +145,7 @@ seedRandom:	FUNC	; signature func seedRandom(int seed) -> void @ 166:1
 
 
 ;-----------------------------------------------------------------------------
-randomFloat:	FUNC	; signature func randomFloat() -> float @ 177:1
+randomFloat:	FUNC	; signature func randomFloat() -> float @ flakes_code.impala:177:1
 	$f:	OUTf
 	$x:	LOCi
 	$y:	LOCi
@@ -167,53 +167,53 @@ randomFloat:	FUNC	; signature func randomFloat() -> float @ 177:1
 		POKE &rndSeedY $y 	; global rndSeedY = y
 		RETU   	; }
 
-C3_FREQUENCY:	! DEFf #261.6255653005986346778499935233	; signature const C3_FREQUENCY : float @ 193:1
-NOP_MODE:	! DEFi #0	; signature const NOP_MODE : int @ 194:1
-SAMPLE_MODE:	! DEFi #1	; signature const SAMPLE_MODE : int @ 195:1
-SQUARE_MODE:	! DEFi #2	; signature const SQUARE_MODE : int @ 196:1
-GRAIN_MODE:	! DEFi #3	; signature const GRAIN_MODE : int @ 197:1
-COMB_MODE:	! DEFi #4	; signature const COMB_MODE : int @ 198:1
-KEY_LOW_MODE:	! DEFi #1	; signature const KEY_LOW_MODE : int @ 199:1
-KEY_HIGH_MODE:	! DEFi #2	; signature const KEY_HIGH_MODE : int @ 200:1
-ARPEG_MODE:	! DEFi #3	; signature const ARPEG_MODE : int @ 201:1
-RANDOM_MODE:	! DEFi #4	; signature const RANDOM_MODE : int @ 202:1
+C3_FREQUENCY:	! DEFf #261.6255653005986346778499935233	; signature const C3_FREQUENCY : float @ flakes_code.impala:193:1
+NOP_MODE:	! DEFi #0	; signature const NOP_MODE : int @ flakes_code.impala:194:1
+SAMPLE_MODE:	! DEFi #1	; signature const SAMPLE_MODE : int @ flakes_code.impala:195:1
+SQUARE_MODE:	! DEFi #2	; signature const SQUARE_MODE : int @ flakes_code.impala:196:1
+GRAIN_MODE:	! DEFi #3	; signature const GRAIN_MODE : int @ flakes_code.impala:197:1
+COMB_MODE:	! DEFi #4	; signature const COMB_MODE : int @ flakes_code.impala:198:1
+KEY_LOW_MODE:	! DEFi #1	; signature const KEY_LOW_MODE : int @ flakes_code.impala:199:1
+KEY_HIGH_MODE:	! DEFi #2	; signature const KEY_HIGH_MODE : int @ flakes_code.impala:200:1
+ARPEG_MODE:	! DEFi #3	; signature const ARPEG_MODE : int @ flakes_code.impala:201:1
+RANDOM_MODE:	! DEFi #4	; signature const RANDOM_MODE : int @ flakes_code.impala:202:1
 .z.EUCLIDEAN:	! DEFi #16
-EUCLIDEAN:	CNST *.z.EUCLIDEAN	; signature array EUCLIDEAN[16] : unknown @ 203:1
+EUCLIDEAN:	CNST *.z.EUCLIDEAN	; signature array EUCLIDEAN[16] : unknown @ flakes_code.impala:203:1
 	DATA #0x8000 #0x8080 #0x8420 #0x8888 #0x9248 #0x9494
 	DATA #0x952a #0xaaaa #0xb56a #0xb5b5 #0xb6db #0xbbbb
 	DATA #0xbdef #0xbfbf #0xfffe #0xffff
-GRAIN_DRIFT:	! DEFi #TRUE	; signature const GRAIN_DRIFT : int @ 207:1
-PITCHED_REVERSED:	! DEFi #TRUE	; signature const PITCHED_REVERSED : int @ 208:1
-ALSO_SHIFT_NOTES:	! DEFi #FALSE	; signature const ALSO_SHIFT_NOTES : int @ 209:1
-CROSSFADE_INPUT:	! DEFi #FALSE	; signature const CROSSFADE_INPUT : int @ 210:1
-CROSSFADE_SAMPLES:	! DEFi #FALSE	; signature const CROSSFADE_SAMPLES : int @ 211:1
-SLOW_RELEASE:	! DEFi #0x40	; signature const SLOW_RELEASE : int @ 212:1
-FAST_RELEASE:	! DEFi #0x800	; signature const FAST_RELEASE : int @ 213:1
-STANDARD_ATTACK:	! DEFi #0x2000	; signature const STANDARD_ATTACK : int @ 214:1
-COMB_ATTACK:	! DEFi #0xA000	; signature const COMB_ATTACK : int @ 215:1
+GRAIN_DRIFT:	! DEFi #TRUE	; signature const GRAIN_DRIFT : int @ flakes_code.impala:207:1
+PITCHED_REVERSED:	! DEFi #TRUE	; signature const PITCHED_REVERSED : int @ flakes_code.impala:208:1
+ALSO_SHIFT_NOTES:	! DEFi #FALSE	; signature const ALSO_SHIFT_NOTES : int @ flakes_code.impala:209:1
+CROSSFADE_INPUT:	! DEFi #FALSE	; signature const CROSSFADE_INPUT : int @ flakes_code.impala:210:1
+CROSSFADE_SAMPLES:	! DEFi #FALSE	; signature const CROSSFADE_SAMPLES : int @ flakes_code.impala:211:1
+SLOW_RELEASE:	! DEFi #0x40	; signature const SLOW_RELEASE : int @ flakes_code.impala:212:1
+FAST_RELEASE:	! DEFi #0x800	; signature const FAST_RELEASE : int @ flakes_code.impala:213:1
+STANDARD_ATTACK:	! DEFi #0x2000	; signature const STANDARD_ATTACK : int @ flakes_code.impala:214:1
+COMB_ATTACK:	! DEFi #0xA000	; signature const COMB_ATTACK : int @ flakes_code.impala:215:1
 .z.NOTE_RATES:	! DEFi #64
-NOTE_RATES:	GLOB *.z.NOTE_RATES	; signature array NOTE_RATES[64] : unknown @ 219:1
+NOTE_RATES:	GLOB *.z.NOTE_RATES	; signature array NOTE_RATES[64] : unknown @ flakes_code.impala:219:1
 .z.SQRT_TABLE:	! DEFi #4097
-SQRT_TABLE:	GLOB *.z.SQRT_TABLE	; signature array SQRT_TABLE[4097] : unknown @ 220:1
+SQRT_TABLE:	GLOB *.z.SQRT_TABLE	; signature array SQRT_TABLE[4097] : unknown @ flakes_code.impala:220:1
 	GLOB *1
-doReset:	DATi #TRUE	; signature global doReset : int @ 221:1
+doReset:	DATi #TRUE	; signature global doReset : int @ flakes_code.impala:221:1
 	GLOB *1
-updateBits:	DATi #TRUE	; signature global updateBits : int @ 222:1
+updateBits:	DATi #TRUE	; signature global updateBits : int @ flakes_code.impala:222:1
 
 ;-----------------------------------------------------------------------------
-init:	FUNC	; signature func init() -> void @ 231:1
+init:	FUNC	; signature func init() -> void @ flakes_code.impala:231:1
 		PARA *1
 	$i:	LOCi
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_init_4db 	; trace("init")
-		CALL ^trace %0 *2	; expects trace(int-ptr) -> unknown @ 234:15
+		CALL ^trace %0 *2	; expects trace(int-ptr) -> unknown @ flakes_code.impala:234:15
 		EQUi #CROSSFADE_SAMPLES #FALSE @.f0	; if (CROSSFADE_SAMPLES != FALSE) 
 		MOVi $i #0 	; for (i = 0 to 4097) 
 		GEQi #0 #4097 @.f0
 	.l2:	NOOP
 		! DIVf <A> #1.0 #4096.0	; global SQRT_TABLE[i] = ftoi((float) sqrt(itof(i) * (1.0 / 4096.0)) * 65536.0)
 		iTOf %1 $i <A>
-		CALL &sqrt %0 *2	; expects sqrt(float) -> float @ 237:71
+		CALL &sqrt %0 *2	; expects sqrt(float) -> float @ flakes_code.impala:237:71
 		fTOi %0 %0 #65536.0
 		POKE &SQRT_TABLE $i %0
 		FORi $i #4097 @.l2	; }
@@ -222,34 +222,34 @@ init:	FUNC	; signature func init() -> void @ 231:1
 	.l4:	SUBi %1 $i #36	; global NOTE_RATES[i] = (float) exp(itof(i - 36) * (LOG2 / 12.0))
 		! DIVf <A> #LOG2 #12.0
 		iTOf %1 %1 <A>
-		CALL &exp %0 *2	; expects exp(float) -> float @ 241:67
+		CALL &exp %0 *2	; expects exp(float) -> float @ flakes_code.impala:241:67
 		POKE &NOTE_RATES $i %0
 		FORi $i #64 @.l4	; }
 	.e3:	RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-reset:	FUNC	; signature func reset() -> void @ 251:1
+reset:	FUNC	; signature func reset() -> void @ flakes_code.impala:251:1
 		PARA *1
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_reset_4dc 	; trace("reset")
-		CALL ^trace %0 *2	; expects trace(int-ptr) -> unknown @ 253:16
+		CALL ^trace %0 *2	; expects trace(int-ptr) -> unknown @ flakes_code.impala:253:16
 		POKE &doReset #TRUE 	; global doReset = TRUE
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-update:	FUNC	; signature func update() -> void @ 264:1
+update:	FUNC	; signature func update() -> void @ flakes_code.impala:264:1
 		PARA *1
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_update_4dd 	; trace("update")
-		CALL ^trace %0 *2	; expects trace(int-ptr) -> unknown @ 266:17
+		CALL ^trace %0 *2	; expects trace(int-ptr) -> unknown @ flakes_code.impala:266:17
 		POKE &updateBits #TRUE 	; global updateBits = TRUE
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-process:	FUNC	; signature func process() -> void @ 285:1
+process:	FUNC	; signature func process() -> void @ flakes_code.impala:285:1
 		PARA *1
 	$i:	LOCi
 	$j:	LOCi
@@ -365,7 +365,7 @@ process:	FUNC	; signature func process() -> void @ 285:1
 		PEEK %0 &updateBits 	; if (global updateBits != FALSE) 
 		EQUi %0 #FALSE @.e38
 		MOVp %1 &.s_bitsup_4de 	; trace("bits update")
-		CALL ^trace %0 *2	; expects trace(int-ptr) -> unknown @ 347:24
+		CALL ^trace %0 *2	; expects trace(int-ptr) -> unknown @ flakes_code.impala:347:24
 		POKE &updateBits #FALSE 	; global updateBits = FALSE
 		MOVi $i #0 	; for (i = 0 to 16) 
 		GEQi #0 #16 @.e6
@@ -449,7 +449,7 @@ process:	FUNC	; signature func process() -> void @ 285:1
 	.e23:	MOVi $euclideanBits #0 	; euclideanBits = 0
 		ANDi %1 $op1LowBits #0xF0	; seedRandom((op1LowBits & 0xF0) + 192837463)
 		ADDi %1 %1 #192837463
-		CALL &seedRandom %0 *2	; expects seedRandom(int) -> void @ 413:51
+		CALL &seedRandom %0 *2	; expects seedRandom(int) -> void @ flakes_code.impala:413:51
 		MOVf $noteIndexFloat #0.0 	; noteIndexFloat = 0.0
 		MOVf $octaveIndexFloat #0.0 	; octaveIndexFloat = 0.0
 		MOVi $i #0 	; for (i = 0 to 16) 
@@ -477,11 +477,11 @@ process:	FUNC	; signature func process() -> void @ 285:1
 		fTOi %0 %0 #1.0
 		GETL %0 $octsList %0
 		SETL $stepOcts $j %0
-		CALL &randomFloat %0 *1	; expects randomFloat() -> float @ 425:67
+		CALL &randomFloat %0 *1	; expects randomFloat() -> float @ flakes_code.impala:425:67
 		MULf %0 %0 #2.0
 		SUBf %0 %0 #1.0
 		ADDf $noteIndexFloat $noteIndexFloat %0
-		CALL &randomFloat %0 *1	; expects randomFloat() -> float @ 426:71
+		CALL &randomFloat %0 *1	; expects randomFloat() -> float @ flakes_code.impala:426:71
 		MULf %0 %0 #2.0
 		SUBf %0 %0 #1.0
 		ADDf $octaveIndexFloat $octaveIndexFloat %0
@@ -489,14 +489,14 @@ process:	FUNC	; signature func process() -> void @ 285:1
 		IORi $euclideanBits $euclideanBits %0
 	.f31:	FORi $i #16 @.l27	; }
 	.e26:	ADDi %1 $op1HighBits #6734261	; seedRandom(op1HighBits + 6734261)
-		CALL &seedRandom %0 *2	; expects seedRandom(int) -> void @ 430:41
+		CALL &seedRandom %0 *2	; expects seedRandom(int) -> void @ flakes_code.impala:430:41
 		MOVi $l #0 	; l = 0
 		MOVi $i #0 	; for (i = 0 to 17) 
 		GEQi #0 #17 @.e38
 	.l33:	EQUi $i #16 @.t34	; if (i == 16 || (int) stepTrigs[i] != FALSE) 
 		GETL %0 $stepTrigs $i
 		EQUi %0 #FALSE @.f35
-	.t34:	CALL &randomFloat %0 *1	; expects randomFloat() -> float @ 434:45
+	.t34:	CALL &randomFloat %0 *1	; expects randomFloat() -> float @ flakes_code.impala:434:45
 		SUBi %1 $i $l
 		iTOf %1 %1 #1.0
 		MULf %0 %0 %1
@@ -661,11 +661,11 @@ process:	FUNC	; signature func process() -> void @ 285:1
 	.s70:	MOVi %1 $clock 	; write(clock, 1, global signal)
 		MOVi %2 #1 
 		MOVp %3 &signal 
-		CALL ^write %0 *4	; expects write(int, int, ptr) -> unknown @ 565:33
+		CALL ^write %0 *4	; expects write(int, int, ptr) -> unknown @ flakes_code.impala:565:33
 		MOVi %1 $clock 	; read(clock, 1, global signal)
 		MOVi %2 #1 
 		MOVp %3 &signal 
-		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ 566:32
+		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ flakes_code.impala:566:32
 		PEEK $inL &signal:0 	; inL = (int) global signal[0]
 		PEEK $inR &signal:1 	; inR = (int) global signal[1]
 		SUBi %0 $env $g0	; g0 = g0 + ((env - g0) * gk >> 16)
@@ -695,12 +695,12 @@ process:	FUNC	; signature func process() -> void @ 285:1
 	.f81:	MOVi %1 $inPos 	; read(inPos, 1, bSamples)
 		MOVi %2 #1 
 		ADRL %3 $bSamples *0
-		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ 595:29
+		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ flakes_code.impala:595:29
 		ADDi $inPos $inPos #1	; inPos = inPos + 1
 		MOVi %1 $outPos 	; read(outPos, 1, aSamples)
 		MOVi %2 #1 
 		ADRL %3 $aSamples *0
-		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ 597:30
+		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ flakes_code.impala:597:30
 		ADDi $outPos $outPos #1	; outPos = outPos + 1
 		SUBi %0 $bSamples:0 $aSamples:0	; left = ((int) aSamples[0] + (((int) bSamples[0] - (int) aSamples[0]) * phase >> 16))
 		MULi %0 %0 $phase
@@ -717,7 +717,7 @@ process:	FUNC	; signature func process() -> void @ 285:1
 		MOVi %1 $i 	; read(i, 2, aSamples)
 		MOVi %2 #2 
 		ADRL %3 $aSamples *0
-		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ 607:25
+		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ flakes_code.impala:607:25
 		ANDi $x $pos #0xFFFF	; x = pos & 0xFFFF
 		ADDi $pos $pos $pitchedRate	; pos = pos + pitchedRate
 		SUBi %0 $aSamples:2 $aSamples:0	; left = ((int) aSamples[0] + (((int) aSamples[2] - (int) aSamples[0]) * x >> 16))
@@ -732,7 +732,7 @@ process:	FUNC	; signature func process() -> void @ 285:1
 		SUBi %1 $i #0x8000	; read(i - 0x8000, 2, bSamples)
 		MOVi %2 #2 
 		ADRL %3 $bSamples *0
-		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ 613:35
+		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ flakes_code.impala:613:35
 		SUBi %0 $bSamples:2 $bSamples:0	; bL = ((int) bSamples[0] + (((int) bSamples[2] - (int) bSamples[0]) * x >> 16))
 		MULi %0 %0 $x
 		SHRi %0 %0 #16
@@ -763,7 +763,7 @@ process:	FUNC	; signature func process() -> void @ 285:1
 		SUBi %1 %1 %2
 		MOVi %2 #2 
 		ADRL %3 $aSamples *0
-		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ 629:50
+		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ flakes_code.impala:629:50
 		ANDi $x $period #0xFFFF	; x = period & 0xFFFF
 		SUBi %0 $aSamples:0 $aSamples:2	; fbL = (int) aSamples[2] + (((int) aSamples[0] - (int) aSamples[2]) * x >> 16)
 		MULi %0 %0 $x
@@ -794,7 +794,7 @@ process:	FUNC	; signature func process() -> void @ 285:1
 		MOVi %1 $clock 	; write(clock, 1, bSamples)
 		MOVi %2 #1 
 		ADRL %3 $bSamples *0
-		CALL ^write %0 *4	; expects write(int, int, ptr) -> unknown @ 646:30
+		CALL ^write %0 *4	; expects write(int, int, ptr) -> unknown @ flakes_code.impala:646:30
 	.s78:	EQUi #CROSSFADE_INPUT #FALSE @.f85	; if (CROSSFADE_INPUT != FALSE) 
 		SUBi %0 $left $inL	; left = inL + ((left - inL) * g1 >> 12)
 		MULi %0 %0 $g1
@@ -811,7 +811,7 @@ process:	FUNC	; signature func process() -> void @ 285:1
 		SHRi $right %0 #12
 	.e86:	POKE &signal:0 $left 	; global signal[0] = left
 		POKE &signal:1 $right 	; global signal[1] = right
-		CALL ^yield %0 *1	; expects yield() -> unknown @ 659:10
+		CALL ^yield %0 *1	; expects yield() -> unknown @ flakes_code.impala:659:10
 		GOTO @.l0  	; }
 		RETU   	; }
 

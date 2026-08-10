@@ -1,20 +1,20 @@
 ; Compiled with Impala version 2.0
 
 ; signatures version=1
-DEBUG:	! DEFi #1	; signature const DEBUG : int @ 14:1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ returnedPointerElem.impala:14:1
 	! MOVi <a> #0	; layout of struct V
 .o.V.a:	! DEFi #<a>
 	! ADDi <a> #<a> #1
 .o.V.b:	! DEFi #<a>
 	! ADDi <a> #<a> #1
 .z.V:	! DEFi #<a>
-; signature struct V { a : int, b : float } @ 16:1
-; signature extern native printInt() -> unknown @ 18:1
-; signature extern native printFloat() -> unknown @ 19:1
-; signature extern native printLF() -> unknown @ 20:1
+; signature struct V { a : int, b : float } @ returnedPointerElem.impala:16:1
+; signature extern native printInt() -> unknown @ returnedPointerElem.impala:18:1
+; signature extern native printFloat() -> unknown @ returnedPointerElem.impala:19:1
+; signature extern native printLF() -> unknown @ returnedPointerElem.impala:20:1
 
 ;-----------------------------------------------------------------------------
-bump:	FUNC	; signature func bump(V-ptr x) -> V-ptr @ 22:1
+bump:	FUNC	; signature func bump(V-ptr x) -> V-ptr @ returnedPointerElem.impala:22:1
 	$y:	OUTp
 	$x:	INPp
 ;-----------------------------------------------------------------------------
@@ -23,7 +23,7 @@ bump:	FUNC	; signature func bump(V-ptr x) -> V-ptr @ 22:1
 
 
 ;-----------------------------------------------------------------------------
-pick:	FUNC	; signature func pick(int-ptr x) -> int-ptr @ 23:1
+pick:	FUNC	; signature func pick(int-ptr x) -> int-ptr @ returnedPointerElem.impala:23:1
 	$y:	OUTp
 	$x:	INPp
 ;-----------------------------------------------------------------------------
@@ -32,7 +32,7 @@ pick:	FUNC	; signature func pick(int-ptr x) -> int-ptr @ 23:1
 
 
 ;-----------------------------------------------------------------------------
-main:	FUNC	; signature func main() -> void @ 25:1
+main:	FUNC	; signature func main() -> void @ returnedPointerElem.impala:25:1
 		PARA *1
 	$src:	LOCA *.z.V
 	$dst:	LOCA *.z.V
@@ -44,7 +44,7 @@ main:	FUNC	; signature func main() -> void @ 25:1
 		MOVi $src:.o.V.a #5 	; src.a = 5
 		MOVf $src:.o.V.b #1.5 	; src.b = 1.5
 		ADRL %1 $src *0	; dst = *bump(&src)
-		CALL &bump %0 *2	; expects bump(V-ptr) -> V-ptr @ 29:19
+		CALL &bump %0 *2	; expects bump(V-ptr) -> V-ptr @ returnedPointerElem.impala:29:19
 		ADRL %1 $dst *0
 		COPY %1 %0 *.z.V
 		ADRL $p $raw:0 *0	; p = (V pointer)&raw[0]
@@ -54,18 +54,18 @@ main:	FUNC	; signature func main() -> void @ 25:1
 		ADDi %1 %1 #100
 		POKE $p #.o.V.a %1
 		MOVi %1 $dst:.o.V.a 	; printInt(dst.a)
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 33:17
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 33:28
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ returnedPointerElem.impala:33:17
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ returnedPointerElem.impala:33:28
 		MOVf %1 $dst:.o.V.b 	; printFloat(dst.b)
-		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 34:19
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 34:30
+		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ returnedPointerElem.impala:34:19
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ returnedPointerElem.impala:34:30
 		PEEK %1 $p #.o.V.a	; printInt(p->a)
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 35:16
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 35:27
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ returnedPointerElem.impala:35:16
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ returnedPointerElem.impala:35:27
 		MOVi $n #7 	; n = 7
 		ADRL %2 $n *0	; printInt(*pick(&n))
-		CALL &pick %1 *2	; expects pick(int-ptr) -> int-ptr @ 38:20
+		CALL &pick %1 *2	; expects pick(int-ptr) -> int-ptr @ returnedPointerElem.impala:38:20
 		PEEK %1 %1 
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 38:21
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 38:32
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ returnedPointerElem.impala:38:21
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ returnedPointerElem.impala:38:32
 		RETU   	; }

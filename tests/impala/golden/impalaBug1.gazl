@@ -1,11 +1,11 @@
 ; Compiled with Impala version 2.0
 
 ; signatures version=1
-FALSE:	! DEFi #0	; signature const FALSE : int @ 1:1
-TRUE:	! DEFi #1	; signature const TRUE : int @ 2:1
+FALSE:	! DEFi #0	; signature const FALSE : int @ impalaBug1.impala:1:1
+TRUE:	! DEFi #1	; signature const TRUE : int @ impalaBug1.impala:2:1
 
 ;-----------------------------------------------------------------------------
-fTSTBIT:	FUNC	; signature func fTSTBIT(int mask, int bit) -> int @ 4:1
+fTSTBIT:	FUNC	; signature func fTSTBIT(int mask, int bit) -> int @ impalaBug1.impala:4:1
 	$result:	OUTi
 	$mask:	INPi
 	$bit:	INPi

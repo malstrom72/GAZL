@@ -608,118 +608,19 @@ const tagCaptureCases = [
 
 testGrammarEquivalence("tagCaptureTest.jspeg", "tagCaptureTest.jspeg", tagCaptureCases);
 
-const parityFixtures = [
-	{
-		name: "smoke",
-		source: "smoke.impala",
-		expected: "smoke.expected.gazl",
-		options: { randomId: 42, sourceName: "smoke.impala" },
-	},
-	{
-		name: "bool",
-		source: "bool.impala",
-		expected: "bool.expected.gazl",
-		options: { randomId: 42, sourceName: "bool.impala" },
-	},
-	{
-		name: "control",
-		source: "control.impala",
-		expected: "control.expected.gazl",
-		options: { randomId: 42, sourceName: "control.impala" },
-	},
-	{
-		name: "perfTest2",
-		source: "perfTest2.impala",
-		expected: "perfTest2.expected.gazl",
-		options: { randomId: 42, sourceName: "perfTest2.impala" },
-	},
-	{
-		name: "inputTest",
-		source: "inputTest.impala",
-		expected: "inputTest.expected.gazl",
-		options: { randomId: 42, sourceName: "inputTest.impala" },
-	},
-	{
-		name: "derefCallContract",
-		source: "derefCallContract.impala",
-		expected: "derefCallContract.expected.gazl",
-		options: { randomId: 42, sourceName: "derefCallContract.impala" },
-	},
-];
+/* `impala/testdata` is the SECOND golden system: small fixtures for the cross-unit `; signature`
+   metadata the corpus does not exercise (return contracts, extern assignment). The list is DERIVED
+   from the directory, never hand-written - a hand-written one omitted externAssignment and the three
+   returnContract fixtures, nothing then compared them, and they quietly fossilised a
+   `; Compiled with Impala version 1.0` banner while 2.0 was being built.
+   Options match tools/regen-jspeg-fixtures, which is what mints these files: seed 42, retabulated
+   like the CLI, and the basename as `sourceName`. */
+const testdataDir = path.join(dir, "testdata");
 
-const legacySourceDir = path.join(dir, "..", "tests", "impala", "sources");
-const legacyExpectedDir = path.join(dir, "..", "tests", "impala", "golden");
-const LEGACY_RANDOM_ID = 0x4d2;
-const legacyParityFixtures = fs
-	.readdirSync(legacySourceDir)
-	.filter((file) => file.endsWith(".impala"))
-	.sort()
-	.map((file) => {
-		const name = path.basename(file, ".impala");
-		return {
-			name,
-			source: file,
-			expected: `${name}.gazl`,
-			sourceDir: legacySourceDir,
-			expectedDir: legacyExpectedDir,
-			options: {
-				randomId: LEGACY_RANDOM_ID,
-				retabulate: false,
-				sourceName: path.join(legacySourceDir, file),
-			},
-		};
-	});
-
-function resolveFixturePath(fixture, key, defaultDir) {
-	if (fixture[`${key}Dir`]) {
-		return path.join(fixture[`${key}Dir`], fixture[key]);
-	}
-	return path.join(defaultDir, fixture[key]);
-}
-
-function runParityFixture(fixture) {
-	const sourcePath = resolveFixturePath(fixture, "source", path.join(dir, "testdata"));
-	const expectedPath = resolveFixturePath(fixture, "expected", path.join(dir, "testdata"));
-	const source = canonicalizeNewlines(fs.readFileSync(sourcePath, IMPALA_ENCODING));
-	const expected = fs.readFileSync(expectedPath, IMPALA_ENCODING);
-	let actual;
-	try {
-		actual = compileWithJsImpala(source, Object.assign({}, fixture.options));
-	} catch (err) {
-		const message = err && err.message ? err.message : String(err);
-		if (fixture.expectFailure) {
-			console.warn(`Skipping ${fixture.name} fixture until JSPEG supports this feature: ${message}`);
-			return;
-		}
-		console.error(`impala.jspeg compiler threw on fixture ${fixture.name}`);
-		console.error(message);
-		process.exit(1);
-	}
-
-	if (fixture.expectFailure) {
-		console.error(`impala.jspeg compiler unexpectedly handled ${fixture.name}; remove expectFailure flag to enforce parity.`);
-		process.exit(1);
-	}
-
-	const normalizedActual = canonicalizeTrimEnd(actual);
-	const normalizedExpected = canonicalizeTrimEnd(expected);
-
-	if (normalizedActual !== normalizedExpected) {
-		console.error(`impala.jspeg compiler output diverges from recorded fixture: ${fixture.name}`);
-		process.exit(1);
-	}
-	console.log(`impala.jspeg compiler matches ${fixture.name} fixture output`);
-	if (!fixture.expectedDir) {
-		assembleFixture(fixture.name, expectedPath);
-	}
-}
-
-/* The `impala/testdata` fixtures used to get `; signature` validation and nothing else, so a label
-   this compiler emitted but never defined - a duplicate `.sN#K` from two identical `case` values,
-   say - would sail through on the shapes only testdata covers (return contracts, extern assignment).
-   Same gate the goldens get, same rule: a host or companion-unit symbol is out of scope here, a
-   module-local `.` name is ours. Fixtures carrying an `expectedDir` are goldens, which runJspegTests
-   already assembles - with its own exemption list - so they are skipped rather than checked twice. */
+/* Same gate the goldens get: "compiles clean" and "loads" are different claims, and only the second
+   catches a label this compiler emitted but never defined - a duplicate `.sN#K` from two identical
+   `case` values, say - on the shapes only testdata covers. A host or companion-unit symbol is out of
+   scope here, a module-local `.` name is ours. */
 function assembleFixture(name, gazlPath) {
 	if (!haveGazlCmd()) {
 		return;
@@ -734,6 +635,35 @@ function assembleFixture(name, gazlPath) {
 		console.log(`${name} fixture assembles`);
 	}
 }
+
+function compileFixture(name) {
+	const source = canonicalizeNewlines(fs.readFileSync(path.join(testdataDir, `${name}.impala`), IMPALA_ENCODING));
+	return compileWithJsImpala(source, { randomId: 42, sourceName: `${name}.impala` });
+}
+
+function runParityFixture(name) {
+	const expectedPath = path.join(testdataDir, `${name}.expected.gazl`);
+	const expected = fs.readFileSync(expectedPath, IMPALA_ENCODING);
+	let actual;
+	try {
+		actual = compileFixture(name);
+	} catch (err) {
+		console.error(`impala.jspeg compiler threw on fixture ${name}`);
+		console.error((err && err.message) ? err.message : String(err));
+		process.exit(1);
+	}
+	if (canonicalizeTrimEnd(actual) !== canonicalizeTrimEnd(expected)) {
+		console.error(`impala.jspeg compiler output diverges from recorded fixture: ${name}`);
+		process.exit(1);
+	}
+	console.log(`impala.jspeg compiler matches ${name} fixture output`);
+	assembleFixture(name, expectedPath);
+}
+
+fs.readdirSync(testdataDir)
+	.filter((file) => file.endsWith(".impala"))
+	.sort()
+	.forEach((file) => runParityFixture(path.basename(file, ".impala")));
 
 /* A source that must COMPILE clean and then be refused by the assembler. That is a real outcome for
    anything Impala defers rather than decides (design/impala/TwoStageConstants.md), and nothing else here can see
@@ -767,11 +697,10 @@ if (!observedFailure) {
 	process.exit(1);
 }
 
-const smokeSource = canonicalizeNewlines(fs.readFileSync(path.join(dir, "testdata", "smoke.impala"), IMPALA_ENCODING));
-const smokeExpected = fs.readFileSync(path.join(dir, "testdata", "smoke.expected.gazl"), IMPALA_ENCODING);
-const smokeOutputAfterFailure = compileWithJsImpala(smokeSource, {
-	randomId: 42,
-});
+/* Recompiles a testdata fixture through runParityFixture's OWN options - spelling them again here is
+   how this check silently stopped matching the fixture it compares against. */
+const smokeExpected = fs.readFileSync(path.join(testdataDir, "smoke.expected.gazl"), IMPALA_ENCODING);
+const smokeOutputAfterFailure = compileFixture("smoke");
 
 if (canonicalizeTrimEnd(smokeOutputAfterFailure) !== canonicalizeTrimEnd(smokeExpected)) {
 	console.error("impala.jspeg compiler leaked state after aborted compile");
@@ -2888,6 +2817,113 @@ const typedPointerCases = [
 		source: ["struct S { int a; float b }", "extern struct S { int a; int b }"].join("\n"),
 		expectError: "does not match its definition",
 	},
+	/* E438 asks whether two claims describe the same LAYOUT, and decides it field by field - not by
+	   string-comparing two rendered `; signature` rows, which is how it used to work. That proxy had a
+	   reachable false positive: E430 FORBIDS a host-owned array field from stating a size, so an extern
+	   body could only ever say `int[]` while the definition said `int[3]`, the rows differed, and E438's
+	   advice to "correct the declaration" ran straight into E430. No legal spelling existed between the
+	   two diagnostics. An extent is now compared only where BOTH sides state one; rank always is. */
+	/* A source byte above 127 is not a portable way to say a byte VALUE: what it becomes depends on how
+	   the HOST decodes the file. node reads latin1 and NuXJS reads UTF-8, so `"...\xD0..."` compiled to
+	   `#208` under one and `#253` under the other (0xD0 is a malformed UTF-8 lead byte -> U+FFFD, low
+	   byte 253). Two corpus sources spelled a Permut8 display glyph that way. `\uXXXX` says it exactly,
+	   from a file that is pure ASCII. Comments are unrestricted - they never reach output. */
+	{
+		label: "a raw high byte in a string literal is rejected",
+		source: ["readonly array T[1] = { \"AÐB\" }", "function main() { }"].join("\n"),
+		expectError: "syntax error",
+	},
+	{
+		label: "...and in a character literal",
+		source: ["function main() locals int c { c = 'Ð'; }"].join("\n"),
+		expectError: "syntax error",
+	},
+	{
+		label: "the \\u escape says the same byte, portably",
+		source: ["readonly array T[1] = { \"A\\u00D0B\" }", "function main() { }"].join("\n"),
+		expectError: null,
+	},
+	/* `&` on an ARRAY place yields a pointer to its ELEMENT. setPlace leaves `struct` undefined for an
+	   array place (it fills `arrayOf` instead), so the struct branch used to mint the descriptor
+	   `Sundefined` - which isStructAtom accepts and renderDesc unwraps to the word "undefined". */
+	{
+		label: "address of a struct's array field is a pointer to its element",
+		source: ["struct Body { int array tags[4] }", "global Body b",
+			"function main() returns int r locals int pointer p { p = &global b.tags; r = 0; }"].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "...and its element type is still checked",
+		source: ["struct Body { int array tags[4] }", "global Body b",
+			"function main() returns int r locals float pointer p { p = &global b.tags; r = 0; }"].join("\n"),
+		expectError: "Pointer element type mismatch",
+	},
+	{
+		label: "address of a struct VALUE is still a struct pointer",
+		source: ["struct P { int a }", "global P g",
+			"function main() locals P pointer q { q = &global g; q->a = 1; }"].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "a struct-element array field gives a struct pointer",
+		source: ["struct Cell { int v }", "struct Grid { Cell array cells[4] }", "global Grid g",
+			"function main() locals Cell pointer c { c = &global g.cells; c->v = 1; }"].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "a host-owned array field meets a sized definition",
+		source: ["extern struct S { int array v[] }", "struct S { int array v[3] }",
+			"function main() { }"].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "...at rank 2 as well",
+		source: ["extern struct S { int array v[,] }", "struct S { int array v[3, 4] }",
+			"function main() { }"].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "but a RANK disagreement is still caught",
+		source: ["extern struct S { int array v[,] }", "struct S { int array v[3] }",
+			"function main() { }"].join("\n"),
+		expectError: "does not match its definition",
+	},
+	{
+		label: "field ORDER is part of the layout, since it decides the offsets",
+		source: ["extern struct S { int a; float b }", "struct S { float b; int a }",
+			"function main() { }"].join("\n"),
+		expectError: "does not match its definition",
+	},
+	{
+		label: "a differing field COUNT is caught",
+		source: ["extern struct S { int a }", "struct S { int a; int b }",
+			"function main() { }"].join("\n"),
+		expectError: "does not match its definition",
+	},
+	{
+		label: "a differing field NAME is caught",
+		source: ["extern struct S { int a }", "struct S { int b }", "function main() { }"].join("\n"),
+		expectError: "does not match its definition",
+	},
+	{
+		label: "a differing POINTER ELEMENT is caught",
+		source: ["extern struct S { int pointer p }", "struct S { float pointer p }",
+			"function main() { }"].join("\n"),
+		expectError: "does not match its definition",
+	},
+	{
+		label: "a differing NESTED struct field is caught",
+		source: ["struct A { int x }", "struct B { int y }", "extern struct S { A n }",
+			"struct S { B n }", "function main() { }"].join("\n"),
+		expectError: "does not match its definition",
+	},
+	{
+		/* no definition to arbitrate, so failDisagreement uses its OTHER message */
+		label: "two extern bodies that disagree are caught with no definition present",
+		source: ["extern struct S { int a }", "extern struct S { float a }",
+			"function main() { }"].join("\n"),
+		expectError: "extern declarations of struct S disagree",
+	},
 	{
 		label: "an extern struct body contradicting a LATER definition is the same error",
 		source: ["extern struct S { int a; int b }", "struct S { int a; float b }"].join("\n"),
@@ -2949,6 +2985,255 @@ const typedPointerCases = [
 		source: ["functype Cb(int a) returns int r", "function g(Cb c) { }",
 			"function main() locals funcptr f { g(f); }"].join("\n"),
 		expectError: "Funcptr type mismatch for argument 1",
+	},
+	/* A cast BETWEEN named functypes is shape-checked: same args and returns convert freely, a
+	   different shape is a wrong call the moment it is made (E465). Untyped `funcptr` is the escape
+	   hatch - `(funcptr)x` erases the name, a named cast re-stamps it - so the deliberate conversion
+	   is spelled `(To)(funcptr)x` and is greppable. */
+	{
+		label: "a cast between same-shape functypes is allowed",
+		source: ["functype Cb(int a) returns int r", "functype Dup(int a) returns int r",
+			"function dbl(int a) returns int r { r = a * 2; }",
+			"function main() locals Cb c, Dup d { c = dbl; d = (Dup)c; }"].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "a cast between different-shape functypes is E465",
+		source: ["functype Cb(int a) returns int r", "functype Wrong(float x, float y) returns float z",
+			"function dbl(int a) returns int r { r = a * 2; }",
+			"function main() locals Cb c, Wrong w { c = dbl; w = (Wrong)c; }"].join("\n"),
+		expectError: "Cast between funcptr types of different shape",
+	},
+	{
+		label: "untyped funcptr is the escape hatch between shapes",
+		source: ["functype Cb(int a) returns int r", "functype Wrong(float x, float y) returns float z",
+			"function dbl(int a) returns int r { r = a * 2; }",
+			"function main() locals Cb c, Wrong w { c = dbl; w = (Wrong)(funcptr)c; }"].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "a non-funcptr does not take a funcptr type",
+		source: ["functype Cb(int a) returns int r",
+			"function main() locals int x, Cb c { x = 3; c = (Cb)x; }"].join("\n"),
+		expectError: "Only a funcptr can take a funcptr type",
+	},
+	{
+		label: "...a data pointer neither",
+		source: ["functype Cb(int a) returns int r", "global int g",
+			"function main() locals int pointer p, Cb c { p = &global g; c = (Cb)p; }"].join("\n"),
+		expectError: "Only a funcptr can take a funcptr type",
+	},
+	{
+		label: "...a float neither",
+		source: ["functype Cb(int a) returns int r",
+			"function main() locals float x, Cb c { x = 1.0; c = (Cb)x; }"].join("\n"),
+		expectError: "Only a funcptr can take a funcptr type - this is float",
+	},
+	{
+		label: "...a struct pointer neither",
+		source: ["struct S { int a }", "functype Cb(int a) returns int r",
+			"function main() locals S v, S pointer sp, Cb c { sp = &v; c = (Cb)sp; }"].join("\n"),
+		expectError: "Only a funcptr can take a funcptr type - this is pointer",
+	},
+	{
+		label: "...nor a native, which is not a value at all",
+		source: ["functype P(int v)", "extern native printInt",
+			"function main() locals P cb { cb = (P)printInt; }"].join("\n"),
+		expectError: "a native can only be called directly, by name",
+	},
+	{
+		label: "a native does not assign into a funcptr either",
+		source: ["functype P(int v)", "extern native printInt",
+			"function main() locals P cb { cb = printInt; }"].join("\n"),
+		expectError: "cannot assign native to funcptr",
+	},
+	/* The funcptr world is sealed at the BASE cast too - E302 in both directions - so a funcptr value
+	   only ever comes from a function name, nullfunc, or another funcptr. These pin the boundary. */
+	{
+		label: "(funcptr) does not take an int",
+		source: ["function main() locals int x, funcptr f { x = 3; f = (funcptr)x; }"].join("\n"),
+		expectError: "Invalid type (int)",
+	},
+	{
+		label: "(funcptr) does not take a data pointer",
+		source: ["global int g",
+			"function main() locals int pointer p, funcptr f { p = &global g; f = (funcptr)p; }"].join("\n"),
+		expectError: "Invalid type (pointer)",
+	},
+	{
+		label: "(pointer) does not take a funcptr",
+		source: ["function dbl(int a) returns int r { r = a * 2; }",
+			"function main() locals funcptr f, pointer p { f = dbl; p = (pointer)f; }"].join("\n"),
+		expectError: "Invalid type (funcptr)",
+	},
+	/* Shape equality is structural: parameter TYPES (with pointer elements) and the return, never the
+	   parameter names. Each dimension of difference gets its own witness. */
+	{
+		label: "shape match ignores parameter names",
+		source: ["functype A(int pointer p)", "functype B(int pointer q)", "function f(int pointer p) { }",
+			"function main() locals A a, B b { a = f; b = (B)a; }"].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "pointer elements are part of the shape",
+		source: ["functype A(int pointer p)", "functype B(float pointer q)", "function f(int pointer p) { }",
+			"function main() locals A a, B b { a = f; b = (B)a; }"].join("\n"),
+		expectError: "Cast between funcptr types of different shape",
+	},
+	{
+		label: "the return is part of the shape",
+		source: ["functype Cb(int a) returns int r", "functype NoRet(int a)",
+			"function dbl(int a) returns int r { r = a * 2; }",
+			"function main() locals Cb c, NoRet n { c = dbl; n = (NoRet)c; }"].join("\n"),
+		expectError: "Cast between funcptr types of different shape",
+	},
+	{
+		label: "arity is part of the shape",
+		source: ["functype One(int a)", "functype Two(int a, int b)", "function f(int a) { }",
+			"function main() locals One o, Two t { o = f; t = (Two)o; }"].join("\n"),
+		expectError: "Cast between funcptr types of different shape",
+	},
+	{
+		label: "a same-name cast is a no-op",
+		source: ["functype Cb(int a) returns int r", "function dbl(int a) returns int r { r = a * 2; }",
+			"function main() locals Cb c, Cb d { c = dbl; d = (Cb)c; }"].join("\n"),
+		expectError: null,
+	},
+	/* A DIRECT function reference keeps its `&name` operand through a cast, so the reference check
+	   (funcTypeMatches, E441) still fires - the cast cannot launder a wrong function into a named type. */
+	{
+		label: "a cast does not launder a wrong direct function reference",
+		source: ["functype Cb(int a) returns int r", "function wrong(float x) returns float y { y = x; }",
+			"function main() locals Cb c { c = (Cb)wrong; }"].join("\n"),
+		expectError: "Function wrong does not match funcptr type 'Cb'",
+	},
+	{
+		label: "a cast on a matching direct function reference is fine",
+		source: ["functype Cb(int a) returns int r", "function dbl(int a) returns int r { r = a * 2; }",
+			"function main() locals Cb c { c = (Cb)dbl; }"].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "an untyped funcptr enters a named type via the cast",
+		source: ["functype Cb(int a) returns int r", "function dbl(int a) returns int r { r = a * 2; }",
+			"function main() locals funcptr f, Cb c, int y { f = dbl; c = (Cb)f; y = c(21); }"].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "a named funcptr decays to untyped without a cast",
+		source: ["functype Cb(int a) returns int r", "function dbl(int a) returns int r { r = a * 2; }",
+			"function main() locals Cb c, funcptr f { c = dbl; f = c; }"].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "nullfunc suits a named type, cast or not",
+		source: ["functype Cb(int a) returns int r",
+			"function main() locals Cb c, Cb d { c = nullfunc; d = (Cb)nullfunc; }"].join("\n"),
+		expectError: null,
+	},
+	/* Calling THROUGH a named funcptr is checked like a call to its shape; through an untyped one it
+	   is the unchecked 1.0 world. */
+	{
+		label: "a call through a named funcptr checks argument types",
+		source: ["functype Cb(int a) returns int r", "function dbl(int a) returns int r { r = a * 2; }",
+			"function main() locals Cb c, int y { c = dbl; y = c(1.5); }"].join("\n"),
+		expectError: "Argument type mismatch for argument 1",
+	},
+	{
+		label: "...and arity",
+		source: ["functype Cb(int a) returns int r", "function dbl(int a) returns int r { r = a * 2; }",
+			"function main() locals Cb c, int y { c = dbl; y = c(1, 2); }"].join("\n"),
+		expectError: "Invalid argument count",
+	},
+	{
+		label: "a call through an untyped funcptr stays unchecked",
+		source: ["function dbl(int a) returns int r { r = a * 2; }",
+			"function main() locals funcptr f, int y { f = dbl; y = f(1, 2, 3); }"].join("\n"),
+		expectError: null,
+	},
+	/* What a funcptr supports is decided by the shape of the RESULT: comparison and difference consume
+	   targets and yield an int, so they can never name a function; `f + 1` would produce one. Unlike a
+	   data-pointer difference this needs no matching element types - ordinals are scaled by nothing.
+	   Lowers to DIFp today, DIFt under the GAZL 2 `t` type. */
+	{
+		label: "funcptr difference is an int",
+		source: ["function a(int x) returns int r { r = x; }",
+			"function b(int x) returns int r { r = x; }",
+			"function main() locals funcptr f, funcptr g, int y { f = a; g = b; y = f - g; }"].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "...between named functypes too, matching or not",
+		source: ["functype Cb(int x) returns int r", "functype Other(float z)",
+			"function a(int x) returns int r { r = x; }", "function c(float z) { }",
+			"function main() locals Cb f, Other g, int y { f = a; g = c; y = f - g; }"].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "a funcptr cannot be offset",
+		source: ["function a(int x) returns int r { r = x; }",
+			"function main() locals funcptr f, funcptr g { f = a; g = f + 1; }"].join("\n"),
+		expectError: "Invalid types (funcptr and int)",
+	},
+	{
+		label: "a funcptr and a data pointer do not subtract",
+		source: ["global int gg", "function a(int x) returns int r { r = x; }",
+			"function main() locals funcptr f, int pointer p, int y "
+				+ "{ f = a; p = &global gg; y = f - p; }"].join("\n"),
+		expectError: "Invalid types (funcptr and pointer)",
+	},
+	{
+		label: "funcptr equality and ordering compile",
+		source: ["function a(int x) returns int r { r = x; }",
+			"function main() locals funcptr f, funcptr g, int y { f = a; g = a; y = 0;",
+			"  if (f == g) y = 1; if (f != g) y = 2; if (f < g) y = 3; if (f >= g) y = 4; }"].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "a functype states one return at most",
+		source: ["functype Bad(int a) returns int r, int s"].join("\n"),
+		expectError: "Multiple return values are not supported",
+	},
+	/* The kind-prefixed descriptor encoding: a struct or functype may take any identifier, including
+	   the compiler's own type codes (i f p F) and code-lookalikes (V, Fn) - each was once a live
+	   collision that corrupted UNRELATED declarations, silently for functypes. */
+	{
+		label: "a struct named p, with pointers of it",
+		source: ["struct p { int a; int b }", "global p array g[3]",
+			"function take(p pointer q) { q->a = 1; }",
+			"function main() locals p v, int y { take(&v); global g[1].b = 5; y = global g[1].b; }"].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "a functype named i, next to int everywhere",
+		source: ["functype i(int a) returns int r", "function dbl(int a) returns int r { r = a * 2; }",
+			"function main() locals i cb, int y { cb = dbl; y = cb(21); }"].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "sizeof of a struct named i",
+		source: ["struct i { int a; int b }",
+			"function main() locals int y { y = sizeof(i); }"].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "a struct named V, the void code",
+		source: ["struct V { int a }",
+			"function main() locals V v, V pointer q { q = &v; q->a = 2; }"].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "a struct named Fn does not strip to n",
+		source: ["struct Fn { int a }",
+			"function main() locals Fn v, Fn pointer q { q = &v; q->a = 1; }"].join("\n"),
+		expectError: null,
+	},
+	{
+		label: "a struct named F and a functype named p, together",
+		source: ["struct F { int a }", "functype p(int a) returns int r",
+			"function dbl(int a) returns int r { r = a * 2; }",
+			"function main() locals F v, p cb, int y { v.a = 1; cb = dbl; y = cb(v.a); }"].join("\n"),
+		expectError: null,
 	},
 	/* A GLOBAL read spells itself `&name`, exactly like a function reference, so testing the sigil
 	   instead of the lookup sent globals down the function-reference branch to find no function and
@@ -3046,5 +3331,41 @@ if (diagnosticWarnings.length !== 1 || !/^diag\.impala:1:\d+: warning\[E101\]: /
 	process.exit(1);
 }
 console.log("impala.jspeg compiler renders --legacy warnings in the same diagnostic shape");
+
+// A symbol table is a plain `{}`, so it inherits `constructor`/`valueOf`/`toString`/`hasOwnProperty`/...
+// from Object.prototype. An unguarded `table[name]` read once mistook those user identifiers for
+// pre-existing entries: `function constructor()` crashed the compiler with a RAW, uncoded
+// `Unexpected identifier 'code'` - the inherited Object function stringifies with `[native code]`, which
+// bake() then evaluated. That broke the accept-or-coded-diagnostic contract this suite exists to enforce,
+// and the fuzzer never caught it because it mints names like `fnN`. Every by-name read is now guarded
+// (see $$parser.hasOwn/ownEntry), so these names are ordinary identifiers. NuXJS - the target engine -
+// stores them (including `__proto__`) as plain keys, so guarding the READ is the whole fix there; node's
+// Annex-B `__proto__` accessor means only the write-then-read-back combos differ, and only under node.
+const prototypeNames = ["constructor", "valueOf", "toString", "hasOwnProperty", "isPrototypeOf",
+	"propertyIsEnumerable", "toLocaleString", "__proto__", "__defineGetter__"];
+for (const name of prototypeNames) {
+	expectCompileOutcome("proto-name", `function ${name}`,
+		`function ${name}() returns int r { r = 7; }`, null);
+	expectCompileOutcome("proto-name", `global int ${name}`,
+		`global int ${name};`, null);
+	// the other raw-name ingestion boundaries: a struct (beginStruct), a funcptr type (beginFuncType) and a
+	// const (declare) each read their own table before writing, so each must accept a prototype name too.
+	expectCompileOutcome("proto-name", `struct ${name}`,
+		`struct ${name} { int x }`, null);
+	expectCompileOutcome("proto-name", `functype ${name}`,
+		`functype ${name}(int a) returns int;`, null);
+	expectCompileOutcome("proto-name", `const ${name}`,
+		`const int ${name} = 5;`, null);
+	// an undeclared use must still resolve to a coded E403, not a raw assertion off an inherited member
+	expectCompileOutcome("proto-name", `undeclared ${name}`,
+		`function main() returns int r { r = ${name}; }`, "E403");
+	// define-then-call exercises the use-site function resolver, which asserted on the inherited entry.
+	// `__proto__` is excluded here only because node drops its write (Annex-B); NuXJS resolves the call.
+	if (name !== "__proto__") {
+		expectCompileOutcome("proto-name", `call ${name}`,
+			`function ${name}() returns int r { r = 7; } function main() returns int r { r = ${name}(); }`, null);
+	}
+}
+console.log("impala.jspeg compiler treats Object.prototype names as ordinary identifiers");
 
 console.log("JSPEG regression suite completed successfully");

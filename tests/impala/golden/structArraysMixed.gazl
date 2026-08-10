@@ -1,14 +1,14 @@
 ; Compiled with Impala version 2.0
 
 ; signatures version=1
-DEBUG:	! DEFi #1	; signature const DEBUG : int @ 7:1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ structArraysMixed.impala:7:1
 	! MOVi <a> #0	; layout of struct Cell
 .o.Cell.lo:	! DEFi #<a>
 	! ADDi <a> #<a> #1
 .o.Cell.hi:	! DEFi #<a>
 	! ADDi <a> #<a> #1
 .z.Cell:	! DEFi #<a>
-; signature struct Cell { lo : int, hi : int } @ 8:1
+; signature struct Cell { lo : int, hi : int } @ structArraysMixed.impala:8:1
 	! MOVi <a> #0	; layout of struct Bank
 .o.Bank.cells:	! DEFi #<a>
 	! MULi <t> #3 #.z.Cell
@@ -17,15 +17,15 @@ DEBUG:	! DEFi #1	; signature const DEBUG : int @ 7:1
 .o.Bank.n:	! DEFi #<a>
 	! ADDi <a> #<a> #1
 .z.Bank:	! DEFi #<a>
-; signature struct Bank { cells : Cell[3], n : int } @ 9:1
+; signature struct Bank { cells : Cell[3], n : int } @ structArraysMixed.impala:9:1
 	! MULi <A> #3 #.z.Cell
 .z.top:	! DEFi #<A>
-top:	GLOB *.z.top	; signature array top[3] : Cell @ 10:1
-; signature extern native printInt() -> unknown @ 11:1
-; signature extern native printLF() -> unknown @ 12:1
+top:	GLOB *.z.top	; signature array top[3] : Cell @ structArraysMixed.impala:10:1
+; signature extern native printInt() -> unknown @ structArraysMixed.impala:11:1
+; signature extern native printLF() -> unknown @ structArraysMixed.impala:12:1
 
 ;-----------------------------------------------------------------------------
-main:	FUNC	; signature func main() -> void @ 13:1
+main:	FUNC	; signature func main() -> void @ structArraysMixed.impala:13:1
 		PARA *1
 	$b:	LOCA *.z.Bank
 	$i:	LOCi
@@ -51,17 +51,17 @@ main:	FUNC	; signature func main() -> void @ 13:1
 		! ADDi <A> #.o.Bank.cells #<B>
 		! ADDi <A> #<A> #.o.Cell.hi
 		MOVi %1 $b:<A> 
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 19:25
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 19:36
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ structArraysMixed.impala:19:25
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structArraysMixed.impala:19:36
 		! MULi <A> #1 #.z.Cell	; printInt(b.cells[1].lo)
 		! ADDi <B> #.o.Bank.cells #<A>
 		! ADDi <B> #<B> #.o.Cell.lo
 		MOVi %1 $b:<B> 
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 20:25
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 20:36
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ structArraysMixed.impala:20:25
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structArraysMixed.impala:20:36
 		! MULi <B> #2 #.z.Cell	; printInt(global top[2].hi)
 		! ADDi <A> #<B> #.o.Cell.hi
 		PEEK %1 &top:<A> 
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 21:28
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 21:39
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ structArraysMixed.impala:21:28
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structArraysMixed.impala:21:39
 		RETU   	; }

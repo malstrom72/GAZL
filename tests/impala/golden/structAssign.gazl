@@ -1,14 +1,14 @@
 ; Compiled with Impala version 2.0
 
 ; signatures version=1
-DEBUG:	! DEFi #1	; signature const DEBUG : int @ 8:1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ structAssign.impala:8:1
 	! MOVi <a> #0	; layout of struct Biquad
 .o.Biquad.b0:	! DEFi #<a>
 	! ADDi <a> #<a> #1
 .o.Biquad.z1:	! DEFi #<a>
 	! ADDi <a> #<a> #1
 .z.Biquad:	! DEFi #<a>
-; signature struct Biquad { b0 : float, z1 : float } @ 10:1
+; signature struct Biquad { b0 : float, z1 : float } @ structAssign.impala:10:1
 	! MOVi <a> #0	; layout of struct Voice
 .o.Voice.note:	! DEFi #<a>
 	! ADDi <a> #<a> #1
@@ -17,15 +17,15 @@ DEBUG:	! DEFi #1	; signature const DEBUG : int @ 8:1
 .o.Voice.gain:	! DEFi #<a>
 	! ADDi <a> #<a> #1
 .z.Voice:	! DEFi #<a>
-; signature struct Voice { note : int, lo : Biquad, gain : float } @ 11:1
-; signature extern native printInt() -> unknown @ 13:1
-; signature extern native printFloat() -> unknown @ 14:1
-; signature extern native printLF() -> unknown @ 15:1
+; signature struct Voice { note : int, lo : Biquad, gain : float } @ structAssign.impala:11:1
+; signature extern native printInt() -> unknown @ structAssign.impala:13:1
+; signature extern native printFloat() -> unknown @ structAssign.impala:14:1
+; signature extern native printLF() -> unknown @ structAssign.impala:15:1
 .z.store:	! DEFi #8
-store:	GLOB *.z.store	; signature array store[8] : unknown @ 17:1
+store:	GLOB *.z.store	; signature array store[8] : unknown @ structAssign.impala:17:1
 
 ;-----------------------------------------------------------------------------
-main:	FUNC	; signature func main() -> void @ 19:1
+main:	FUNC	; signature func main() -> void @ structAssign.impala:19:1
 		PARA *1
 	$a:	LOCA *.z.Voice
 	$b:	LOCA *.z.Voice
@@ -42,26 +42,26 @@ main:	FUNC	; signature func main() -> void @ 19:1
 		ADRL %1 $a *0
 		COPY %0 %1 *.z.Voice
 		MOVi %1 $b:.o.Voice.note 	; printInt(b.note)
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 28:18
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 28:29
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ structAssign.impala:28:18
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structAssign.impala:28:29
 		! ADDi <A> #.o.Voice.lo #.o.Biquad.b0	; printFloat(b.lo.b0)
 		MOVf %1 $b:<A> 
-		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 29:21
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 29:32
+		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ structAssign.impala:29:21
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structAssign.impala:29:32
 		MOVf %1 $b:.o.Voice.gain 	; printFloat(b.gain)
-		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 30:20
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 30:31
+		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ structAssign.impala:30:20
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structAssign.impala:30:31
 		MOVp $p &store:0 	; p = (Voice pointer) &global store[0]
 		ADRL %0 $a *0	; *p = a
 		COPY $p %0 *.z.Voice
 		! ADDi <A> #.o.Voice.lo #.o.Biquad.z1	; printFloat(p->lo.z1)
 		PEEK %1 $p #<A>
-		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 34:22
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 34:33
+		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ structAssign.impala:34:22
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structAssign.impala:34:33
 		ADRL %0 $bq *0	; bq = a.lo
 		ADRL %1 $a:.o.Voice.lo *0
 		COPY %0 %1 *.z.Biquad
 		MOVf %1 $bq:.o.Biquad.b0 	; printFloat(bq.b0)
-		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 37:19
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 37:30
+		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ structAssign.impala:37:19
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structAssign.impala:37:30
 		RETU   	; }

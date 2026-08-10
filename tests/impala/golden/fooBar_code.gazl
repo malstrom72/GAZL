@@ -1,58 +1,58 @@
 ; Compiled with Impala version 2.0
 
 ; signatures version=1
-PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #2	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int @ 17:1
-FALSE:	! DEFi #0	; signature const FALSE : int @ 18:1
-TRUE:	! DEFi #1	; signature const TRUE : int @ 19:1
+PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #2	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int @ fooBar_code.impala:17:1
+FALSE:	! DEFi #0	; signature const FALSE : int @ fooBar_code.impala:18:1
+TRUE:	! DEFi #1	; signature const TRUE : int @ fooBar_code.impala:19:1
 .z.panelTextRows:	! DEFi #8
-panelTextRows:	CNST *.z.panelTextRows	; signature array panelTextRows[8] : unknown @ 27:1
+panelTextRows:	CNST *.z.panelTextRows	; signature array panelTextRows[8] : unknown @ fooBar_code.impala:27:1
 	DATA &.s_stdREV_4d2 &.s_fastCR_4d3 &.s_slowCH_4d4
 	DATA &.s_rndAK4_4d5 &.s_1616_4d6 &.s_3216_4d7 &.s_88_4d8
 	DATA &.s_168Gat_4d9
-; signature extern native abort() -> unknown @ 39:1
-; signature extern native trace() -> unknown @ 40:1
-; signature extern native yield() -> unknown @ 41:1
-; signature extern native write() -> unknown @ 42:1
-; signature extern native read() -> unknown @ 43:1
-; signature extern const DEBUG : int @ 45:1
-; signature extern const OPERATOR_1_NOP : int @ 47:1
-; signature extern const OPERATOR_1_AND : int @ 48:1
-; signature extern const OPERATOR_1_MUL : int @ 49:1
-; signature extern const OPERATOR_1_OSC : int @ 50:1
-; signature extern const OPERATOR_1_RND : int @ 51:1
-; signature extern const OPERATOR_1_COUNT : int @ 52:1
-; signature extern const OPERATOR_2_NOP : int @ 54:1
-; signature extern const OPERATOR_2_OR : int @ 55:1
-; signature extern const OPERATOR_2_XOR : int @ 56:1
-; signature extern const OPERATOR_2_MSK : int @ 57:1
-; signature extern const OPERATOR_2_SUB : int @ 58:1
-; signature extern const OPERATOR_2_COUNT : int @ 59:1
-; signature extern const SWITCHES_SYNC_MASK : int @ 61:1
-; signature extern const SWITCHES_TRIPLET_MASK : int @ 62:1
-; signature extern const SWITCHES_DOTTED_MASK : int @ 63:1
-; signature extern const SWITCHES_WRITE_PROTECT_MASK : int @ 64:1
-; signature extern const SWITCHES_REVERSE_MASK : int @ 65:1
-; signature extern const CLOCK_FREQ_PARAM_INDEX : int @ 67:1
-; signature extern const SWITCHES_PARAM_INDEX : int @ 68:1
-; signature extern const OPERATOR_1_PARAM_INDEX : int @ 69:1
-; signature extern const OPERAND_1_HIGH_PARAM_INDEX : int @ 70:1
-; signature extern const OPERAND_1_LOW_PARAM_INDEX : int @ 71:1
-; signature extern const OPERATOR_2_PARAM_INDEX : int @ 72:1
-; signature extern const OPERAND_2_HIGH_PARAM_INDEX : int @ 73:1
-; signature extern const OPERAND_2_LOW_PARAM_INDEX : int @ 74:1
-; signature extern const PARAM_COUNT : int @ 75:1
-; signature extern const POSITION_INT_BITS : int @ 77:1
-; signature extern const POSITION_FRACT_BITS : int @ 78:1
+; signature extern native abort() -> unknown @ fooBar_code.impala:39:1
+; signature extern native trace() -> unknown @ fooBar_code.impala:40:1
+; signature extern native yield() -> unknown @ fooBar_code.impala:41:1
+; signature extern native write() -> unknown @ fooBar_code.impala:42:1
+; signature extern native read() -> unknown @ fooBar_code.impala:43:1
+; signature extern const DEBUG : int @ fooBar_code.impala:45:1
+; signature extern const OPERATOR_1_NOP : int @ fooBar_code.impala:47:1
+; signature extern const OPERATOR_1_AND : int @ fooBar_code.impala:48:1
+; signature extern const OPERATOR_1_MUL : int @ fooBar_code.impala:49:1
+; signature extern const OPERATOR_1_OSC : int @ fooBar_code.impala:50:1
+; signature extern const OPERATOR_1_RND : int @ fooBar_code.impala:51:1
+; signature extern const OPERATOR_1_COUNT : int @ fooBar_code.impala:52:1
+; signature extern const OPERATOR_2_NOP : int @ fooBar_code.impala:54:1
+; signature extern const OPERATOR_2_OR : int @ fooBar_code.impala:55:1
+; signature extern const OPERATOR_2_XOR : int @ fooBar_code.impala:56:1
+; signature extern const OPERATOR_2_MSK : int @ fooBar_code.impala:57:1
+; signature extern const OPERATOR_2_SUB : int @ fooBar_code.impala:58:1
+; signature extern const OPERATOR_2_COUNT : int @ fooBar_code.impala:59:1
+; signature extern const SWITCHES_SYNC_MASK : int @ fooBar_code.impala:61:1
+; signature extern const SWITCHES_TRIPLET_MASK : int @ fooBar_code.impala:62:1
+; signature extern const SWITCHES_DOTTED_MASK : int @ fooBar_code.impala:63:1
+; signature extern const SWITCHES_WRITE_PROTECT_MASK : int @ fooBar_code.impala:64:1
+; signature extern const SWITCHES_REVERSE_MASK : int @ fooBar_code.impala:65:1
+; signature extern const CLOCK_FREQ_PARAM_INDEX : int @ fooBar_code.impala:67:1
+; signature extern const SWITCHES_PARAM_INDEX : int @ fooBar_code.impala:68:1
+; signature extern const OPERATOR_1_PARAM_INDEX : int @ fooBar_code.impala:69:1
+; signature extern const OPERAND_1_HIGH_PARAM_INDEX : int @ fooBar_code.impala:70:1
+; signature extern const OPERAND_1_LOW_PARAM_INDEX : int @ fooBar_code.impala:71:1
+; signature extern const OPERATOR_2_PARAM_INDEX : int @ fooBar_code.impala:72:1
+; signature extern const OPERAND_2_HIGH_PARAM_INDEX : int @ fooBar_code.impala:73:1
+; signature extern const OPERAND_2_LOW_PARAM_INDEX : int @ fooBar_code.impala:74:1
+; signature extern const PARAM_COUNT : int @ fooBar_code.impala:75:1
+; signature extern const POSITION_INT_BITS : int @ fooBar_code.impala:77:1
+; signature extern const POSITION_FRACT_BITS : int @ fooBar_code.impala:78:1
 	GLOB *1
-clock:	DATi #0	; signature global clock : int @ 80:1
+clock:	DATi #0	; signature global clock : int @ fooBar_code.impala:80:1
 .z.params:	! DEFi #PARAM_COUNT
-params:	GLOB *.z.params	; signature array params[PARAM_COUNT] : unknown @ 81:1
+params:	GLOB *.z.params	; signature array params[PARAM_COUNT] : unknown @ fooBar_code.impala:81:1
 .z.displayLEDs:	! DEFi #4
-displayLEDs:	GLOB *.z.displayLEDs	; signature array displayLEDs[4] : unknown @ 82:1
+displayLEDs:	GLOB *.z.displayLEDs	; signature array displayLEDs[4] : unknown @ fooBar_code.impala:82:1
 	CNST *1
-clockFreqLimit:	DATi #132300	; signature readonly clockFreqLimit : int @ 84:1
+clockFreqLimit:	DATi #132300	; signature readonly clockFreqLimit : int @ fooBar_code.impala:84:1
 .z.signal:	! DEFi #2
-signal:	GLOB *.z.signal	; signature array signal[2] : unknown @ 87:1
+signal:	GLOB *.z.signal	; signature array signal[2] : unknown @ fooBar_code.impala:87:1
 	CNST *1
 	! SHLi <A> #1 #OPERATOR_1_PARAM_INDEX
 	! SHLi <B> #1 #OPERAND_1_HIGH_PARAM_INDEX
@@ -67,14 +67,14 @@ signal:	GLOB *.z.signal	; signature array signal[2] : unknown @ 87:1
 	! IORi <A> <A> <B>
 	! SHLi <B> #1 #SWITCHES_PARAM_INDEX
 	! IORi <A> <A> <B>
-updateMask:	DATi <A>	; signature readonly updateMask : int @ 89:1
+updateMask:	DATi <A>	; signature readonly updateMask : int @ fooBar_code.impala:89:1
 	GLOB *1
-rndSeedX:	DATi #1	; signature global rndSeedX : int @ 98:1
+rndSeedX:	DATi #1	; signature global rndSeedX : int @ fooBar_code.impala:98:1
 	GLOB *1
-rndSeedY:	DATi #1	; signature global rndSeedY : int @ 99:1
+rndSeedY:	DATi #1	; signature global rndSeedY : int @ fooBar_code.impala:99:1
 
 ;-----------------------------------------------------------------------------
-seedRandom:	FUNC	; signature func seedRandom(int seed) -> void @ 101:1
+seedRandom:	FUNC	; signature func seedRandom(int seed) -> void @ fooBar_code.impala:101:1
 		PARA *1
 	$seed:	INPi
 	$x:	LOCi
@@ -93,7 +93,7 @@ seedRandom:	FUNC	; signature func seedRandom(int seed) -> void @ 101:1
 
 
 ;-----------------------------------------------------------------------------
-randomFloat:	FUNC	; signature func randomFloat() -> float @ 112:1
+randomFloat:	FUNC	; signature func randomFloat() -> float @ fooBar_code.impala:112:1
 	$f:	OUTf
 	$x:	LOCi
 	$y:	LOCi
@@ -116,58 +116,58 @@ randomFloat:	FUNC	; signature func randomFloat() -> float @ 112:1
 		POKE &rndSeedY $y 	; global rndSeedY = y
 		RETU   	; }
 
-STEP_COUNT:	! DEFi #32	; signature const STEP_COUNT : int @ 128:1
-REVERSE_FX:	! DEFi #0	; signature const REVERSE_FX : int @ 130:1
-BIT_CRUSH_EFFECT:	! DEFi #1	; signature const BIT_CRUSH_EFFECT : int @ 131:1
-TRANCE_GATE_EFFECT:	! DEFi #2	; signature const TRANCE_GATE_EFFECT : int @ 132:1
-REPEAT_EFFECT:	! DEFi #3	; signature const REPEAT_EFFECT : int @ 133:1
-STRETCH_EFFECT:	! DEFi #4	; signature const STRETCH_EFFECT : int @ 134:1
-PITCH_SHIFT_EFFECT:	! DEFi #5	; signature const PITCH_SHIFT_EFFECT : int @ 135:1
-HALF_SPEED_EFFECT:	! DEFi #6	; signature const HALF_SPEED_EFFECT : int @ 136:1
-TAPE_STOP_FX:	! DEFi #7	; signature const TAPE_STOP_FX : int @ 137:1
-FX_PARAM_TAPE_STOP_RATE:	! DEFi #0	; signature const FX_PARAM_TAPE_STOP_RATE : int @ 139:1
-FX_PARAM_TRANCE_GATE_RATE:	! DEFi #1	; signature const FX_PARAM_TRANCE_GATE_RATE : int @ 140:1
-FX_PARAM_BIT_CRUSH_MASK:	! DEFi #2	; signature const FX_PARAM_BIT_CRUSH_MASK : int @ 141:1
-FX_PARAM_REPEAT_MASK:	! DEFi #3	; signature const FX_PARAM_REPEAT_MASK : int @ 142:1
-FX_PARAM_REPEAT_OFF_3:	! DEFi #4	; signature const FX_PARAM_REPEAT_OFF_3 : int @ 143:1
-FX_PARAM_SHIFT_9:	! DEFi #5	; signature const FX_PARAM_SHIFT_9 : int @ 144:1
-FX_PARAM_SHIFT_10:	! DEFi #6	; signature const FX_PARAM_SHIFT_10 : int @ 145:1
-FX_PARAM_1_LSHIFT_9:	! DEFi #7	; signature const FX_PARAM_1_LSHIFT_9 : int @ 146:1
-FX_PARAM_1_LSHIFT_10:	! DEFi #8	; signature const FX_PARAM_1_LSHIFT_10 : int @ 147:1
-FX_PARAM_MASK_10:	! DEFi #9	; signature const FX_PARAM_MASK_10 : int @ 148:1
-FX_PARAM_COUNT:	! DEFi #10	; signature const FX_PARAM_COUNT : int @ 149:1
+STEP_COUNT:	! DEFi #32	; signature const STEP_COUNT : int @ fooBar_code.impala:128:1
+REVERSE_FX:	! DEFi #0	; signature const REVERSE_FX : int @ fooBar_code.impala:130:1
+BIT_CRUSH_EFFECT:	! DEFi #1	; signature const BIT_CRUSH_EFFECT : int @ fooBar_code.impala:131:1
+TRANCE_GATE_EFFECT:	! DEFi #2	; signature const TRANCE_GATE_EFFECT : int @ fooBar_code.impala:132:1
+REPEAT_EFFECT:	! DEFi #3	; signature const REPEAT_EFFECT : int @ fooBar_code.impala:133:1
+STRETCH_EFFECT:	! DEFi #4	; signature const STRETCH_EFFECT : int @ fooBar_code.impala:134:1
+PITCH_SHIFT_EFFECT:	! DEFi #5	; signature const PITCH_SHIFT_EFFECT : int @ fooBar_code.impala:135:1
+HALF_SPEED_EFFECT:	! DEFi #6	; signature const HALF_SPEED_EFFECT : int @ fooBar_code.impala:136:1
+TAPE_STOP_FX:	! DEFi #7	; signature const TAPE_STOP_FX : int @ fooBar_code.impala:137:1
+FX_PARAM_TAPE_STOP_RATE:	! DEFi #0	; signature const FX_PARAM_TAPE_STOP_RATE : int @ fooBar_code.impala:139:1
+FX_PARAM_TRANCE_GATE_RATE:	! DEFi #1	; signature const FX_PARAM_TRANCE_GATE_RATE : int @ fooBar_code.impala:140:1
+FX_PARAM_BIT_CRUSH_MASK:	! DEFi #2	; signature const FX_PARAM_BIT_CRUSH_MASK : int @ fooBar_code.impala:141:1
+FX_PARAM_REPEAT_MASK:	! DEFi #3	; signature const FX_PARAM_REPEAT_MASK : int @ fooBar_code.impala:142:1
+FX_PARAM_REPEAT_OFF_3:	! DEFi #4	; signature const FX_PARAM_REPEAT_OFF_3 : int @ fooBar_code.impala:143:1
+FX_PARAM_SHIFT_9:	! DEFi #5	; signature const FX_PARAM_SHIFT_9 : int @ fooBar_code.impala:144:1
+FX_PARAM_SHIFT_10:	! DEFi #6	; signature const FX_PARAM_SHIFT_10 : int @ fooBar_code.impala:145:1
+FX_PARAM_1_LSHIFT_9:	! DEFi #7	; signature const FX_PARAM_1_LSHIFT_9 : int @ fooBar_code.impala:146:1
+FX_PARAM_1_LSHIFT_10:	! DEFi #8	; signature const FX_PARAM_1_LSHIFT_10 : int @ fooBar_code.impala:147:1
+FX_PARAM_MASK_10:	! DEFi #9	; signature const FX_PARAM_MASK_10 : int @ fooBar_code.impala:148:1
+FX_PARAM_COUNT:	! DEFi #10	; signature const FX_PARAM_COUNT : int @ fooBar_code.impala:149:1
 	! MULi <A> #FX_PARAM_COUNT #3
 .z.FX_PARAMS:	! DEFi #<A>
-FX_PARAMS:	GLOB *.z.FX_PARAMS	; signature array FX_PARAMS[] : unknown @ 153:1
+FX_PARAMS:	GLOB *.z.FX_PARAMS	; signature array FX_PARAMS[] : unknown @ fooBar_code.impala:153:1
 .z.stepFXs:	! DEFi #STEP_COUNT
-stepFXs:	GLOB *.z.stepFXs	; signature array stepFXs[STEP_COUNT] : unknown @ 154:1
+stepFXs:	GLOB *.z.stepFXs	; signature array stepFXs[STEP_COUNT] : unknown @ fooBar_code.impala:154:1
 .z.stepFXParams:	! DEFi #STEP_COUNT
-stepFXParams:	GLOB *.z.stepFXParams	; signature array stepFXParams[STEP_COUNT] : unknown @ 155:1
+stepFXParams:	GLOB *.z.stepFXParams	; signature array stepFXParams[STEP_COUNT] : unknown @ fooBar_code.impala:155:1
 	GLOB *1
-doReset:	DATi #TRUE	; signature global doReset : int @ 156:1
+doReset:	DATi #TRUE	; signature global doReset : int @ fooBar_code.impala:156:1
 	GLOB *1
-updateBits:	DATi #TRUE	; signature global updateBits : int @ 157:1
+updateBits:	DATi #TRUE	; signature global updateBits : int @ fooBar_code.impala:157:1
 	GLOB *1
-clockMask:	DATi #0x1FFFF	; signature global clockMask : int @ 158:1
+clockMask:	DATi #0x1FFFF	; signature global clockMask : int @ fooBar_code.impala:158:1
 	GLOB *1
-clockShift:	DATi #13	; signature global clockShift : int @ 159:1
+clockShift:	DATi #13	; signature global clockShift : int @ fooBar_code.impala:159:1
 	GLOB *1
-fxQuantize:	DATi #0xFFF	; signature global fxQuantize : int @ 160:1
+fxQuantize:	DATi #0xFFF	; signature global fxQuantize : int @ fooBar_code.impala:160:1
 	GLOB *1
-dirXor:	DATi #0x0	; signature global dirXor : int @ 161:1
+dirXor:	DATi #0x0	; signature global dirXor : int @ fooBar_code.impala:161:1
 
 ;-----------------------------------------------------------------------------
-reset:	FUNC	; signature func reset() -> void @ 171:1
+reset:	FUNC	; signature func reset() -> void @ fooBar_code.impala:171:1
 		PARA *1
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_reset_4da 	; trace("reset")
-		CALL ^trace %0 *2	; expects trace(int-ptr) -> unknown @ 173:16
+		CALL ^trace %0 *2	; expects trace(int-ptr) -> unknown @ fooBar_code.impala:173:16
 		POKE &doReset #TRUE 	; global doReset = TRUE
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-update:	FUNC	; signature func update() -> void @ 184:1
+update:	FUNC	; signature func update() -> void @ fooBar_code.impala:184:1
 		PARA *1
 	$i:	LOCi
 	$fx:	LOCi
@@ -182,7 +182,7 @@ update:	FUNC	; signature func update() -> void @ 184:1
 	$fxCountFloat:	LOCf
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_update_4db 	; trace("update")
-		CALL ^trace %0 *2	; expects trace(int-ptr) -> unknown @ 196:17
+		CALL ^trace %0 *2	; expects trace(int-ptr) -> unknown @ fooBar_code.impala:196:17
 		POKE &dirXor #0 	; global dirXor = 0
 		PEEK %0 &params:SWITCHES_PARAM_INDEX 	; if (((int) global params[SWITCHES_PARAM_INDEX] & SWITCHES_REVERSE_MASK) != 0) 
 		ANDi %0 %0 #SWITCHES_REVERSE_MASK
@@ -202,7 +202,7 @@ update:	FUNC	; signature func update() -> void @ 184:1
 	.f4:	FORi $i #8 @.l3	; }
 	.f1:	PEEK %1 &params:OPERAND_1_LOW_PARAM_INDEX 	; seedRandom((int) global params[OPERAND_1_LOW_PARAM_INDEX] + 1)
 		ADDi %1 %1 #1
-		CALL &seedRandom %0 *2	; expects seedRandom(int) -> void @ 215:64
+		CALL &seedRandom %0 *2	; expects seedRandom(int) -> void @ fooBar_code.impala:215:64
 		PEEK %0 &params:OPERATOR_2_PARAM_INDEX 	; stepRate = (int) global params[OPERATOR_2_PARAM_INDEX] - 1
 		SUBi $stepRate %0 #1
 		GEQi $stepRate #0 @.f5	; if (stepRate < 0) 
@@ -236,7 +236,7 @@ update:	FUNC	; signature func update() -> void @ 184:1
 		MOVi $fx #-1 	; fx = -1
 		MOVi $i #0 	; for (i = 0 to STEP_COUNT) 
 		GEQi #0 #STEP_COUNT @.e12
-	.l13:	CALL &randomFloat %0 *1	; expects randomFloat() -> float @ 241:40
+	.l13:	CALL &randomFloat %0 *1	; expects randomFloat() -> float @ fooBar_code.impala:241:40
 		MULf %0 %0 $fxCountFloat
 		fTOi $fxRnd %0 #1.0
 		LEQi $fxRnd $fxCount @.f14	; if (fxRnd > fxCount) 
@@ -262,7 +262,7 @@ update:	FUNC	; signature func update() -> void @ 184:1
 		GOTO @.s20  
 	.s20#3:	MOVi $fx #0 	; fx = 0
 		GOTO @.s20  
-	.s20#4:	CALL &randomFloat %0 *1	; expects randomFloat() -> float @ 262:44
+	.s20#4:	CALL &randomFloat %0 *1	; expects randomFloat() -> float @ fooBar_code.impala:262:44
 		fTOi $fx %0 #2.9999
 	.s20:	POKE &stepFXParams $i $fx	; global stepFXParams[i] = fx
 		FORi $i #STEP_COUNT @.l19	; }
@@ -270,7 +270,7 @@ update:	FUNC	; signature func update() -> void @ 184:1
 
 
 ;-----------------------------------------------------------------------------
-init:	FUNC	; signature func init() -> void @ 273:1
+init:	FUNC	; signature func init() -> void @ fooBar_code.impala:273:1
 		PARA *1
 	$i:	LOCi
 	$p:	LOCp
@@ -279,8 +279,8 @@ init:	FUNC	; signature func init() -> void @ 273:1
 	$t:	LOCi
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_init_4dc 	; trace("init")
-		CALL ^trace %0 *2	; expects trace(int-ptr) -> unknown @ 276:15
-		CALL &update %0 *1	; expects update() -> void @ 277:10
+		CALL ^trace %0 *2	; expects trace(int-ptr) -> unknown @ fooBar_code.impala:276:15
+		CALL &update %0 *1	; expects update() -> void @ fooBar_code.impala:277:10
 		MOVp $p &FX_PARAMS 	; p = global FX_PARAMS
 		MOVi $i #0 	; for (i = 0 to 3) 
 		GEQi #0 #3 @.e0
@@ -314,7 +314,7 @@ init:	FUNC	; signature func init() -> void @ 273:1
 
 
 ;-----------------------------------------------------------------------------
-process:	FUNC	; signature func process() -> void @ 311:1
+process:	FUNC	; signature func process() -> void @ fooBar_code.impala:311:1
 		PARA *1
 	$i:	LOCi
 	$x:	LOCi
@@ -389,11 +389,11 @@ process:	FUNC	; signature func process() -> void @ 311:1
 	.e6:	MOVi %1 $clock 	; write(clock, 1, global signal)
 		MOVi %2 #1 
 		MOVp %3 &signal 
-		CALL ^write %0 *4	; expects write(int, int, ptr) -> unknown @ 368:33
+		CALL ^write %0 *4	; expects write(int, int, ptr) -> unknown @ fooBar_code.impala:368:33
 		MOVi %1 $clock 	; read(clock, 1, inp)
 		MOVi %2 #1 
 		ADRL %3 $inp *0
-		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ 369:22
+		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ fooBar_code.impala:369:22
 		SWCH $held *8 @.s7	; switch (held == 0 to 8) 
 	.s7#REVERSE_FX:	EQUi $trig #FALSE @.f9	; if (trig != FALSE) 
 		MOVi $pos $clock 	; pos = clock
@@ -401,7 +401,7 @@ process:	FUNC	; signature func process() -> void @ 311:1
 		MOVi %1 $pos 	; read(pos, 1, outp)
 		MOVi %2 #1 
 		ADRL %3 $outp *0
-		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ 377:23
+		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ fooBar_code.impala:377:23
 		GOTO @.s7  	; }
 	.s7#TAPE_STOP_FX:	EQUi $trig #FALSE @.f10	; if (trig != FALSE) 
 		SHLi $pos $clock #16	; pos = clock << 16
@@ -410,7 +410,7 @@ process:	FUNC	; signature func process() -> void @ 311:1
 		SHRi %1 $pos #16	; read(pos >> 16, 2, samples)
 		MOVi %2 #2 
 		ADRL %3 $samples *0
-		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ 386:32
+		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ fooBar_code.impala:386:32
 		SUBi %0 $samples:2 $samples:0	; outp[0] = (int) samples[0] + (((int) samples[2] - (int) samples[0]) * x >> 16)
 		MULi %0 %0 $x
 		SHRi %0 %0 #16
@@ -429,7 +429,7 @@ process:	FUNC	; signature func process() -> void @ 311:1
 	.f12:	SHRi %1 $pos #1	; read(pos >> 1, 1, outp)
 		MOVi %2 #1 
 		ADRL %3 $outp *0
-		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ 400:28
+		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ fooBar_code.impala:400:28
 		ADDi $pos $pos #1	; pos = pos + 1
 		GOTO @.s7  	; }
 	.s7#TRANCE_GATE_EFFECT:	SHRi %0 $clock $fxParams:FX_PARAM_TRANCE_GATE_RATE	; x = (clock >> (int) fxParams[FX_PARAM_TRANCE_GATE_RATE]) & 0x7FF
@@ -455,7 +455,7 @@ process:	FUNC	; signature func process() -> void @ 311:1
 	.s7#BIT_CRUSH_EFFECT:	ANDi %1 $clock $fxParams:FX_PARAM_BIT_CRUSH_MASK	; read(clock & (int) fxParams[FX_PARAM_BIT_CRUSH_MASK], 1, outp)
 		MOVi %2 #1 
 		ADRL %3 $outp *0
-		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ 420:67
+		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ fooBar_code.impala:420:67
 		! XORi <A> #0x7F #-1	; outp[0] = (int) outp[0] & ~0x7F
 		ANDi $outp:0 $outp:0 <A>
 		! XORi <A> #0x7F #-1	; outp[1] = (int) outp[1] & ~0x7F
@@ -469,7 +469,7 @@ process:	FUNC	; signature func process() -> void @ 311:1
 		MOVi %1 $pos 	; read(pos, 1, samples)
 		MOVi %2 #1 
 		ADRL %3 $samples *0
-		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ 429:26
+		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ fooBar_code.impala:429:26
 		ANDi %0 $clock $fxParams:FX_PARAM_REPEAT_OFF_3	; if ((clock & (int) fxParams[FX_PARAM_REPEAT_OFF_3]) == (int) fxParams[FX_PARAM_REPEAT_OFF_3]) 
 		NEQi %0 $fxParams:FX_PARAM_REPEAT_OFF_3 @.f19
 		ADDi $pos $pos $fxParams:FX_PARAM_REPEAT_OFF_3	; pos = pos + (int) fxParams[FX_PARAM_REPEAT_OFF_3]
@@ -486,7 +486,7 @@ process:	FUNC	; signature func process() -> void @ 311:1
 	.f23:	MOVi %1 $pos 	; read(pos, 1, &samples[2])
 		MOVi %2 #1 
 		ADRL %3 $samples:2 *0
-		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ 441:30
+		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ fooBar_code.impala:441:30
 		SUBi %0 $samples:2 $samples:0	; outp[0] = (int) samples[0] + (((int) samples[2] - (int) samples[0]) * x >> (int) fxParams[FX_PARAM_SHIFT_10])
 		MULi %0 %0 $x
 		SHRi %0 %0 $fxParams:FX_PARAM_SHIFT_10
@@ -501,11 +501,11 @@ process:	FUNC	; signature func process() -> void @ 311:1
 	.f24:	MOVi %1 $pos 	; read(pos, 1, samples)
 		MOVi %2 #1 
 		ADRL %3 $samples *0
-		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ 450:26
+		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ fooBar_code.impala:450:26
 		SUBi %1 $pos $fxParams:FX_PARAM_1_LSHIFT_9	; read(pos - (int) fxParams[FX_PARAM_1_LSHIFT_9], 1, &samples[2])
 		MOVi %2 #1 
 		ADRL %3 $samples:2 *0
-		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ 451:68
+		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ fooBar_code.impala:451:68
 		ANDi $x $clock $fxParams:FX_PARAM_MASK_10	; x = clock & (int) fxParams[FX_PARAM_MASK_10]
 		SUBi %0 $samples:2 $samples:0	; outp[0] = (int) samples[0] + (((int) samples[2] - (int) samples[0]) * x >> (int) fxParams[FX_PARAM_SHIFT_10])
 		MULi %0 %0 $x
@@ -529,11 +529,11 @@ process:	FUNC	; signature func process() -> void @ 311:1
 		SUBi %1 $pos $fxParams:FX_PARAM_1_LSHIFT_9	; read(pos - (int) fxParams[FX_PARAM_1_LSHIFT_9], 1, samples)
 		MOVi %2 #1 
 		ADRL %3 $samples *0
-		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ 464:64
+		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ fooBar_code.impala:464:64
 		SUBi %1 $pos $fxParams:FX_PARAM_1_LSHIFT_10	; read(pos - (int) fxParams[FX_PARAM_1_LSHIFT_10], 1, &samples[2])
 		MOVi %2 #1 
 		ADRL %3 $samples:2 *0
-		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ 465:69
+		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ fooBar_code.impala:465:69
 		SUBi %0 $samples:2 $samples:0	; outp[0] = (int) samples[0] + (((int) samples[2] - (int) samples[0]) * x >> (int) fxParams[FX_PARAM_SHIFT_9])
 		MULi %0 %0 $x
 		SHRi %0 %0 $fxParams:FX_PARAM_SHIFT_9
@@ -560,7 +560,7 @@ process:	FUNC	; signature func process() -> void @ 311:1
 		SHRi %0 %0 #15
 		ADDi %0 $inp:1 %0
 		POKE &signal:1 %0 
-		CALL ^yield %0 *1	; expects yield() -> unknown @ 485:10
+		CALL ^yield %0 *1	; expects yield() -> unknown @ fooBar_code.impala:485:10
 		ADDi $clock $clock #1	; clock = clock + 1
 		GOTO @.l0  	; }
 		RETU   	; }

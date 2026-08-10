@@ -4,14 +4,14 @@
  .s_ABCD_2a:		CNST *5
  					DATs ABCD
  					DATi #0
- SOURCE:			! DEFp &.s_ABCD_2a ; signature const SOURCE : ptr @ 1:1
+ SOURCE:			! DEFp &.s_ABCD_2a ; signature const SOURCE : ptr @ control.impala:1:1
  .s_WXYZ_2a:		CNST *5
  					DATs WXYZ
  					DATi #0
- TARGET:			! DEFp &.s_WXYZ_2a ; signature const TARGET : ptr @ 2:1
+ TARGET:			! DEFp &.s_WXYZ_2a ; signature const TARGET : ptr @ control.impala:2:1
 
  ;-----------------------------------------------------------------------------
- controlSample:		FUNC		; signature func controlSample() -> int @ 4:1
+ controlSample:		FUNC		; signature func controlSample() -> int @ control.impala:4:1
  					$result:	OUTi
  					$sum:		LOCi
  					$index:		LOCi

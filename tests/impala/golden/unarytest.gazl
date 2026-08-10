@@ -1,12 +1,12 @@
 ; Compiled with Impala version 2.0
 
 ; signatures version=1
-; signature extern const SOME_CONST : int @ 1:1
+; signature extern const SOME_CONST : int @ unarytest.impala:1:1
 .z.ga:	! DEFi #100
-ga:	GLOB *.z.ga	; signature array ga[100] : unknown @ 3:1
+ga:	GLOB *.z.ga	; signature array ga[100] : unknown @ unarytest.impala:3:1
 
 ;-----------------------------------------------------------------------------
-test:	FUNC	; signature func test() -> void @ 5:1
+test:	FUNC	; signature func test() -> void @ unarytest.impala:5:1
 		PARA *1
 	$i:	LOCi
 	$f:	LOCf
@@ -69,5 +69,5 @@ test:	FUNC	; signature func test() -> void @ 5:1
 		! fTOi <A> <A> #1.0
 		! iTOf <A> <A> #1.0
 		MOVf $f <A> 
-		CALL $fp %0 *1	; expects function() -> unknown @ 39:6
+		CALL $fp %0 *1	; expects function() -> unknown @ unarytest.impala:39:6
 		RETU   	; }
