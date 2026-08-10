@@ -28,6 +28,18 @@ function fail(message) {
 	process.exit(1);
 }
 
+// Assemble a gazl string through GAZLCmd under a temp name and check it runs to `spec` ({ args, want }),
+// cleaning up the temp file either way. `failPrefix` labels the failure for whichever check called in.
+function assembleAndRun(label, gazl, spec, failPrefix) {
+	const gazlPath = path.join(repoRoot, 'output', `deadstrip-${label}.gazl`);
+	fs.writeFileSync(gazlPath, gazl, 'latin1');
+	const failure = runExpected(gazlPath, spec);
+	fs.unlinkSync(gazlPath);
+	if (failure) {
+		fail(failPrefix + failure);
+	}
+}
+
 // The closure must gather both units, dependency-first (mathlib before main).
 const closure = resolveImportClosure(rootUnit).map((u) => path.basename(u.path));
 if (closure.length !== 2 || closure[0] !== 'mathlib.impala' || closure[1] !== 'main.impala') {
@@ -83,13 +95,7 @@ if (haveGazlCmd()) {
 		fail('stripmain.impala must carry an `Expected (GAZLCmd ...)` row for the dead-strip run check');
 	}
 	for (const [label, gazl] of [['unstripped', unstripped], ['stripped', stripped]]) {
-		const gazlPath = path.join(repoRoot, 'output', `deadstrip-${label}.gazl`);
-		fs.writeFileSync(gazlPath, gazl, 'latin1');
-		const failure = runExpected(gazlPath, want);
-		fs.unlinkSync(gazlPath);
-		if (failure) {
-			fail(`--dead-strip changed program behaviour (${label}): ${failure}`);
-		}
+		assembleAndRun(label, gazl, want, `--dead-strip changed program behaviour (${label}): `);
 	}
 }
 
@@ -189,11 +195,8 @@ if (aStripped.indexOf(aRef[1] + ':') < 0) {
 }
 if (aStripped.indexOf('drop me') >= 0) fail('A: the dead function\'s string survived the strip');
 if (haveGazlCmd()) {
-	const aPath = path.join(repoRoot, 'output', 'deadstrip-protoA.gazl');
-	fs.writeFileSync(aPath, aStripped, 'latin1');
-	const failure = runExpected(aPath, { args: ['live'], want: ['keep', 'me', 'alive'] });
-	fs.unlinkSync(aPath);
-	if (failure) fail('A: stripped output must assemble and still print its string - ' + failure);
+	assembleAndRun('protoA', aStripped, { args: ['live'], want: ['keep', 'me', 'alive'] },
+		'A: stripped output must assemble and still print its string - ');
 }
 
 // B. An exported global that nothing references is a ROOT and must survive (the CLI's own help text).

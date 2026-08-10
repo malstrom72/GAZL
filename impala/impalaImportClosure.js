@@ -218,10 +218,8 @@ function isDataDef(line) {
 	// an ordinary label or a minted `.s_`/`.a_` one. A `! DEF` fold is a definition ONLY under an ordinary
 	// label (a const like `FALSE: ! DEFi #0`); a DOTTED fold is a neighbour's `.z.`/`.o.` extent and must
 	// stay absorbable, not stand alone - which is what kept the tag-only match from swallowing struct layouts.
-	if (STORAGE_HEAD_RE.test(m[2])) {
-		return m[1];
-	}
-	return DEF_FOLD_RE.test(m[2]) && m[1].charAt(0) !== "." ? m[1] : null;
+	return STORAGE_HEAD_RE.test(m[2])
+			|| (DEF_FOLD_RE.test(m[2]) && m[1].charAt(0) !== ".") ? m[1] : null;
 }
 
 /* A function body ends only at the next named definition or a standalone `; signature` row (extern

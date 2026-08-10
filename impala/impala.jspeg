@@ -2047,7 +2047,7 @@
 
     $$parser.beginStruct = function (name, sourceCode, sourceOffset) {
         $$parser.claimTopName(name, 'struct', sourceCode, sourceOffset);
-        var prev = $$parser.structs[name];
+        var prev = $$parser.ownEntry($$parser.structs, name);
         if (prev && prev.complete && !prev.extern) {
             $$parser.fail('Struct already defined: ' + name, sourceCode, sourceOffset, 'E410');
         }
@@ -2259,7 +2259,7 @@
        back. A bodied one IS a claim, parsed alongside the definition and compared by endStruct. */
     $$parser.beginExternStruct = function (name, sourceCode, sourceOffset) {
         $$parser.claimTopName(name, 'struct', sourceCode, sourceOffset);
-        var prev = $$parser.structs[name];
+        var prev = $$parser.ownEntry($$parser.structs, name);
         if (!prev || prev.complete) {
             $$parser.structs[name] = { shadowed: (prev && prev.complete ? prev : undefined),
                     fields: [], words: 0, complete: false,

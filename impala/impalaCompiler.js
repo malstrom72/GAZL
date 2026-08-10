@@ -2060,7 +2060,7 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
 
     beginStruct = function (name, sourceCode, sourceOffset) {
         claimTopName(name, 'struct', sourceCode, sourceOffset);
-        var prev = structs[name];
+        var prev = ownEntry(structs, name);
         if (prev && prev.complete && !prev.extern) {
             fail('Struct already defined: ' + name, sourceCode, sourceOffset, 'E410');
         }
@@ -2272,7 +2272,7 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
        back. A bodied one IS a claim, parsed alongside the definition and compared by endStruct. */
     beginExternStruct = function (name, sourceCode, sourceOffset) {
         claimTopName(name, 'struct', sourceCode, sourceOffset);
-        var prev = structs[name];
+        var prev = ownEntry(structs, name);
         if (!prev || prev.complete) {
             structs[name] = { shadowed: (prev && prev.complete ? prev : undefined),
                     fields: [], words: 0, complete: false,

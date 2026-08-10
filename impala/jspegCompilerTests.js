@@ -3286,6 +3286,14 @@ for (const name of prototypeNames) {
 		`function ${name}() returns int r { r = 7; }`, null);
 	expectCompileOutcome("proto-name", `global int ${name}`,
 		`global int ${name};`, null);
+	// the other raw-name ingestion boundaries: a struct (beginStruct), a funcptr type (beginFuncType) and a
+	// const (declare) each read their own table before writing, so each must accept a prototype name too.
+	expectCompileOutcome("proto-name", `struct ${name}`,
+		`struct ${name} { int x }`, null);
+	expectCompileOutcome("proto-name", `functype ${name}`,
+		`functype ${name}(int a) returns int;`, null);
+	expectCompileOutcome("proto-name", `const ${name}`,
+		`const int ${name} = 5;`, null);
 	// an undeclared use must still resolve to a coded E403, not a raw assertion off an inherited member
 	expectCompileOutcome("proto-name", `undeclared ${name}`,
 		`function main() returns int r { r = ${name}; }`, "E403");
