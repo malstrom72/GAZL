@@ -2605,13 +2605,8 @@
                     /* A SHAPE mirrors its axes in the braces, exactly as a standalone shaped array does -
                        `{ {1,2,3}, {4,5,6} }` for `[2, 3]` - and is checked the same way: literal axes here,
                        symbolic axes (`md[OJ,OJ]`) at GAZL assembly via `! EQUi`. Because a full shape fills
-                       exactly its `.z`, no later field is displaced and there is nothing to block. Axes are
-                       stored innermost-first; nest outermost-first. */
-                    var _fax = [];
-                    for (var _fk = f.dims.length - 1; _fk >= 0; --_fk) {
-                        _fax.push(f.dims[_fk]);
-                    }
-                    $$parser.buildShapedInit(_fax, structName, structEl, f.elem, arr, out, f.name,
+                       exactly its `.z`, no later field is displaced and there is nothing to block. */
+                    $$parser.buildShapedInit(f.dims, structName, structEl, f.elem, arr, out, f.name,
                             sourceCode, sourceOffset);
                     continue;
                 }
@@ -2636,12 +2631,7 @@
                 for (var e = 0; e < count; ++e) {
                     var ev = (e < arr.length)
                             ? $$parser.indexedEntry(arr[e], sourceCode, sourceOffset) : undefined;
-                    if (structEl) {
-                        $$parser.buildStructInit($$parser.descName(f.elem), (ev && ev.braced) || [], out, sourceCode, sourceOffset);
-                    } else {
-                        var et = $$parser.descTypeElem(f.elem);   /* `p:i` is a pointer TO int, not a type */
-                        $$parser.pushInitScalar(out, ev, et.type, et.elem, f.name, sourceCode, sourceOffset);
-                    }
+                    $$parser.fillEntry(out, ev, structEl, f.elem, f.name, sourceCode, sourceOffset);
                 }
                 if (symbolic && out.blocked === undefined) {
                     /* WORDS given, not elements: a struct-element array contributes .z.Elem each, and
@@ -2676,11 +2666,23 @@
         return true;
     };
 
-    /* Walk a nested initializer against a SHAPE, outermost axis first: each brace group mirrors one axis, so
-       a `[2, 3]` array is `{ {,,}, {,,} }` and a shape mistake is caught rather than shifting every element
-       as a flat list silently would. The innermost axis holds ELEMENTS - a scalar checked exactly as a flat
-       entry is (pushInitScalar), or a struct group handed to buildStructInit - so this is the array-of-structs
-       loop generalized from one axis to N.
+    /* Emit ONE array element into the buffer: a struct element recurses into buildStructInit, a scalar runs
+       the full assignment check via pushInitScalar. The single leaf every array fill shares - the flat struct
+       field loop, the shaped walk, and the struct-element global - so a rule added here reaches all three. */
+    $$parser.fillEntry = function (out, ev, structEl, elemDesc, name, sourceCode, sourceOffset) {
+        if (structEl) {
+            $$parser.buildStructInit($$parser.descName(elemDesc), (ev && ev.braced) || [], out, sourceCode, sourceOffset);
+        } else {
+            var et = $$parser.descTypeElem(elemDesc);
+            $$parser.pushInitScalar(out, ev, et.type, et.elem, name, sourceCode, sourceOffset);
+        }
+    };
+
+    /* Walk a nested initializer against a SHAPE. `axes` is innermost-first, exactly as `dims` is stored, and
+       this walker OWNS the order - callers pass `dims` untouched: nesting level 0 is the OUTERMOST group,
+       which is axis `rank-1-level`. A `[2, 3]` array is `{ {,,}, {,,} }` and a shape mistake is caught rather
+       than shifting every element as a flat list silently would. The innermost axis holds ELEMENTS (fillEntry)
+       - so this is the array-of-structs loop generalized from one axis to N.
 
        Two modes. When every axis is a literal Impala can count, a group may be SHORT and the tail zero-fills
        (C-style), and the counts are checked here (E460 / E422). When ANY axis is symbolic - host- or
@@ -2690,16 +2692,16 @@
        assertFitsExtent makes. A wrong shape then fails at assembly, not silently. */
     $$parser.buildShapedInit = function (axes, owner, structEl, elemDesc, tree, out, name, sourceCode, sourceOffset) {
         var rank = axes.length, k;
-        var expected;                                         /* undefined = literal mode; else the per-axis counts */
+        var expected;                                         /* undefined = literal mode; else the per-level counts */
         if (!$$parser.axesAllLiteral(axes)) {
-            expected = [];                                    /* leftmost spine gives one count per axis */
+            expected = [];                                    /* leftmost spine gives one count per nesting level */
             var node = tree;
             for (k = 0; k < rank; ++k) {
                 expected.push(node.length);
                 node = (node[0] && node[0].braced) || [];
             }
-            for (k = 0; k < rank; ++k) {                      /* literal axis: exact fill; symbolic axis: assemble-time EQ */
-                var lit = $$parser.constInt('#' + axes[k]);
+            for (k = 0; k < rank; ++k) {                      /* level k is axis rank-1-k; literal: exact fill here, symbolic: assemble-time EQ */
+                var lit = $$parser.constInt('#' + axes[rank - 1 - k]);
                 if (lit !== undefined) {
                     if (expected[k] !== lit) {
                         $$parser.fail('A shaped array with a symbolic axis must be filled exactly: axis '
@@ -2729,7 +2731,7 @@
                     (tree[0].at !== undefined ? tree[0].at : sourceOffset), 'E422');
         }
         if (expected === undefined) {                         /* all-literal: a short group zero-fills, a long one is E460 */
-            count = $$parser.constInt('#' + axes[axis]);
+            count = $$parser.constInt('#' + axes[axes.length - 1 - axis]);   /* level -> innermost-first axis */
             if (tree.length > count) {
                 $$parser.failSurplus(name, (inner ? 'elements' : 'groups'), tree.length, count,
                         tree[count] && tree[count].at, sourceCode, sourceOffset);
@@ -2752,12 +2754,8 @@
                 }
                 $$parser.fillShaped(axes, axis + 1, expected, structEl, elemDesc, (ev && ev.braced) || [],
                         out, name, sourceCode, sourceOffset);
-            } else if (structEl) {
-                $$parser.buildStructInit($$parser.descName(elemDesc), (ev && ev.braced) || [], out,
-                        sourceCode, sourceOffset);
             } else {
-                var et = $$parser.descTypeElem(elemDesc);
-                $$parser.pushInitScalar(out, ev, et.type, et.elem, name, sourceCode, sourceOffset);
+                $$parser.fillEntry(out, ev, structEl, elemDesc, name, sourceCode, sourceOffset);
             }
         }
     };
@@ -2854,9 +2852,16 @@
        a funcptr element head is a TYPE NAME it would not recognise - so the funcptr and pointer-element
        questions belong to `checkInitTarget`, which reads the same descriptor whole. Derived, not stored:
        one `initTarget` cannot disagree with itself, where three parallel slots could. */
-    $$parser.initCoarseType = function () {
-        var t = $$parser.descTypeElem($$parser.initTarget).type;
+    $$parser.coarseType = function (desc) {
+        if (desc === undefined) {
+            return undefined;                                 /* untyped: a struct's row spans mixed field types */
+        }
+        var t = $$parser.descTypeElem(desc).type;
         return (t === 'i' || t === 'f' || t === 'p' ? t : undefined);
+    };
+
+    $$parser.initCoarseType = function () {
+        return $$parser.coarseType($$parser.initTarget);
     };
 
     $$parser.initElemRow = function () {
@@ -2897,17 +2902,21 @@
         return v !== '' && Number(v) === 0;                   /* NaN for a symbol -> not zero */
     };
 
-    /* emit a flat constant list as one or more data rows (mirrors InitList chunking). A scalar-element
-       shape gives `initTarget` a single type, so the rows come out typed (`DATi`/`DATf`/`DATp`) exactly as
-       the flat 1-D path emits them - the assembler then re-checks each word. A struct initializer states no
-       target (initTarget undefined), so it stays the untyped `DATA` one mixed-type row needs. */
+    /* emit a flat constant list as one or more data rows (mirrors InitList chunking). The element type
+       rides on the BUFFER (`ops.target`), set by whoever built it, NOT on the parser-lifetime `initTarget`:
+       a scalar-element array states its element type, so its rows come out typed (`DATi`/`DATf`/`DATp`) and
+       the assembler re-checks each word; a struct states no target, so it stays the untyped `DATA` one
+       mixed-type row needs. Reading `initTarget` here instead would inherit a stale value from a previous
+       declaration - an all-int array before a `{ int, float }` struct emitted `DATi #2.5`, which the
+       assembler rejects. */
     $$parser.emitInitData = function (ops, sourceCode, sourceOffset) {
         if (ops.blocked !== undefined) {
             ops.length = ops.blocked.at;                      /* the region zero-fills the remainder;
                                                                  pushInitScalar already refused any
                                                                  non-zero word past this point */
         }
-        var row = $$parser.initElemRow(), type = ($$parser.initCoarseType() || 'i');
+        var coarse = $$parser.coarseType(ops.target);
+        var row = (coarse !== undefined ? 'DAT?' : 'DATA'), type = (coarse || 'i');
         var line = '';
         for (var i = 0; i < ops.length; ++i) {
             if (line !== '' && (line + ' ' + ops[i]).length >= 55) {
@@ -5228,7 +5237,6 @@ GlobalDecl  <-  (   GLOBAL                                            { $section
                                                                                     the rule's return value, not its context - see declEntry */
                                                                                     [ { size: $a.size, dims: $a.dims } ]);
                                                                             $aStructEl = $$parser.isStructAtom($a.elem);
-                                                                            $aStruct = ($aStructEl ? $$parser.descName($a.elem) : $a.elem);
                                                                             $aCount = $$parser.constInt('#' + $a.size);
                                                                          }
                          ( '=' _                                       {   /* the list is fully consumed before these
@@ -5264,12 +5272,9 @@ GlobalDecl  <-  (   GLOBAL                                            { $section
                                                                                 $$parser.fail('Nested brace initializers are for struct-element or shaped arrays',
                                                                                         $$s, $initStart, 'E422');
                                                                             $binit = [];
-                                                                            if ($shaped) {                     /* axes are stored innermost-first; nest outermost-first */
-                                                                                var _axes = [];
-                                                                                for (var _k = $a.dims.length - 1; _k >= 0; --_k) {
-                                                                                    _axes.push($a.dims[_k]);
-                                                                                }
-                                                                                $$parser.buildShapedInit(_axes, undefined, $aStructEl, $a.elem, $d, $binit,
+                                                                            $binit.target = ($aStructEl ? undefined : $a.elem);   /* types the DATA rows; see emitInitData */
+                                                                            if ($shaped) {                     /* buildShapedInit owns axis order - pass dims as stored */
+                                                                                $$parser.buildShapedInit($a.dims, undefined, $aStructEl, $a.elem, $d, $binit,
                                                                                         $a.name, $$s, $initStart);
                                                                             } else {
                                                                                 if (isNaN($aCount))
@@ -5283,8 +5288,7 @@ GlobalDecl  <-  (   GLOBAL                                            { $section
                                                                                 for (var _ae = 0; _ae < $aCount; ++_ae) {
                                                                                     var _aev = (_ae < _arr.length)
                                                                                             ? $$parser.indexedEntry(_arr[_ae], $$s, $initStart) : undefined;
-                                                                                    $$parser.buildStructInit($aStruct,
-                                                                                            (_aev && _aev.braced) || [], $binit, $$s, $initStart);
+                                                                                    $$parser.fillEntry($binit, _aev, $aStructEl, $a.elem, $a.name, $$s, $initStart);
                                                                                 }
                                                                             }
                                                                             $$parser.emitInitData($binit, $$s, $initStart);

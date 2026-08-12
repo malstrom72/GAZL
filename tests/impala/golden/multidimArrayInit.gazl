@@ -63,7 +63,7 @@ mat:	CNST *.z.Mat	; signature readonly mat : Mat @ multidimArrayInit.impala:35:1
 	! EQUi #2 #.d.Mat.grid.0 @.g4
 	! FAIL initializer for grid has the wrong length on axis 1: 2 given
 .g4:	!
-	DATi #7 #11 #22 #33 #44 #50 #60 #70 #80
+	DATA #7 #11 #22 #33 #44 #50 #60 #70 #80
 
 ;-----------------------------------------------------------------------------
 main:	FUNC	; signature export func main() -> void @ multidimArrayInit.impala:37:1
