@@ -2679,6 +2679,19 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         return true;
     };
 
+    /* Where a diagnostic about one initializer entry points: the entry's own position when it has one, else
+       the initializer start. One helper so a caret rule cannot be right in one shaped-init message and wrong
+       in the next. */
+    entryAt = function (entry, sourceOffset) {
+        return (entry !== undefined && entry.at !== undefined ? entry.at : sourceOffset);
+    };
+
+    /* The entry a COUNT complaint points at: the first surplus one when too many were given, else the last
+       one actually given - a short group's mistake is at its end, not at the declaration's `=`. */
+    countAt = function (group, want, sourceOffset) {
+        return entryAt((group.length > want ? group[want] : group[group.length - 1]), sourceOffset);
+    };
+
     /* Emit ONE array element into the buffer: a struct element recurses into buildStructInit, a scalar runs
        the full assignment check via pushInitScalar. The single leaf every array fill shares - the flat struct
        field loop, the shaped walk, and the struct-element global - so a rule added here reaches all three. */
@@ -2708,8 +2721,9 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         var expected;                                         /* undefined = literal mode; else the per-level counts */
         if (!axesAllLiteral(axes)) {
             expected = [];                                    /* leftmost spine gives one count per nesting level */
-            var node = tree;
+            var spine = [], node = tree;                      /* the groups themselves, so a count error can name one */
             for (k = 0; k < rank; ++k) {
+                spine.push(node);
                 expected.push(node.length);
                 node = (node[0] && node[0].braced) || [];
             }
@@ -2719,7 +2733,7 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
                     if (expected[k] !== lit) {
                         fail('A shaped array with a symbolic axis must be filled exactly: axis '
                                 + (rank - k) + ' holds ' + lit + ', but ' + expected[k] + ' given',
-                                sourceCode, sourceOffset, 'E460',
+                                sourceCode, countAt(spine[k], lit, sourceOffset), 'E460',
                                 'a partial fill cannot skip a symbolic stride - give every element');
                     }
                 } else {
@@ -2736,12 +2750,16 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
     fillShaped = function (axes, axis, expected, structEl, elemDesc, tree, out, name, sourceCode, sourceOffset) {
         var inner = (axis + 1 >= axes.length);
         var count;
-        if (!inner && tree.length > 0 && tree[0] && tree[0].braced === undefined) {
+        if (!inner && tree.length > 0) {
             /* a scalar where a brace group belongs - a flat list given for a shape. Reported before the
-               count checks so `{ 1, 2, 3, 4, 5, 6 }` for a `[2, 3]` reads as "needs nesting", not "too many". */
-            fail('Not enough braces in initializer for ' + name
-                    + ': a shaped array nests one group per axis', sourceCode,
-                    (tree[0].at !== undefined ? tree[0].at : sourceOffset), 'E422');
+               count checks so `{ 1, 2, 3, 4, 5, 6 }` for a `[2, 3]` reads as "needs nesting", not "too many".
+               indexedEntry FIRST, so a `field:` name here still gets its own E458 rather than this message. */
+            var first = indexedEntry(tree[0], sourceCode, sourceOffset);
+            if (first !== undefined && first.braced === undefined) {
+                fail('Not enough braces in initializer for ' + name
+                        + ': a shaped array nests one group per axis', sourceCode,
+                        entryAt(first, sourceOffset), 'E422');
+            }
         }
         if (expected === undefined) {                         /* all-literal: a short group zero-fills, a long one is E460 */
             count = constInt('#' + axes[axes.length - 1 - axis]);   /* level -> innermost-first axis */
@@ -2754,7 +2772,8 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
             if (tree.length !== count) {
                 fail('A shaped array with a symbolic axis must be rectangular: axis '
                         + (axes.length - axis) + ' holds ' + count + ', but a group gives ' + tree.length,
-                        sourceCode, sourceOffset, 'E460', 'give every group the same length');
+                        sourceCode, countAt(tree, count, sourceOffset), 'E460',
+                        'give every group the same length');
             }
         }
         for (var e = 0; e < count; ++e) {
@@ -2763,7 +2782,7 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
                 if (ev !== undefined && ev.braced === undefined) {
                     fail('Not enough braces in initializer for ' + name
                             + ': a shaped array nests one group per axis', sourceCode,
-                            (ev.at !== undefined ? ev.at : sourceOffset), 'E422');
+                            entryAt(ev, sourceOffset), 'E422');
                 }
                 fillShaped(axes, axis + 1, expected, structEl, elemDesc, (ev && ev.braced) || [],
                         out, name, sourceCode, sourceOffset);
