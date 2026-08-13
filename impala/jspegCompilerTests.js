@@ -1271,13 +1271,11 @@ const litInit = compileWithJsImpala(
 	{ randomId: 42 });
 assert(/DATA #1 #7 #8 #9 #2/.test(litInit),
 	`a literal-extent struct initializer must emit all five words\n${litInit}`);
-// A symbolic field's row STOPS at the last placeable word - the ones it did not fill are a symbolic count
-// DATA cannot skip, and `z` lies past them. The row is `DATA #1` rather than `DATA #1 #0 #0` because
-// emitInitData drops a trailing run of zero words: the region supplies exactly those, so writing them buys
-// nothing. Verified on GAZLCmd that an omitted tail reads back 0 in a CNST section as well as a GLOB one,
-// which is what makes the drop safe. Pinned to end-of-line so a word for `z` reappearing still fails.
+// A symbolic field emits exactly the words it was GIVEN and the row stops there - the ones it did not
+// fill are a symbolic count DATA cannot skip, and `z` lies past them. The two `#0`s are WRITTEN in the
+// source, so emitInitData keeps them: it drops only the padding invented for what the source omitted.
 const symInit = compileWithJsImpala(SYM_ZERO_SRC, { randomId: 42 });
-assert(/DATA #1\s*$/m.test(symInit),
+assert(/DATA #1 #0 #0(\s|$)/.test(symInit),
 	`a symbolic initializer must stop at the last placeable word\n${symInit}`);
 console.log("impala.jspeg compiler lays out symbolic struct extents and refuses to guess the rest");
 

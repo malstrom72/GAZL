@@ -2778,7 +2778,9 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
 
     pushInitScalar = function (out, item, type, elem, fieldName, sourceCode, sourceOffset) {
         if (item === undefined) {
-            out.push(ZEROES[type]);                      /* omitted -> zero */
+            out.push(ZEROES[type]);                      /* omitted -> zero, and INVENTED: `out.given`
+                                                                     does not advance, so emitInitData may drop
+                                                                     it if nothing explicit follows */
             return;
         }
         if (item.braced !== undefined) {
@@ -2808,6 +2810,8 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
                     sourceCode, (item.at !== undefined ? item.at : sourceOffset), b.code, b.hint);
         }
         out.push(item.op);
+        out.given = out.length;                               /* the source WROTE this word - an explicit `0`
+                                                                 is kept, unlike the padding around it */
     };
 
     /* Mark every word from here on UNPLACEABLE: Impala cannot say which GAZL word it would land in.
@@ -2933,13 +2937,18 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
                                                                  pushInitScalar already refused any
                                                                  non-zero word past this point */
         }
-        /* THE short-fill rule, in the one place every initializer passes through. A trailing run of zero
-           words is exactly what the region supplies anyway, so writing it out only costs data section - a
-           `[100]` struct array given 14 entries wrote 400 words where 56 carry information. Deciding it
-           here rather than in each fill loop is what lets those loops pad honestly to the extent, which is
-           what keeps a SHORT INTERIOR group from shifting everything after it. */
-        while (ops.length > 0 && isZeroWord(ops[ops.length - 1])) {
-            --ops.length;
+        /* THE short-fill rule, in the one place every initializer passes through: drop the words the SOURCE
+           NEVER WROTE. `out.given` is the high-water mark pushInitScalar sets for an explicit entry, so the
+           padding invented for omitted elements and fields falls off the end while an explicit `0` stays -
+           writing `{ a: 1, b: 0, c: 0 }` still emits three words, because you asked for three. Only the
+           invention is dropped, and only the region's own zeros replace it (verified on GAZLCmd for GLOB,
+           CNST and TEMP alike), which is what turned a `[100]` struct array given 14 entries from 400 words
+           back into 56. Deciding it here rather than in each fill loop is what lets those loops pad honestly
+           to the extent, which is what keeps a SHORT INTERIOR group from shifting everything after it. */
+        if (ops.given === undefined) {
+            ops.length = 0;                                   /* nothing explicit at all - the region is already this */
+        } else if (ops.given < ops.length) {
+            ops.length = ops.given;
         }
         var coarse = coarseType(ops.target);
         var row = (coarse !== undefined ? 'DAT?' : 'DATA'), type = (coarse || 'i');
