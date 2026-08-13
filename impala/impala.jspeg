@@ -2599,47 +2599,12 @@
             if (f.type === 'S') {
                 $$parser.buildStructInit(f.struct, (item && item.braced) || [], out, sourceCode, sourceOffset);
             } else if (f.type === 'A') {
-                var arr = (item && item.braced) || [];
-                var structEl = $$parser.isStructAtom(f.elem);
-                if (f.dims !== undefined) {
-                    /* A SHAPE mirrors its axes in the braces, exactly as a standalone shaped array does -
-                       `{ {1,2,3}, {4,5,6} }` for `[2, 3]` - and is checked the same way: literal axes here,
-                       symbolic axes (`md[OJ,OJ]`) at GAZL assembly via `! EQUi`. Because a full shape fills
-                       exactly its `.z`, no later field is displaced and there is nothing to block. */
-                    $$parser.buildShapedInit(f.dims, structName, structEl, f.elem, arr, out, f.name,
-                            sourceCode, sourceOffset);
-                    continue;
-                }
-                /* A 1-D symbolic extent is fillable, but only up to the values actually given, and only if
-                   they FIT - an over-filled array spills into whatever follows: `v[N]` with N=2 given
-                   three values, and a `z` after it, emits four words that fit `1+N+1` exactly, so the
-                   assembler passes it and z gets v's third value. Impala cannot do that comparison, but
-                   it can hand it to the assembler, which by then knows the extent (assertFitsExtent).
-                   What stays blocked is everything AFTER the field: the words it did not fill are a
-                   symbolic count, and DATA cannot skip them. (The loop used to compare against the
-                   extent OPERAND, get NaN, run zero times, and emit a short row that shifted every
-                   later field.) */
-                var count = $$parser.constInt('#' + f.size);
-                var symbolic = (count === undefined);
-                if (symbolic) {
-                    count = arr.length;                       /* fill what was given; the rest zero-fills */
-                } else if (arr.length > count) {
-                    $$parser.failSurplus(f.name, 'values', arr.length, count,
-                            arr[count] && arr[count].at, sourceCode, sourceOffset);
-                }
-                var from = out.length;
-                for (var e = 0; e < count; ++e) {
-                    var ev = (e < arr.length)
-                            ? $$parser.indexedEntry(arr[e], sourceCode, sourceOffset) : undefined;
-                    $$parser.fillEntry(out, ev, structEl, f.elem, f.name, sourceCode, sourceOffset);
-                }
-                if (symbolic && out.blocked === undefined) {
-                    /* WORDS given, not elements: a struct-element array contributes .z.Elem each, and
-                       the extent symbol is in words too. Nothing to assert once the row is already
-                       blocked - emitInitData drops these words rather than placing them, and
-                       blockInitFrom keeps the FIRST block, so both calls are no-ops past that point. */
-                    $$parser.assertFitsExtent(out.length - from, f.name, structName,
-                            sourceCode, sourceOffset);
+                /* Every array slot - 1-D or shaped, struct- or scalar-element, literal or symbolic extent -
+                   goes through the one filler. The only thing a FIELD adds is that something may follow it
+                   in the same allocation, so a gap of unknown size makes those later words unplaceable. */
+                if ($$parser.fillArray(f, structName, (item && item.braced) || [], out,
+                        sourceCode, sourceOffset)
+                        && out.blocked === undefined) {
                     $$parser.blockInitFrom(out,
                             'the extent of ' + f.name + ' is not resolved until GAZL assembly time, so '
                                     + 'Impala cannot tell which word this would land in',
@@ -2691,21 +2656,30 @@
         }
     };
 
-    /* Walk a nested initializer against a SHAPE. `axes` is innermost-first, exactly as `dims` is stored, and
-       this walker OWNS the order - callers pass `dims` untouched: nesting level 0 is the OUTERMOST group,
-       which is axis `rank-1-level`. A `[2, 3]` array is `{ {,,}, {,,} }` and a shape mistake is caught rather
-       than shifting every element as a flat list silently would. The innermost axis holds ELEMENTS (fillEntry)
-       - so this is the array-of-structs loop generalized from one axis to N.
+    /* THE array filler. One slot record (`{ name, elem, size, dims }` - a struct FIELD entry, or a global
+       array's declarator, which already share those keys) covers every case that used to be its own loop:
+       1-D or shaped, struct- or scalar-element, field or standalone, literal or symbolic extent. A 1-D array
+       is simply the rank-1 shape `[size]`, so there is no separate 1-D path to drift.
 
-       Two modes. When every axis is a literal Impala can count, a group may be SHORT and the tail zero-fills
-       (C-style), and the counts are checked here (E460 / E422). When ANY axis is symbolic - host- or
-       const-supplied, resolved only at GAZL assembly time - the length is unknown here, so the shape is
-       validated THERE: the init must be given in FULL and RECTANGULAR (no gap to skip a symbolic stride),
-       and each axis is handed to the assembler as `! EQUi #given #.d.name.k`, the same two-stage move
-       assertFitsExtent makes. A wrong shape then fails at assembly, not silently. */
-    $$parser.buildShapedInit = function (axes, owner, structEl, elemDesc, tree, out, name, sourceCode, sourceOffset) {
-        var rank = axes.length, k;
-        var expected;                                         /* undefined = literal mode; else the per-level counts */
+       Axes are innermost-first, as `dims` stores them; nesting level 0 is the OUTERMOST group, i.e. axis
+       `rank-1-level`. This walker owns that conversion - callers pass `dims` untouched.
+
+       Extent is a CHECK, never a fill bound. A literal axis is compared here; a symbolic one is handed to
+       GAZL assembly, and the two checks it needs are different because the layout consequences are:
+         - the OUTERMOST axis may stop short. That is a prefix, and the region zero-fills the rest, so only
+           `words <= .z.name` has to hold (assertFitsExtent, emitted once over the whole array).
+         - an INTERIOR axis must be exactly full, because a short group there leaves a gap of unknown size
+           and positional `DATA` cannot skip one. Impala cannot know "full", so it requires every group to
+           match the leftmost (rectangular) and asserts that length against `.d.name.k` with `! EQUi`.
+       At rank 1 there are no interior axes, so the rule degenerates to "fill the prefix given, assert it
+       fits" with nothing special written down for it.
+
+       Returns true when the fill left a gap of unknown size, which is the caller's business: a struct FIELD
+       has words after it that then become unplaceable (E454), a standalone array has nothing after it. */
+    $$parser.fillArray = function (slot, owner, tree, out, sourceCode, sourceOffset) {
+        var axes = (slot.dims !== undefined ? slot.dims : [ slot.size ]);
+        var rank = axes.length, from = out.length, k;
+        var expected;                                         /* per-level counts; set only when an axis is symbolic */
         if (!$$parser.axesAllLiteral(axes)) {
             expected = [];                                    /* leftmost spine gives one count per nesting level */
             var spine = [], node = tree;                      /* the groups themselves, so a count error can name one */
@@ -2714,7 +2688,7 @@
                 expected.push(node.length);
                 node = (node[0] && node[0].braced) || [];
             }
-            for (k = 0; k < rank; ++k) {                      /* level k is axis rank-1-k; literal: exact fill here, symbolic: assemble-time EQ */
+            for (k = 1; k < rank; ++k) {                      /* INTERIOR axes only - level 0 may be a prefix */
                 var lit = $$parser.constInt('#' + axes[rank - 1 - k]);
                 if (lit !== undefined) {
                     if (expected[k] !== lit) {
@@ -2725,17 +2699,23 @@
                     }
                 } else {
                     $$parser.assembleAssert([['EQU?', '#' + expected[k] + ' #'
-                            + $$parser.axisSymbol(name, owner, rank - 1 - k)]],
-                            'initializer for ' + name + ' has the wrong length on axis ' + (rank - k)
+                            + $$parser.axisSymbol(slot.name, owner, rank - 1 - k)]],
+                            'initializer for ' + slot.name + ' has the wrong length on axis ' + (rank - k)
                                     + ': ' + expected[k] + ' given', sourceCode, sourceOffset);
                 }
             }
         }
-        $$parser.fillShaped(axes, 0, expected, structEl, elemDesc, tree, out, name, sourceCode, sourceOffset);
+        $$parser.fillAxis(slot, axes, 0, expected, tree, out, sourceCode, sourceOffset);
+        if (expected !== undefined) {                         /* the one bound a symbolic extent still needs */
+            $$parser.assertFitsExtent(out.length - from, slot.name, owner, sourceCode, sourceOffset);
+        }
+        return (expected !== undefined);
     };
 
-    $$parser.fillShaped = function (axes, axis, expected, structEl, elemDesc, tree, out, name, sourceCode, sourceOffset) {
-        var inner = (axis + 1 >= axes.length);
+    $$parser.fillAxis = function (slot, axes, level, expected, tree, out, sourceCode, sourceOffset) {
+        var rank = axes.length;
+        var inner = (level + 1 >= rank);
+        var structEl = $$parser.isStructAtom(slot.elem);
         var count;
         if (!inner && tree.length > 0) {
             /* a scalar where a brace group belongs - a flat list given for a shape. Reported before the
@@ -2743,23 +2723,27 @@
                indexedEntry FIRST, so a `field:` name here still gets its own E458 rather than this message. */
             var first = $$parser.indexedEntry(tree[0], sourceCode, sourceOffset);
             if (first !== undefined && first.braced === undefined) {
-                $$parser.fail('Not enough braces in initializer for ' + name
+                $$parser.fail('Not enough braces in initializer for ' + slot.name
                         + ': a shaped array nests one group per axis', sourceCode,
                         $$parser.entryAt(first, sourceOffset), 'E422');
             }
         }
-        if (expected === undefined) {                         /* all-literal: a short group zero-fills, a long one is E460 */
-            count = $$parser.constInt('#' + axes[axes.length - 1 - axis]);   /* level -> innermost-first axis */
-            if (tree.length > count) {
-                $$parser.failSurplus(name, (inner ? 'elements' : 'groups'), tree.length, count,
-                        tree[count] && tree[count].at, sourceCode, sourceOffset);
+        var axisLen = $$parser.constInt('#' + axes[rank - 1 - level]);
+        if (axisLen !== undefined) {
+            if (tree.length > axisLen) {
+                $$parser.failSurplus(slot.name, (inner ? 'elements' : 'groups'), tree.length, axisLen,
+                        tree[axisLen] && tree[axisLen].at, sourceCode, sourceOffset);
             }
-        } else {                                              /* symbolic shape: every group matches the spine, so no gap forms */
-            count = expected[axis];
-            if (tree.length !== count) {
+            /* Pad to the axis: a short group in the MIDDLE must still occupy its slots or everything after
+               it shifts. A short group at the END costs nothing either - emitInitData drops a trailing run
+               of zero words, so "fill only what is needed" is decided once, there, not in this loop. */
+            count = axisLen;
+        } else {
+            count = tree.length;                              /* unknown length - place the prefix given */
+            if (level > 0 && tree.length !== expected[level]) {
                 $$parser.fail('A shaped array with a symbolic axis must be rectangular: axis '
-                        + (axes.length - axis) + ' holds ' + count + ', but a group gives ' + tree.length,
-                        sourceCode, $$parser.countAt(tree, count, sourceOffset), 'E460',
+                        + (rank - level) + ' holds ' + expected[level] + ', but a group gives ' + tree.length,
+                        sourceCode, $$parser.countAt(tree, expected[level], sourceOffset), 'E460',
                         'give every group the same length');
             }
         }
@@ -2767,14 +2751,14 @@
             var ev = (e < tree.length) ? $$parser.indexedEntry(tree[e], sourceCode, sourceOffset) : undefined;
             if (!inner) {
                 if (ev !== undefined && ev.braced === undefined) {
-                    $$parser.fail('Not enough braces in initializer for ' + name
+                    $$parser.fail('Not enough braces in initializer for ' + slot.name
                             + ': a shaped array nests one group per axis', sourceCode,
                             $$parser.entryAt(ev, sourceOffset), 'E422');
                 }
-                $$parser.fillShaped(axes, axis + 1, expected, structEl, elemDesc, (ev && ev.braced) || [],
-                        out, name, sourceCode, sourceOffset);
+                $$parser.fillAxis(slot, axes, level + 1, expected, (ev && ev.braced) || [], out,
+                        sourceCode, sourceOffset);
             } else {
-                $$parser.fillEntry(out, ev, structEl, elemDesc, name, sourceCode, sourceOffset);
+                $$parser.fillEntry(out, ev, structEl, slot.elem, slot.name, sourceCode, sourceOffset);
             }
         }
     };
@@ -2935,6 +2919,14 @@
             ops.length = ops.blocked.at;                      /* the region zero-fills the remainder;
                                                                  pushInitScalar already refused any
                                                                  non-zero word past this point */
+        }
+        /* THE short-fill rule, in the one place every initializer passes through. A trailing run of zero
+           words is exactly what the region supplies anyway, so writing it out only costs data section - a
+           `[100]` struct array given 14 entries wrote 400 words where 56 carry information. Deciding it
+           here rather than in each fill loop is what lets those loops pad honestly to the extent, which is
+           what keeps a SHORT INTERIOR group from shifting everything after it. */
+        while (ops.length > 0 && $$parser.isZeroWord(ops[ops.length - 1])) {
+            --ops.length;
         }
         var coarse = $$parser.coarseType(ops.target);
         var row = (coarse !== undefined ? 'DAT?' : 'DATA'), type = (coarse || 'i');
@@ -5258,7 +5250,6 @@ GlobalDecl  <-  (   GLOBAL                                            { $section
                                                                                     the rule's return value, not its context - see declEntry */
                                                                                     [ { size: $a.size, dims: $a.dims } ]);
                                                                             $aStructEl = $$parser.isStructAtom($a.elem);
-                                                                            $aCount = $$parser.constInt('#' + $a.size);
                                                                          }
                          ( '=' _                                       {   /* the list is fully consumed before these
                                                                               checks run, so $$i would land on the NEXT
@@ -5294,35 +5285,13 @@ GlobalDecl  <-  (   GLOBAL                                            { $section
                                                                                         $$s, $initStart, 'E422');
                                                                             $binit = [];
                                                                             $binit.target = ($aStructEl ? undefined : $a.elem);   /* types the DATA rows; see emitInitData */
-                                                                            if ($shaped) {                     /* buildShapedInit owns axis order - pass dims as stored */
-                                                                                $$parser.buildShapedInit($a.dims, undefined, $aStructEl, $a.elem, $d, $binit,
-                                                                                        $a.name, $$s, $initStart);
-                                                                            } else {
-                                                                                /* FILL WHAT WAS GIVEN, not the whole extent. The words past the last entry are
-                                                                                   zero, and the region already supplies zeros - the flat 1.x path has always
-                                                                                   relied on that - so emitting them explicitly only bloats the data section
-                                                                                   (a `[100]` array given 14 entries wrote 400 words instead of 56). Making the
-                                                                                   loop bound the ENTRY COUNT also removes the only reason a literal size was
-                                                                                   ever needed: the extent is a CHECK, not a fill bound, so when Impala cannot
-                                                                                   evaluate it the assembler makes the same check instead of the declaration
-                                                                                   being rejected. Nothing follows this array inside its own allocation, so a
-                                                                                   short fill displaces nothing - the blockInitFrom case that a struct FIELD
-                                                                                   needs cannot arise here. */
-                                                                                var _arr = $d;
-                                                                                if (!isNaN($aCount) && _arr.length > $aCount) {
-                                                                                    $$parser.failSurplus($a.name, 'elements', _arr.length, $aCount,
-                                                                                            _arr[$aCount] && _arr[$aCount].at, $$s, $initStart);
-                                                                                }
-                                                                                for (var _ae = 0; _ae < _arr.length; ++_ae) {
-                                                                                    $$parser.fillEntry($binit,
-                                                                                            $$parser.indexedEntry(_arr[_ae], $$s, $initStart),
-                                                                                            $aStructEl, $a.elem, $a.name, $$s, $initStart);
-                                                                                }
-                                                                                if (isNaN($aCount)) {          /* symbolic extent: hand the same check to the assembler */
-                                                                                    $$parser.assertFitsExtent($binit.length, $a.name, undefined,
-                                                                                            $$s, $initStart);
-                                                                                }
-                                                                            }
+                                                                            /* The same filler a struct FIELD uses. Nothing follows a standalone array inside
+                                                                               its own allocation, so the gap it may report needs no blockInitFrom here.
+                                                                               Fields spelled out because bare `$a` is the rule's return value, not its
+                                                                               context - see declEntry. */
+                                                                            $$parser.fillArray({ name: $a.name, elem: $a.elem,
+                                                                                    size: $a.size, dims: $a.dims },
+                                                                                    undefined, $d, $binit, $$s, $initStart);
                                                                             $$parser.emitInitData($binit, $$s, $initStart);
                                                                          }
                            ) )?

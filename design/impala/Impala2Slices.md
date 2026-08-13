@@ -92,13 +92,25 @@ all base-kind combinations, and read-back verification after every write.
 - `Filter array banks[4]` = `LOCA`/`GLOB *(4*sizeof)`; constant index → place with
   `offset = i*sizeof + …` (still free); dynamic index → stride `MULi`, base becomes a computed
   pointer temp, terminal access is `PEEK`/`POKE`/`GETL`-style - the Step 1 dynamic-index shapes.
-  **Lifts error E414 - DONE 2026-08-13.** The fill loop now runs over the entries GIVEN rather than to
-  the extent, which is what made a compile-time count necessary in the first place. The extent is a
-  CHECK, not a fill bound: a literal one is compared here, a symbolic one is handed to the assembler as
-  `! LEQi #words #.z.<name>` - the same two-stage move a symbolically-sized struct FIELD already made.
-  Filling only what is given also stopped the tail being written out as explicit `&NULL #0` per missing
-  element (a `[100]` array given 14 entries emitted 400 words instead of 56); the region zero-fills it,
-  as the flat 1.x path always relied on. Covered by `tests/impala/sources/structArrayGiven.impala`.
+  **Lifts error E414 - DONE 2026-08-13, by unifying the fill.** There were three array-fill loops - a
+  struct FIELD's, a standalone array's, and the shaped walk - each re-deciding what the extent meant, and
+  E414 was one of them deciding it needed a compile-time count. They are now ONE `fillArray`/`fillAxis`
+  taking a slot record (`{ name, elem, size, dims }`, which a field entry and an array declarator already
+  share); a 1-D array is just the rank-1 shape `[size]`, so there is no separate 1-D path left to drift.
+
+  **The extent is a CHECK, never a fill bound**, and the two checks a symbolic extent needs differ because
+  the layout consequences do: the OUTERMOST axis may stop short (a prefix - the region zero-fills the
+  rest), so only `words <= .z.<name>` must hold; an INTERIOR axis must be exactly full, because a short
+  group there leaves a gap of unknown size that positional `DATA` cannot skip, so it is asserted against
+  `.d.<name>.k` with `! EQUi`. At rank 1 there are no interior axes and the rule degenerates to "place the
+  prefix, assert it fits" - which is E414's case, now with nothing special written down for it. A symbolic
+  OUTERMOST axis gained a prefix fill for free; it previously demanded an exact count.
+
+  **Short fill is decided once, in `emitInitData`**, which drops a trailing run of zero words - exactly
+  what the region supplies (verified on GAZLCmd for a `CNST` section as well as a `GLOB` one). That is what
+  lets every fill loop pad honestly to its axis, which is what keeps a short INTERIOR group from shifting
+  everything after it, while a `[100]` array given 14 entries still emits 56 words rather than 400.
+  Covered by `tests/impala/sources/structArrayGiven.impala`.
 - Brace initializers recurse the existing `InitList` machinery with a field cursor: each value
   checked against the field type, nested `{}` descends into struct/array fields, trailing
   omission zero-fills. Lowering is the flat `DATA` rows the braces describe.

@@ -15,7 +15,7 @@
 	! MULi <A> #4 #.z.S
 .z.bank:	! DEFi #<A>
 bank:	GLOB *.z.bank	; signature array bank[4] : S @ pointerStride.impala:14:1
-	DATA #10 #0 #0 #20 #0 #0 #30 #0 #0 #40 #0 #0
+	DATA #10 #0 #0 #20 #0 #0 #30 #0 #0 #40
 .z.words:	! DEFi #6
 words:	GLOB *.z.words	; signature array words[6] : int @ pointerStride.impala:15:1
 	DATi #1 #2 #3 #4 #4 #4
