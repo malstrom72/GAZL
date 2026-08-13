@@ -1564,7 +1564,6 @@ foo.impala:12:9: note: use a cast: (int pointer)
 | E411 | duplicate field in struct |
 | E412 | field has an incomplete struct type (define it, or use a pointer) |
 | E413 | unknown type |
-| E414 | an initialized struct-element array needs a literal size |
 | E415 | field access requires a struct or struct pointer |
 | E416 | wrong field operator (`.` on a pointer, or `->` on a value) |
 | E417 | struct has no such field |

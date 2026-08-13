@@ -41,9 +41,9 @@ compare) were protecting. The one-word temporary invariant is never touched. Ris
 > `GLOB/LOCA *(count*sizeof)`; a struct array decays to a struct pointer, and subscripting a struct
 > pointer (`structSubscript`) yields a place - constant index folds `C*sizeof` into the offset,
 > dynamic index emits one `MULi` stride; global bases use `&name:off`, runtime pointers use
-> PEEK/POKE; an INITIALIZED struct-element array needs a numeric literal size, E414 - an uninitialized
-> one takes a named `const` extent, so `const int N = 4; global S array bank[N]` compiles clean
-> (narrowed 2026-08-04)). Slice 7: **array fields**
+> PEEK/POKE; a struct-element array takes a named `const` extent whether or not it is initialized, so
+> `const int N = 4; global S array bank[N] = { { n: 1 } }` compiles clean - the 2026-08-04 narrowing of
+> the INITIALIZED case to a numeric literal (E414) was LIFTED 2026-08-13, see Slice 2.4). Slice 7: **array fields**
 > inside a struct (`struct Filter { float array state[4] }` → `f.state[i]`) - the array field
 > decays to a typed pointer at base+offset (global `&v:off`, local ADRL+add, pointer base+add),
 > subscript handles the rest incl. arrays-of-structs inside a struct. Slice 8: **brace
@@ -92,7 +92,13 @@ all base-kind combinations, and read-back verification after every write.
 - `Filter array banks[4]` = `LOCA`/`GLOB *(4*sizeof)`; constant index → place with
   `offset = i*sizeof + …` (still free); dynamic index → stride `MULi`, base becomes a computed
   pointer temp, terminal access is `PEEK`/`POKE`/`GETL`-style - the Step 1 dynamic-index shapes.
-  Lifts error E414.
+  **Lifts error E414 - DONE 2026-08-13.** The fill loop now runs over the entries GIVEN rather than to
+  the extent, which is what made a compile-time count necessary in the first place. The extent is a
+  CHECK, not a fill bound: a literal one is compared here, a symbolic one is handed to the assembler as
+  `! LEQi #words #.z.<name>` - the same two-stage move a symbolically-sized struct FIELD already made.
+  Filling only what is given also stopped the tail being written out as explicit `&NULL #0` per missing
+  element (a `[100]` array given 14 entries emitted 400 words instead of 56); the region zero-fills it,
+  as the flat 1.x path always relied on. Covered by `tests/impala/sources/structArrayGiven.impala`.
 - Brace initializers recurse the existing `InitList` machinery with a field cursor: each value
   checked against the field type, nested `{}` descends into struct/array fields, trailing
   omission zero-fills. Lowering is the flat `DATA` rows the braces describe.

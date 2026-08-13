@@ -2411,9 +2411,13 @@ const typedPointerCases = [
 		expectError: null,
 	},
 	{
-		label: "an initialized struct-element array still needs a literal size",
+		/* Was "still needs a literal size" (E414). The extent is a CHECK, not a fill bound: the loop now
+		   runs over the entries GIVEN, so a size Impala cannot evaluate is deferred to the assembler
+		   (`! LEQi #words #.z.bank`) exactly as a symbolically-sized struct FIELD already was. The emitted
+		   form is pinned by tests/impala/sources/structArrayGiven.impala, which assembles and runs. */
+		label: "an initialized struct-element array accepts a named-constant size",
 		source: ["struct V { int n }", "const int N = 2", "global V array bank[N] = { { n: 1 }, { n: 2 } }"].join("\n"),
-		expectError: "literal size",
+		expectError: null,
 	},
 	{
 		label: "array fields inside a struct index correctly",
