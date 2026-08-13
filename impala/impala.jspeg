@@ -2939,9 +2939,16 @@
         }
         var coarse = $$parser.coarseType(ops.target);
         var row = (coarse !== undefined ? 'DAT?' : 'DATA'), type = (coarse || 'i');
+        /* A `<X>` SCRATCH OPERAND GETS ITS OWN ROW, and that is a correctness rule, not formatting.
+           `declare` ends by handing its emitted value back to the pool (`returnBack(value)`), and returnBack
+           only recognises an operand it can parse whole - a scratch buried in `#8 <A> #7` is silently never
+           returned, and the run dies on the boundary assert "compile-time scratch leak before main".
+           `readonly S s = { x: 1 << P }` with P a named const did exactly that and never compiled. The flat
+           `InitList` has always had this rule; the buffered path was written without it. */
         var line = '';
         for (var i = 0; i < ops.length; ++i) {
-            if (line !== '' && (line + ' ' + ops[i]).length >= 55) {
+            if (line !== '' && (ops[i].charAt(0) === '<' || line.charAt(0) === '<'
+                    || (line + ' ' + ops[i]).length >= 55)) {
                 $$parser.declare(row, 'globals', undefined, type, true, line, sourceCode, sourceOffset);
                 line = '';
             }

@@ -111,6 +111,20 @@ all base-kind combinations, and read-back verification after every write.
   lets every fill loop pad honestly to its axis, which is what keeps a short INTERIOR group from shifting
   everything after it, while a `[100]` array given 14 entries still emits 56 words rather than 400.
   Covered by `tests/impala/sources/structArrayGiven.impala`.
+
+  **`InitList` STAYS A SEPARATE PATH, and the reason is the scratch pool - do not re-attempt the merge
+  without answering it.** The flat list writes its `DATA` rows WHILE PARSING; everything else buffers the
+  words and writes them at the end. Merging the flat list into the buffered filler was built and reverted
+  2026-08-13: an entry like `STRIDE + 1` on a named const is folded by emitting `! ADDi <A> ...` and using
+  `<A>` as the word, and `declare` returns a scratch to the pool only when it writes the row quoting it. The
+  pool is `<A>`..`<Z>`. Collecting entries before placing them therefore holds one scratch per computed
+  entry and aborts at 27 with "compile-time scratch pool exhausted"; measured exactly - 26 entries compile,
+  30 do not - while the streaming form has no limit. `chess.impala` and `Priyome.impala` are the corpus
+  programs that prove it. The merge is possible only by making the shared writer EMIT AS IT FILLS, which
+  additionally needs a pending-zero run (so a trailing run can still be dropped, and an interior one still
+  written) - a real design, not a rename. What the attempt DID land is the rule it exposed: a scratch gets a
+  row to itself in the buffered writer too, without which `readonly S s = { x: 1 << P }` never compiled at
+  all (`tests/impala/sources/structInitScratch.impala`).
 - Brace initializers recurse the existing `InitList` machinery with a field cursor: each value
   checked against the field type, nested `{}` descends into struct/array fields, trailing
   omission zero-fills. Lowering is the flat `DATA` rows the braces describe.
