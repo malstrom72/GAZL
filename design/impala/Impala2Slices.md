@@ -122,9 +122,22 @@ all base-kind combinations, and read-back verification after every write.
   30 do not - while the streaming form has no limit. `chess.impala` and `Priyome.impala` are the corpus
   programs that prove it. The merge is possible only by making the shared writer EMIT AS IT FILLS, which
   additionally needs a pending-zero run (so a trailing run can still be dropped, and an interior one still
-  written) - a real design, not a rename. What the attempt DID land is the rule it exposed: a scratch gets a
-  row to itself in the buffered writer too, without which `readonly S s = { x: 1 << P }` never compiled at
-  all (`tests/impala/sources/structInitScratch.impala`).
+  written) - a real design, not a rename. An emit-as-you-fill sink WAS built and reverted the same day: it
+  is byte-identical and costs 20 lines, but it does not lift the cap, because the scratches are borrowed
+  while the tree is PARSED, before any placement can free one.
+
+  **The CAP itself is gone, separately (`holdConstant`, `tests/impala/sources/initSpill.impala`).** Once the
+  pool is empty the next computed entry is captured into a named define and the scratch handed straight
+  back, so at most one is ever tied up and a nested initializer has no entry limit (200 verified). It looks
+  unsound and is not: the emitted line naming `<A>` is its DEFINITION, which is what gives the capture its
+  value, while the only pending reference is an operand string still held in the entry - so redirecting it
+  costs nothing. This is the same move `.z.`/`.d.` already make (`! MULi <A> ...` then `.z.g: ! DEFi #<A>`).
+  Only entries past the pool spill, so every initializer that already fitted emits exactly what it did
+  before - no golden moved.
+
+  What the merge attempt also landed is the rule it exposed: a scratch gets a row to itself in the buffered
+  writer too, without which `readonly S s = { x: 1 << P }` never compiled at all
+  (`tests/impala/sources/structInitScratch.impala`).
 - Brace initializers recurse the existing `InitList` machinery with a field cursor: each value
   checked against the field type, nested `{}` descends into struct/array fields, trailing
   omission zero-fills. Lowering is the flat `DATA` rows the braces describe.

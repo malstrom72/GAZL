@@ -166,6 +166,7 @@
     var $$parser.topNames = {};                                   /// name -> kind ('global'/'function'/'const'/'struct'/'functype'), one flat namespace
     var $$parser.guardCounter = 0;                                /// mints `.g<N>` skip labels for deferred assertions; NOT labelCounter, which resets per function
     var $$parser.emittedGuards = {};                              /// (array, index) pairs already asserted in this function - the same assertion twice says nothing new
+    var $$parser.holdCounter = 0;                                 /// names minted by holdConstant when the scratch pool ran dry
     var $$parser.initTarget = undefined;                          /// element DESCRIPTOR an `InitList`'s entries answer to; undefined = untyped array, accept what comes
     var $$parser.reservedAt = undefined;                          /// offset of the last name reported as reserved - two doors check one name, one reports it
     var $$parser.switchStack = [];
@@ -2877,6 +2878,37 @@
         return ($$parser.initCoarseType() !== undefined ? 'DAT?' : 'DATA');
     };
 
+    /* How many compile-time scratches could still be handed out: `counters` is how many names have ever been
+       minted, `stock` the ones handed back, and `borrow` mints at most 26. */
+    $$parser.freeScratches = function () {
+        return (26 - $$parser.counters['<']) + $$parser.stock['<'].length;
+    };
+
+    /* Make a computed initializer value DURABLE so its scratch can go back to the pool.
+
+       A value only the assembler can fold - `1 << P` on a named const - arrives as `<A>`, one of 26, and a
+       brace initializer holds every entry's value until the whole group is placed (it must: named fields may
+       be written out of order). So a list of 27 folded constants ran the pool dry and died with "expression
+       too complex" - which is what capped EVERY nested initializer at 26 computed entries while the flat,
+       streaming one had no limit.
+
+       Capturing into a named define is what this compiler already does for `.z.`/`.d.` (`! MULi <A> ...`
+       then `.z.g: ! DEFi #<A>`), and it is safe for exactly the reason it first looks unsafe: the emitted
+       line that names `<A>` is its DEFINITION, which is what gives the capture its value, and the only
+       PENDING reference is the operand string in the entry - still in memory, and it is what this returns.
+       `declare` hands the scratch back itself, since returnBack reads the trailing `<X>` of `#<A>`.
+
+       Done only once the pool is EMPTY, so an initializer that fits emits exactly what it always did. */
+    $$parser.holdConstant = function (op, type, sourceCode, sourceOffset) {
+        if (op.charAt(0) !== '<' || $$parser.freeScratches() > 0) {
+            return op;
+        }
+        var name = '.k' + ($$parser.holdCounter++);
+        $$parser.declare('! DEF?', 'defines', name, (type === 'f' ? 'f' : 'i'), true, '#' + op,
+                sourceCode, sourceOffset);
+        return '#' + name;
+    };
+
     /* One entry of a flat initializer list: the full assignment check, then the rendered constant. Both
        list doors call this, so a rule added here cannot be live at the first entry and missing at the rest. */
     $$parser.initEntry = function (x, sourceCode, sourceOffset) {
@@ -2886,7 +2918,8 @@
         if (coarse === undefined) {
             coarse = metaSlot(x).type;                            /* untyped array: accept what comes */
         }
-        return { op: $$parser.makeConstant(x, coarse, sourceCode, sourceOffset), type: coarse };
+        return { op: $$parser.holdConstant($$parser.makeConstant(x, coarse, sourceCode, sourceOffset),
+                coarse, sourceCode, sourceOffset), type: coarse };
     };
 
     $$parser.blockInitFrom = function (out, why, code, hint) {
@@ -4549,6 +4582,7 @@ var _sn = $$parser.strideStruct(field.elem);
         $$parser.functypes        = {};
         $$parser.topNames         = {};
         $$parser.guardCounter     = 0;
+        $$parser.holdCounter      = 0;
         $$parser.exportNext       = false;
 
         /* reset deferred string tables */
@@ -5343,7 +5377,8 @@ BracedItem  <-  b:Braced                                             { $$ = { br
                                                                         var op = $$parser.makeRValue(m, '#<&');
                                                                         if (span(op[0] || '', '#<&') !== 1)
                                                                             $$parser.fail('Initializer must be a constant', $$s, $$i, 'E407');
-                                                                        $$ = { op: op, type: m.type, elem: m.elem };
+                                                                        $$ = { op: $$parser.holdConstant(op, m.type, $$s, $$i),
+                                                                               type: m.type, elem: m.elem };
                                                                     }
 
 InitList    <-  '{' _                                                 { $d = ' '; $type = undefined; }
