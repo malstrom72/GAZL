@@ -1505,9 +1505,14 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         var w;
         if (op.ext.stride !== undefined && !op.own) {             /* `.z.` counts WORDS, the index counts
                                                                      ELEMENTS - scale before comparing */
-            w = borrow('<');
-            emit('<> *', 'i', w, lhs, '#' + op.ext.stride);
-            lhs = '#' + w;
+            if (constInt(lhs) === 1) {                   /* `1 * .z.S` IS `.z.S`, here too - so no
+                                                                     scratch is borrowed and none is freed */
+                lhs = '#' + op.ext.stride;
+            } else {
+                w = borrow('<');
+                emit('<> *', 'i', w, lhs, '#' + op.ext.stride);
+                lhs = '#' + w;
+            }
         }
         var low;
         if (typeof op.k !== 'number') {
@@ -3090,9 +3095,10 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
 
     /* One Horner step: `acc * stride + idx`. Assemble-time throughout when every part is - a constant
        subscript then costs nothing at run time, exactly as a constant 1-D one does.
-       The two DEGENERATE steps are skipped, and both identities hold whatever the stride turns out to be -
-       so a host-owned axis folds exactly as a literal one does and nothing is baked. `0 * W + idx` is
-       `idx`, which is the whole of `grid[0, x]`, the row-0 idiom; `acc * W + 0` is the multiply alone.
+       The three DEGENERATE steps are skipped, and every identity holds whatever the stride turns out to be
+       - so a host-owned axis folds exactly as a literal one does and nothing is baked. `0 * W + idx` is
+       `idx`, which is the whole of `grid[0, x]`, the row-0 idiom; `acc * W + 0` is the multiply alone;
+       `1 * W + idx` is `W + idx`, the row-1 one.
        Emitting them cost two and one RUNTIME instructions per access, inside whatever loop the subscript
        sat in. `subscriptStruct` has always skipped the flat `+ 0` (its `k !== '0'` test); this is the
        same rule reaching the axes. */
@@ -3105,10 +3111,17 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         var zero = (indexKind(idx) === 'now' && constInt(idx) === 0);
         var live = (indexKind(acc) === 'runtime'
                 || (!zero && indexKind(idx) === 'runtime'));
+        var one = (indexKind(acc) === 'now' && constInt(acc) === 1);
         var dst = borrow(live ? '%' : '<');
-        emit(live ? '*' : '<> *', 'i', dst, acc, stride);
-        if (!zero) {
-            emit(live ? '+' : '<> +', 'i', dst, dst, idx);
+        if (one) {                                                /* `1 * stride` IS `stride` - the THIRD degenerate
+                                                                     step, and `a[1, x]` is as ordinary as row 0 */
+            if (zero) emit('<> =', 'i', dst, stride, undefined);   /* both parts constant, so never live */
+            else      emit(live ? '+' : '<> +', 'i', dst, stride, idx);
+        } else {
+            emit(live ? '*' : '<> *', 'i', dst, acc, stride);
+            if (!zero) {
+                emit(live ? '+' : '<> +', 'i', dst, dst, idx);
+            }
         }
         returnBack(acc);
         returnBack(idx);
@@ -3225,9 +3238,15 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
             if (k !== '0') {
                 var part = k;                                    /* scalar stride is 1 word -> the offset is just k */
                 if (elemStruct) {
-                    part = borrow('<');
-                    emit('<> *', 'i', part, '#' + k, '#' + extentSymbol(elemName));
-                    if (scratch) { returnBack(k); }
+                    var sym = extentSymbol(elemName);
+                    part = sym;                                  /* `1 * .z.S` IS `.z.S` - the same degenerate step
+                                                                    mulAddAxis skips, one level out. `&p[1]` is the
+                                                                    canonical walk, so it was the common case. */
+                    if (k !== '1') {
+                        part = borrow('<');
+                        emit('<> *', 'i', part, '#' + k, '#' + sym);
+                        if (scratch) { returnBack(k); }
+                    }
                 }
                 /* A folded `<X>` cannot key a deferred assertion, so the guard takes its OWN copy while the
                    value is still live - the pushed one is freed by foldOffset long before the use decides

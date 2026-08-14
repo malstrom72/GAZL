@@ -75,8 +75,7 @@ main:	FUNC	; signature export func main() -> void @ multidimArrayInit.impala:37:
 	$x:	LOCi
 	$total:	LOCi
 ;-----------------------------------------------------------------------------
-		! MULi <A> #1 #.d.m.0	; printInt(global m[1, 2])
-		! ADDi <A> <A> #2
+		! ADDi <A> #.d.m.0 #2	; printInt(global m[1, 2])
 		PEEK %1 &m:<A> 
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ multidimArrayInit.impala:40:26
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ multidimArrayInit.impala:41:11
@@ -97,14 +96,13 @@ main:	FUNC	; signature export func main() -> void @ multidimArrayInit.impala:37:
 	.e0:	MOVi %1 $total 	; printInt(total)
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ multidimArrayInit.impala:51:17
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ multidimArrayInit.impala:52:11
-		! MULi <A> #1 #.d.cube.1	; printInt(global cube[1, 1, 1])
-		! ADDi <A> <A> #1
+		! ADDi <A> #.d.cube.1 #1	; printInt(global cube[1, 1, 1])
 		! MULi <B> #<A> #.d.cube.0
 		! ADDi <B> <B> #1
 		PEEK %1 &cube:<B> 
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ multidimArrayInit.impala:54:32
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ multidimArrayInit.impala:55:11
-		! MULi <B> #1 #.d.cube.1	; printInt(global cube[1, 0, 0])
+		! MOVi <B> #.d.cube.1 	; printInt(global cube[1, 0, 0])
 		! MULi <A> #<B> #.d.cube.0
 		PEEK %1 &cube:<A> 
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ multidimArrayInit.impala:56:32
@@ -141,8 +139,7 @@ main:	FUNC	; signature export func main() -> void @ multidimArrayInit.impala:37:
 		PEEK %1 &mat:.o.Mat.tag 	; printInt(global mat.tag)
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ multidimArrayInit.impala:71:26
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ multidimArrayInit.impala:72:11
-		! MULi <A> #1 #.d.Mat.cells.0	; printInt(global mat.cells[1, 1])
-		! ADDi <A> <A> #1
+		! ADDi <A> #.d.Mat.cells.0 #1	; printInt(global mat.cells[1, 1])
 		! ADDi <B> #.o.Mat.cells #<A>
 		PEEK %1 &mat:<B> 
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ multidimArrayInit.impala:73:34

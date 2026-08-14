@@ -55,9 +55,8 @@ main:	FUNC	; signature func main() -> void @ structInit.impala:21:1
 		PEEK %1 &preset:<A> 
 		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ structInit.impala:28:33
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structInit.impala:28:44
-		! MULi <A> #1 #.z.Voice	; printInt((int) global bank[1].note)
-		! ADDi <B> #<A> #.o.Voice.note
-		PEEK %1 &bank:<B> 
+		! ADDi <A> #.z.Voice #.o.Voice.note	; printInt((int) global bank[1].note)
+		PEEK %1 &bank:<A> 
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ structInit.impala:29:37
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structInit.impala:29:48
 		PEEK %1 &bank:.o.Voice.gain 	; printFloat(global bank[0].gain)

@@ -1339,6 +1339,22 @@ console.log("impala.jspeg compiler spills initializer constants only once the sc
 	console.log("impala.jspeg compiler leaves every corpus program inside the scratch pool");
 }
 
+// Scaling an index by an element size is `k * .z.S`, and at k == 1 that multiply IS the size - the third
+// degenerate step alongside the `0 * W + idx` and `acc * W + 0` mulAddAxis already folds. It went unnoticed
+// because `&p[1]` is the CANONICAL struct-pointer walk, so the commonest subscript in the language carried
+// the one line that says nothing; it cost a `<X>` borrow apiece too, out of the same 26-deep pool the
+// initializer spill above exists to protect. Three sites scale independently - the offset parts, the Horner
+// axis step and the deferred bounds guard - so this asks the corpus rather than any one of them.
+{
+	const goldenDir = path.join(dir, "..", "tests", "impala", "golden");
+	const scaling = fs.readdirSync(goldenDir)
+		.filter((f) => f.endsWith(".gazl"))
+		.filter((f) => /^\s*! MULi <[A-Za-z]> #1 #/m.test(fs.readFileSync(path.join(goldenDir, f), IMPALA_ENCODING)));
+	assert(scaling.length === 0,
+		`multiplying an index by one is not a scale, but these goldens do: ${scaling.join(", ")}`);
+	console.log("impala.jspeg compiler folds away the multiply-by-one in a scaled index");
+}
+
 // Surplus initializer values used to be read by nobody and vanish: the fill loops stop at the extent, so
 // nothing was emitted for them and the assembler had nothing wrong to see. (A surplus FIELD is already
 // E456 - naming the fields closed that one for free.) A flat `int array a[2] = { 7, 8, 9 }` is a different

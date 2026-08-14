@@ -169,8 +169,7 @@ initFilesIfNecessary:	FUNC	; signature func initFilesIfNecessary() -> void @ fil
 		POKE $filePointer #.o.File.size %0
 		POKE $filePointer #.o.File.date $datePointer	; filePointer->date = datePointer
 		ADDi $index $index #1	; index = index + 1
-		! MULi <A> #1 #.z.File	; filePointer = &filePointer[1]
-		ADDp %0 $filePointer #<A>
+		ADDp %0 $filePointer #.z.File	; filePointer = &filePointer[1]
 		MOVp $filePointer %0 
 		MULi %0 $index #.d.FILE_NAMES.0	; namePointer = &global FILE_NAMES[index, 0]
 		ADDp $namePointer &FILE_NAMES %0
