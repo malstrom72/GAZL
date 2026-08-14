@@ -1319,12 +1319,18 @@
        two questions callers ask part company here. It is an assemble-time value, so it folds into an
        offset like any other constant. But `<A>` is recycled - the next folded subscript in the same
        function rebinds it (`! ADDi <A> #K #1` ... `! ADDi <A> #M #1`) - so it can never KEY a bounds
-       assertion, which dedups by index text and would then answer for whichever value landed last. */
+       assertion, which dedups by index text and would then answer for whichever value landed last.
+
+       A COMPILER-MINTED name is as assemble-time as a user's: `#.d.g.0` is a layout constant the assembler
+       resolves, and only the leading dot ever made it look otherwise. Reading it as `runtime` was the gap
+       this table exists to close - it demoted whatever consumed it from `! MULi` to a real multiply, which
+       is how `cube[1, 0, 0]` came to need a materializing `! MOVi` to get its tier back. */
     $$parser.indexKind = function (op) {
         if (/^#?<[A-Za-z]>$/.test(op)) return 'scratch';          /* an assemble-time fold under a recycled name */
         if (op.charAt(0) !== '#') return 'runtime';               /* $local, %transient */
         if ($$parser.constInt(op) !== undefined) return 'now';    /* a literal - Impala decides it */
-        return /^#[A-Za-z_]/.test(op) ? 'assembly' : 'runtime';   /* #NAME is the assembler's */
+        return /^#\.?[A-Za-z_]/.test(op) ? 'assembly' : 'runtime'; /* #NAME - and #.z.NAME, #.d.NAME.k,
+                                                                     #.o.S.f - are all the assembler's */
     };
 
     $$parser.checkConstIndex = function (extent, idxRV, sourceCode, sourceOffset) {
@@ -3099,11 +3105,16 @@
         var live = ($$parser.indexKind(acc) === 'runtime'
                 || (!zero && $$parser.indexKind(idx) === 'runtime'));
         var one = ($$parser.indexKind(acc) === 'now' && $$parser.constInt(acc) === 1);
+        if (one && zero) {                                        /* `1 * stride + 0` IS `stride`, and a minted
+                                                                     name carries its own tier - see indexKind */
+            $$parser.returnBack(acc);
+            $$parser.returnBack(idx);
+            return stride;
+        }
         var dst = $$parser.borrow(live ? '%' : '<');
         if (one) {                                                /* `1 * stride` IS `stride` - the THIRD degenerate
                                                                      step, and `a[1, x]` is as ordinary as row 0 */
-            if (zero) $$parser.emit('<> =', 'i', dst, stride, undefined);   /* both parts constant, so never live */
-            else      $$parser.emit(live ? '+' : '<> +', 'i', dst, stride, idx);
+            $$parser.emit(live ? '+' : '<> +', 'i', dst, stride, idx);
         } else {
             $$parser.emit(live ? '*' : '<> *', 'i', dst, acc, stride);
             if (!zero) {

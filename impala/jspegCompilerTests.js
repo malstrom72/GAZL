@@ -1355,6 +1355,22 @@ console.log("impala.jspeg compiler spills initializer constants only once the sc
 	console.log("impala.jspeg compiler folds away the multiply-by-one in a scaled index");
 }
 
+// A subscript built ENTIRELY from constants must cost no runtime arithmetic - every step is a layout name
+// the assembler resolves. indexKind decides that, and it used to read the leading dot of a COMPILER-minted
+// name (`#.d.cube.0`) as `runtime` while accepting a user's `#KONST` as `assembly`, so the moment a Horner
+// step consumed one it emitted a real multiply inside whatever loop the subscript sat in. Nothing caught it:
+// the demotion is invisible in a golden unless you notice the missing `!`, and the arithmetic is correct
+// either way. So this asserts the TIER, which is the part that silently rots.
+{
+	const src = "global int array cube[2, 3, 4]\n"
+		+ "function main()\nlocals int v\n{\n\tv = global cube[1, 0, 0];\n}\n";
+	const out = compileWithJsImpala(src, { randomId: 42 });
+	const atRuntime = out.split("\n").filter((line) => /^\s+(MULi|ADDi)\s/.test(line));
+	assert(atRuntime.length === 0,
+		`a wholly constant subscript must fold at assembly, but this runs:\n${atRuntime.join("\n")}`);
+	console.log("impala.jspeg compiler folds a wholly constant multidimensional subscript at assembly");
+}
+
 // Surplus initializer values used to be read by nobody and vanish: the fill loops stop at the extent, so
 // nothing was emitted for them and the assembler had nothing wrong to see. (A surplus FIELD is already
 // E456 - naming the fields closed that one for free.) A flat `int array a[2] = { 7, 8, 9 }` is a different
