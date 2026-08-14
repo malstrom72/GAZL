@@ -1303,6 +1303,42 @@ assertLoadFails("an over-filled symbolic array field",
 	"too many initializer values for S.v: 3 given, room for .z.S.v");
 console.log("impala.jspeg compiler defers the symbolic value-count check to GAZL assembly time");
 
+// A spilled `.kN` define is the ESCAPE HATCH that lets a nested initializer hold more folded constants than
+// the 26-deep `<A>`..`<Z>` pool (holdConstant). It has to stay an escape hatch, and that is worth pinning
+// from both sides, because the failure is silent and ugly rather than loud: anything that drains the pool -
+// a scratch leak somewhere else being the obvious one - now shows up as `.k` defines appearing in ordinary
+// programs instead of as the abort it used to be. So: nothing that FITS may spill, and something that does
+// not fit must spill rather than die. The spilled values are proved correct on the VM by
+// tests/impala/sources/initSpill.impala; this only guards when the hatch opens.
+function computedInitSource(n) {
+	const entries = [];
+	for (let i = 1; i <= n; ++i) {
+		entries.push("K + " + i);
+	}
+	return "const int K = 100\nglobal int array a[1, " + n + "] = { { " + entries.join(", ") + " } }\n"
+		+ "function main() { }\n";
+}
+const initFits = compileWithJsImpala(computedInitSource(25), { randomId: 42 });
+assert(!/\.k\d/.test(initFits),
+	`an initializer that fits the scratch pool must spill nothing\n${initFits}`);
+const initSpills = compileWithJsImpala(computedInitSource(40), { randomId: 42 });
+assert(/\.k\d+:\s+! DEFi /.test(initSpills),
+	`an initializer past the scratch pool must spill, not abort\n${initSpills}`);
+console.log("impala.jspeg compiler spills initializer constants only once the scratch pool is empty");
+
+// The corpus is the wider net: every one of those programs fitted the pool before holdConstant existed, so
+// a `.k` appearing in any of their goldens means something started draining it. The byte-compare gate would
+// flag the diff, but not say what it meant - this names it.
+{
+	const goldenDir = path.join(dir, "..", "tests", "impala", "golden");
+	const spilling = fs.readdirSync(goldenDir)
+		.filter((f) => f.endsWith(".gazl"))
+		.filter((f) => /^\.k\d+:/m.test(fs.readFileSync(path.join(goldenDir, f), IMPALA_ENCODING)));
+	assert(spilling.length === 1 && spilling[0] === "initSpill.gazl",
+		`only initSpill.gazl may spill initializer constants, but these do: ${spilling.join(", ")}`);
+	console.log("impala.jspeg compiler leaves every corpus program inside the scratch pool");
+}
+
 // Surplus initializer values used to be read by nobody and vanish: the fill loops stop at the extent, so
 // nothing was emitted for them and the assembler had nothing wrong to see. (A surplus FIELD is already
 // E456 - naming the fields closed that one for free.) A flat `int array a[2] = { 7, 8, 9 }` is a different
