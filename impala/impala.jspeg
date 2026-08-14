@@ -5322,8 +5322,13 @@ GlobalDecl  <-  (   GLOBAL                                            { $section
                                                                             $shaped = ($a.dims !== undefined);
                                                                             $needNested = ($shaped || $aStructEl);
                                                                          }
-                           ( d:InitList                                {   /* flat list -> 1-D scalar arrays and symbolic-axis shapes */
-                                                                            if ($needNested)
+                           ( d:InitList                                {   /* flat list -> 1-D scalar arrays and symbolic-axis shapes.
+                                                                              `{ }` states nothing, so there is nothing to nest and
+                                                                              nothing to place: it zero-fills, exactly as it already
+                                                                              did for a struct value and a plain array. Rejecting it
+                                                                              here asked for "one group per element" when no element
+                                                                              had been given. */
+                                                                            if ($needNested && $d > 0)
                                                                                 $$parser.fail(($aStructEl
                                                                                         ? 'A struct-element array needs nested braces, one group per element'
                                                                                         : 'A shaped array needs nested braces, one group per axis'),
@@ -5381,7 +5386,7 @@ BracedItem  <-  b:Braced                                             { $$ = { br
                                                                                type: m.type, elem: m.elem };
                                                                     }
 
-InitList    <-  '{' _                                                 { $d = ' '; $type = undefined; }
+InitList    <-  '{' _                                                 { $d = ' '; $type = undefined; $n = 0; }
                 # Decline a `field:` entry so the ordered choice falls through to `Braced`, which owns the
                 # named form. Without this, `Expr` evaluates the name first and dies as E403 instead.
                 ( !(Identifier ':')                                  { $entryAt = $$i; }   # `Expr` eats the trailing
@@ -5390,6 +5395,7 @@ InitList    <-  '{' _                                                 { $d = ' '
                                                                             var first = $$parser.initEntry(metaSlot($x), $$s, $entryAt);
                                                                             $type = first.type;
                                                                             $d += first.op;
+                                                                            ++$n;
                                                                         }
                   ( ',' _ !(Identifier ':')                          { $entryAt = $$i; }
                     x:Expr                                           {
@@ -5411,9 +5417,13 @@ InitList    <-  '{' _                                                 { $d = ' '
                                                                             }
                                                                             $d += ' ' + constant;
                                                                             $type = xType;
+                                                                            ++$n;
                                                                         }
                   )* )?
               '}' _                                                  {
+                                                                        $$ = $n;   /* entry count, set at the END: the
+                                                                              `!(Identifier ':')` predicate compiles to
+                                                                              `Identifier($)` and clobbers `$$` mid-rule */
                                                                         if ($d.substr(1) !== '') {
                                                                             $$parser.declare(
                                                                                 $$parser.initElemRow(), 'globals',
