@@ -1,0 +1,356 @@
+; Compiled with Impala version 2.0
+
+; signatures version=1
+; signature extern native findFirmwarePatch() -> unknown @ fileList2.impala:25:1
+FILE_TYPE_COUNT:	! DEFi #4	; signature const FILE_TYPE_COUNT : int @ fileList2.impala:27:1
+FILE_TYPE_EXE:	! DEFi #0	; signature const FILE_TYPE_EXE : int @ fileList2.impala:28:1
+FILE_TYPE_SYS:	! DEFi #1	; signature const FILE_TYPE_SYS : int @ fileList2.impala:29:1
+FILE_TYPE_TXT:	! DEFi #2	; signature const FILE_TYPE_TXT : int @ fileList2.impala:30:1
+FILE_TYPE_BIN:	! DEFi #3	; signature const FILE_TYPE_BIN : int @ fileList2.impala:31:1
+.z.FILE_TYPE_STRINGS:	! DEFi #FILE_TYPE_COUNT
+FILE_TYPE_STRINGS:	CNST *.z.FILE_TYPE_STRINGS	; signature array FILE_TYPE_STRINGS[FILE_TYPE_COUNT] : ptr @ fileList2.impala:32:1
+	DATp &.s_exe_4d2 &.s_sys_4d3 &.s_txt_4d4 &.s_bin_4d5
+	! MOVi <a> #0	; layout of struct File
+.o.File.name:	! DEFi #<a>
+	! ADDi <a> #<a> #1
+.o.File.type:	! DEFi #<a>
+	! ADDi <a> #<a> #1
+.o.File.size:	! DEFi #<a>
+	! ADDi <a> #<a> #1
+.o.File.date:	! DEFi #<a>
+	! ADDi <a> #<a> #1
+.z.File:	! DEFi #<a>
+; signature struct File { name : ptr, type : int, size : int, date : ptr } @ fileList2.impala:36:1
+MAX_FILE_COUNT:	! DEFi #100	; signature const MAX_FILE_COUNT : int @ fileList2.impala:43:1
+MAX_FILE_NAME_LENGTH:	! DEFi #31	; signature const MAX_FILE_NAME_LENGTH : int @ fileList2.impala:44:1
+FILE_DATE_LENGTH:	! DEFi #8	; signature const FILE_DATE_LENGTH : int @ fileList2.impala:45:1
+BUILT_IN_FILE_COUNT:	! DEFi #14	; signature const BUILT_IN_FILE_COUNT : int @ fileList2.impala:46:1
+	GLOB *1
+fileCount:	DATi #BUILT_IN_FILE_COUNT	; signature global fileCount : int @ fileList2.impala:47:1
+	! MULi <A> #MAX_FILE_COUNT #.z.File
+.z.FILES:	! DEFi #<A>
+FILES:	GLOB *.z.FILES	; signature array FILES[MAX_FILE_COUNT] : File @ fileList2.impala:49:1
+	! LEQi #56 #.z.FILES @.g0
+	! FAIL too many initializer values for FILES: 56 given, room for .z.FILES
+.g0:	!
+	DATA &.s_about_4d6 #FILE_TYPE_TXT #2 &.s_111384_4d7
+	DATA &.s_advent_4d8 #FILE_TYPE_EXE #91 &.s_22178_4d9
+	DATA &.s_blupri_4da #FILE_TYPE_TXT #2 &.s_6579_4db
+	DATA &.s_calc_4dc #FILE_TYPE_EXE #7 &.s_112577_4dd
+	DATA &.s_chess_4de #FILE_TYPE_EXE #16 &.s_3684_4df
+	DATA &.s_disasm_4e0 #FILE_TYPE_EXE #4 &.s_112577_4dd
+	DATA &.s_fredri_4e1 #FILE_TYPE_TXT #5 &.s_71484_4e2
+	DATA &.s_life_4e3 #FILE_TYPE_EXE #5 &.s_31279_4e4
+	DATA &.s_magnus_4e5 #FILE_TYPE_TXT #5 &.s_62284_4e6
+	DATA &.s_patch_4e7 #FILE_TYPE_EXE #3 &.s_21884_4e8
+	DATA &.s_permut_4e9 #FILE_TYPE_SYS #82 &.s_3183_4ea
+	DATA &.s_prawno_4eb #FILE_TYPE_SYS #58 &.s_101184_4ec
+	DATA &.s_readme_4ed #FILE_TYPE_TXT #2 &.s_121479_4ee
+	DATA &.s_versio_4ef #FILE_TYPE_TXT #1 &.s_111384_4d7
+	! ADDi <A> #MAX_FILE_NAME_LENGTH #1
+	! MULi <B> #MAX_FILE_COUNT #<A>
+.z.FILE_NAMES:	! DEFi #<B>
+.d.FILE_NAMES.0:	! DEFi #<A>
+.d.FILE_NAMES.1:	! DEFi #MAX_FILE_COUNT
+FILE_NAMES:	GLOB *.z.FILE_NAMES	; signature array FILE_NAMES[] : int @ fileList2.impala:65:1
+	! ADDi <A> #FILE_DATE_LENGTH #1
+	! MULi <B> #MAX_FILE_COUNT #<A>
+.z.FILE_DATES:	! DEFi #<B>
+.d.FILE_DATES.0:	! DEFi #<A>
+.d.FILE_DATES.1:	! DEFi #MAX_FILE_COUNT
+FILE_DATES:	GLOB *.z.FILE_DATES	; signature array FILE_DATES[] : int @ fileList2.impala:66:1
+	GLOB *1
+filesAreInited:	DATi #0	; signature global filesAreInited : int @ fileList2.impala:68:1
+
+;-----------------------------------------------------------------------------
+strcmp:	FUNC	; signature func strcmp(ptr s0, ptr s1) -> int @ fileList2.impala:70:1
+	$d:	OUTi
+	$s0:	INPp
+	$s1:	INPp
+	$a:	LOCp
+	$b:	LOCp
+	$c:	LOCi
+;-----------------------------------------------------------------------------
+		MOVp $a $s0 	; a = s0
+		MOVp $b $s1 	; b = s1
+	.l0:	PEEK $c $a 	; while ((d = (c = (int)*a) - (int)*b) == 0 && c != 0) 
+		PEEK %0 $b 
+		SUBi $d $c %0
+		NEQi $d #0 @.e2
+		EQUi $c #0 @.e2
+		ADDp $a $a #1	; a = a + 1
+		ADDp $b $b #1	; b = b + 1
+		GOTO @.l0  	; }
+	.e2:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+sortFiles:	FUNC	; signature func sortFiles() -> void @ fileList2.impala:82:1
+		PARA *1
+	$i:	LOCi
+	$j:	LOCi
+	$minJ:	LOCi
+	$minS:	LOCp
+	$s:	LOCp
+	$temp:	LOCA *.z.File
+;-----------------------------------------------------------------------------
+		MOVi $i #0 	; for (i = 0 to global fileCount - 1) 
+		PEEK %0 &fileCount 
+		SUBi %0 %0 #1
+		GEQi #0 %0 @.e0
+	.l1:	MOVi $minJ $i 	; minJ = i
+		MULi %2 $i #.z.File	; minS = global FILES[i].name
+		ADDp %1 &FILES %2
+		PEEK $minS %1 #.o.File.name
+		ADDi $j $i #1	; for (j = i + 1 to global fileCount) 
+		PEEK %1 &fileCount 
+		GEQi $j %1 @.e2
+	.l3:	MULi %4 $j #.z.File	; if ((int) strcmp((s = global FILES[j].name), minS) < 0) 
+		ADDp %3 &FILES %4
+		PEEK $s %3 #.o.File.name
+		MOVp %3 $s 
+		MOVp %4 $minS 
+		CALL &strcmp %2 *3	; expects strcmp(ptr, ptr) -> int @ fileList2.impala:89:55
+		GEQi %2 #0 @.f4
+		MOVi $minJ $j 	; minJ = j
+		MOVp $minS $s 	; minS = s
+	.f4:	FORi $j %1 @.l3	; }
+	.e2:	MULi %2 $minJ #.z.File	; temp = global FILES[minJ]
+		ADDp %1 &FILES %2
+		ADRL %2 $temp *0
+		COPY %2 %1 *.z.File
+		MULi %1 $minJ #.z.File	; global FILES[minJ] = global FILES[i]
+		ADDp %2 &FILES %1
+		MULi %3 $i #.z.File
+		ADDp %1 &FILES %3
+		COPY %2 %1 *.z.File
+		MULi %1 $i #.z.File	; global FILES[i] = temp
+		ADDp %2 &FILES %1
+		ADRL %1 $temp *0
+		COPY %2 %1 *.z.File
+		FORi $i %0 @.l1	; }
+	.e0:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+initFilesIfNecessary:	FUNC	; signature func initFilesIfNecessary() -> void @ fileList2.impala:100:1
+		PARA *1
+	$index:	LOCi
+	$size:	LOCi
+	$filePointer:	LOCp
+	$namePointer:	LOCp
+	$datePointer:	LOCp
+;-----------------------------------------------------------------------------
+		PEEK %0 &filesAreInited 	; if (global filesAreInited == 0) 
+		NEQi %0 #0 @.f0
+		! EQUi #DEBUG #0 @.a1	; assert(global fileCount == BUILT_IN_FILE_COUNT)
+		PEEK %0 &fileCount 
+		EQUi %0 #BUILT_IN_FILE_COUNT @.a1
+		MOVp %1 &.a_global_4d2 
+		CALL ^assertFail %0 *1
+	.a1:	MOVi $index #0 	; index = 0
+		! MULi <A> #BUILT_IN_FILE_COUNT #.z.File	; filePointer = &global FILES[BUILT_IN_FILE_COUNT]
+		ADDp %0 &FILES #<A>
+		MOVp $filePointer %0 
+		MOVp $namePointer &FILE_NAMES:0 	; namePointer = &global FILE_NAMES[0, 0]
+		MOVp $datePointer &FILE_DATES:0 	; datePointer = &global FILE_DATES[0, 0]
+	.l2:	MOVi %1 $index 	; while ((int) findFirmwarePatch(index, MAX_FILE_NAME_LENGTH, namePointer, &size, datePointer) == 1) 
+		MOVi %2 #MAX_FILE_NAME_LENGTH 
+		MOVp %3 $namePointer 
+		ADRL %4 $size *0
+		MOVp %5 $datePointer 
+		CALL ^findFirmwarePatch %0 *6	; expects findFirmwarePatch(int, int, ptr, int-ptr, ptr) -> unknown @ fileList2.impala:109:96
+		NEQi %0 #1 @.e3
+		GEQi $index #MAX_FILE_COUNT @.l2	; if (index < MAX_FILE_COUNT) 
+		POKE $filePointer #.o.File.name $namePointer	; filePointer->name = namePointer
+		POKE $filePointer #.o.File.type #FILE_TYPE_BIN	; filePointer->type = FILE_TYPE_BIN
+		ADDi %0 $size #1023	; filePointer->size = (size + 1023) / 1024
+		DIVi %0 %0 #1024
+		POKE $filePointer #.o.File.size %0
+		POKE $filePointer #.o.File.date $datePointer	; filePointer->date = datePointer
+		ADDi $index $index #1	; index = index + 1
+		! MULi <A> #1 #.z.File	; filePointer = &filePointer[1]
+		ADDp %0 $filePointer #<A>
+		MOVp $filePointer %0 
+		MULi %0 $index #.d.FILE_NAMES.0	; namePointer = &global FILE_NAMES[index, 0]
+		ADDp $namePointer &FILE_NAMES %0
+		MULi %0 $index #.d.FILE_DATES.0	; datePointer = &global FILE_DATES[index, 0]
+		ADDp $datePointer &FILE_DATES %0
+		! EQUi #DEBUG #0 @.a5	; assert(filePointer < &global FILES[MAX_FILE_COUNT])
+		! MULi <A> #MAX_FILE_COUNT #.z.File
+		ADDp %0 &FILES #<A>
+		LSSp $filePointer %0 @.a5
+		MOVp %1 &.a_filePo_4d3 
+		CALL ^assertFail %0 *1
+	.a5:	NOOP
+		! EQUi #DEBUG #0 @.a6	; assert(namePointer < &global FILE_NAMES[MAX_FILE_COUNT, 0])
+		! MULi <A> #MAX_FILE_COUNT #.d.FILE_NAMES.0
+		LSSp $namePointer &FILE_NAMES:<A> @.a6
+		MOVp %1 &.a_namePo_4d4 
+		CALL ^assertFail %0 *1
+	.a6:	NOOP
+		! EQUi #DEBUG #0 @.a7	; assert(datePointer < &global FILE_DATES[MAX_FILE_COUNT, 0])
+		! MULi <A> #MAX_FILE_COUNT #.d.FILE_DATES.0
+		LSSp $datePointer &FILE_DATES:<A> @.l2
+		MOVp %1 &.a_datePo_4d5 
+		CALL ^assertFail %0 *1
+	.a7:	GOTO @.l2  	; }
+	.e3:	ADDi %0 #BUILT_IN_FILE_COUNT $index	; global fileCount = BUILT_IN_FILE_COUNT + index
+		POKE &fileCount %0 
+		CALL &sortFiles %0 *1	; expects sortFiles() -> void @ fileList2.impala:133:14
+		POKE &filesAreInited #1 	; global filesAreInited = 1
+	.f0:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+findFile:	FUNC	; signature func findFile(ptr s0) -> int @ fileList2.impala:139:1
+	$file:	OUTi
+	$s0:	INPp
+;-----------------------------------------------------------------------------
+		CALL &initFilesIfNecessary %0 *1	; expects initFilesIfNecessary() -> void @ fileList2.impala:142:24
+		MOVi $file #0 	; for (file = 0 to global fileCount)
+		PEEK %0 &fileCount 
+		GEQi #0 %0 @.e0
+	.l1:	MOVp %2 $s0 	; if ((int)strcmp(s0, global FILES[file].name) == 0) goto found
+		MULi %4 $file #.z.File
+		ADDp %3 &FILES %4
+		PEEK %3 %3 #.o.File.name
+		CALL &strcmp %1 *3	; expects strcmp(ptr, ptr) -> int @ fileList2.impala:144:48
+		NEQi %1 #0 @.f2
+		RETU   	; goto found
+	.f2:	FORi $file %0 @.l1
+	.e0:	MOVi $file #-1 	; file = -1
+	found:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+lower:	FUNC	; signature func lower(ptr s) -> void @ fileList2.impala:149:1
+		PARA *1
+	$s:	INPp
+	$p:	LOCp
+	$c:	LOCi
+;-----------------------------------------------------------------------------
+		MOVp $p $s 	; p = s
+	.l0:	PEEK $c $p 	; while ((c = (int)*p) != 0) 
+		EQUi $c #0 @.e1
+		LSSi $c #'A' @.f3	; if (c >= 'A' && c <= 'Z') *p = c + ('a' - 'A')
+		GRTi $c #'Z' @.f3
+		! SUBi <A> #'a' #'A'	; *p = c + ('a' - 'A')
+		ADDi %0 $c <A>
+		POKE $p %0 
+	.f3:	ADDp $p $p #1	; p = p + 1
+		GOTO @.l0  	; }
+	.e1:	RETU   	; }
+
+.s_exe_4d2:	CNST *4
+	DATs exe
+	DATi #0
+.s_sys_4d3:	CNST *4
+	DATs sys
+	DATi #0
+.s_txt_4d4:	CNST *4
+	DATs txt
+	DATi #0
+.s_bin_4d5:	CNST *4
+	DATs bin
+	DATi #0
+.s_about_4d6:	CNST *6
+	DATs about
+	DATi #0
+.s_111384_4d7:	CNST *9
+	DATs 11/13/84
+	DATi #0
+.s_advent_4d8:	CNST *7
+	DATs advent
+	DATi #0
+.s_22178_4d9:	CNST *9
+	DATi #32
+	DATs 2/21/78
+	DATi #0
+.s_blupri_4da:	CNST *9
+	DATs bluprint
+	DATi #0
+.s_6579_4db:	CNST *9
+	DATi #32
+	DATs 6/ 5/79
+	DATi #0
+.s_calc_4dc:	CNST *5
+	DATs calc
+	DATi #0
+.s_112577_4dd:	CNST *9
+	DATs 11/25/77
+	DATi #0
+.s_chess_4de:	CNST *6
+	DATs chess
+	DATi #0
+.s_3684_4df:	CNST *9
+	DATi #32
+	DATs 3/ 6/84
+	DATi #0
+.s_disasm_4e0:	CNST *7
+	DATs disasm
+	DATi #0
+.s_fredri_4e1:	CNST *8
+	DATs fredrik
+	DATi #0
+.s_71484_4e2:	CNST *9
+	DATi #32
+	DATs 7/14/84
+	DATi #0
+.s_life_4e3:	CNST *5
+	DATs life
+	DATi #0
+.s_31279_4e4:	CNST *9
+	DATi #32
+	DATs 3/12/79
+	DATi #0
+.s_magnus_4e5:	CNST *7
+	DATs magnus
+	DATi #0
+.s_62284_4e6:	CNST *9
+	DATi #32
+	DATs 6/22/84
+	DATi #0
+.s_patch_4e7:	CNST *6
+	DATs patch
+	DATi #0
+.s_21884_4e8:	CNST *9
+	DATi #32
+	DATs 2/18/84
+	DATi #0
+.s_permut_4e9:	CNST *8
+	DATs permut8
+	DATi #0
+.s_3183_4ea:	CNST *9
+	DATi #32
+	DATs 3/ 1/83
+	DATi #0
+.s_prawno_4eb:	CNST *8
+	DATs prawnos
+	DATi #0
+.s_101184_4ec:	CNST *9
+	DATs 10/11/84
+	DATi #0
+.s_readme_4ed:	CNST *7
+	DATs readme
+	DATi #0
+.s_121479_4ee:	CNST *9
+	DATs 12/14/79
+	DATi #0
+.s_versio_4ef:	CNST *8
+	DATs version
+	DATi #0
+	! EQUi #DEBUG #0 @.noAssertStrings
+.a_global_4d2:	CNST *42
+	DATs (global fileCount == BUILT_IN_FILE_COUNT)
+	DATi #0
+.a_filePo_4d3:	CNST *46
+	DATs (filePointer < &global FILES[MAX_FILE_COUNT])
+	DATi #0
+.a_namePo_4d4:	CNST *54
+	DATs (namePointer < &global FILE_NAMES[MAX_FILE_COUNT, 0])
+	DATi #0
+.a_datePo_4d5:	CNST *54
+	DATs (datePointer < &global FILE_DATES[MAX_FILE_COUNT, 0])
+	DATi #0
+.noAssertStrings:	!

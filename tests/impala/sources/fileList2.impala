@@ -1,0 +1,157 @@
+/*
+	Prawn OS Command Prompt - ported to Impala 2.
+
+	This is `fileList.impala` rewritten with the 2.0 type system; the 1.0 original stays in the corpus
+	beside it as backward-compatibility coverage. The port is what the 2.0 features are FOR, so the two
+	files are meant to be read as a diff:
+
+	  - A four-word record hand-addressed through `FILE_FIELD_NAME`..`FILE_FIELD_COUNT` becomes a
+	    `struct File`. The five consts go away, and so does every `i * FILE_FIELD_COUNT + FILE_FIELD_x`
+	    - the stride is now the assembler's `.z.File` and the offset its `.o.File.name`.
+	  - `FILE_NAMES[MAX_FILE_COUNT * (MAX_FILE_NAME_LENGTH + 1)]` becomes a rectangular
+	    `[MAX_FILE_COUNT, MAX_FILE_NAME_LENGTH + 1]`, so a row is `&FILE_NAMES[i, 0]` instead of a
+	    pointer the author has to remember to advance by the row length.
+	  - The three-way swap in `sortFiles` was `copy (FILE_FIELD_COUNT from .. to ..)` through a scratch
+	    array plus two saved pointers; whole-struct assignment says the same thing in three lines and
+	    the word count is `.z.File`, not a const that has to be kept in step with the record.
+
+	The built-in table's DATA rows assemble to the same words as the 1.0 version's - that equivalence is
+	the point, and `tests/impala/golden/fileList2.gazl` is the record of it.
+
+	Not run by the gate: `findFirmwarePatch` is a host native, so this compiles and link-checks only,
+	exactly as `fileList.impala` does.
+*/
+
+extern native findFirmwarePatch	// findFirmwarePatch(int index, int nameMaxLength, int name[31 + 1], int* size, int modDate[8 + 1]) -> int : returns 1 if found, returns 0 if no more patches available (which also means next call will refresh the list).
+
+const int FILE_TYPE_COUNT = 4
+const int FILE_TYPE_EXE = 0
+const int FILE_TYPE_SYS = 1
+const int FILE_TYPE_TXT = 2
+const int FILE_TYPE_BIN = 3
+readonly pointer array FILE_TYPE_STRINGS[FILE_TYPE_COUNT] = {
+	"exe", "sys", "txt", "bin"
+}
+
+struct File {
+	pointer name;
+	int type;
+	int size;
+	pointer date
+}
+
+const int MAX_FILE_COUNT = 100
+const int MAX_FILE_NAME_LENGTH = 31
+const int FILE_DATE_LENGTH = 8
+const int BUILT_IN_FILE_COUNT = 14
+global int fileCount = BUILT_IN_FILE_COUNT
+
+global File array FILES[MAX_FILE_COUNT] = {
+	  { name: "about"	, type: FILE_TYPE_TXT	, size: 2	, date: "11/13/84" }
+	, { name: "advent"	, type: FILE_TYPE_EXE	, size: 91	, date: " 2/21/78" }
+	, { name: "bluprint", type: FILE_TYPE_TXT	, size: 2 	, date: " 6/ 5/79" }
+	, { name: "calc"	, type: FILE_TYPE_EXE	, size: 7	, date: "11/25/77" }
+	, { name: "chess"	, type: FILE_TYPE_EXE	, size: 16	, date: " 3/ 6/84" }
+	, { name: "disasm"	, type: FILE_TYPE_EXE	, size: 4	, date: "11/25/77" }
+	, { name: "fredrik"	, type: FILE_TYPE_TXT	, size: 5	, date: " 7/14/84" }
+	, { name: "life"	, type: FILE_TYPE_EXE	, size: 5	, date: " 3/12/79" }
+	, { name: "magnus"	, type: FILE_TYPE_TXT	, size: 5	, date: " 6/22/84" }
+	, { name: "patch"	, type: FILE_TYPE_EXE	, size: 3  	, date: " 2/18/84" }
+	, { name: "permut8"	, type: FILE_TYPE_SYS	, size: 82	, date: " 3/ 1/83" }
+	, { name: "prawnos"	, type: FILE_TYPE_SYS	, size: 58	, date: "10/11/84" }
+	, { name: "readme"	, type: FILE_TYPE_TXT	, size: 2	, date: "12/14/79" }
+	, { name: "version"	, type: FILE_TYPE_TXT	, size: 1	, date: "11/13/84" }
+};
+global int array FILE_NAMES[MAX_FILE_COUNT, MAX_FILE_NAME_LENGTH + 1];
+global int array FILE_DATES[MAX_FILE_COUNT, FILE_DATE_LENGTH + 1];
+
+global int filesAreInited = 0;
+
+function strcmp(pointer s0, pointer s1)
+returns int d
+locals pointer a, pointer b, int c
+{
+	a = s0;
+	b = s1;
+	while ((d = (c = (int)*a) - (int)*b) == 0 && c != 0) {
+		a = a + 1;
+		b = b + 1;
+	}
+}
+
+function sortFiles()
+locals int i, int j, int minJ, pointer minS, pointer s, File temp
+{
+	for (i = 0 to global fileCount - 1) {
+		minJ = i;
+		minS = global FILES[i].name;
+		for (j = i + 1 to global fileCount) {
+			if ((int) strcmp((s = global FILES[j].name), minS) < 0) {
+				minJ = j;
+				minS = s;
+			}
+		}
+		temp = global FILES[minJ];
+		global FILES[minJ] = global FILES[i];
+		global FILES[i] = temp;
+	}
+}
+
+function initFilesIfNecessary()
+locals int index, int size, File pointer filePointer, pointer namePointer, pointer datePointer
+{
+	if (global filesAreInited == 0) {
+		assert(global fileCount == BUILT_IN_FILE_COUNT);
+		index = 0;
+		filePointer = &global FILES[BUILT_IN_FILE_COUNT];
+		namePointer = &global FILE_NAMES[0, 0];
+		datePointer = &global FILE_DATES[0, 0];
+		while ((int) findFirmwarePatch(index, MAX_FILE_NAME_LENGTH, namePointer, &size, datePointer) == 1) {
+			if (index < MAX_FILE_COUNT) {
+				filePointer->name = namePointer;
+				filePointer->type = FILE_TYPE_BIN;
+				filePointer->size = (size + 1023) / 1024;
+				filePointer->date = datePointer;
+				index = index + 1;
+				/* A struct pointer moves by scaled subscript, never by `+ 1` (that is E307), so one
+				   record on is `&p[1]` and the stride is `.z.File`. The row pointers name a row
+				   instead of adding a row length the author had to keep in step with the extent. */
+				filePointer = &filePointer[1];
+				namePointer = &global FILE_NAMES[index, 0];
+				datePointer = &global FILE_DATES[index, 0];
+				/* Strict `<`, exactly as the 1.0 original has it: the loop keeps calling
+				   findFirmwarePatch after the table is full - it has to, or the list never refreshes -
+				   and it hands over whatever these still point at. So the moment one becomes a
+				   one-past-the-end address is the moment the next call would write past the array. */
+				assert(filePointer < &global FILES[MAX_FILE_COUNT]);
+				assert(namePointer < &global FILE_NAMES[MAX_FILE_COUNT, 0]);
+				assert(datePointer < &global FILE_DATES[MAX_FILE_COUNT, 0]);
+			}
+		}
+		global fileCount = BUILT_IN_FILE_COUNT + index;
+
+		sortFiles();
+
+		global filesAreInited = 1;
+	}
+}
+
+function findFile(pointer s0)
+returns int file
+{
+	initFilesIfNecessary();
+	for (file = 0 to global fileCount)
+		if ((int)strcmp(s0, global FILES[file].name) == 0) goto found;
+	file = -1;
+found: ;
+}
+
+function lower(pointer s)
+locals pointer p, int c
+{
+	p = s;
+	while ((c = (int)*p) != 0) {
+		if (c >= 'A' && c <= 'Z') *p = c + ('a' - 'A');
+		p = p + 1;
+	}
+}
