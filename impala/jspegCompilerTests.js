@@ -1371,6 +1371,50 @@ console.log("impala.jspeg compiler spills initializer constants only once the sc
 	console.log("impala.jspeg compiler folds a wholly constant multidimensional subscript at assembly");
 }
 
+// TWO Impala modules meeting on one struct layout. fileList2.impala DEFINES `struct File` and emits
+// `.o.File.*` / `.z.File` as `! DEFi`; disasm2.impala declares the same shape `extern struct` and emits
+// only references. Nothing else covers this: externStruct.impala proves a HOST can supply the layout, and
+// the per-file gate cannot see it either - assembleOnly deliberately reads any unresolved `.o.`/`.z.` as
+// NEEDS_HOST, so disasm2 alone is waved through by design.
+//
+// The two GAZLCmd stages are what make this decidable. Assembly resolves `!` directives and complains
+// "Symbol not previously defined" WITH a line; linking resolves calls and complains "Symbol not found"
+// WITHOUT one. So reaching the link stage proves every `.o.File.*` reference in disasm2 found its
+// definition in fileList2 - and the negative case below proves the check is not vacuous.
+if (haveGazlCmd()) {
+	const sourcesDir = path.join(dir, "..", "tests", "impala", "sources");
+	const read = (name) => canonicalizeNewlines(
+		fs.readFileSync(path.join(sourcesDir, name), IMPALA_ENCODING));
+	// Distinct random ids: both modules mint `.s_<text>_<id>` string labels, and one pool would collide.
+	const link = (disasmSource) => {
+		const gazl = compileWithJsImpala(read("fileList2.impala"), { randomId: 0x1000 })
+			+ "\n" + compileWithJsImpala(disasmSource, { randomId: 0x9000 });
+		const linkedPath = path.join(dir, "..", "tests", "impala", "erroneous", "structLink.gazl");
+		fs.mkdirSync(path.dirname(linkedPath), { recursive: true });
+		fs.writeFileSync(linkedPath, gazl, IMPALA_ENCODING);
+		const result = childProcess.spawnSync(
+			path.join(dir, "..", "output", process.platform === "win32" ? "GAZLCmd.exe" : "GAZLCmd"),
+			[linkedPath, ".no-entry-point", "DEBUG", "0"], { encoding: "latin1", timeout: 30000 });
+		return ((result.stderr || "").split("\n").find((l) => l.trim()) || "(no output)").trim();
+	};
+
+	// Linking throws, so its complaint arrives as `Exception: Symbol not found ...`; assembly's does not.
+	const agreed = link(read("disasm2.impala"));
+	assert(/Symbol not found\b/.test(agreed) && !/\.[oz]\.File/.test(agreed),
+		`fileList2 + disasm2 must agree on the File layout and reach linking, but assembly said: ${agreed}`);
+
+	// Rename ONE field on the extern side only. Same size, same order, same everything else.
+	const renamed = read("disasm2.impala")
+		.replace("int type; int size", "int kind; int size")
+		.replace("global FILES[file].type", "global FILES[file].kind");
+	assert(renamed.indexOf("int kind") >= 0 && renamed.indexOf(".kind") >= 0, "the rename did not apply");
+	const disagreed = link(renamed);
+	assert(/^Symbol not previously defined\b/.test(disagreed) && /\.o\.File\.kind/.test(disagreed),
+		`a field the definer does not have must fail to assemble, but got: ${disagreed}`);
+
+	console.log("impala.jspeg compiler links two modules through one struct layout, and refuses a mismatch");
+}
+
 // Surplus initializer values used to be read by nobody and vanish: the fill loops stop at the extent, so
 // nothing was emitted for them and the assembler had nothing wrong to see. (A surplus FIELD is already
 // E456 - naming the fields closed that one for free.) A flat `int array a[2] = { 7, 8, 9 }` is a different
