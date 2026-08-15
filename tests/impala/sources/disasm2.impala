@@ -44,7 +44,8 @@ extern native launch
 /* Documented signature, so it can be a CHECKED prototype instead of a comment; returns the count
    loaded, or -1 on error. output/input/launch/sleep stay name-only: nothing here states their
    shapes, and Impala 2's rule is not to claim one it cannot verify. */
-extern native loadText(int pointer fileName, int offset, int maxCount, int pointer destination) returns int loaded
+extern native loadText(int pointer fileName, int offset, int maxCount, int pointer destination)
+		returns int loaded
 extern native sleep
 
 /* -------------------------------------- Defined in fileList2.impala ----------------------------------------------- */
