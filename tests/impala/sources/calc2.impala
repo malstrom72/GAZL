@@ -14,6 +14,11 @@
 	float`. The pairing is the struct, the stride is `.z.MathOp`, and the call is checked against the
 	signature - so the cast is gone and with it the hole it papered over.
 
+	The pointers are typed as well - `int pointer` for the strings it scans, `float pointer` for the
+	value out-parameter every parse function fills, `float array` for the A-Z memories. That deleted
+	88 casts on its own and changed not one emitted instruction: all 88 were no-ops that existed
+	because a 1.0 `pointer` deref and a 1.0 `array` element have no type to begin with.
+
 	The emitted table is the same words in the same order; see tests/impala/golden/calc2.gazl. A funcptr
 	field being CALLED out of a struct array is proved on the VM by structFuncTable.impala - nothing in
 	the corpus did that before these two files.
@@ -45,25 +50,25 @@ const float PI = 3.14159265358979323846;
 const float TWICE_PI = PI * 2.0;
 const float COS_EPSILON = 1.0e-6;
 
-global pointer lastError;
+global int pointer lastError;
 
-global array memoryUsed['z' - 'a' + 1];
-global array memory['z' - 'a' + 1];
+global int array memoryUsed['z' - 'a' + 1];
+global float array memory['z' - 'a' + 1];
 global float lastResult = 0.0;
 
-function strcmp(pointer s0, pointer s1)
+function strcmp(int pointer s0, int pointer s1)
 returns int d
-locals pointer a, pointer b, int c
+locals int pointer a, int pointer b, int c
 {
 	a = s0;
 	b = s1;
-	while ((d = (c = (int) *a) - (int) *b) == 0 && c != 0) {
+	while ((d = (c = *a) - *b) == 0 && c != 0) {
 		a = a + 1;
 		b = b + 1;
 	}
 }
 
-function error(pointer s)
+function error(int pointer s)
 {
 	if (global lastError == null) global lastError = s;
 }
@@ -157,13 +162,13 @@ locals	float a
 function log2(float x)
 returns float y
 {
-	y = (float) log(x) * LOG2R;
+	y = log(x) * LOG2R;
 }
 
 function log10(float x)
 returns float y
 {
-	y = (float) log(x) * LOG10R;
+	y = log(x) * LOG10R;
 }
 
 function trunc(float x)
@@ -177,7 +182,7 @@ function fmod(float x, float y)
 returns float z
 {
 	if (y == 0.0) error("Division by zero");
-	else z = x - (float) trunc(x / y) * y;
+	else z = x - trunc(x / y) * y;
 }
 
 /*
@@ -198,7 +203,7 @@ locals	float a
 		, float m
 		, float t
 {
-	m = (float) fmod(x, TWICE_PI);
+	m = fmod(x, TWICE_PI);
 	m = -m * m;
 	a = 1.0;
 	n = 1.0;
@@ -215,7 +220,7 @@ locals	float a
 function sin(float x)
 returns float y
 {
-	y = (float) cos(x - HALF_PI);
+	y = cos(x - HALF_PI);
 }
 
 function tan(float x)
@@ -223,9 +228,9 @@ returns float y
 locals	float c
 {
 	y = 0.0;
-	c = (float) cos(x);
+	c = cos(x);
 	if (c == 0.0) error("Domain error");
-	else y = (float) sin(x) / c;
+	else y = sin(x) / c;
 }
 
 function pow(float x, float y)
@@ -235,7 +240,7 @@ locals	float a
 	z = 0.0;
 	a = x;
 	if (a < 0.0 && y == floor(y)) a = -a;
-	if (a > 0.0) z = (float) exp((float) log(a) * y);
+	if (a > 0.0) z = exp(log(a) * y);
 	else if (a < 0.0 || y <= 0.0) error("Domain error");
 	if (a != x && (y * 0.5) != floor(y * 0.5)) z = -z;
 }
@@ -255,13 +260,13 @@ returns float y
 function sqrt(float x)
 returns float y
 {
-	y = (float) pow(x, 0.5);
+	y = pow(x, 0.5);
 }
 
 const int FUNCTION_COUNT = 10;
 
 functype MathFn(float x) returns float
-struct MathOp { pointer name; MathFn fn }
+struct MathOp { int pointer name; MathFn fn }
 
 readonly MathOp array FUNCTIONS[FUNCTION_COUNT] = {
 	  { name: "ceil",  fn: ceilFunc }
@@ -290,11 +295,11 @@ returns int l
 	if (c >= 'A' && c <= 'Z') l = l + ('a' - 'A');
 }
 
-function eatWhite(pointer b)
-returns	pointer p
+function eatWhite(int pointer b)
+returns	int pointer p
 {
 	p = b;
-	while ((int) *p == ' ') p = p + 1;
+	while (*p == ' ') p = p + 1;
 }
 
 const float EPSILON_FLOAT = 1.0e-45
@@ -302,15 +307,15 @@ const float SMALL_FLOAT = 1.0e-5
 const float LARGE_FLOAT = 1.0e+10
 const float HUGE_FLOAT = 1.0e+38
 
-function hexToFloat(pointer b, pointer v)
-returns pointer p
+function hexToFloat(int pointer b, float pointer v)
+returns int pointer p
 locals	int i
 		, int c
 		, int d
 {
 	p = b;
 	i = 0;
-	while (((c = (int) *p) >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+	while (((c = *p) >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
 		if (c <= '9') d = (c - '0');
 		else d = ((c & ~0x20) - ('A' - 10));
 		i = (i << 4) | d;
@@ -319,8 +324,8 @@ locals	int i
 	*v = itof(i);
 }
 
-function intToHex(int i, pointer buffer)
-returns pointer p
+function intToHex(int i, int pointer buffer)
+returns int pointer p
 locals	int x
 {
 	x = i;
@@ -332,37 +337,37 @@ locals	int x
 	} while (x != 0);
 }
 
-function stringToFloat(pointer b, pointer v)
-returns	pointer p
+function stringToFloat(int pointer b, float pointer v)
+returns	int pointer p
 locals	float f
 		, float e
 		, int n
 		, int i
 		, int c
-		, pointer q
+		, int pointer q
 {
 	p = b;
 	f = 0.0;
-	while ((c = (int) *p) >= '0' && c <= '9') {
+	while ((c = *p) >= '0' && c <= '9') {
 		f = f * 10.0 + itof(c - '0');
 		p = p + 1;
 	}
-	if ((int) *p == '.') {
+	if (*p == '.') {
 		p = p + 1;
 		e = 0.1;
-		while ((c = (int) *p) >= '0' && c <= '9') {
+		while ((c = *p) >= '0' && c <= '9') {
 			f = f + e * itof(c - '0');
 			e = e * 0.1;
 			p = p + 1;
 		}
 	}
-	if ((c = (int) *p) == 'e' || c == 'E') {
+	if ((c = *p) == 'e' || c == 'E') {
 		q = p + 1;
 		e = 10.0;
-		if ((c = (int) *q) == '+') q = q + 1;
+		if ((c = *q) == '+') q = q + 1;
 		else if (c == '-') { e = 0.1; q = q + 1; }
 		n = 0;
-		while ((c = (int) *q) >= '0' && c <= '9') {
+		while ((c = *q) >= '0' && c <= '9') {
 			n = n * 10 + (c - '0');
 			q = q + 1;
 			p = q;
@@ -374,9 +379,9 @@ locals	float f
 }
 
 // buffer should hold at least 32 elements
-function floatToString(float f, int precision, pointer buffer)
-returns	pointer p
-locals float x, float y, int e, float g, pointer dp, pointer pp, pointer ep, int i
+function floatToString(float f, int precision, int pointer buffer)
+returns	int pointer p
+locals float x, float y, int e, float g, int pointer dp, int pointer pp, int pointer ep, int i
 {
 	assert(1 <= precision && precision <= 24);
 
@@ -445,19 +450,19 @@ locals float x, float y, int e, float g, pointer dp, pointer pp, pointer ep, int
 		
 		p = buffer + 2;
 		if (x >= 5.0) {
-			while ((int) dp[-1] == '9') *(dp = dp - 1) = '0';
+			while (dp[-1] == '9') *(dp = dp - 1) = '0';
 			
 			// If we are at spare position, set to '1' and include, otherwise, increment last non-9.
 			
 			if (dp == p) *(p = p - 1) = '1';
-			else dp[-1] = (int) dp[-1] + 1;
+			else dp[-1] = dp[-1] + 1;
 		}
 		
 		*pp = '.';
 		
 		// Trim trailing zeroes (and possibly '.').
 		
-		if (ep > pp) while ((int) ep[-1] == '0') ep = ep - 1;
+		if (ep > pp) while (ep[-1] == '0') ep = ep - 1;
 		if (ep - 1 == pp) ep = ep - 1;
 		
 		// Add any exponent and negative sign.
@@ -479,44 +484,44 @@ locals float x, float y, int e, float g, pointer dp, pointer pp, pointer ep, int
 	}
 }
 
-function evaluate(pointer b, pointer v, int precedence)
-returns pointer p
+function evaluate(int pointer b, float pointer v, int precedence)
+returns int pointer p
 locals	float f
-		, pointer q
-		, pointer s
+		, int pointer q
+		, int pointer s
 		, int c
 		, int i
 {
-	p = (pointer) eatWhite(b);
+	p = eatWhite(b);
 
-    switch ((int) *p == 0 to 128) {
+    switch (*p == 0 to 128) {
         case 0: error("Unexpected end of line");
         case '-': {
-			p = (pointer) evaluate(p + 1, v, PREFIX_PRECEDENCE);
-			*v = -(float) *v;
+			p = evaluate(p + 1, v, PREFIX_PRECEDENCE);
+			*v = -*v;
 		}
 		case '_': {
 			*v = global lastResult;
 			p = p + 1;
 		}
         case '(': {
-			p = (pointer) evaluate(p + 1, v, PARENTHESIS_PRECEDENCE);
-			if ((int) *p != ')') error("Expected ')'");
+			p = evaluate(p + 1, v, PARENTHESIS_PRECEDENCE);
+			if (*p != ')') error("Expected ')'");
 			p = p + 1;
 		}
 		case '0', '1', '2', '3', '4', '5', '6', '7', '8', '9': {
-			if ((int) *p == '0' && (int) lower(p[1]) == 'x') q = (pointer) hexToFloat(p + 2, v);
-			else q = (pointer) stringToFloat(p, v);
+			if (*p == '0' && lower(p[1]) == 'x') q = hexToFloat(p + 2, v);
+			else q = stringToFloat(p, v);
 			if (p == q) error("Invalid number");
 			p = q;
 		}
 		case 'e', 'E': {
-			if ((int) isalpha(p[1]) != FALSE) goto symbol;
+			if (isalpha(p[1]) != FALSE) goto symbol;
 			p = p + 1;
 			*v = E;
 		}
 		case 'p', 'P': {
-			if ((int) lower(p[1]) != 'i' || (int) isalpha(p[2]) != FALSE) goto symbol;
+			if (lower(p[1]) != 'i' || isalpha(p[2]) != FALSE) goto symbol;
 			p = p + 2;
 			*v = PI;
 		}
@@ -525,111 +530,111 @@ locals	float f
 				for (i = 0 to FUNCTION_COUNT) {
 					q = p;
 					s = global FUNCTIONS[i].name;
-					while ((c = (int) *s) != 0 && (int) lower(*q) == c) {
+					while ((c = *s) != 0 && lower(*q) == c) {
 						s = s + 1;
 						q = q + 1;
 					}
-					if ((int) *s == 0) {
-						q = (pointer) eatWhite(q);
-						if ((int) *q == '(') {
-							p = (pointer) evaluate(q + 1, v, PARENTHESIS_PRECEDENCE);
-							if ((int) *p != ')') error("Expected ')'");
+					if (*s == 0) {
+						q = eatWhite(q);
+						if (*q == '(') {
+							p = evaluate(q + 1, v, PARENTHESIS_PRECEDENCE);
+							if (*p != ')') error("Expected ')'");
 							p = p + 1;
-							(float) *v = (float) global FUNCTIONS[i].fn((float) *v);
+							*v = global FUNCTIONS[i].fn(*v);
 							goto wasFunction;
 						}
 					}
 				}
-				c = (int) lower(*p);
-				if ((int) isalpha(c) == FALSE || (int) isalpha(p[1]) == TRUE) error("Syntax error");
-				else if ((int) global memoryUsed[c - 'a'] == 0) error("Undefined variable");
+				c = lower(*p);
+				if (isalpha(c) == FALSE || isalpha(p[1]) == TRUE) error("Syntax error");
+				else if (global memoryUsed[c - 'a'] == 0) error("Undefined variable");
 				else {
 					p = p + 1;
-					*v = (float) global memory[c - 'a'];
+					*v = global memory[c - 'a'];
 				}
 			wasFunction: ;
 		}
     }
 	
 	repeat: {
-		p = (pointer) eatWhite(p);
+		p = eatWhite(p);
 
-		switch ((int) *p == '%' to ('|' + 1)) {
+		switch (*p == '%' to ('|' + 1)) {
 			case '|': {
 				if (precedence < BITWISE_PRECEDENCE) {
-					p = (pointer) evaluate(p + 1, &f, BITWISE_PRECEDENCE);
-					*v = itof(ftoi((float) *v) | ftoi(f));
+					p = evaluate(p + 1, &f, BITWISE_PRECEDENCE);
+					*v = itof(ftoi(*v) | ftoi(f));
 					goto repeat;
 				}
 			}
 			case '&': {
 				if (precedence < BITWISE_PRECEDENCE) {
-					p = (pointer) evaluate(p + 1, &f, BITWISE_PRECEDENCE);
-					*v = itof(ftoi((float) *v) & ftoi(f));
+					p = evaluate(p + 1, &f, BITWISE_PRECEDENCE);
+					*v = itof(ftoi(*v) & ftoi(f));
 					goto repeat;
 				}
 			}
 			case '^': {
 				if (precedence < BITWISE_PRECEDENCE) {
-					p = (pointer) evaluate(p + 1, &f, BITWISE_PRECEDENCE);
-					*v = itof(ftoi((float) *v) ^ ftoi(f));
+					p = evaluate(p + 1, &f, BITWISE_PRECEDENCE);
+					*v = itof(ftoi(*v) ^ ftoi(f));
 					goto repeat;
 				}
 			}
 			case '<': {
-				if ((int) p[1] == '<' && precedence < BITWISE_PRECEDENCE) {
-					p = (pointer) evaluate(p + 2, &f, BITWISE_PRECEDENCE);
-					*v = itof(ftoi((float) *v) << ftoi(f));
+				if (p[1] == '<' && precedence < BITWISE_PRECEDENCE) {
+					p = evaluate(p + 2, &f, BITWISE_PRECEDENCE);
+					*v = itof(ftoi(*v) << ftoi(f));
 					goto repeat;
 				}
 			}
 			case '>': {
-				if ((int) p[1] == '>' && precedence < BITWISE_PRECEDENCE) {
-					p = (pointer) evaluate(p + 2, &f, BITWISE_PRECEDENCE);
-					*v = itof(ftoi((float) *v) >>> ftoi(f));
+				if (p[1] == '>' && precedence < BITWISE_PRECEDENCE) {
+					p = evaluate(p + 2, &f, BITWISE_PRECEDENCE);
+					*v = itof(ftoi(*v) >>> ftoi(f));
 					goto repeat;
 				}
 			}
 			case '+': {
 				if (precedence < ADD_SUB_PRECEDENCE) {
-					p = (pointer) evaluate(p + 1, &f, ADD_SUB_PRECEDENCE);
-					*v = (float) *v + f;
+					p = evaluate(p + 1, &f, ADD_SUB_PRECEDENCE);
+					*v = *v + f;
 					goto repeat;
 				}
 			}
 			case '-': {
 				if (precedence < ADD_SUB_PRECEDENCE) {
-					p = (pointer) evaluate(p + 1, &f, ADD_SUB_PRECEDENCE);
-					*v = (float) *v - f;
+					p = evaluate(p + 1, &f, ADD_SUB_PRECEDENCE);
+					*v = *v - f;
 					goto repeat;
 				}
 			}
 			case '*': {
-				if ((int) p[1] == '*') {
+				if (p[1] == '*') {
 					if (precedence <= POW_PRECEDENCE) {
-						p = (pointer) evaluate(p + 2, &f, POW_PRECEDENCE);
-						*v = pow((float) *v, f);
+						p = evaluate(p + 2, &f, POW_PRECEDENCE);
+						*v = pow(*v, f);
 						goto repeat;
 					}
 				} else {
 					if (precedence < MUL_DIV_PRECEDENCE) {
-						p = (pointer) evaluate(p + 1, &f, MUL_DIV_PRECEDENCE);
-						*v = (float) *v * f;
+						p = evaluate(p + 1, &f, MUL_DIV_PRECEDENCE);
+						*v = *v * f;
 						goto repeat;
 					}
 				}
 			}
 			case '/': {
 				if (precedence < MUL_DIV_PRECEDENCE) {
-					p = (pointer) evaluate(p + 1, &f, MUL_DIV_PRECEDENCE);
+					p = evaluate(p + 1, &f, MUL_DIV_PRECEDENCE);
 					if (f == 0.0) error("Division by zero");
-					else *v = (float) *v / f;
+					else *v = *v / f;
 					goto repeat;
 				}
 			}
 			case '%': {
 				if (precedence < MUL_DIV_PRECEDENCE) {
-					p = (pointer) evaluate(p + 1, &f, MUL_DIV_PRECEDENCE);
+					p = evaluate(p + 1, &f, MUL_DIV_PRECEDENCE);
 					*v = fmod(*v, f);
 					goto repeat;
 				}
@@ -639,36 +644,36 @@ locals	float f
 }
 
 function main()
-locals	array s[256]
-		, pointer p
-		, pointer q
+locals	int array s[256]
+		, int pointer p
+		, int pointer q
 		, float f
 		, int c
 		, int assignTo
-		, array buffer[32]
+		, int array buffer[32]
 		, int i
 {
 	loop {
 		output("calc> ");
 		input(255, s);
 		
-		p = (pointer) eatWhite(s);
-		if ((int) *p == 0 || (int) strcmp(p, "quit") == 0) goto quit;
+		p = eatWhite(s);
+		if (*p == 0 || strcmp(p, "quit") == 0) goto quit;
 		
 		assignTo = -1;
-		c = (int) lower(*p);
-		if ((int) isalpha(c) != FALSE && c != 'e') {
-			q = (pointer) eatWhite(p + 1);
-			if ((int) *q == '=') {
-				p = (pointer) eatWhite(q + 1);
+		c = lower(*p);
+		if (isalpha(c) != FALSE && c != 'e') {
+			q = eatWhite(p + 1);
+			if (*q == '=') {
+				p = eatWhite(q + 1);
 				assignTo = c - 'a';
 			}
 		}
 				
 		global lastError = null;
-		p = (pointer) evaluate(p, &f, 0);
-		p = (pointer) eatWhite(p);
-		if ((int) *p != 0) error("Syntax error");
+		p = evaluate(p, &f, 0);
+		p = eatWhite(p);
+		if (*p != 0) error("Syntax error");
 		
 		if ((p = global lastError) != null) output(p);
 		else {

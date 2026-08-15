@@ -1,41 +1,41 @@
 ; Compiled with Impala version 2.0
 
 ; signatures version=1
-; signature extern const DEBUG : int @ disasm2.impala:28:1
-FILE_BUFFER_SIZE:	! DEFi #8192	; signature const FILE_BUFFER_SIZE : int @ disasm2.impala:29:1
-TERMINAL_COLUMNS:	! DEFi #80	; signature const TERMINAL_COLUMNS : int @ disasm2.impala:30:1
-TERMINAL_ROWS:	! DEFi #25	; signature const TERMINAL_ROWS : int @ disasm2.impala:31:1
-TERMINAL_TAB_SIZE:	! DEFi #4	; signature const TERMINAL_TAB_SIZE : int @ disasm2.impala:32:1
-; signature extern native output() -> unknown @ disasm2.impala:34:1
-; signature extern native input() -> unknown @ disasm2.impala:35:1
-; signature extern native inputEOF() -> unknown @ disasm2.impala:36:1
-; signature extern native launch() -> unknown @ disasm2.impala:37:1
-; signature extern native loadText() -> unknown @ disasm2.impala:38:1
-; signature extern native sleep() -> unknown @ disasm2.impala:39:1
-; signature extern const FILE_TYPE_COUNT : int @ disasm2.impala:43:1
-; signature extern const FILE_TYPE_EXE : int @ disasm2.impala:44:1
-; signature extern const FILE_TYPE_SYS : int @ disasm2.impala:45:1
-; signature extern const FILE_TYPE_TXT : int @ disasm2.impala:46:1
-; signature extern const FILE_TYPE_BIN : int @ disasm2.impala:47:1
-; signature extern array FILE_TYPE_STRINGS[] : ptr @ disasm2.impala:49:1
-; signature extern struct File { name : ptr, type : int, size : int, date : ptr } @ disasm2.impala:51:1
-; signature extern global fileCount : int @ disasm2.impala:53:1
-; signature extern array FILES[] : File @ disasm2.impala:54:1
-; signature extern func strcmp() -> unknown @ disasm2.impala:56:1
-; signature extern func findFile() -> unknown @ disasm2.impala:57:1
-; signature extern func lower() -> unknown @ disasm2.impala:58:1
-; signature extern func initFilesIfNecessary() -> unknown @ disasm2.impala:59:1
-FALSE:	! DEFi #0	; signature const FALSE : int @ disasm2.impala:63:1
-TRUE:	! DEFi #1	; signature const TRUE : int @ disasm2.impala:64:1
+; signature extern const DEBUG : int @ disasm2.impala:34:1
+FILE_BUFFER_SIZE:	! DEFi #8192	; signature const FILE_BUFFER_SIZE : int @ disasm2.impala:35:1
+TERMINAL_COLUMNS:	! DEFi #80	; signature const TERMINAL_COLUMNS : int @ disasm2.impala:36:1
+TERMINAL_ROWS:	! DEFi #25	; signature const TERMINAL_ROWS : int @ disasm2.impala:37:1
+TERMINAL_TAB_SIZE:	! DEFi #4	; signature const TERMINAL_TAB_SIZE : int @ disasm2.impala:38:1
+; signature extern native output() -> unknown @ disasm2.impala:40:1
+; signature extern native input() -> unknown @ disasm2.impala:41:1
+; signature extern native inputEOF() -> unknown @ disasm2.impala:42:1
+; signature extern native launch() -> unknown @ disasm2.impala:43:1
+; signature extern native loadText(int-ptr fileName, int offset, int maxCount, int-ptr destination) -> int @ disasm2.impala:47:1
+; signature extern native sleep() -> unknown @ disasm2.impala:48:1
+; signature extern const FILE_TYPE_COUNT : int @ disasm2.impala:52:1
+; signature extern const FILE_TYPE_EXE : int @ disasm2.impala:53:1
+; signature extern const FILE_TYPE_SYS : int @ disasm2.impala:54:1
+; signature extern const FILE_TYPE_TXT : int @ disasm2.impala:55:1
+; signature extern const FILE_TYPE_BIN : int @ disasm2.impala:56:1
+; signature extern array FILE_TYPE_STRINGS[] : int-ptr @ disasm2.impala:58:1
+; signature extern struct File { name : int-ptr, type : int, size : int, date : int-ptr } @ disasm2.impala:60:1
+; signature extern global fileCount : int @ disasm2.impala:62:1
+; signature extern array FILES[] : File @ disasm2.impala:63:1
+; signature extern func strcmp(int-ptr s0, int-ptr s1) -> int @ disasm2.impala:65:1
+; signature extern func findFile(int-ptr s0) -> int @ disasm2.impala:66:1
+; signature extern func lower(int-ptr s) -> void @ disasm2.impala:67:1
+; signature extern func initFilesIfNecessary() -> void @ disasm2.impala:68:1
+FALSE:	! DEFi #0	; signature const FALSE : int @ disasm2.impala:72:1
+TRUE:	! DEFi #1	; signature const TRUE : int @ disasm2.impala:73:1
 
 ;-----------------------------------------------------------------------------
-strlen:	FUNC	; signature func strlen(ptr s) -> int @ disasm2.impala:66:1
+strlen:	FUNC	; signature func strlen(int-ptr s) -> int @ disasm2.impala:75:1
 	$l:	OUTi
 	$s:	INPp
 	$a:	LOCp
 ;-----------------------------------------------------------------------------
 		MOVp $a $s 	; a = s
-	.l0:	PEEK %0 $a 	; while ((int)*a != 0) a = a + 1
+	.l0:	PEEK %0 $a 	; while (*a != 0) a = a + 1
 		EQUi %0 #0 @.e1
 		ADDp $a $a #1	; a = a + 1
 		GOTO @.l0  
@@ -44,7 +44,7 @@ strlen:	FUNC	; signature func strlen(ptr s) -> int @ disasm2.impala:66:1
 
 
 ;-----------------------------------------------------------------------------
-strcat:	FUNC	; signature func strcat(ptr d, ptr s) -> ptr @ disasm2.impala:75:1
+strcat:	FUNC	; signature func strcat(int-ptr d, int-ptr s) -> int-ptr @ disasm2.impala:84:1
 	$r:	OUTp
 	$d:	INPp
 	$s:	INPp
@@ -53,12 +53,12 @@ strcat:	FUNC	; signature func strcat(ptr d, ptr s) -> ptr @ disasm2.impala:75:1
 ;-----------------------------------------------------------------------------
 		MOVp $a $d 	; r = a = d
 		MOVp $r $d 
-	.l0:	PEEK %0 $a 	; while ((int)*a != 0) a = a + 1
+	.l0:	PEEK %0 $a 	; while (*a != 0) a = a + 1
 		EQUi %0 #0 @.e1
 		ADDp $a $a #1	; a = a + 1
 		GOTO @.l0  
 	.e1:	MOVp $b $s 	; b = s
-	.l2:	PEEK %0 $b 	; while ((*a = (int)*b) != 0) 
+	.l2:	PEEK %0 $b 	; while ((*a = *b) != 0) 
 		POKE $a %0 
 		EQUi %0 #0 @.e3
 		ADDp $a $a #1	; a = a + 1
@@ -68,22 +68,22 @@ strcat:	FUNC	; signature func strcat(ptr d, ptr s) -> ptr @ disasm2.impala:75:1
 
 
 ;-----------------------------------------------------------------------------
-outputLine:	FUNC	; signature func outputLine(ptr s) -> void @ disasm2.impala:88:1
+outputLine:	FUNC	; signature func outputLine(int-ptr s) -> void @ disasm2.impala:97:1
 		PARA *1
 	$s:	INPp
 ;-----------------------------------------------------------------------------
 		MOVp %1 $s 	; output(s)
-		CALL ^output %0 *2	; expects output(ptr) -> unknown @ disasm2.impala:90:11
+		CALL ^output %0 *2	; expects output(int-ptr) -> unknown @ disasm2.impala:99:11
 		MOVp %1 &.s__4d2 	; output("\n")
-		CALL ^output %0 *2	; expects output(int-ptr) -> unknown @ disasm2.impala:91:14
+		CALL ^output %0 *2	; expects output(int-ptr) -> unknown @ disasm2.impala:100:14
 		RETU   	; }
 
 	! ADDi <A> #FILE_BUFFER_SIZE #1
 .z.fileBuffer:	! DEFi #<A>
-fileBuffer:	GLOB *.z.fileBuffer	; signature array fileBuffer[] : int @ disasm2.impala:94:1
+fileBuffer:	GLOB *.z.fileBuffer	; signature array fileBuffer[] : int @ disasm2.impala:103:1
 
 ;-----------------------------------------------------------------------------
-main:	FUNC	; signature func main() -> void @ disasm2.impala:96:1
+main:	FUNC	; signature func main() -> void @ disasm2.impala:105:1
 		PARA *1
 .z.main.s:	! DEFi #256
 	$s:	LOCA *.z.main.s
@@ -101,23 +101,23 @@ main:	FUNC	; signature func main() -> void @ disasm2.impala:96:1
 .z.main.yn:	! DEFi #64
 	$yn:	LOCA *.z.main.yn
 ;-----------------------------------------------------------------------------
-		CALL &initFilesIfNecessary %0 *1	; expects initFilesIfNecessary() -> unknown @ disasm2.impala:100:24
+		CALL &initFilesIfNecessary %0 *1	; expects initFilesIfNecessary() -> void @ disasm2.impala:109:24
 		MOVp %1 &.s_GAZLdi_4d3 	; outputLine("GAZL disassembler v2.1.")
-		CALL &outputLine %0 *2	; expects outputLine(ptr) -> void @ disasm2.impala:101:39
+		CALL &outputLine %0 *2	; expects outputLine(int-ptr) -> void @ disasm2.impala:110:39
 		MOVp %1 &.s_Disass_4d4 	; output("Disassemble file: ")
-		CALL ^output %0 *2	; expects output(int-ptr) -> unknown @ disasm2.impala:102:30
+		CALL ^output %0 *2	; expects output(int-ptr) -> unknown @ disasm2.impala:111:30
 		MOVi %1 #255 	; input(255, s)
 		ADRL %2 $s *0
-		CALL ^input %0 *3	; expects input(int, ptr) -> unknown @ disasm2.impala:103:15
-		EQUi $s:0 #0 @stopIt	; if ((int)s[0] != 0) 
+		CALL ^input %0 *3	; expects input(int, int-ptr) -> unknown @ disasm2.impala:112:15
+		EQUi $s:0 #0 @stopIt	; if (s[0] != 0) 
 		ADRL %1 $s *0	; lower(s)
-		CALL &lower %0 *2	; expects lower(ptr) -> unknown @ disasm2.impala:105:11
-		ADRL %1 $s *0	; if ((file = (int)findFile(s)) < 0) outputLine("File not found")
-		CALL &findFile %0 *2	; expects findFile(ptr) -> unknown @ disasm2.impala:106:31
+		CALL &lower %0 *2	; expects lower(int-ptr) -> void @ disasm2.impala:114:11
+		ADRL %1 $s *0	; if ((file = findFile(s)) < 0) outputLine("File not found")
+		CALL &findFile %0 *2	; expects findFile(int-ptr) -> int @ disasm2.impala:115:26
 		MOVi $file %0 
 		GEQi %0 #0 @.f1
 		MOVp %1 &.s_Fileno_4d5 	; outputLine("File not found")
-		CALL &outputLine %0 *2	; expects outputLine(ptr) -> void @ disasm2.impala:106:66
+		CALL &outputLine %0 *2	; expects outputLine(int-ptr) -> void @ disasm2.impala:115:61
 		RETU   
 	.f1:	MULi %1 $file #.z.File	; if ((type = global FILES[file].type) != FILE_TYPE_EXE
 		ADDp %0 &FILES %1
@@ -126,40 +126,40 @@ main:	FUNC	; signature func main() -> void @ disasm2.impala:96:1
 		EQUi $type #FILE_TYPE_SYS @.f4
 		EQUi $type #FILE_TYPE_BIN @.f4
 		MOVp %1 &.s_Fileis_4d6 	; outputLine("File is not GAZL format")
-		CALL &outputLine %0 *2	; expects outputLine(ptr) -> void @ disasm2.impala:111:42
-		RETU   	; } else if ((int)strcmp(s, "permut8") == 0) 
-	.f4:	ADRL %1 $s *0	; if ((int)strcmp(s, "permut8") == 0) 
+		CALL &outputLine %0 *2	; expects outputLine(int-ptr) -> void @ disasm2.impala:120:42
+		RETU   	; } else if (strcmp(s, "permut8") == 0) 
+	.f4:	ADRL %1 $s *0	; if (strcmp(s, "permut8") == 0) 
 		MOVp %2 &.s_permut_4d7 
-		CALL &strcmp %0 *3	; expects strcmp(ptr, int-ptr) -> unknown @ disasm2.impala:112:41
+		CALL &strcmp %0 *3	; expects strcmp(int-ptr, int-ptr) -> int @ disasm2.impala:121:36
 		NEQi %0 #0 @.f6
 		MOVp %1 &.s_Protec_4d8 	; outputLine("Protected file")
-		CALL &outputLine %0 *2	; expects outputLine(ptr) -> void @ disasm2.impala:113:33
+		CALL &outputLine %0 *2	; expects outputLine(int-ptr) -> void @ disasm2.impala:122:33
 		RETU   	; } else 
 	.f6:	MOVp $p &.s_zl_4d9 	; p = ".zl"
 		NEQi $type #FILE_TYPE_BIN @.f8	; if (type == FILE_TYPE_BIN) p = ".gazl"
 		MOVp $p &.s_gazl_4da 	; p = ".gazl"
 	.f8:	ADRL %1 $s *0	; strcat(s, p)
 		MOVp %2 $p 
-		CALL &strcat %0 *3	; expects strcat(ptr, ptr) -> ptr @ disasm2.impala:117:17
+		CALL &strcat %0 *3	; expects strcat(int-ptr, int-ptr) -> int-ptr @ disasm2.impala:126:17
 		MOVi $offset #0 	; offset = 0
 		MOVi $row #0 	; row = 0
 		MOVi $col #0 	; col = 0
-	.l9:	ADRL %1 $s *0	; readCount = (int)loadText(s, offset, FILE_BUFFER_SIZE, global fileBuffer)
+	.l9:	ADRL %1 $s *0	; readCount = loadText(s, offset, FILE_BUFFER_SIZE, global fileBuffer)
 		MOVi %2 $offset 
 		MOVi %3 #FILE_BUFFER_SIZE 
 		MOVp %4 &fileBuffer 
-		CALL ^loadText %0 *5	; expects loadText(ptr, int, int, int-ptr) -> unknown @ disasm2.impala:122:79
+		CALL ^loadText %0 *5	; expects loadText(int-ptr, int, int, int-ptr) -> int @ disasm2.impala:131:74
 		MOVi $readCount %0 
 		GEQi $readCount #0 @.f10	; if (readCount < 0) 
 		MOVp %1 &.s_Reader_4db 	; outputLine("Read error")
-		CALL &outputLine %0 *2	; expects outputLine(ptr) -> void @ disasm2.impala:124:31
+		CALL &outputLine %0 *2	; expects outputLine(int-ptr) -> void @ disasm2.impala:133:31
 		RETU   	; goto stopIt
 		GOTO @.e11  	; } else 
 	.f10:	MOVp $p &fileBuffer 	; p = global fileBuffer
 		MOVp $b $p 	; b = p
 		ADDp $e $p $readCount	; e = p + readCount
 	.l12:	GEQp $p $e @.e13	; while (p < e) 
-		PEEK $c $p 	; c = (int)*p
+		PEEK $c $p 	; c = *p
 		ADDp $p $p #1	; p = p + 1
 		MOVi $i #1 	; i = 1
 		NEQi $c #9 @.f14	; if (c == 9) i = TERMINAL_TAB_SIZE - col % TERMINAL_TAB_SIZE
@@ -170,18 +170,18 @@ main:	FUNC	; signature func main() -> void @ disasm2.impala:96:1
 		LSSi $col #TERMINAL_COLUMNS @.l12
 	.t15:	ADDi $row $row #1	; if ((row = row + 1) >= TERMINAL_ROWS) 
 		LSSi $row #TERMINAL_ROWS @.f17
-		PEEK $c $p 	; c = (int)*p
+		PEEK $c $p 	; c = *p
 		POKE $p #0 	; *p = 0
 		MOVp %1 $b 	; output(b)
-		CALL ^output %0 *2	; expects output(ptr) -> unknown @ disasm2.impala:139:19
-		POKE $p $c 	; (int)*p = c
+		CALL ^output %0 *2	; expects output(int-ptr) -> unknown @ disasm2.impala:148:19
+		POKE $p $c 	; *p = c
 		MOVp $b $p 	; b = p
 		MOVp %1 &.s_Morey_4dc 	; output("More (y)? ")
-		CALL ^output %0 *2	; expects output(int-ptr) -> unknown @ disasm2.impala:142:30
+		CALL ^output %0 *2	; expects output(int-ptr) -> unknown @ disasm2.impala:151:30
 		MOVi %1 #63 	; input(63, yn)
 		ADRL %2 $yn *0
-		CALL ^input %0 *3	; expects input(int, ptr) -> unknown @ disasm2.impala:143:23
-		EQUi $yn:0 #'n' @stopIt	; if ((int)yn[0] == 'n' || (int)yn[0] == 'N') goto stopIt
+		CALL ^input %0 *3	; expects input(int, int-ptr) -> unknown @ disasm2.impala:152:23
+		EQUi $yn:0 #'n' @stopIt	; if (yn[0] == 'n' || yn[0] == 'N') goto stopIt
 		NEQi $yn:0 #'N' @.f19
 		RETU   	; goto stopIt
 	.f19:	MOVi $row #1 	; row = 1
@@ -189,11 +189,11 @@ main:	FUNC	; signature func main() -> void @ disasm2.impala:96:1
 		GOTO @.l12  	; }
 	.e13:	POKE $e #0 	; *e = 0
 		MOVp %1 $b 	; output(b)
-		CALL ^output %0 *2	; expects output(ptr) -> unknown @ disasm2.impala:151:16
+		CALL ^output %0 *2	; expects output(int-ptr) -> unknown @ disasm2.impala:160:16
 		ADDi $offset $offset $readCount	; offset = offset + readCount
 	.e11:	GRTi $readCount #0 @.l9	; } while (readCount > 0)
 		MOVp %1 &.s_Morey_4dc:10 	; outputLine("")
-		CALL &outputLine %0 *2	; expects outputLine(ptr) -> void @ disasm2.impala:155:19
+		CALL &outputLine %0 *2	; expects outputLine(int-ptr) -> void @ disasm2.impala:164:19
 	stopIt:	RETU   	; }
 
 .s__4d2:	CNST *2

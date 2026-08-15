@@ -15,6 +15,12 @@
 	    array plus two saved pointers; whole-struct assignment says the same thing in three lines and
 	    the word count is `.z.File`, not a const that has to be kept in step with the record.
 
+	  - Every `pointer` is now an `int pointer` and every `array` an `int array`, which is what
+	    retires the `(int)` casts on the derefs: a 1.0 `pointer` has no element type, so `*a` was
+	    untyped and every read of it had to say so. `findFirmwarePatch`'s signature moved out of its
+	    comment and into a checked prototype for the same reason - the `== 1` needed a cast only
+	    because a name-only extern returns `unknown`.
+
 	The built-in table's DATA rows assemble to the same words as the 1.0 version's - that equivalence is
 	the point, and `tests/impala/golden/fileList2.gazl` is the record of it.
 
@@ -22,22 +28,25 @@
 	exactly as `fileList.impala` does.
 */
 
-extern native findFirmwarePatch	// findFirmwarePatch(int index, int nameMaxLength, int name[31 + 1], int* size, int modDate[8 + 1]) -> int : returns 1 if found, returns 0 if no more patches available (which also means next call will refresh the list).
+/* The signature used to live in this comment; as a prototype it is checked at every call and the
+   result has a real type, so the `(int)` cast on the `== 1` below is gone. Returns 1 if found, 0 if
+   no more patches are available - which also means the next call refreshes the list. */
+extern native findFirmwarePatch(int index, int nameMaxLength, int pointer name, int pointer size, int pointer modDate) returns int found
 
 const int FILE_TYPE_COUNT = 4
 const int FILE_TYPE_EXE = 0
 const int FILE_TYPE_SYS = 1
 const int FILE_TYPE_TXT = 2
 const int FILE_TYPE_BIN = 3
-readonly pointer array FILE_TYPE_STRINGS[FILE_TYPE_COUNT] = {
+readonly int pointer array FILE_TYPE_STRINGS[FILE_TYPE_COUNT] = {
 	"exe", "sys", "txt", "bin"
 }
 
 struct File {
-	pointer name;
+	int pointer name;
 	int type;
 	int size;
-	pointer date
+	int pointer date
 }
 
 const int MAX_FILE_COUNT = 100
@@ -67,26 +76,26 @@ global int array FILE_DATES[MAX_FILE_COUNT, FILE_DATE_LENGTH + 1];
 
 global int filesAreInited = 0;
 
-function strcmp(pointer s0, pointer s1)
+function strcmp(int pointer s0, int pointer s1)
 returns int d
-locals pointer a, pointer b, int c
+locals int pointer a, int pointer b, int c
 {
 	a = s0;
 	b = s1;
-	while ((d = (c = (int)*a) - (int)*b) == 0 && c != 0) {
+	while ((d = (c = *a) - *b) == 0 && c != 0) {
 		a = a + 1;
 		b = b + 1;
 	}
 }
 
 function sortFiles()
-locals int i, int j, int minJ, pointer minS, pointer s, File temp
+locals int i, int j, int minJ, int pointer minS, int pointer s, File temp
 {
 	for (i = 0 to global fileCount - 1) {
 		minJ = i;
 		minS = global FILES[i].name;
 		for (j = i + 1 to global fileCount) {
-			if ((int) strcmp((s = global FILES[j].name), minS) < 0) {
+			if (strcmp((s = global FILES[j].name), minS) < 0) {
 				minJ = j;
 				minS = s;
 			}
@@ -98,7 +107,8 @@ locals int i, int j, int minJ, pointer minS, pointer s, File temp
 }
 
 function initFilesIfNecessary()
-locals int index, int size, File pointer filePointer, pointer namePointer, pointer datePointer
+locals int index, int size, File pointer filePointer, int pointer namePointer,
+		int pointer datePointer
 {
 	if (global filesAreInited == 0) {
 		assert(global fileCount == BUILT_IN_FILE_COUNT);
@@ -106,7 +116,7 @@ locals int index, int size, File pointer filePointer, pointer namePointer, point
 		filePointer = &global FILES[BUILT_IN_FILE_COUNT];
 		namePointer = &global FILE_NAMES[0, 0];
 		datePointer = &global FILE_DATES[0, 0];
-		while ((int) findFirmwarePatch(index, MAX_FILE_NAME_LENGTH, namePointer, &size, datePointer) == 1) {
+		while (findFirmwarePatch(index, MAX_FILE_NAME_LENGTH, namePointer, &size, datePointer) == 1) {
 			if (index < MAX_FILE_COUNT) {
 				filePointer->name = namePointer;
 				filePointer->type = FILE_TYPE_BIN;
@@ -136,21 +146,21 @@ locals int index, int size, File pointer filePointer, pointer namePointer, point
 	}
 }
 
-function findFile(pointer s0)
+function findFile(int pointer s0)
 returns int file
 {
 	initFilesIfNecessary();
 	for (file = 0 to global fileCount)
-		if ((int)strcmp(s0, global FILES[file].name) == 0) goto found;
+		if (strcmp(s0, global FILES[file].name) == 0) goto found;
 	file = -1;
 found: ;
 }
 
-function lower(pointer s)
-locals pointer p, int c
+function lower(int pointer s)
+locals int pointer p, int c
 {
 	p = s;
-	while ((c = (int)*p) != 0) {
+	while ((c = *p) != 0) {
 		if (c >= 'A' && c <= 'Z') *p = c + ('a' - 'A');
 		p = p + 1;
 	}

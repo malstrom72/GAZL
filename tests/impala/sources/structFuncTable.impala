@@ -28,7 +28,7 @@ function twice(int x) returns int r { r = x * 2; }
 function negate(int x) returns int r { r = 0 - x; }
 function square(int x) returns int r { r = x * x; }
 
-struct Op { pointer name; IntFn fn }
+struct Op { int pointer name; IntFn fn }
 
 readonly Op array OPS[3] = {
 	  { name: "twice",  fn: twice }
@@ -40,7 +40,7 @@ export function main()
 locals int i, int v
 {
 	for (i = 0 to 3) {
-		v = (int) global OPS[i].fn(7);			/* 14, -7, 49 */
+		v = global OPS[i].fn(7);			/* 14, -7, 49 */
 		printInt(v);
 		printLF();
 	}

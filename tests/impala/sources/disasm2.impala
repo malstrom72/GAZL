@@ -19,6 +19,12 @@
 	The field types come across too, which is why the `(int)` cast on the `type` read is gone: in 1.0
 	`FILES[...]` had no element type, so every read needed one.
 
+	The pointers are typed too, and the four `extern function` declarations now carry the real
+	signatures instead of trailing comments - so the calls are argument-checked and their results
+	have a type, which is what removes the `(int)` casts. `loadText` documented its shape in a
+	comment and so became a prototype; `output`, `input`, `launch` and `sleep` did not, and stay
+	name-only rather than have this file invent a claim it cannot verify.
+
 	Not run by the gate: `output`, `input`, `loadText` and `launch` are host natives, so this compiles
 	and link-checks only, exactly as `disasm.impala` does. The cross-module agreement is proved
 	separately by assembling it together with fileList2.gazl - see runJspegTests / the header of
@@ -35,7 +41,10 @@ extern native output
 extern native input
 extern native inputEOF
 extern native launch
-extern native loadText // loadText(pointer fileName, int offset, int maxCount, pointer destination) -> int : returns count loaded or -1 on error
+/* Documented signature, so it can be a CHECKED prototype instead of a comment; returns the count
+   loaded, or -1 on error. output/input/launch/sleep stay name-only: nothing here states their
+   shapes, and Impala 2's rule is not to claim one it cannot verify. */
+extern native loadText(int pointer fileName, int offset, int maxCount, int pointer destination) returns int loaded
 extern native sleep
 
 /* -------------------------------------- Defined in fileList2.impala ----------------------------------------------- */
@@ -46,46 +55,46 @@ const int FILE_TYPE_SYS
 const int FILE_TYPE_TXT
 const int FILE_TYPE_BIN
 
-extern pointer array FILE_TYPE_STRINGS[]
+extern int pointer array FILE_TYPE_STRINGS[]
 
-extern struct File { pointer name; int type; int size; pointer date }
+extern struct File { int pointer name; int type; int size; int pointer date }
 
 extern int fileCount
 extern File array FILES[]
 
-extern function strcmp // strcmp(pointer s0, pointer s1) -> int
-extern function findFile // findFile(pointer s0) -> int
-extern function lower // lower(pointer s)
-extern function initFilesIfNecessary // initFilesIfNecessary()
+extern function strcmp(int pointer s0, int pointer s1) returns int d
+extern function findFile(int pointer s0) returns int file
+extern function lower(int pointer s)
+extern function initFilesIfNecessary()
 
 /* ------------------------------------------------------------------------------------------------------------------ */
 
 const int FALSE = 0
 const int TRUE = 1
 
-function strlen(pointer s)
+function strlen(int pointer s)
 returns int l
-locals	pointer a
+locals	int pointer a
 {
 	a = s;
-	while ((int)*a != 0) a = a + 1;
+	while (*a != 0) a = a + 1;
 	l = a - s;
 }
 
-function strcat(pointer d, pointer s)
-returns pointer r
-locals	pointer a, pointer b
+function strcat(int pointer d, int pointer s)
+returns int pointer r
+locals	int pointer a, int pointer b
 {
 	r = a = d;
-	while ((int)*a != 0) a = a + 1;
+	while (*a != 0) a = a + 1;
 	b = s;
-	while ((*a = (int)*b) != 0) {
+	while ((*a = *b) != 0) {
 		a = a + 1;
 		b = b + 1;
 	}
 }
 
-function outputLine(pointer s)
+function outputLine(int pointer s)
 {
 	output(s);
 	output("\n");
@@ -94,22 +103,22 @@ function outputLine(pointer s)
 global int array fileBuffer[FILE_BUFFER_SIZE + 1]
 
 function main()
-locals	array s[256], int type, int offset, int readCount, int file, pointer p, pointer b, pointer e, int row, int col,
-		int c, int i, array yn[64]
+locals	int array s[256], int type, int offset, int readCount, int file, int pointer p, int pointer b,
+		int pointer e, int row, int col, int c, int i, int array yn[64]
 {
 	initFilesIfNecessary();
 	outputLine("GAZL disassembler v2.1.");
 	output("Disassemble file: ");
 	input(255, s);
-	if ((int)s[0] != 0) {
+	if (s[0] != 0) {
 		lower(s);
-		if ((file = (int)findFile(s)) < 0) outputLine("File not found");
+		if ((file = findFile(s)) < 0) outputLine("File not found");
 		else {
 			/* The field is typed, so no `(int)` cast and no `* FILE_FIELD_COUNT + FILE_FIELD_TYPE`. */
 			if ((type = global FILES[file].type) != FILE_TYPE_EXE
 					&& type != FILE_TYPE_SYS && type != FILE_TYPE_BIN) {
 				outputLine("File is not GAZL format");
-			} else if ((int)strcmp(s, "permut8") == 0) {
+			} else if (strcmp(s, "permut8") == 0) {
 				outputLine("Protected file");
 			} else {
 				p = ".zl";
@@ -119,7 +128,7 @@ locals	array s[256], int type, int offset, int readCount, int file, pointer p, p
 				row = 0;
 				col = 0;
 				do {
-					readCount = (int)loadText(s, offset, FILE_BUFFER_SIZE, global fileBuffer);
+					readCount = loadText(s, offset, FILE_BUFFER_SIZE, global fileBuffer);
 					if (readCount < 0) {
 						outputLine("Read error");
 						goto stopIt;
@@ -128,20 +137,20 @@ locals	array s[256], int type, int offset, int readCount, int file, pointer p, p
 						b = p;
 						e = p + readCount;
 						while (p < e) {
-							c = (int)*p;
+							c = *p;
 							p = p + 1;
 							i = 1;
 							if (c == 9) i = TERMINAL_TAB_SIZE - col % TERMINAL_TAB_SIZE;
 							if (c == 10 || (col = col + i) >= TERMINAL_COLUMNS) {
 								if ((row = row + 1) >= TERMINAL_ROWS) {
-									c = (int)*p;
+									c = *p;
 									*p = 0;
 									output(b);
-									(int)*p = c;
+									*p = c;
 									b = p;
 									output("More (y)? ");
 									input(63, yn);
-									if ((int)yn[0] == 'n' || (int)yn[0] == 'N') goto stopIt;
+									if (yn[0] == 'n' || yn[0] == 'N') goto stopIt;
 									row = 1;
 								}
 								col = 0;

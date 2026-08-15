@@ -38,7 +38,7 @@ square:	FUNC	; signature func square(int x) -> int @ structFuncTable.impala:29:1
 .o.Op.fn:	! DEFi #<a>
 	! ADDi <a> #<a> #1
 .z.Op:	! DEFi #<a>
-; signature struct Op { name : ptr, fn : IntFn } @ structFuncTable.impala:31:1
+; signature struct Op { name : int-ptr, fn : IntFn } @ structFuncTable.impala:31:1
 	! MULi <A> #3 #.z.Op
 .z.OPS:	! DEFi #<A>
 OPS:	CNST *.z.OPS	; signature array OPS[3] : Op @ structFuncTable.impala:33:1
@@ -53,10 +53,10 @@ main:	FUNC	; signature export func main() -> void @ structFuncTable.impala:39:1
 ;-----------------------------------------------------------------------------
 		MOVi $i #0 	; for (i = 0 to 3) 
 		GEQi #0 #3 @.e0
-	.l1:	MULi %1 $i #.z.Op	; v = (int) global OPS[i].fn(7)
+	.l1:	MULi %1 $i #.z.Op	; v = global OPS[i].fn(7)
 		ADDp %0 &OPS %1
 		MOVi %2 #7 
-		PEEK %0 %0 #.o.Op.fn	; expects function(int) -> int @ structFuncTable.impala:43:32
+		PEEK %0 %0 #.o.Op.fn	; expects function(int) -> int @ structFuncTable.impala:43:26
 		CALL %0 %1 *2
 		MOVi $v %1 
 		MOVi %1 $v 	; printInt(v)
@@ -64,7 +64,7 @@ main:	FUNC	; signature export func main() -> void @ structFuncTable.impala:39:1
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structFuncTable.impala:45:12
 		FORi $i #3 @.l1	; }
 	.e0:	PEEK %1 &OPS:.o.Op.name 	; print(global OPS[0].name)
-		CALL ^print %0 *2	; expects print(ptr) -> unknown @ structFuncTable.impala:47:27
+		CALL ^print %0 *2	; expects print(int-ptr) -> unknown @ structFuncTable.impala:47:27
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structFuncTable.impala:48:11
 		RETU   	; }
 
