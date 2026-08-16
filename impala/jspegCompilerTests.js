@@ -1371,6 +1371,30 @@ console.log("impala.jspeg compiler spills initializer constants only once the sc
 	console.log("impala.jspeg compiler folds a wholly constant multidimensional subscript at assembly");
 }
 
+// An extern prototype's RETURN NAME is the one declarator name nothing reads: the proto keeps only
+// type/elem/struct, and the emitted row prints `-> int`. Requiring one made the author invent an
+// identifier that is never printed nor referenced - and the sibling `functype f() returns V` had never
+// required it, so the two declaration forms disagreed for no reason. Both spellings must now mean
+// exactly the same thing, which is what this pins: same row, same everything.
+{
+	const proto = (ret) => "extern native f(int a, int b) returns " + ret
+		+ "\nfunction main() locals int r { r = f(1, 2); }\n";
+	const bare = compileWithJsImpala(proto("int"), { randomId: 42, retabulate: false });
+	const named = compileWithJsImpala(proto("int n"), { randomId: 42, retabulate: false });
+	assert(bare === named, `a prototype return name must not change anything it emits\n${bare}\n---\n${named}`);
+	assert(/signature extern native f\(int a, int b\) -> int\b/.test(bare),
+		`the row must carry the real types either way\n${bare}`);
+	// The name being optional must not make the RETURN optional: no `returns` at all is still void, and
+	// the by-value and multi-return doors still shut on the bare form.
+	expectCompileOutcome("bare prototype return", "void is not int",
+		"extern native f(int a)\nfunction main() locals int r { r = f(1); }\n", "E303");
+	expectCompileOutcome("bare prototype return", "struct by value",
+		"struct V { int a; int b }\nextern native n() returns V\nfunction main() { }\n", "E427");
+	expectCompileOutcome("bare prototype return", "multiple returns",
+		"extern native n() returns int, int\nfunction main() { }\n", "E428");
+	console.log("impala.jspeg compiler takes an extern prototype return with or without a name, identically");
+}
+
 // TWO Impala modules meeting on one struct layout. fileList2.impala DEFINES `struct File` and emits
 // `.o.File.*` / `.z.File` as `! DEFi`; disasm2.impala declares the same shape `extern struct` and emits
 // only references. Nothing else covers this: externStruct.impala proves a HOST can supply the layout, and

@@ -142,6 +142,9 @@ values at load, so the same `.gazl` runs against any layout with no recompile. A
 still parses and still asserts nothing. When a prototype and a real definition disagree in one build, that
 is `E437`.
 
+The return may be named or bare - `returns int` and `returns int n` compile to the same thing, because a
+prototype records only the type. Parameter names are not optional: they are printed in the signature row.
+
 ## Diagnostics became citable
 
 1.0 already had a caret and a line and column. What it did not have: a code, a fix-it note, warnings, or

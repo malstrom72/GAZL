@@ -5006,8 +5006,17 @@ ExternDecl  <-  EXTERN _                                              { $$.scope
                                                                              row carries real types. */
                                                                         $$parser.pendingProto = { args: $$parser.copyParams($inp, $inp.n), ret: undefined };
                                                                       }
-                      ( RETURNS _ out:VarDecl                         { if ($$parser.pendingProto) $$parser.pendingProto.ret = { type: $out.type, elem: $out.elem, struct: $out.struct, name: $out.name }; }
-                        ( ',' _ VarDecl                               {   /* PARKED for Impala 3.0 - see design/ParkedFeatures.md */
+                      ( RETURNS _ out:TypeDeclr                       {   /* The name is OPTIONAL, as it already was for
+                                                                             the sibling `functype ... returns V`: only
+                                                                             type/elem/struct are read out of it, so
+                                                                             `returns int` says everything `returns int n`
+                                                                             did without making the author invent an
+                                                                             identifier that is never printed nor
+                                                                             referenced. TypeDeclr rather than a second
+                                                                             rule for exactly that reason - the two
+                                                                             declaration forms had no business differing. */
+                                                                          if ($$parser.pendingProto) $$parser.pendingProto.ret = { type: $out.type, elem: $out.elem, struct: $out.struct, name: $out.name }; }
+                        ( ',' _ TypeDeclr                             {   /* PARKED for Impala 3.0 - see design/ParkedFeatures.md */
                                                                           $$parser.fail('Multiple return values are not supported in Impala 2.0',
                                                                                   $$s, $$i, 'E428',
                                                                                   'declare a single return value for this extern');

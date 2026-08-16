@@ -32,7 +32,7 @@
    result has a real type, so the `(int)` cast on the `== 1` below is gone. Returns 1 if found, 0 if
    no more patches are available - which also means the next call refreshes the list. */
 extern native findFirmwarePatch(int index, int nameMaxLength, int pointer name, int pointer size,
-		int pointer modDate) returns int found
+		int pointer modDate) returns int
 
 const int FILE_TYPE_COUNT = 4
 const int FILE_TYPE_EXE = 0

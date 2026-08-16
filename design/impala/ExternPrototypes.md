@@ -1,7 +1,11 @@
 # Extern prototypes / the extern linking model (design note)
 
-Status: **"allow + validate" IMPLEMENTED** (the recommendation below). `extern native f(int a) returns int q`
-is accepted; calls against a prototyped extern are argument-count and type-checked and get a real result
+Status: **"allow + validate" IMPLEMENTED** (the recommendation below). `extern native f(int a) returns int`
+is accepted - the return name is optional, and was briefly required for no reason: only its TYPE is ever
+read, so `returns int q` made the author mint an identifier that reaches neither the row nor any check,
+while the sibling `functype f() returns V` had never asked for one. Parameter names stay required; they
+are printed in the row. Calls against a prototyped extern are argument-count and type-checked and get a
+real result type; calls against a prototyped extern are argument-count and type-checked and get a real result
 type; the emitted row carries real types (`extern native printInt(int n) -> void`). Name-only externs are
 unchanged and still assert nothing (`() -> unknown`, a wildcard the validator skips), so prototypes are
 ALLOWED, never demanded. Fixture: `tests/impala/sources/externPrototype.impala`.

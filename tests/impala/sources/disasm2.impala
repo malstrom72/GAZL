@@ -45,7 +45,7 @@ extern native launch
    loaded, or -1 on error. output/input/launch/sleep stay name-only: nothing here states their
    shapes, and Impala 2's rule is not to claim one it cannot verify. */
 extern native loadText(int pointer fileName, int offset, int maxCount, int pointer destination)
-		returns int loaded
+		returns int
 extern native sleep
 
 /* -------------------------------------- Defined in fileList2.impala ----------------------------------------------- */
@@ -63,8 +63,8 @@ extern struct File { int pointer name; int type; int size; int pointer date }
 extern int fileCount
 extern File array FILES[]
 
-extern function strcmp(int pointer s0, int pointer s1) returns int d
-extern function findFile(int pointer s0) returns int file
+extern function strcmp(int pointer s0, int pointer s1) returns int
+extern function findFile(int pointer s0) returns int
 extern function lower(int pointer s)
 extern function initFilesIfNecessary()
 
