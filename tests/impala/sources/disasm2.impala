@@ -21,6 +21,9 @@
 	what it was. The four `extern function` declarations now carry real signatures instead of trailing
 	comments, and the calls are argument-checked against them.
 
+	The general form of this rewrite - and what it costs, which is nothing - is in
+	docs/impala/WhatsNewInImpala2.md under "What is worth rewriting".
+
 	Not run by the gate: `output`, `input`, `loadText` and `launch` are host natives, so this compiles
 	and link-checks only, exactly as `disasm.impala` does. The cross-module agreement is proved
 	separately, by assembling it together with fileList2.gazl and requiring the mismatch to fail - see

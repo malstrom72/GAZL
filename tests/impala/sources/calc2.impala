@@ -24,6 +24,9 @@
 	the corpus did that before these two files.
 
 	(C)1978 Shrimperative Computing LTD.
+
+	The general form of this rewrite - and what it costs, which is nothing - is in
+	docs/impala/WhatsNewInImpala2.md under "What is worth rewriting".
 */
 
 const int DEBUG;

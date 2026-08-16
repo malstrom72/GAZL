@@ -24,6 +24,9 @@
 	The built-in table's DATA rows assemble to the same words as the 1.0 version's - that equivalence is
 	the point, and `tests/impala/golden/fileList2.gazl` is the record of it.
 
+	The general form of this rewrite - and what it costs, which is nothing - is in
+	docs/impala/WhatsNewInImpala2.md under "What is worth rewriting".
+
 	Not run by the gate: `findFirmwarePatch` is a host native, so this compiles and link-checks only,
 	exactly as `fileList.impala` does.
 */
