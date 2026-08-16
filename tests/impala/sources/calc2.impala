@@ -1,8 +1,8 @@
 /*
 	Calculator for Prawn OS - ported to Impala 2.
 
-	`calc.impala` with one change: its function-dispatch table. Everything else is byte-for-byte the
-	1.0 source, so the diff between the two files IS the feature.
+	`calc.impala` with two changes: its function-dispatch table, and typed pointers throughout. Nothing
+	else is touched, so the diff between the two files IS the feature.
 
 	In 1.0 the table is a flat `FUNCTIONS[FUNCTION_COUNT * 2]` of alternating name/function words. The
 	pairing lives only in the `* 2 + 0` / `* 2 + 1` at the two use sites, and the call needs a
@@ -10,8 +10,8 @@
 	TYPES of whatever is stored there are checked by nobody. Storing a two-argument function, or an int
 	one, compiles.
 
-	In 2.0 it is a `struct MathOp { pointer name; MathFn fn }` with `functype MathFn(float x) returns
-	float`. The pairing is the struct, the stride is `.z.MathOp`, and the call is checked against the
+	In 2.0 it is a `struct MathOp { int pointer name; MathFn fn }` with `functype MathFn(float x)
+	returns float`. The pairing is the struct, the stride is `.z.MathOp`, and the call is checked against the
 	signature - so the cast is gone and with it the hole it papered over.
 
 	The pointers are typed as well - `int pointer` for the strings it scans, `float pointer` for the

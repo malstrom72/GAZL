@@ -5,7 +5,8 @@ const vm = require("vm");
 
 const { wrapCompilerSource, applyImpalaHardening } = require("./updateJSPEG.js");
 const { compileWithJsImpala } = require("./impalaJsCompilerRunner");
-const { haveGazlCmd, assembleOnly, NEEDS_HOST } = require("./gazlAssembleCheck");
+const { haveGazlCmd, runGazlCmd, assembleOnly, NEEDS_HOST, NO_ENTRY_POINT }
+	= require("./gazlAssembleCheck");
 
 const dir = __dirname;
 const IMPALA_ENCODING = "latin1";
@@ -1326,33 +1327,66 @@ assert(/\.k\d+:\s+! DEFi /.test(initSpills),
 	`an initializer past the scratch pool must spill, not abort\n${initSpills}`);
 console.log("impala.jspeg compiler spills initializer constants only once the scratch pool is empty");
 
-// The corpus is the wider net: every one of those programs fitted the pool before holdConstant existed, so
-// a `.k` appearing in any of their goldens means something started draining it. The byte-compare gate would
-// flag the diff, but not say what it meant - this names it.
+// The corpus is the wider net for two properties at once, so it is read ONCE here. A `.k` appearing in any
+// golden means something started draining the scratch pool - every one of these programs fitted it before
+// holdConstant existed. And an `! MULi <X> #1 #...` means an index was "scaled" by one: the degenerate step
+// alongside the `0 * W + idx` and `acc * W + 0` that mulAddAxis already folds, which went unnoticed because
+// `&p[1]` is the CANONICAL struct-pointer walk - the commonest subscript in the language carried the one
+// line that says nothing, and burned a `<X>` from that same 26-deep pool doing it. SIX sites scale a count
+// or index by a symbolic stride (struct layout, axesProduct, arrayAllocSize, the offset parts, the Horner
+// axis step, the deferred bounds guard); all six fold, which is what lets this ask the whole corpus instead
+// of naming one of them. The byte-compare gate would flag either diff, but not say what it meant.
 {
 	const goldenDir = path.join(dir, "..", "tests", "impala", "golden");
-	const spilling = fs.readdirSync(goldenDir)
+	const goldens = fs.readdirSync(goldenDir)
 		.filter((f) => f.endsWith(".gazl"))
-		.filter((f) => /^\.k\d+:/m.test(fs.readFileSync(path.join(goldenDir, f), IMPALA_ENCODING)));
+		.map((f) => [ f, fs.readFileSync(path.join(goldenDir, f), IMPALA_ENCODING) ]);
+	const matching = (re) => goldens.filter((g) => re.test(g[1])).map((g) => g[0]);
+
+	const spilling = matching(/^\.k\d+:/m);
 	assert(spilling.length === 1 && spilling[0] === "initSpill.gazl",
 		`only initSpill.gazl may spill initializer constants, but these do: ${spilling.join(", ")}`);
 	console.log("impala.jspeg compiler leaves every corpus program inside the scratch pool");
-}
 
-// Scaling an index by an element size is `k * .z.S`, and at k == 1 that multiply IS the size - the third
-// degenerate step alongside the `0 * W + idx` and `acc * W + 0` mulAddAxis already folds. It went unnoticed
-// because `&p[1]` is the CANONICAL struct-pointer walk, so the commonest subscript in the language carried
-// the one line that says nothing; it cost a `<X>` borrow apiece too, out of the same 26-deep pool the
-// initializer spill above exists to protect. Three sites scale independently - the offset parts, the Horner
-// axis step and the deferred bounds guard - so this asks the corpus rather than any one of them.
-{
-	const goldenDir = path.join(dir, "..", "tests", "impala", "golden");
-	const scaling = fs.readdirSync(goldenDir)
-		.filter((f) => f.endsWith(".gazl"))
-		.filter((f) => /^\s*! MULi <[A-Za-z]> #1 #/m.test(fs.readFileSync(path.join(goldenDir, f), IMPALA_ENCODING)));
+	// By VALUE, not spelling: `#0x1` and `#+1` mean one too, and a `k !== '1'` test in one of the six sites
+	// left both of those paying the multiply while this scan - matching `#1` - could not see it.
+	const scaling = matching(/^\s*! MULi <[A-Za-z]> #[-+]?(?:0[xX]0*1|0*1) #/m);
 	assert(scaling.length === 0,
 		`multiplying an index by one is not a scale, but these goldens do: ${scaling.join(", ")}`);
 	console.log("impala.jspeg compiler folds away the multiply-by-one in a scaled index");
+}
+
+// Each 1.0/2.0 port pair claims IN ITS HEADER that the ported data table assembles to the same words as
+// the original - fileList2's "the DATA rows assemble to the same words as the 1.0 version's, that
+// equivalence is the point", calc2's "the emitted table is the same words in the same order". Nothing
+// checked either: every golden is byte-compared against ITSELF, and no gate looks across two files, so a
+// regold could quietly move one side and leave the claim standing. Reading the rows back is the check.
+{
+	const goldenDir = path.join(dir, "..", "tests", "impala", "golden");
+	const tableWords = (file, label) => {
+		const lines = canonicalizeNewlines(
+			fs.readFileSync(path.join(goldenDir, file), IMPALA_ENCODING)).split("\n");
+		let i = lines.findIndex((l) => l.indexOf(label + ":") === 0);
+		assert(i >= 0, `${file} has no ${label} table`);
+		const words = [];
+		for (++i; i < lines.length; ++i) {
+			const row = lines[i].match(/^\s+DAT[AipfsT]?\s+(\S.*)$/);
+			if (row) { words.push.apply(words, row[1].trim().split(/\s+/)); continue; }
+			if (/^\s*!/.test(lines[i]) || lines[i].trim() === "") { continue; }
+			if (/^\.g\d+:/.test(lines[i])) { continue; }      /* an assemble-time guard label, still the table */
+			break;                                            /* any other label ends it */
+		}
+		return words;
+	};
+	for (const pair of [ [ "calc.gazl", "calc2.gazl", "FUNCTIONS" ],
+			[ "fileList.gazl", "fileList2.gazl", "FILES" ] ]) {
+		const one = tableWords(pair[0], pair[2]), two = tableWords(pair[1], pair[2]);
+		assert(one.length > 0, `${pair[0]}: ${pair[2]} table read back empty - the extractor is broken`);
+		assert(one.join(" ") === two.join(" "),
+			`${pair[2]} must assemble to the same words in ${pair[0]} and ${pair[1]}\n`
+				+ `  1.0: ${one.join(" ")}\n  2.0: ${two.join(" ")}`);
+	}
+	console.log("impala.jspeg compiler ports keep their data tables word-identical to the 1.0 originals");
 }
 
 // A subscript built ENTIRELY from constants must cost no runtime arithmetic - every step is a layout name
@@ -1379,8 +1413,8 @@ console.log("impala.jspeg compiler spills initializer constants only once the sc
 {
 	const proto = (ret) => "extern native f(int a, int b) returns " + ret
 		+ "\nfunction main() locals int r { r = f(1, 2); }\n";
-	const bare = compileWithJsImpala(proto("int"), { randomId: 42, retabulate: false });
-	const named = compileWithJsImpala(proto("int n"), { randomId: 42, retabulate: false });
+	const bare = compileWithJsImpala(proto("int"), { randomId: 42 });
+	const named = compileWithJsImpala(proto("int n"), { randomId: 42 });
 	assert(bare === named, `a prototype return name must not change anything it emits\n${bare}\n---\n${named}`);
 	assert(/signature extern native f\(int a, int b\) -> int\b/.test(bare),
 		`the row must carry the real types either way\n${bare}`);
@@ -1409,31 +1443,28 @@ if (haveGazlCmd()) {
 	const sourcesDir = path.join(dir, "..", "tests", "impala", "sources");
 	const read = (name) => canonicalizeNewlines(
 		fs.readFileSync(path.join(sourcesDir, name), IMPALA_ENCODING));
-	// Distinct random ids: both modules mint `.s_<text>_<id>` string labels, and one pool would collide.
+	// Only the CONSUMER side varies between the two runs, so the definer is compiled once. Distinct random
+	// ids: both modules mint `.s_<text>_<id>` string labels, and one pool would collide.
+	const definer = compileWithJsImpala(read("fileList2.impala"), { randomId: 0x1000 });
+	const disasm = read("disasm2.impala");
 	const link = (disasmSource) => {
-		const gazl = compileWithJsImpala(read("fileList2.impala"), { randomId: 0x1000 })
-			+ "\n" + compileWithJsImpala(disasmSource, { randomId: 0x9000 });
 		const linkedPath = path.join(dir, "..", "tests", "impala", "erroneous", "structLink.gazl");
 		fs.mkdirSync(path.dirname(linkedPath), { recursive: true });
-		fs.writeFileSync(linkedPath, gazl, IMPALA_ENCODING);
-		const result = childProcess.spawnSync(
-			path.join(dir, "..", "output", process.platform === "win32" ? "GAZLCmd.exe" : "GAZLCmd"),
-			[linkedPath, ".no-entry-point", "DEBUG", "0"], { encoding: "latin1", timeout: 30000 });
-		return ((result.stderr || "").split("\n").find((l) => l.trim()) || "(no output)").trim();
+		fs.writeFileSync(linkedPath,
+			definer + "\n" + compileWithJsImpala(disasmSource, { randomId: 0x9000 }), IMPALA_ENCODING);
+		return runGazlCmd(linkedPath, [ NO_ENTRY_POINT, "DEBUG", "0" ]).line;
 	};
 
 	// Linking throws, so its complaint arrives as `Exception: Symbol not found ...`; assembly's does not.
-	const agreed = link(read("disasm2.impala"));
+	const agreed = link(disasm);
 	assert(/Symbol not found\b/.test(agreed) && !/\.[oz]\.File/.test(agreed),
 		`fileList2 + disasm2 must agree on the File layout and reach linking, but assembly said: ${agreed}`);
 
-	// Rename ONE field on the extern side only. Same size, same order, same everything else.
-	const renamed = read("disasm2.impala")
-		.replace("int type; int size", "int kind; int size")
-		.replace("global FILES[file].type", "global FILES[file].kind");
-	assert(renamed.indexOf("int kind") >= 0 && renamed.indexOf(".kind") >= 0, "the rename did not apply");
-	const disagreed = link(renamed);
-	assert(/^Symbol not previously defined\b/.test(disagreed) && /\.o\.File\.kind/.test(disagreed),
+	// Rename ONE field on the extern side only. Same size, same order, same everything else. A vacuous
+	// rename cannot pass: the assertion demands `.o.File.kind` by name, which only a real one produces.
+	const disagreed = link(disasm.replace("int type; int size", "int kind; int size")
+		.replace("global FILES[file].type", "global FILES[file].kind"));
+	assert(/Symbol not previously defined\b/.test(disagreed) && /\.o\.File\.kind/.test(disagreed),
 		`a field the definer does not have must fail to assemble, but got: ${disagreed}`);
 
 	console.log("impala.jspeg compiler links two modules through one struct layout, and refuses a mismatch");

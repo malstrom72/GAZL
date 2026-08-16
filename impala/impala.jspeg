@@ -1324,7 +1324,11 @@
        A COMPILER-MINTED name is as assemble-time as a user's: `#.d.g.0` is a layout constant the assembler
        resolves, and only the leading dot ever made it look otherwise. Reading it as `runtime` was the gap
        this table exists to close - it demoted whatever consumed it from `! MULi` to a real multiply, which
-       is how `cube[1, 0, 0]` came to need a materializing `! MOVi` to get its tier back. */
+       is how `cube[1, 0, 0]` came to need a materializing `! MOVi` to get its tier back. The leading dot is
+       the same mark `claimTopName` reads ("no Impala identifier starts with `.`"), minted only by
+       extentSymbol / fieldSymbol / axisSymbol - change the scheme in those and this must follow.
+       It also widens what `checkConstIndex` will DEFER on, which is safe only because foldAxes clears a
+       shape's extent before a minted index can reach it. */
     $$parser.indexKind = function (op) {
         if (/^#?<[A-Za-z]>$/.test(op)) return 'scratch';          /* an assemble-time fold under a recycled name */
         if (op.charAt(0) !== '#') return 'runtime';               /* $local, %transient */
@@ -2209,9 +2213,15 @@
             } else if (f.type === 'A') {                          /* array: name the extent, THEN advance by it */
                 var x = $$parser.extentSymbol(f.name, name);
                 var words = f.size;
-                if ($$parser.isStructAtom(f.elem)) {              /* count * element size, folded now */
-                    output(T + '! MULi <t> #' + f.size + ' #' + $$parser.extentSymbol($$parser.descName(f.elem)));
-                    words = '<t>';
+                if ($$parser.isStructAtom(f.elem)) {              /* count * element size, folded now - except at
+                                                                    a count of one, where the size IS the answer */
+                    var esym = $$parser.extentSymbol($$parser.descName(f.elem));
+                    if ($$parser.constInt('#' + f.size) === 1) {
+                        words = esym;
+                    } else {
+                        output(T + '! MULi <t> #' + f.size + ' #' + esym);
+                        words = '<t>';
+                    }
                 }
                 output(x + ':' + T + '! DEFi #' + words);
                 /* A SHAPE also names each axis, so a subscript can stride by one and a bounds check can
@@ -2426,6 +2436,11 @@
     $$parser.axesProduct = function (dims) {
         var acc = dims[0];
         for (var i = 1; i < dims.length; ++i) {
+            /* An axis of one contributes nothing to the product, and neither borrows nor emits for it. Safe
+               against the ownership rule below because a skipped step creates no intermediate: `acc` can only
+               BE one at i === 1, where it is axis 0's text rather than a borrow. */
+            if ($$parser.constInt('#' + dims[i]) === 1) { continue; }
+            if ($$parser.constInt('#' + acc) === 1) { acc = dims[i]; continue; }
             var next = $$parser.borrow('<');
             $$parser.emit('<> *', 'i', next, '#' + acc, '#' + dims[i]);
             if (i > 1 && ('' + acc).charAt(0) === '<') {
@@ -2441,8 +2456,14 @@
         var symbol = $$parser.extentSymbol(name, owner);
         var value = count;
         if ($$parser.isStructAtom(elemDesc)) {
-            value = $$parser.borrow('<');
-            $$parser.emit('<> *', 'i', value, '#' + count, '#' + $$parser.extentSymbol($$parser.descName(elemDesc)));
+            var esym = $$parser.extentSymbol($$parser.descName(elemDesc));
+            if ($$parser.constInt('#' + count) === 1) {
+                value = esym;                                 /* one element: the size IS the allocation, so no
+                                                                 multiply and - the point - no borrow to own */
+            } else {
+                value = $$parser.borrow('<');
+                $$parser.emit('<> *', 'i', value, '#' + count, '#' + esym);
+            }
         }
         /* A DERIVED name must never be the one that reports a user's mistake. This runs as an ARGUMENT to
            the `declare` that registers the array itself, so JS evaluates it FIRST - and on a duplicate
@@ -3237,10 +3258,14 @@
                 var part = k;                                    /* scalar stride is 1 word -> the offset is just k */
                 if (elemStruct) {
                     var sym = $$parser.extentSymbol(elemName);
-                    part = sym;                                  /* `1 * .z.S` IS `.z.S` - the same degenerate step
-                                                                    mulAddAxis skips, one level out. `&p[1]` is the
-                                                                    canonical walk, so it was the common case. */
-                    if (k !== '1') {
+                    if ($$parser.constInt('#' + k) === 1) {      /* `1 * .z.S` IS `.z.S` - the same degenerate step
+                                                                    mulAddAxis skips, one level out, and `&p[1]` is
+                                                                    the canonical walk so it is the common case. By
+                                                                    VALUE, not spelling: `p[0x1]` and `p[+1]` mean
+                                                                    one as well, and a `k !== '1'` here left both
+                                                                    paying a multiply and a `<X>` borrow. */
+                        part = sym;
+                    } else {
                         part = $$parser.borrow('<');
                         $$parser.emit('<> *', 'i', part, '#' + k, '#' + sym);
                         if (scratch) { $$parser.returnBack(k); }
@@ -5015,7 +5040,7 @@ ExternDecl  <-  EXTERN _                                              { $$.scope
                                                                              referenced. TypeDeclr rather than a second
                                                                              rule for exactly that reason - the two
                                                                              declaration forms had no business differing. */
-                                                                          if ($$parser.pendingProto) $$parser.pendingProto.ret = { type: $out.type, elem: $out.elem, struct: $out.struct, name: $out.name }; }
+                                                                          if ($$parser.pendingProto) $$parser.pendingProto.ret = { type: $out.type, elem: $out.elem, struct: $out.struct }; }
                         ( ',' _ TypeDeclr                             {   /* PARKED for Impala 3.0 - see design/ParkedFeatures.md */
                                                                           $$parser.fail('Multiple return values are not supported in Impala 2.0',
                                                                                   $$s, $$i, 'E428',

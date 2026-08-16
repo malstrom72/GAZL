@@ -3,10 +3,10 @@
 
 	This is the shape a 1.0 dispatch table takes once it is ported - `calc2.impala`'s FUNCTIONS is
 	exactly it - and nothing in the corpus covered it. funcType, funcTypePointer and funcTypeCasts all
-	call through a local or an array of BARE funcptrs; structArrayGiven only STORES one (`ft: nullfunc`)
-	and never calls it. So "a `t`-typed field, initialized by name in a brace initializer, then called
-	through a dynamic subscript" had no test at all, in a language where the funcptr type was split out
-	of `p` precisely so the call could be checked.
+	call through a local, an array of BARE funcptrs, or a cast - no source declared a funcptr-typed struct
+	FIELD at all before this file and calc2.impala. So "a `t`-typed field, initialized by name in a brace
+	initializer, then called through a dynamic subscript" had no test, in a language where the funcptr type
+	was split out of `p` precisely so the call could be checked.
 
 	Three things have to hold at once here, and only the last is visible in a golden:
 	  - the initializer takes a FUNCTION NAME as a field value and lays down its address,

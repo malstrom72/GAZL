@@ -103,4 +103,5 @@ function assembleOnly(gazlPath) {
 	return `did not assemble: ${run.line}`;
 }
 
-module.exports = { gazlCmd, haveGazlCmd, parseExpectedRun, runExpected, assembleOnly, NEEDS_HOST };
+module.exports = { gazlCmd, haveGazlCmd, runGazlCmd, parseExpectedRun, runExpected, assembleOnly,
+	NEEDS_HOST, NO_ENTRY_POINT };

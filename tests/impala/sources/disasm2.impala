@@ -16,19 +16,15 @@
 	of design/impala/StructLayoutConstants.md, and until this file existed only the HOST side of it was
 	covered (externStruct.impala); nothing showed two Impala modules meeting in the middle.
 
-	The field types come across too, which is why the `(int)` cast on the `type` read is gone: in 1.0
-	`FILES[...]` had no element type, so every read needed one.
-
-	The pointers are typed too, and the four `extern function` declarations now carry the real
-	signatures instead of trailing comments - so the calls are argument-checked and their results
-	have a type, which is what removes the `(int)` casts. `loadText` documented its shape in a
-	comment and so became a prototype; `output`, `input`, `launch` and `sleep` did not, and stay
-	name-only rather than have this file invent a claim it cannot verify.
+	Types come across the boundary with it, which is what retires the `(int)` casts: a 1.0 `FILES[...]`
+	had no element type and a name-only extern returned `unknown`, so every read of either had to say
+	what it was. The four `extern function` declarations now carry real signatures instead of trailing
+	comments, and the calls are argument-checked against them.
 
 	Not run by the gate: `output`, `input`, `loadText` and `launch` are host natives, so this compiles
 	and link-checks only, exactly as `disasm.impala` does. The cross-module agreement is proved
-	separately by assembling it together with fileList2.gazl - see runJspegTests / the header of
-	fileList2.impala.
+	separately, by assembling it together with fileList2.gazl and requiring the mismatch to fail - see
+	the `links two modules through one struct layout` block in impala/jspegCompilerTests.js.
 */
 
 const int DEBUG
@@ -115,7 +111,6 @@ locals	int array s[256], int type, int offset, int readCount, int file, int poin
 		lower(s);
 		if ((file = findFile(s)) < 0) outputLine("File not found");
 		else {
-			/* The field is typed, so no `(int)` cast and no `* FILE_FIELD_COUNT + FILE_FIELD_TYPE`. */
 			if ((type = global FILES[file].type) != FILE_TYPE_EXE
 					&& type != FILE_TYPE_SYS && type != FILE_TYPE_BIN) {
 				outputLine("File is not GAZL format");
