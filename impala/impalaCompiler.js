@@ -1515,14 +1515,8 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         var w;
         if (op.ext.stride !== undefined && !op.own) {             /* `.z.` counts WORDS, the index counts
                                                                      ELEMENTS - scale before comparing */
-            if (constInt(lhs) === 1) {                   /* `1 * .z.S` IS `.z.S`, here too - so no
-                                                                     scratch is borrowed and none is freed */
-                lhs = '#' + op.ext.stride;
-            } else {
-                w = borrow('<');
-                emit('<> *', 'i', w, lhs, '#' + op.ext.stride);
-                lhs = '#' + w;
-            }
+            w = scaleByStride(op.k, op.ext.stride);
+            lhs = '#' + w;                                        /* freed below - a no-op when it folded */
         }
         var low;
         if (typeof op.k !== 'number') {
@@ -2266,6 +2260,22 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         output(extentSymbol(name) + ':' + T + '! DEFi #<a>');
     };
 
+    /* `k * sym` as ONE assemble-time operand, with the k == 1 identity folded - a VALUE test, so `0x1`
+       and `+1` fold exactly as `1` does. Returns an UNHASHED operand: the stride symbol itself when it
+       folds, which costs no emitted line and no borrow, else a `<X>` the caller owns. `returnBack`
+       no-ops on a plain symbol, so a caller frees the result unconditionally without caring which it
+       got - that is what lets four callers share this at all.
+       The other two sites that scale a count by a symbolic element size keep their own shape: the struct
+       layout block writes through `output()` with its own hand-picked `<t>`, and mulAddAxis fuses the
+       following add and chooses between a transient and a scratch. */
+    scaleByStride = function (k, sym) {
+        var n = '#' + dropHash('' + k);
+        if (constInt(n) === 1) { return sym; }
+        var w = borrow('<');
+        emit('<> *', 'i', w, n, '#' + sym);
+        return w;
+    };
+
     /* Fold a place's compile-time offset PARTS (field-offset symbols + constant strides) into one
        operand, emitting inline `! ADDi` (assemble-time, zero runtime cost) only when there are 2+
        parts. One part -> used bare; zero -> null (offset 0). The scratch is pool-managed (`<`),
@@ -2453,9 +2463,7 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
                against the ownership rule below because a skipped step creates no intermediate: `acc` can only
                BE one at i === 1, where it is axis 0's text rather than a borrow. */
             if (constInt('#' + dims[i]) === 1) { continue; }
-            if (constInt('#' + acc) === 1) { acc = dims[i]; continue; }
-            var next = borrow('<');
-            emit('<> *', 'i', next, '#' + acc, '#' + dims[i]);
+            var next = scaleByStride(acc, dims[i]);
             if (i > 1 && ('' + acc).charAt(0) === '<') {
                 returnBack(acc);                     /* an intermediate product, not an axis */
             }                                                 /* i === 1: acc IS axis 0, and `.d.<S>.<f>.0`
@@ -2469,14 +2477,8 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         var symbol = extentSymbol(name, owner);
         var value = count;
         if (isStructAtom(elemDesc)) {
-            var esym = extentSymbol(descName(elemDesc));
-            if (constInt('#' + count) === 1) {
-                value = esym;                                 /* one element: the size IS the allocation, so no
-                                                                 multiply and - the point - no borrow to own */
-            } else {
-                value = borrow('<');
-                emit('<> *', 'i', value, '#' + count, '#' + esym);
-            }
+            value = scaleByStride(count,             /* one element: the size IS the allocation */
+                    extentSymbol(descName(elemDesc)));
         }
         /* A DERIVED name must never be the one that reports a user's mistake. This runs as an ARGUMENT to
            the `declare` that registers the array itself, so JS evaluates it FIRST - and on a duplicate
@@ -3269,20 +3271,10 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
             }
             if (k !== '0') {
                 var part = k;                                    /* scalar stride is 1 word -> the offset is just k */
-                if (elemStruct) {
-                    var sym = extentSymbol(elemName);
-                    if (constInt('#' + k) === 1) {      /* `1 * .z.S` IS `.z.S` - the same degenerate step
-                                                                    mulAddAxis skips, one level out, and `&p[1]` is
-                                                                    the canonical walk so it is the common case. By
-                                                                    VALUE, not spelling: `p[0x1]` and `p[+1]` mean
-                                                                    one as well, and a `k !== '1'` here left both
-                                                                    paying a multiply and a `<X>` borrow. */
-                        part = sym;
-                    } else {
-                        part = borrow('<');
-                        emit('<> *', 'i', part, '#' + k, '#' + sym);
-                        if (scratch) { returnBack(k); }
-                    }
+                if (elemStruct) {                                /* `&p[1]` is the canonical walk, so the fold
+                                                                    inside scaleByStride is the common case here */
+                    part = scaleByStride(k, extentSymbol(elemName));
+                    if (scratch) { returnBack(k); }     /* a folded k is a literal, never a scratch */
                 }
                 /* A folded `<X>` cannot key a deferred assertion, so the guard takes its OWN copy while the
                    value is still live - the pushed one is freed by foldOffset long before the use decides
