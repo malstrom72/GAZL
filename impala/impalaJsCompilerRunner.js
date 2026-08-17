@@ -255,6 +255,9 @@ function compileWithJsImpala(source, options = {}) {
 	if (options.rangeChecks) {
 		compilerOptions.rangeChecks = true;   // --range-checks: DEBUG-gated runtime bounds tests, off by default
 	}
+	if (options.keepLabels) {
+		compilerOptions.keepLabels = true;   // --keep-labels: a NOOP per coincident label, off by default
+	}
 	compilerOptions.warn = (message, offset, code, hint) => {
 		const formatted = formatDiagnostic(source, options, offset ?? 0, "warning", code, message, hint);
 		if (typeof onWarning === "function") {

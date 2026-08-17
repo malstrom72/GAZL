@@ -46,12 +46,16 @@ function readStdinLatin1Sync() {
 
 function usageAndExit() {
 	console.error('Usage:');
-	console.error('  node impala/impala.node.js compile [--legacy] [--dead-strip] [--range-checks] [<input.impala>] [<output.gazl>|-] [<random id>]');
+	console.error('  node impala/impala.node.js compile [--legacy] [--dead-strip] [--range-checks] [--keep-labels] [<input.impala>] [<output.gazl>|-] [<random id>]');
 	console.error('  node impala/impala.node.js run [--legacy] [--range-checks] [<input.impala>]');
 	console.error('  --legacy downgrades Impala 2 strict-expression errors to warnings');
 	console.error('  --dead-strip drops everything unreachable from an `export`');
 	console.error('  --range-checks emits DEBUG-gated runtime bounds tests (off by default: they stay in the');
 	console.error('                 .gazl TEXT even when DEBUG is 0, and that text is what ships)');
+	console.error('  --keep-labels gives every coincident label its own NOOP instead of collapsing a run onto');
+	console.error('                 one survivor. Off by default: the collapse is a size win for a .gazl that');
+	console.error('                 SHIPS. On, the listing keeps a 1:1 name mapping with the source, which is');
+	console.error('                 what you want reading or debugging one - and a NOOP costs no cycles.');
 	process.exit(1);
 }
 
@@ -85,6 +89,7 @@ function compileProgram(rootPath, options = {}) {
 		units: spans,
 		legacy: options.legacy,
 		rangeChecks: options.rangeChecks,
+		keepLabels: options.keepLabels,
 	});
 	if (options.deadStrip) {
 		output = deadStrip(output);
@@ -191,7 +196,8 @@ function main() {
 	const argv = process.argv.slice(2);
 	// One list, so adding a flag touches one place instead of three. An UNKNOWN `--flag` is rejected
 	// rather than taken for a filename: `--range-cheks` used to be silently dropped and compile anyway.
-	const FLAGS = { '--legacy': 'legacy', '--dead-strip': 'deadStrip', '--range-checks': 'rangeChecks' };
+	const FLAGS = { '--legacy': 'legacy', '--dead-strip': 'deadStrip', '--range-checks': 'rangeChecks',
+			'--keep-labels': 'keepLabels' };
 	const opts = {};
 	const rest = [];
 	for (const arg of argv) {

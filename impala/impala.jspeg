@@ -135,6 +135,8 @@
             && !!_hostOptions.legacy);                          /// `--legacy` downgrades strict-expression errors to warnings
     var $$parser.rangeChecks    = (typeof _hostOptions !== 'undefined' && _hostOptions != null
             && !!_hostOptions.rangeChecks);                     /// `--range-checks` emits DEBUG-gated runtime bounds tests
+    var $$parser.keepLabels     = (typeof _hostOptions !== 'undefined' && _hostOptions != null
+            && !!_hostOptions.keepLabels);                      /// `--keep-labels` gives every coincident label its own NOOP
     var $$parser.units          = ((typeof _hostOptions !== 'undefined' && _hostOptions != null
             && _hostOptions.units) || undefined);               /// import-closure spans {name,start,end}[], for origins
     var $$parser.declOffset     = 0;                            /// offset of the declaration being parsed - see `root`
@@ -942,9 +944,13 @@
            the prototype that tried to do this while walking. A user label survives in preference to a
            minted one, so a name someone can `goto` never disappears from the listing.
            NOT merged: a name holding `#` is a switch table entry (`.sN#k`), where the case value IS
-           part of the name and two entries are different addresses that merely render alike here. */
+           part of the name and two entries are different addresses that merely render alike here.
+           `--keep-labels` turns the whole pass off, because collapsing is a DISTRIBUTION optimization
+           and it costs the one thing a reader wants while debugging: a source label whose name still
+           appears in the listing. A `NOOP` is free at run time, so the trade only pays when size does. */
         var alias = {}, run = [];
-        for (i = 0; i <= $$parser.metacode.length; ++i) {
+        if ($$parser.keepLabels) { run = undefined; }
+        for (i = 0; run !== undefined && i <= $$parser.metacode.length; ++i) {
             rec = (i < $$parser.metacode.length ? $$parser.metacode[i] : { operator: null });
             if (rec.operator === ';' || (rec.operator == null && i < $$parser.metacode.length)) continue;
             if (rec.operator === '<--' && rec.operands[0].indexOf('#') < 0) {

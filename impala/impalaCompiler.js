@@ -148,6 +148,8 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
             && !!_hostOptions.legacy);                          /// `--legacy` downgrades strict-expression errors to warnings
     var rangeChecks    = (typeof _hostOptions !== 'undefined' && _hostOptions != null
             && !!_hostOptions.rangeChecks);                     /// `--range-checks` emits DEBUG-gated runtime bounds tests
+    var keepLabels     = (typeof _hostOptions !== 'undefined' && _hostOptions != null
+            && !!_hostOptions.keepLabels);                      /// `--keep-labels` gives every coincident label its own NOOP
     var units          = ((typeof _hostOptions !== 'undefined' && _hostOptions != null
             && _hostOptions.units) || undefined);               /// import-closure spans {name,start,end}[], for origins
     var declOffset     = 0;                            /// offset of the declaration being parsed - see `root`
@@ -955,9 +957,13 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
            the prototype that tried to do this while walking. A user label survives in preference to a
            minted one, so a name someone can `goto` never disappears from the listing.
            NOT merged: a name holding `#` is a switch table entry (`.sN#k`), where the case value IS
-           part of the name and two entries are different addresses that merely render alike here. */
+           part of the name and two entries are different addresses that merely render alike here.
+           `--keep-labels` turns the whole pass off, because collapsing is a DISTRIBUTION optimization
+           and it costs the one thing a reader wants while debugging: a source label whose name still
+           appears in the listing. A `NOOP` is free at run time, so the trade only pays when size does. */
         var alias = {}, run = [];
-        for (i = 0; i <= metacode.length; ++i) {
+        if (keepLabels) { run = undefined; }
+        for (i = 0; run !== undefined && i <= metacode.length; ++i) {
             rec = (i < metacode.length ? metacode[i] : { operator: null });
             if (rec.operator === ';' || (rec.operator == null && i < metacode.length)) continue;
             if (rec.operator === '<--' && rec.operands[0].indexOf('#') < 0) {

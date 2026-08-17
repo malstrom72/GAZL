@@ -1356,6 +1356,27 @@ console.log("impala.jspeg compiler spills initializer constants only once the sc
 	console.log("impala.jspeg compiler folds away the multiply-by-one in a scaled index");
 }
 
+// Two source labels with nothing between them name ONE address, and only one GAZL line can carry a name -
+// so the run collapses onto a survivor and `goto beta` comes out as `GOTO @alpha`. That is a size win for a
+// .gazl that ships and a loss for one being read: a name the source can `goto` is simply absent, and the
+// commit that added the collapse promised "a name someone can `goto` never disappears" - true only while at
+// most one label in the run is user-written. `--keep-labels` spends a free NOOP to keep the mapping 1:1.
+{
+	const src = "const int DEBUG = 0\nextern native printInt\nexport function main()\nlocals int i\n{\n\ti = 0;\n\tif (i == 0) goto alpha;\n\ti = 1;\nalpha: ;\nbeta: ;\n\tprintInt(i);\n\tif (i == 5) goto beta;\n}\n";
+	const collapsed = compileWithJsImpala(src, { randomId: 42 });
+	const kept = compileWithJsImpala(src, { randomId: 42, keepLabels: true });
+	assert(/^\s*alpha:/m.test(collapsed) && !/^\s*beta:/m.test(collapsed),
+		`by default a coincident label collapses onto one survivor
+${collapsed}`);
+	assert(/^\s*alpha:\s+NOOP/m.test(kept) && /^\s*beta:/m.test(kept),
+		`--keep-labels must give each coincident label its own NOOP
+${kept}`);
+	assert(/GOTO @beta\b/.test(kept) && /GOTO @alpha\b/.test(collapsed),
+		`each spelling must branch to the label it names
+${kept}`);
+	console.log("impala.jspeg compiler keeps coincident labels apart under --keep-labels");
+}
+
 // Each 1.0/2.0 port pair claims IN ITS HEADER that the ported data table assembles to the same words as
 // the original - fileList2's "the DATA rows assemble to the same words as the 1.0 version's, that
 // equivalence is the point", calc2's "the emitted table is the same words in the same order". Nothing
