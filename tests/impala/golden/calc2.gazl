@@ -113,10 +113,11 @@ log:	FUNC	; signature func log(float x) -> float @ calc2.impala:137:1
 		MULf $m $m #2.0	; m = m * 2.0
 		SUBf $b $b #LOG2	; b = b - LOG2
 		GOTO @.l3  	; }
-	.e4:	LEQf $m #1.5 @.e6	; while (m > 1.5) 
+	.e4:	NOOP
+	.l5:	LEQf $m #1.5 @.e6	; while (m > 1.5) 
 		MULf $m $m #0.5	; m = m * 0.5
 		ADDf $b $b #LOG2	; b = b + LOG2
-		GOTO @.e4  	; }
+		GOTO @.l5  	; }
 	.e6:	SUBf $m #1.0 $m	; m = 1.0 - m
 		MOVf $a #-1.0 	; a = -1.0
 		MOVf $n #1.0 	; n = 1.0
@@ -266,12 +267,13 @@ pow:	FUNC	; signature func pow(float x, float y) -> float @ calc2.impala:239:1
 		MULf %1 %1 $y
 		CALL &exp %0 *2	; expects exp(float) -> float @ calc2.impala:246:34
 		MOVf $z %0 
-		GOTO @.f5  
+		GOTO @.e3  
 	.f2:	LSSf $a #0.0 @.t4	; if (a < 0.0 || y <= 0.0) error("Domain error")
 		GRTf $y #0.0 @.f5
 	.t4:	MOVp %1 &.s_Domain_4d2 	; error("Domain error")
 		CALL &error %0 *2	; expects error(int-ptr) -> void @ calc2.impala:247:53
-	.f5:	EQUf $a $x @.f7	; if (a != x && (y * 0.5) != floor(y * 0.5)) z = -z
+	.f5:	NOOP
+	.e3:	EQUf $a $x @.f7	; if (a != x && (y * 0.5) != floor(y * 0.5)) z = -z
 		MULf %0 $y #0.5
 		MULf %1 $y #0.5
 		FLOf %0 %0 
@@ -474,11 +476,12 @@ stringToFloat:	FUNC	; signature func stringToFloat(int-ptr b, float-ptr v) -> in
 		PEEK $c $q 	; if ((c = *q) == '+') q = q + 1
 		NEQi $c #'+' @.f9
 		ADDp $q $q #1	; q = q + 1
-		GOTO @.f11  
+		GOTO @.e10  
 	.f9:	NEQi $c #'-' @.f11	; if (c == '-') 
 		MOVf $e #0.1 	; e = 0.1
 		ADDp $q $q #1	; q = q + 1
-	.f11:	MOVi $n #0 	; n = 0
+	.f11:	NOOP
+	.e10:	MOVi $n #0 	; n = 0
 	.l12:	PEEK $c $q 	; while ((c = *q) >= '0' && c <= '9') 
 		LSSi $c #'0' @.e14
 		GRTi $c #'9' @.e14
@@ -544,10 +547,11 @@ floatToString:	FUNC	; signature func floatToString(float f, int precision, int-p
 		SUBi $e $e #1	; e = e - 1
 		MULf $y $y #10.0	; y = y * 10.0
 		GOTO @.l12  	; }
-	.e13:	LSSf $y #10.0 @.l6	; while (y >= 10.0) 
+	.e13:	NOOP
+	.l14:	LSSf $y #10.0 @.l6	; while (y >= 10.0) 
 		ADDi $e $e #1	; e = e + 1
 		MULf $y $y #0.1	; y = y * 0.1
-		GOTO @.e13  	; }
+		GOTO @.l14  	; }
 		GOTO @.l6  	; }
 	broke:	ADDp $dp $buffer #2	; broke:
 	.l16:	GEQf $x #1.0 @.e18	; while (x < 1.0 && dp < buffer + 32) 
@@ -561,7 +565,8 @@ floatToString:	FUNC	; signature func floatToString(float f, int precision, int-p
 	.f19:	ADDp $ep $ep #1	; ep = ep + 1
 		MULf $x $x #10.0	; x = x * 10.0
 		GOTO @.l16  	; }
-	.e18:	GEQp $dp $ep @.e21	; while (dp < ep) 
+	.e18:	NOOP
+	.l20:	GEQp $dp $ep @.e21	; while (dp < ep) 
 		fTOi $i $x #1.0	; i = ftoi(x)
 		ADDi %0 $i #'0'	; *dp = i + '0'
 		POKE $dp %0 
@@ -572,9 +577,9 @@ floatToString:	FUNC	; signature func floatToString(float f, int precision, int-p
 	.f22:	iTOf %0 $i #1.0	; x = (x - itof(i)) * 10.0
 		SUBf %0 $x %0
 		MULf $x %0 #10.0
-		GOTO @.e18  	; }
+		GOTO @.l20  	; }
 	.e21:	ADDp $p $buffer #2	; p = buffer + 2
-		LSSf $x #5.0 @.e27	; if (x >= 5.0) 
+		LSSf $x #5.0 @.f23	; if (x >= 5.0) 
 	.l24:	PEEK %0 $dp #-1	; while (dp[-1] == '9') *(dp = dp - 1) = '0'
 		NEQi %0 #'9' @.e25
 		SUBp $dp $dp #1	; *(dp = dp - 1) = '0'
@@ -587,7 +592,8 @@ floatToString:	FUNC	; signature func floatToString(float f, int precision, int-p
 	.f26:	PEEK %0 $dp #-1	; dp[-1] = dp[-1] + 1
 		ADDi %0 %0 #1
 		POKE $dp #-1 %0
-	.e27:	POKE $pp #'.' 	; *pp = '.'
+	.e27:	NOOP
+	.f23:	POKE $pp #'.' 	; *pp = '.'
 		LEQp $ep $pp @.f28	; if (ep > pp) while (ep[-1] == '0') ep = ep - 1
 	.l29:	PEEK %0 $ep #-1	; while (ep[-1] == '0') ep = ep - 1
 		NEQi %0 #'0' @.f28
@@ -625,7 +631,9 @@ floatToString:	FUNC	; signature func floatToString(float f, int precision, int-p
 		GEQf $f #0.0 @.f36	; if (f < 0.0) *(p = p - 1) = '-'
 		SUBp $p $p #1	; *(p = p - 1) = '-'
 		POKE $p #'-' 
-	.f36:	RETU   	; }
+	.f36:	NOOP
+	.e5:	NOOP
+	.e3:	RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
@@ -644,10 +652,10 @@ evaluate:	FUNC	; signature func evaluate(int-ptr b, float-ptr v, int precedence)
 		CALL &eatWhite %0 *2	; expects eatWhite(int-ptr) -> int-ptr @ calc2.impala:498:17
 		MOVp $p %0 
 		PEEK %0 $p 	; switch (*p == 0 to 128) 
-		SWCH %0 *128 @symbol
+		SWCH %0 *128 @.s0
 	.s0#0:	MOVp %1 &.s_Unexpe_4e0 	; error("Unexpected end of line")
 		CALL &error %0 *2	; expects error(int-ptr) -> void @ calc2.impala:501:48
-		GOTO @wasFunction  
+		GOTO @.e1  
 	.s0#'-':	ADDp %1 $p #1	; p = evaluate(p + 1, v, PREFIX_PRECEDENCE)
 		MOVp %2 $v 
 		MOVi %3 #PREFIX_PRECEDENCE 
@@ -656,11 +664,11 @@ evaluate:	FUNC	; signature func evaluate(int-ptr b, float-ptr v, int precedence)
 		PEEK %0 $v 	; *v = -*v
 		SUBf %0 #0.0 %0
 		POKE $v %0 
-		GOTO @wasFunction  	; }
+		GOTO @.e1  	; }
 	.s0#'_':	PEEK %0 &lastResult 	; *v = global lastResult
 		POKE $v %0 
 		ADDp $p $p #1	; p = p + 1
-		GOTO @wasFunction  	; }
+		GOTO @.e1  	; }
 	.s0#'(':	ADDp %1 $p #1	; p = evaluate(p + 1, v, PARENTHESIS_PRECEDENCE)
 		MOVp %2 $v 
 		MOVi %3 #PARENTHESIS_PRECEDENCE 
@@ -671,7 +679,7 @@ evaluate:	FUNC	; signature func evaluate(int-ptr b, float-ptr v, int precedence)
 		MOVp %1 &.s_Expect_4e1 	; error("Expected ')'")
 		CALL &error %0 *2	; expects error(int-ptr) -> void @ calc2.impala:512:40
 	.f2:	ADDp $p $p #1	; p = p + 1
-		GOTO @wasFunction  	; }
+		GOTO @.e1  	; }
 	.s0#'0':	NOOP
 	.s0#'1':	NOOP
 	.s0#'2':	NOOP
@@ -699,7 +707,7 @@ evaluate:	FUNC	; signature func evaluate(int-ptr b, float-ptr v, int precedence)
 		MOVp %1 &.s_Invali_4e2 	; error("Invalid number")
 		CALL &error %0 *2	; expects error(int-ptr) -> void @ calc2.impala:518:39
 	.f6:	MOVp $p $q 	; p = q
-		GOTO @wasFunction  	; }
+		GOTO @.e1  	; }
 	.s0#'e':	NOOP
 	.s0#'E':	PEEK %1 $p #1	; if (isalpha(p[1]) != FALSE) goto symbol
 		CALL &isalpha %0 *2	; expects isalpha(int) -> int @ calc2.impala:522:22
@@ -707,7 +715,7 @@ evaluate:	FUNC	; signature func evaluate(int-ptr b, float-ptr v, int precedence)
 		GOTO @symbol  	; goto symbol
 	.f7:	ADDp $p $p #1	; p = p + 1
 		POKE $v #E 	; *v = E
-		GOTO @wasFunction  	; }
+		GOTO @.e1  	; }
 	.s0#'p':	NOOP
 	.s0#'P':	PEEK %1 $p #1	; if (lower(p[1]) != 'i' || isalpha(p[2]) != FALSE) goto symbol
 		CALL &lower %0 *2	; expects lower(int) -> int @ calc2.impala:527:20
@@ -718,7 +726,8 @@ evaluate:	FUNC	; signature func evaluate(int-ptr b, float-ptr v, int precedence)
 		GOTO @symbol  	; goto symbol
 	.f9:	ADDp $p $p #2	; p = p + 2
 		POKE $v #PI 	; *v = PI
-		GOTO @wasFunction  	; }
+		GOTO @.e1  	; }
+	.s0:	NOOP
 	symbol:	MOVi $i #0 	; symbol:
 		GEQi #0 #FUNCTION_COUNT @.e10
 	.l11:	MOVp $q $p 	; q = p
@@ -769,29 +778,33 @@ evaluate:	FUNC	; signature func evaluate(int-ptr b, float-ptr v, int precedence)
 		NEQi %0 #TRUE @.f19
 	.t18:	MOVp %1 &.s_Syntax_4e3 	; error("Syntax error")
 		CALL &error %0 *2	; expects error(int-ptr) -> void @ calc2.impala:552:76
-		GOTO @wasFunction  
+		GOTO @.e20  
 	.f19:	SUBi %0 $c #'a'	; if (global memoryUsed[c - 'a'] == 0) error("Undefined variable")
 		PEEK %0 &memoryUsed %0
 		NEQi %0 #0 @.f21
 		MOVp %1 &.s_Undefi_4e4 	; error("Undefined variable")
 		CALL &error %0 *2	; expects error(int-ptr) -> void @ calc2.impala:553:74
-		GOTO @wasFunction  
+		GOTO @.e22  
 	.f21:	ADDp $p $p #1	; p = p + 1
 		SUBi %0 $c #'a'	; *v = global memory[c - 'a']
 		PEEK %0 &memory %0
 		POKE $v %0 
-	wasFunction:	MOVp %1 $p 	; p = eatWhite(p)
+	.e22:	NOOP
+	.e20:	NOOP
+	wasFunction:	NOOP
+	.e1:	NOOP
+	repeat:	MOVp %1 $p 	; p = eatWhite(p)
 		CALL &eatWhite %0 *2	; expects eatWhite(int-ptr) -> int-ptr @ calc2.impala:563:18
 		MOVp $p %0 
 		! ADDi <A> #'|' #1	; switch (*p == '%' to ('|' + 1)) 
 		! SUBi <A> <A> #'%'
 		PEEK %0 $p 
 		SUBi %0 %0 #'%'
-		SWCH %0 *<A> @.f51
+		SWCH %0 *<A> @.s23
 		! SUBi <A> #'|' #'%'	; case '|'
 		! LSSi <A> #0 @.g25
 	.s23#<A>:	NOOP
-	.g25:	GEQi $precedence #BITWISE_PRECEDENCE @.f51	; if (precedence < BITWISE_PRECEDENCE) 
+	.g25:	GEQi $precedence #BITWISE_PRECEDENCE @.e24	; if (precedence < BITWISE_PRECEDENCE) 
 		ADDp %1 $p #1	; p = evaluate(p + 1, &f, BITWISE_PRECEDENCE)
 		ADRL %2 $f *0
 		MOVi %3 #BITWISE_PRECEDENCE 
@@ -803,12 +816,12 @@ evaluate:	FUNC	; signature func evaluate(int-ptr b, float-ptr v, int precedence)
 		IORi %0 %0 %1
 		iTOf %0 %0 #1.0
 		POKE $v %0 
-		GOTO @wasFunction  	; goto repeat
+		GOTO @repeat  	; goto repeat
 		RETU   	; }
 		! SUBi <A> #'&' #'%'	; case '&'
 		! LSSi <A> #0 @.g27
 	.s23#<A>:	NOOP
-	.g27:	GEQi $precedence #BITWISE_PRECEDENCE @.f51	; if (precedence < BITWISE_PRECEDENCE) 
+	.g27:	GEQi $precedence #BITWISE_PRECEDENCE @.e24	; if (precedence < BITWISE_PRECEDENCE) 
 		ADDp %1 $p #1	; p = evaluate(p + 1, &f, BITWISE_PRECEDENCE)
 		ADRL %2 $f *0
 		MOVi %3 #BITWISE_PRECEDENCE 
@@ -820,12 +833,12 @@ evaluate:	FUNC	; signature func evaluate(int-ptr b, float-ptr v, int precedence)
 		ANDi %0 %0 %1
 		iTOf %0 %0 #1.0
 		POKE $v %0 
-		GOTO @wasFunction  	; goto repeat
+		GOTO @repeat  	; goto repeat
 		RETU   	; }
 		! SUBi <A> #'^' #'%'	; case '^'
 		! LSSi <A> #0 @.g29
 	.s23#<A>:	NOOP
-	.g29:	GEQi $precedence #BITWISE_PRECEDENCE @.f51	; if (precedence < BITWISE_PRECEDENCE) 
+	.g29:	GEQi $precedence #BITWISE_PRECEDENCE @.e24	; if (precedence < BITWISE_PRECEDENCE) 
 		ADDp %1 $p #1	; p = evaluate(p + 1, &f, BITWISE_PRECEDENCE)
 		ADRL %2 $f *0
 		MOVi %3 #BITWISE_PRECEDENCE 
@@ -837,14 +850,14 @@ evaluate:	FUNC	; signature func evaluate(int-ptr b, float-ptr v, int precedence)
 		XORi %0 %0 %1
 		iTOf %0 %0 #1.0
 		POKE $v %0 
-		GOTO @wasFunction  	; goto repeat
+		GOTO @repeat  	; goto repeat
 		RETU   	; }
 		! SUBi <A> #'<' #'%'	; case '<'
 		! LSSi <A> #0 @.g31
 	.s23#<A>:	NOOP
 	.g31:	PEEK %0 $p #1	; if (p[1] == '<' && precedence < BITWISE_PRECEDENCE) 
-		NEQi %0 #'<' @.f51
-		GEQi $precedence #BITWISE_PRECEDENCE @.f51
+		NEQi %0 #'<' @.e24
+		GEQi $precedence #BITWISE_PRECEDENCE @.e24
 		ADDp %1 $p #2	; p = evaluate(p + 2, &f, BITWISE_PRECEDENCE)
 		ADRL %2 $f *0
 		MOVi %3 #BITWISE_PRECEDENCE 
@@ -856,14 +869,14 @@ evaluate:	FUNC	; signature func evaluate(int-ptr b, float-ptr v, int precedence)
 		SHLi %0 %0 %1
 		iTOf %0 %0 #1.0
 		POKE $v %0 
-		GOTO @wasFunction  	; goto repeat
+		GOTO @repeat  	; goto repeat
 		RETU   	; }
 		! SUBi <A> #'>' #'%'	; case '>'
 		! LSSi <A> #0 @.g34
 	.s23#<A>:	NOOP
 	.g34:	PEEK %0 $p #1	; if (p[1] == '>' && precedence < BITWISE_PRECEDENCE) 
-		NEQi %0 #'>' @.f51
-		GEQi $precedence #BITWISE_PRECEDENCE @.f51
+		NEQi %0 #'>' @.e24
+		GEQi $precedence #BITWISE_PRECEDENCE @.e24
 		ADDp %1 $p #2	; p = evaluate(p + 2, &f, BITWISE_PRECEDENCE)
 		ADRL %2 $f *0
 		MOVi %3 #BITWISE_PRECEDENCE 
@@ -875,12 +888,12 @@ evaluate:	FUNC	; signature func evaluate(int-ptr b, float-ptr v, int precedence)
 		SHRu %0 %0 %1
 		iTOf %0 %0 #1.0
 		POKE $v %0 
-		GOTO @wasFunction  	; goto repeat
+		GOTO @repeat  	; goto repeat
 		RETU   	; }
 		! SUBi <A> #'+' #'%'	; case '+'
 		! LSSi <A> #0 @.g37
 	.s23#<A>:	NOOP
-	.g37:	GEQi $precedence #ADD_SUB_PRECEDENCE @.f51	; if (precedence < ADD_SUB_PRECEDENCE) 
+	.g37:	GEQi $precedence #ADD_SUB_PRECEDENCE @.e24	; if (precedence < ADD_SUB_PRECEDENCE) 
 		ADDp %1 $p #1	; p = evaluate(p + 1, &f, ADD_SUB_PRECEDENCE)
 		ADRL %2 $f *0
 		MOVi %3 #ADD_SUB_PRECEDENCE 
@@ -889,12 +902,12 @@ evaluate:	FUNC	; signature func evaluate(int-ptr b, float-ptr v, int precedence)
 		PEEK %0 $v 	; *v = *v + f
 		ADDf %0 %0 $f
 		POKE $v %0 
-		GOTO @wasFunction  	; goto repeat
+		GOTO @repeat  	; goto repeat
 		RETU   	; }
 		! SUBi <A> #'-' #'%'	; case '-'
 		! LSSi <A> #0 @.g39
 	.s23#<A>:	NOOP
-	.g39:	GEQi $precedence #ADD_SUB_PRECEDENCE @.f51	; if (precedence < ADD_SUB_PRECEDENCE) 
+	.g39:	GEQi $precedence #ADD_SUB_PRECEDENCE @.e24	; if (precedence < ADD_SUB_PRECEDENCE) 
 		ADDp %1 $p #1	; p = evaluate(p + 1, &f, ADD_SUB_PRECEDENCE)
 		ADRL %2 $f *0
 		MOVi %3 #ADD_SUB_PRECEDENCE 
@@ -903,14 +916,14 @@ evaluate:	FUNC	; signature func evaluate(int-ptr b, float-ptr v, int precedence)
 		PEEK %0 $v 	; *v = *v - f
 		SUBf %0 %0 $f
 		POKE $v %0 
-		GOTO @wasFunction  	; goto repeat
+		GOTO @repeat  	; goto repeat
 		RETU   	; }
 		! SUBi <A> #'*' #'%'	; case '*'
 		! LSSi <A> #0 @.g41
 	.s23#<A>:	NOOP
 	.g41:	PEEK %0 $p #1	; if (p[1] == '*') 
 		NEQi %0 #'*' @.f42
-		GRTi $precedence #POW_PRECEDENCE @.f51	; if (precedence <= POW_PRECEDENCE) 
+		GRTi $precedence #POW_PRECEDENCE @.e24	; if (precedence <= POW_PRECEDENCE) 
 		ADDp %1 $p #2	; p = evaluate(p + 2, &f, POW_PRECEDENCE)
 		ADRL %2 $f *0
 		MOVi %3 #POW_PRECEDENCE 
@@ -920,9 +933,9 @@ evaluate:	FUNC	; signature func evaluate(int-ptr b, float-ptr v, int precedence)
 		MOVf %2 $f 
 		CALL &pow %0 *3	; expects pow(float, float) -> float @ calc2.impala:619:22
 		POKE $v %0 
-		GOTO @wasFunction  	; goto repeat
+		GOTO @repeat  	; goto repeat
 		RETU   	; } else 
-	.f42:	GEQi $precedence #MUL_DIV_PRECEDENCE @.f51	; if (precedence < MUL_DIV_PRECEDENCE) 
+	.f42:	GEQi $precedence #MUL_DIV_PRECEDENCE @.e24	; if (precedence < MUL_DIV_PRECEDENCE) 
 		ADDp %1 $p #1	; p = evaluate(p + 1, &f, MUL_DIV_PRECEDENCE)
 		ADRL %2 $f *0
 		MOVi %3 #MUL_DIV_PRECEDENCE 
@@ -931,12 +944,12 @@ evaluate:	FUNC	; signature func evaluate(int-ptr b, float-ptr v, int precedence)
 		PEEK %0 $v 	; *v = *v * f
 		MULf %0 %0 $f
 		POKE $v %0 
-		GOTO @wasFunction  	; goto repeat
+		GOTO @repeat  	; goto repeat
 	.e44:	RETU   	; }
 		! SUBi <A> #'/' #'%'	; case '/'
 		! LSSi <A> #0 @.g46
 	.s23#<A>:	NOOP
-	.g46:	GEQi $precedence #MUL_DIV_PRECEDENCE @.f51	; if (precedence < MUL_DIV_PRECEDENCE) 
+	.g46:	GEQi $precedence #MUL_DIV_PRECEDENCE @.e24	; if (precedence < MUL_DIV_PRECEDENCE) 
 		ADDp %1 $p #1	; p = evaluate(p + 1, &f, MUL_DIV_PRECEDENCE)
 		ADRL %2 $f *0
 		MOVi %3 #MUL_DIV_PRECEDENCE 
@@ -945,11 +958,11 @@ evaluate:	FUNC	; signature func evaluate(int-ptr b, float-ptr v, int precedence)
 		NEQf $f #0.0 @.f48	; if (f == 0.0) error("Division by zero")
 		MOVp %1 &.s_Divisi_4d3 	; error("Division by zero")
 		CALL &error %0 *2	; expects error(int-ptr) -> void @ calc2.impala:633:45
-		GOTO @wasFunction  
+		GOTO @repeat  
 	.f48:	PEEK %0 $v 	; *v = *v / f
 		DIVf %0 %0 $f
 		POKE $v %0 
-	.e49:	GOTO @wasFunction  	; goto repeat
+	.e49:	GOTO @repeat  	; goto repeat
 		RETU   	; }
 		! SUBi <A> #'%' #'%'	; case '%'
 		! LSSi <A> #0 @.g50
@@ -964,8 +977,10 @@ evaluate:	FUNC	; signature func evaluate(int-ptr b, float-ptr v, int precedence)
 		MOVf %2 $f 
 		CALL &fmod %0 *3	; expects fmod(float, float) -> float @ calc2.impala:641:22
 		POKE $v %0 
-		GOTO @wasFunction  	; goto repeat
-	.f51:	RETU   	; }
+		GOTO @repeat  	; goto repeat
+	.f51:	NOOP
+	.s23:	NOOP
+	.e24:	RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
@@ -1031,7 +1046,7 @@ main:	FUNC	; signature func main() -> void @ calc2.impala:649:1
 		EQUp $p &NULL @.f7
 		MOVp %1 $p 	; output(p)
 		CALL ^output %0 *2	; expects output(int-ptr) -> unknown @ calc2.impala:681:48
-		GOTO @.f11  
+		GOTO @.e8  
 	.f7:	POKE &lastResult $f 	; global lastResult = f
 		LSSi $assignTo #0 @.f9	; if (assignTo >= 0) 
 		ADDi $s:0 #'a' $assignTo	; s[0] = 'a' + assignTo
@@ -1057,7 +1072,8 @@ main:	FUNC	; signature func main() -> void @ calc2.impala:649:1
 	.f10:	LSSi $assignTo #0 @.f11	; if (assignTo >= 0) 
 		POKE &memory $assignTo $f	; global memory[assignTo] = f
 		POKE &memoryUsed $assignTo #1	; global memoryUsed[assignTo] = 1
-	.f11:	MOVp %1 &.s__4e9 	; output("\n")
+	.f11:	NOOP
+	.e8:	MOVp %1 &.s__4e9 	; output("\n")
 		CALL ^output %0 *2	; expects output(int-ptr) -> unknown @ calc2.impala:700:15
 		GOTO @.l0  	; }
 	quit:	RETU   	; }

@@ -148,8 +148,8 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
             && !!_hostOptions.legacy);                          /// `--legacy` downgrades strict-expression errors to warnings
     var rangeChecks    = (typeof _hostOptions !== 'undefined' && _hostOptions != null
             && !!_hostOptions.rangeChecks);                     /// `--range-checks` emits DEBUG-gated runtime bounds tests
-    var keepLabels     = (typeof _hostOptions !== 'undefined' && _hostOptions != null
-            && !!_hostOptions.keepLabels);                      /// `--keep-labels` gives every coincident label its own NOOP
+    var collapseLabels = (typeof _hostOptions !== 'undefined' && _hostOptions != null
+            && !!_hostOptions.collapseLabels);                  /// `--collapse-labels` merges coincident labels onto one survivor
     var units          = ((typeof _hostOptions !== 'undefined' && _hostOptions != null
             && _hostOptions.units) || undefined);               /// import-closure spans {name,start,end}[], for origins
     var declOffset     = 0;                            /// offset of the declaration being parsed - see `root`
@@ -958,11 +958,13 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
            minted one, so a name someone can `goto` never disappears from the listing.
            NOT merged: a name holding `#` is a switch table entry (`.sN#k`), where the case value IS
            part of the name and two entries are different addresses that merely render alike here.
-           `--keep-labels` turns the whole pass off, because collapsing is a DISTRIBUTION optimization
-           and it costs the one thing a reader wants while debugging: a source label whose name still
-           appears in the listing. A `NOOP` is free at run time, so the trade only pays when size does. */
+           OFF unless `--collapse-labels` asks for it. Collapsing is a DISTRIBUTION optimization and it
+           costs the one thing a reader wants: a source label whose name still appears in the listing -
+           two coincident USER labels collapse too, so a name someone can `goto` does disappear, which
+           `wasFunction`/`repeat` in calc.impala showed. A `NOOP` is free at run time, so the trade only
+           pays when SIZE does; by default Impala:GAZL stays as close to 1:1 as it can. */
         var alias = {}, run = [];
-        if (keepLabels) { run = undefined; }
+        if (!collapseLabels) { run = undefined; }
         for (i = 0; run !== undefined && i <= metacode.length; ++i) {
             rec = (i < metacode.length ? metacode[i] : { operator: null });
             if (rec.operator === ';' || (rec.operator == null && i < metacode.length)) continue;

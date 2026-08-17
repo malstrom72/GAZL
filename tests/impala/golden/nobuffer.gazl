@@ -232,10 +232,11 @@ floatToString:	FUNC	; signature func floatToString(float f, int precision, ptr b
 		SUBi $e $e #1	; e = e - 1
 		MULf $y $y #10.0	; y = y * 10.0
 		GOTO @.l12  	; }
-	.e13:	LSSf $y #10.0 @.l6	; while (y >= 10.0) 
+	.e13:	NOOP
+	.l14:	LSSf $y #10.0 @.l6	; while (y >= 10.0) 
 		ADDi $e $e #1	; e = e + 1
 		MULf $y $y #0.1	; y = y * 0.1
-		GOTO @.e13  	; }
+		GOTO @.l14  	; }
 		GOTO @.l6  	; }
 	broke:	ADDp $dp $buffer #2	; broke:
 	.l16:	GEQf $x #1.0 @.e18	; while (x < 1.0 && dp < buffer + 32) 
@@ -249,7 +250,8 @@ floatToString:	FUNC	; signature func floatToString(float f, int precision, ptr b
 	.f19:	ADDp $ep $ep #1	; ep = ep + 1
 		MULf $x $x #10.0	; x = x * 10.0
 		GOTO @.l16  	; }
-	.e18:	GEQp $dp $ep @.e21	; while (dp < ep) 
+	.e18:	NOOP
+	.l20:	GEQp $dp $ep @.e21	; while (dp < ep) 
 		fTOi $i $x #1.0	; i = ftoi(x)
 		ADDi %0 $i #'0'	; *dp = i + '0'
 		POKE $dp %0 
@@ -260,7 +262,7 @@ floatToString:	FUNC	; signature func floatToString(float f, int precision, ptr b
 	.f22:	iTOf %0 $i #1.0	; x = (x - itof(i)) * 10.0
 		SUBf %0 $x %0
 		MULf $x %0 #10.0
-		GOTO @.e18  	; }
+		GOTO @.l20  	; }
 	.e21:	ADDp $p $buffer #2	; p = buffer + 2
 		LSSf $x #5.0 @.f23	; if (x >= 5.0) 
 	.l24:	PEEK %0 $dp #-1	; while ((int)dp[-1] == '9') *(dp = dp - 1) = '0'
@@ -316,7 +318,9 @@ floatToString:	FUNC	; signature func floatToString(float f, int precision, ptr b
 		GEQf $f #0.0 @.f37	; if (f < 0.0) *(p = p - 1) = '-'
 		SUBp $p $p #1	; *(p = p - 1) = '-'
 		POKE $p #'-' 
-	.f37:	RETU   	; }
+	.f37:	NOOP
+	.e5:	NOOP
+	.e3:	RETU   	; }
 
 
 ;-----------------------------------------------------------------------------

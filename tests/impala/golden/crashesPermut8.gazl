@@ -184,11 +184,12 @@ stringToFloat:	FUNC	; signature func stringToFloat(ptr b, ptr v) -> ptr @ crashe
 		PEEK $c $q 	; if ((c = (int) *q) == '+') q = q + 1
 		NEQi $c #'+' @.f9
 		ADDp $q $q #1	; q = q + 1
-		GOTO @.f11  
+		GOTO @.e10  
 	.f9:	NEQi $c #'-' @.f11	; if (c == '-') 
 		MOVf $e #0.1 	; e = 0.1
 		ADDp $q $q #1	; q = q + 1
-	.f11:	MOVi $n #0 	; n = 0
+	.f11:	NOOP
+	.e10:	MOVi $n #0 	; n = 0
 	.l12:	PEEK $c $q 	; while ((c = (int) *q) >= '0' && c <= '9') 
 		LSSi $c #'0' @.e14
 		GRTi $c #'9' @.e14
@@ -254,10 +255,11 @@ floatToString:	FUNC	; signature func floatToString(float f, int precision, ptr b
 		SUBi $e $e #1	; e = e - 1
 		MULf $y $y #10.0	; y = y * 10.0
 		GOTO @.l12  	; }
-	.e13:	LSSf $y #10.0 @.l6	; while (y >= 10.0) 
+	.e13:	NOOP
+	.l14:	LSSf $y #10.0 @.l6	; while (y >= 10.0) 
 		ADDi $e $e #1	; e = e + 1
 		MULf $y $y #0.1	; y = y * 0.1
-		GOTO @.e13  	; }
+		GOTO @.l14  	; }
 		GOTO @.l6  	; }
 	broke:	ADDp $dp $buffer #2	; broke:
 	.l16:	GEQf $x #1.0 @.e18	; while (x < 1.0 && dp < buffer + 32) 
@@ -271,7 +273,8 @@ floatToString:	FUNC	; signature func floatToString(float f, int precision, ptr b
 	.f19:	ADDp $ep $ep #1	; ep = ep + 1
 		MULf $x $x #10.0	; x = x * 10.0
 		GOTO @.l16  	; }
-	.e18:	GEQp $dp $ep @.e21	; while (dp < ep) 
+	.e18:	NOOP
+	.l20:	GEQp $dp $ep @.e21	; while (dp < ep) 
 		fTOi $i $x #1.0	; i = ftoi(x)
 		ADDi %0 $i #'0'	; *dp = i + '0'
 		POKE $dp %0 
@@ -282,9 +285,9 @@ floatToString:	FUNC	; signature func floatToString(float f, int precision, ptr b
 	.f22:	iTOf %0 $i #1.0	; x = (x - itof(i)) * 10.0
 		SUBf %0 $x %0
 		MULf $x %0 #10.0
-		GOTO @.e18  	; }
+		GOTO @.l20  	; }
 	.e21:	ADDp $p $buffer #2	; p = buffer + 2
-		LSSf $x #5.0 @.e27	; if (x >= 5.0) 
+		LSSf $x #5.0 @.f23	; if (x >= 5.0) 
 	.l24:	PEEK %0 $dp #-1	; while ((int) dp[-1] == '9') *(dp = dp - 1) = '0'
 		NEQi %0 #'9' @.e25
 		SUBp $dp $dp #1	; *(dp = dp - 1) = '0'
@@ -297,7 +300,8 @@ floatToString:	FUNC	; signature func floatToString(float f, int precision, ptr b
 	.f26:	PEEK %0 $dp #-1	; dp[-1] = (int) dp[-1] + 1
 		ADDi %0 %0 #1
 		POKE $dp #-1 %0
-	.e27:	POKE $pp #'.' 	; *pp = '.'
+	.e27:	NOOP
+	.f23:	POKE $pp #'.' 	; *pp = '.'
 		LEQp $ep $pp @.f28	; if (ep > pp) while ((int) ep[-1] == '0') ep = ep - 1
 	.l29:	PEEK %0 $ep #-1	; while ((int) ep[-1] == '0') ep = ep - 1
 		NEQi %0 #'0' @.f28
@@ -335,7 +339,9 @@ floatToString:	FUNC	; signature func floatToString(float f, int precision, ptr b
 		GEQf $f #0.0 @.f36	; if (f < 0.0) *(p = p - 1) = '-'
 		SUBp $p $p #1	; *(p = p - 1) = '-'
 		POKE $p #'-' 
-	.f36:	RETU   	; }
+	.f36:	NOOP
+	.e5:	NOOP
+	.e3:	RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
@@ -646,9 +652,9 @@ update:	FUNC	; signature func update() -> void @ crashesPermut8.impala:486:1
 		POKE &clockShift #0 	; global clockShift = 0
 		POKE &fxQuantize #0 	; global fxQuantize = 0
 		POKE &stepFXs:0 #-1 	; global stepFXs[0] = -1
-		LEQi $fxCount #0 @.e11	; if (fxCount > 0) 
+		LEQi $fxCount #0 @.e7	; if (fxCount > 0) 
 		POKE &stepFXs:0 $fxs:0 	; global stepFXs[0] = fxs[0]
-		GOTO @.e11  	; } else 
+		GOTO @.e7  	; } else 
 	.f5:	ANDi %0 $stepRate #1	; global clockMask = 0xFFFF | ((stepRate & 1) << 16)
 		SHLi %0 %0 #16
 		IORi %0 #0xFFFF %0
@@ -698,20 +704,22 @@ update:	FUNC	; signature func update() -> void @ crashesPermut8.impala:486:1
 		FORi $i #STEP_COUNT @.l13	; }
 	.e12:	MOVp %1 &.s__4e2 	; trace("---")
 		CALL ^trace %0 *2	; expects trace(int-ptr) -> unknown @ crashesPermut8.impala:562:16
-	.e11:	MOVi $i #0 	; for (i = 0 to STEP_COUNT) 
+	.e11:	NOOP
+	.e7:	MOVi $i #0 	; for (i = 0 to STEP_COUNT) 
 		GEQi #0 #STEP_COUNT @.e20
 	.l21:	SWCH $fxParams *5 @.s22	; switch (fxParams == 0 to 5) 
 	.s22#0:	MOVi $fx #1 	; fx = 1
-		GOTO @.s22  
+		GOTO @.e23  
 	.s22#1:	MOVi $fx #1 	; fx = 1
-		GOTO @.s22  
+		GOTO @.e23  
 	.s22#2:	MOVi $fx #2 	; fx = 2
-		GOTO @.s22  
+		GOTO @.e23  
 	.s22#3:	MOVi $fx #0 	; fx = 0
-		GOTO @.s22  
+		GOTO @.e23  
 	.s22#4:	CALL &randomFloat %0 *1	; expects randomFloat() -> float @ crashesPermut8.impala:571:44
 		fTOi $fx %0 #2.9999
-	.s22:	POKE &stepFXParams $i $fx	; global stepFXParams[i] = fx
+	.s22:	NOOP
+	.e23:	POKE &stepFXParams $i $fx	; global stepFXParams[i] = fx
 		FORi $i #STEP_COUNT @.l21	; }
 	.e20:	MOVp %1 &.s_steps_4e3 	; traceInts("steps: ", 16, global stepFXs)
 		MOVi %2 #16 
@@ -813,7 +821,7 @@ process:	FUNC	; signature func process() -> void @ crashesPermut8.impala:622:1
 		MOVi $trig #TRUE 	; trig = TRUE
 	.f2:	PEEK %0 &fxQuantize 	; if ((clock & global fxQuantize) == 0) 
 		ANDi %0 $clock %0
-		NEQi %0 #0 @.e6
+		NEQi %0 #0 @.f3
 		PEEK %0 &dirXor 	; step = ((clock ^ (int) global dirXor) & global clockMask) >> global clockShift
 		XORi %0 $clock %0
 		PEEK %1 &clockMask 
@@ -827,7 +835,7 @@ process:	FUNC	; signature func process() -> void @ crashesPermut8.impala:622:1
 		SHRi %0 #0x8000 %0
 		POKE &displayLEDs:3 %0 
 		PEEK $x &stepFXs $step	; x = (int) global stepFXs[step]
-		EQUi $x $fx @.e6	; if (x != fx) 
+		EQUi $x $fx @.f3	; if (x != fx) 
 		MOVi $fx $x 	; fx = x
 		LSSi $fx #0 @.f5	; if (fx >= 0) 
 		MOVi $trig #TRUE 	; trig = TRUE
@@ -841,7 +849,8 @@ process:	FUNC	; signature func process() -> void @ crashesPermut8.impala:622:1
 		COPY %1 %0 *FX_PARAM_COUNT
 		GOTO @.e6  	; } else 
 	.f5:	POKE &displayLEDs:0 #0 	; global displayLEDs[0] = 0
-	.e6:	MOVi %1 $clock 	; write(clock, 1, global signal)
+	.e6:	NOOP
+	.f3:	MOVi %1 $clock 	; write(clock, 1, global signal)
 		MOVi %2 #1 
 		MOVp %3 &signal 
 		CALL ^write %0 *4	; expects write(int, int, ptr) -> unknown @ crashesPermut8.impala:679:33
@@ -857,7 +866,7 @@ process:	FUNC	; signature func process() -> void @ crashesPermut8.impala:622:1
 		MOVi %2 #1 
 		ADRL %3 $outp *0
 		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ crashesPermut8.impala:688:23
-		GOTO @.s7  	; }
+		GOTO @.e8  	; }
 	.s7#TAPE_STOP_FX:	EQUi $trig #FALSE @.f10	; if (trig != FALSE) 
 		SHLi $pos $clock #16	; pos = clock << 16
 		MOVi $posInc #0x10000 	; posInc = 0x10000
@@ -876,9 +885,9 @@ process:	FUNC	; signature func process() -> void @ crashesPermut8.impala:622:1
 		ADDi $outp:1 $samples:1 %0
 		ADDi $pos $pos $posInc	; pos = pos + posInc
 		SUBi $posInc $posInc $fxParams:FX_PARAM_TAPE_STOP_RATE	; posInc = posInc - (int) fxParams[FX_PARAM_TAPE_STOP_RATE]
-		GEQi $posInc #0 @.s7	; if (posInc < 0) 
+		GEQi $posInc #0 @.e8	; if (posInc < 0) 
 		MOVi $posInc #0 	; posInc = 0
-		GOTO @.s7  	; }
+		GOTO @.e8  	; }
 	.s7#HALF_SPEED_EFFECT:	EQUi $trig #FALSE @.f12	; if (trig != FALSE) 
 		SHLi $pos $clock #1	; pos = clock << 1
 	.f12:	SHRi %1 $pos #1	; read(pos >> 1, 1, outp)
@@ -886,27 +895,29 @@ process:	FUNC	; signature func process() -> void @ crashesPermut8.impala:622:1
 		ADRL %3 $outp *0
 		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ crashesPermut8.impala:711:28
 		ADDi $pos $pos #1	; pos = pos + 1
-		GOTO @.s7  	; }
+		GOTO @.e8  	; }
 	.s7#TRANCE_GATE_EFFECT:	SHRi %0 $clock $fxParams:FX_PARAM_TRANCE_GATE_RATE	; x = (clock >> (int) fxParams[FX_PARAM_TRANCE_GATE_RATE]) & 0x7FF
 		ANDi $x %0 #0x7FF
 		GEQi $x #0x280 @.f13	; if (x < 0x280) 
 		MOVi $x #0x1800 	; x = 0x1800
-		GOTO @.e18  	; } else if (x < 0x400) 
+		GOTO @.e14  	; } else if (x < 0x400) 
 	.f13:	GEQi $x #0x400 @.f15	; if (x < 0x400) 
 		SUBi %0 $x #0x280	; x = 0x1800 - ((x - 0x280) << 4)
 		SHLi %0 %0 #4
 		SUBi $x #0x1800 %0
-		GOTO @.e18  	; } else if (x < 0x7A0) 
+		GOTO @.e16  	; } else if (x < 0x7A0) 
 	.f15:	GEQi $x #0x7A0 @.f17	; if (x < 0x7A0) 
 		MOVi $x #0x0 	; x = 0x0
 		GOTO @.e18  	; } else 
 	.f17:	SUBi %0 $x #0x7A0	; x = (x - 0x7A0) << 6
 		SHLi $x %0 #6
-	.e18:	MULi %0 $inp:0 $x	; outp[0] = (int) inp[0] * x >> 12
+	.e18:	NOOP
+	.e16:	NOOP
+	.e14:	MULi %0 $inp:0 $x	; outp[0] = (int) inp[0] * x >> 12
 		SHRi $outp:0 %0 #12
 		MULi %0 $inp:1 $x	; outp[1] = (int) inp[1] * x >> 12
 		SHRi $outp:1 %0 #12
-		GOTO @.s7  	; }
+		GOTO @.e8  	; }
 	.s7#BIT_CRUSH_EFFECT:	ANDi %1 $clock $fxParams:FX_PARAM_BIT_CRUSH_MASK	; read(clock & (int) fxParams[FX_PARAM_BIT_CRUSH_MASK], 1, outp)
 		MOVi %2 #1 
 		ADRL %3 $outp *0
@@ -919,7 +930,7 @@ process:	FUNC	; signature func process() -> void @ crashesPermut8.impala:622:1
 		ADDi $outp:0 $outp:0 %0
 		SHRi %0 $outp:1 #1	; outp[1] = (int) outp[1] + ((int) outp[1] >> 1)
 		ADDi $outp:1 $outp:1 %0
-		GOTO @.s7  	; }
+		GOTO @.e8  	; }
 	.s7#REPEAT_EFFECT:	ANDi $pos $clock $fxParams:FX_PARAM_REPEAT_MASK	; pos = clock & (int) fxParams[FX_PARAM_REPEAT_MASK]
 		MOVi %1 $pos 	; read(pos, 1, samples)
 		MOVi %2 #1 
@@ -935,10 +946,11 @@ process:	FUNC	; signature func process() -> void @ crashesPermut8.impala:622:1
 		SUBi $x %0 $fxParams:FX_PARAM_1_LSHIFT_10
 		GEQi $x #0 @.f21	; if (x < 0) 
 		MOVi $x #0 	; x = 0
-		GOTO @.f23  	; } else if (x > (int) fxParams[FX_PARAM_MASK_10]) 
+		GOTO @.e22  	; } else if (x > (int) fxParams[FX_PARAM_MASK_10]) 
 	.f21:	LEQi $x $fxParams:FX_PARAM_MASK_10 @.f23	; if (x > (int) fxParams[FX_PARAM_MASK_10]) 
 		MOVi $x $fxParams:FX_PARAM_MASK_10 	; x = (int) fxParams[FX_PARAM_MASK_10]
-	.f23:	MOVi %1 $pos 	; read(pos, 1, &samples[2])
+	.f23:	NOOP
+	.e22:	MOVi %1 $pos 	; read(pos, 1, &samples[2])
 		MOVi %2 #1 
 		ADRL %3 $samples:2 *0
 		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ crashesPermut8.impala:752:30
@@ -950,7 +962,7 @@ process:	FUNC	; signature func process() -> void @ crashesPermut8.impala:622:1
 		MULi %0 %0 $x
 		SHRi %0 %0 $fxParams:FX_PARAM_SHIFT_10
 		ADDi $outp:1 $samples:1 %0
-		GOTO @.s7  	; }
+		GOTO @.e8  	; }
 	.s7#STRETCH_EFFECT:	EQUi $trig #FALSE @.f24	; if (trig != FALSE) 
 		MOVi $pos $clock 	; pos = clock
 	.f24:	MOVi %1 $pos 	; read(pos, 1, samples)
@@ -971,9 +983,9 @@ process:	FUNC	; signature func process() -> void @ crashesPermut8.impala:622:1
 		SHRi %0 %0 $fxParams:FX_PARAM_SHIFT_10
 		ADDi $outp:1 $samples:1 %0
 		ADDi $pos $pos #1	; pos = pos + 1
-		NEQi $x $fxParams:FX_PARAM_MASK_10 @.s7	; if (x == (int) fxParams[FX_PARAM_MASK_10]) 
+		NEQi $x $fxParams:FX_PARAM_MASK_10 @.e8	; if (x == (int) fxParams[FX_PARAM_MASK_10]) 
 		SUBi $pos $pos $fxParams:FX_PARAM_1_LSHIFT_9	; pos = pos - (int) fxParams[FX_PARAM_1_LSHIFT_9]
-		GOTO @.s7  	; }
+		GOTO @.e8  	; }
 	.s7#PITCH_SHIFT_EFFECT:	SUBi %0 $fxParams:FX_PARAM_1_LSHIFT_9 #1	; x = clock & ((int) fxParams[FX_PARAM_1_LSHIFT_9] - 1)
 		ANDi $x $clock %0
 		SUBi %0 $fxParams:FX_PARAM_1_LSHIFT_9 #1	; pos = (clock & ~((int) fxParams[FX_PARAM_1_LSHIFT_9] - 1)) + x * 2
@@ -997,15 +1009,17 @@ process:	FUNC	; signature func process() -> void @ crashesPermut8.impala:622:1
 		MULi %0 %0 $x
 		SHRi %0 %0 $fxParams:FX_PARAM_SHIFT_9
 		ADDi $outp:1 $samples:1 %0
-	.s7:	LSSi $fx #0 @.f26	; if (fx >= 0) 
+	.s7:	NOOP
+	.e8:	LSSi $fx #0 @.f26	; if (fx >= 0) 
 		ADDi $mix $mix #0x800	; mix = mix + 0x800
-		LEQi $mix #0x8000 @.f29	; if (mix > 0x8000) 
+		LEQi $mix #0x8000 @.e28	; if (mix > 0x8000) 
 		MOVi $mix #0x8000 	; mix = 0x8000
-		GOTO @.f29  	; } else 
+		GOTO @.e28  	; } else 
 	.f26:	SUBi $mix $mix #0x100	; mix = mix - 0x100
 		GEQi $mix #0 @.f29	; if (mix < 0) 
 		MOVi $mix #0 	; mix = 0
-	.f29:	SUBi %0 $outp:0 $inp:0	; global signal[0] = (int) inp[0] + (((int) outp[0] - (int) inp[0]) * mix >> 15)
+	.f29:	NOOP
+	.e28:	SUBi %0 $outp:0 $inp:0	; global signal[0] = (int) inp[0] + (((int) outp[0] - (int) inp[0]) * mix >> 15)
 		MULi %0 %0 $mix
 		SHRi %0 %0 #15
 		ADDi %0 $inp:0 %0

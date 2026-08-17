@@ -109,7 +109,7 @@ main:	FUNC	; signature func main() -> void @ disasm2.impala:105:1
 		MOVi %1 #255 	; input(255, s)
 		ADRL %2 $s *0
 		CALL ^input %0 *3	; expects input(int, int-ptr) -> unknown @ disasm2.impala:112:15
-		EQUi $s:0 #0 @stopIt	; if (s[0] != 0) 
+		EQUi $s:0 #0 @.f0	; if (s[0] != 0) 
 		ADRL %1 $s *0	; lower(s)
 		CALL &lower %0 *2	; expects lower(int-ptr) -> void @ disasm2.impala:114:11
 		ADRL %1 $s *0	; if ((file = findFile(s)) < 0) outputLine("File not found")
@@ -194,6 +194,10 @@ main:	FUNC	; signature func main() -> void @ disasm2.impala:105:1
 	.e11:	GRTi $readCount #0 @.l9	; } while (readCount > 0)
 		MOVp %1 &.s_Morey_4dc:10 	; outputLine("")
 		CALL &outputLine %0 *2	; expects outputLine(int-ptr) -> void @ disasm2.impala:163:19
+	.e7:	NOOP
+	.e5:	NOOP
+	.e2:	NOOP
+	.f0:	NOOP
 	stopIt:	RETU   	; }
 
 .s__4d2:	CNST *2

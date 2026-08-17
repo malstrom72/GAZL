@@ -1356,25 +1356,22 @@ console.log("impala.jspeg compiler spills initializer constants only once the sc
 	console.log("impala.jspeg compiler folds away the multiply-by-one in a scaled index");
 }
 
-// Two source labels with nothing between them name ONE address, and only one GAZL line can carry a name -
-// so the run collapses onto a survivor and `goto beta` comes out as `GOTO @alpha`. That is a size win for a
-// .gazl that ships and a loss for one being read: a name the source can `goto` is simply absent, and the
-// commit that added the collapse promised "a name someone can `goto` never disappears" - true only while at
-// most one label in the run is user-written. `--keep-labels` spends a free NOOP to keep the mapping 1:1.
+// Two source labels with nothing between them name ONE address, and only one GAZL line can carry a name.
+// BY DEFAULT each keeps its own NOOP, so the listing maps 1:1 onto the source. Collapsing the run is a size
+// win for a .gazl that SHIPS and a loss for one being read: it merges two USER labels as readily as a minted
+// one, so a name the source can `goto` simply disappears - `repeat` did exactly that in calc.gazl, leaving
+// `goto repeat` emitted as `GOTO @wasFunction`. `--collapse-labels` opts into the trade; a NOOP is free.
 {
 	const src = "const int DEBUG = 0\nextern native printInt\nexport function main()\nlocals int i\n{\n\ti = 0;\n\tif (i == 0) goto alpha;\n\ti = 1;\nalpha: ;\nbeta: ;\n\tprintInt(i);\n\tif (i == 5) goto beta;\n}\n";
-	const collapsed = compileWithJsImpala(src, { randomId: 42 });
-	const kept = compileWithJsImpala(src, { randomId: 42, keepLabels: true });
-	assert(/^\s*alpha:/m.test(collapsed) && !/^\s*beta:/m.test(collapsed),
-		`by default a coincident label collapses onto one survivor
-${collapsed}`);
+	const kept = compileWithJsImpala(src, { randomId: 42 });
+	const collapsed = compileWithJsImpala(src, { randomId: 42, collapseLabels: true });
 	assert(/^\s*alpha:\s+NOOP/m.test(kept) && /^\s*beta:/m.test(kept),
-		`--keep-labels must give each coincident label its own NOOP
-${kept}`);
+		`by default each coincident label must keep its own NOOP\n${kept}`);
+	assert(/^\s*alpha:/m.test(collapsed) && !/^\s*beta:/m.test(collapsed),
+		`--collapse-labels must merge the run onto one survivor\n${collapsed}`);
 	assert(/GOTO @beta\b/.test(kept) && /GOTO @alpha\b/.test(collapsed),
-		`each spelling must branch to the label it names
-${kept}`);
-	console.log("impala.jspeg compiler keeps coincident labels apart under --keep-labels");
+		`each spelling must branch to the label it names\n${kept}`);
+	console.log("impala.jspeg compiler keeps coincident labels apart unless --collapse-labels asks");
 }
 
 // Each 1.0/2.0 port pair claims IN ITS HEADER that the ported data table assembles to the same words as
@@ -2039,19 +2036,23 @@ console.log("impala.jspeg compiler never bounds-checks ADDRESS formation");
 	assert(!/! FAIL/.test(exprAddr) && !/! MOVi <\w> #<\w>/.test(exprAddr),
 		"expression index: an ADDRESS kept the guard or its copy\n" + exprAddr);
 
-	// COINCIDENT LABELS collapse. Nested `if`s end at the same address, and only one line can carry a
-	// name, so every label but one used to be spent on a `NOOP` that existed for no other reason
-	// (adventCode had seven in a row). processBranches folds the run onto one survivor and rewrites the
-	// references, which is only safe after every alias and deletion it makes has settled.
+	// COINCIDENT LABELS collapse, under `--collapse-labels`. Nested `if`s end at the same address, and
+	// only one line can carry a name, so every label but one is spent on a `NOOP` that exists for no
+	// other reason (adventCode has seven in a row). processBranches folds the run onto one survivor and
+	// rewrites the references, which is only safe after every alias and deletion it makes has settled.
+	// OFF by default - see the 1:1 test above - because it merges two USER labels just as readily, and
+	// a `NOOP` costs nothing to keep.
 	const coincident = compileWithJsImpala(
 		"function main() locals int x, int y { if (x == 1) { if (y == 2) { x = 3; } } x = 4; }\n",
-		{ randomId: 42 });
+		{ randomId: 42, collapseLabels: true });
 	assert(!/NOOP/.test(coincident) && (coincident.match(/@\.f\d/g) || []).length === 2
 			&& new Set(coincident.match(/@\.f\d/g)).size === 1,
 		"coincident labels: not collapsed onto one survivor\n" + coincident);
-	// A user label survives in preference to a minted one, so a `goto` target never leaves the listing.
+	// A user label survives in preference to a MINTED one. Against another USER label it does not - one
+	// of the two names goes, which is the reason collapsing is opt-in rather than the default.
 	const userLabel = compileWithJsImpala(
-		"function main() locals int x { if (x == 1) { x = 2; } top: ; x = 3; goto top; }\n", { randomId: 42 });
+		"function main() locals int x { if (x == 1) { x = 2; } top: ; x = 3; goto top; }\n",
+		{ randomId: 42, collapseLabels: true });
 	assert(!/NOOP/.test(userLabel) && /GOTO @top/.test(userLabel) && /^\s*top:/m.test(userLabel)
 			&& /NEQi \$x #1 @top/.test(userLabel),
 		"coincident labels: the user's name did not survive\n" + userLabel);

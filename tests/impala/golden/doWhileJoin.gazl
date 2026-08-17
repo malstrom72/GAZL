@@ -11,8 +11,9 @@ nested:	FUNC	; signature func nested() -> int @ doWhileJoin.impala:13:1
 	$i:	LOCi
 ;-----------------------------------------------------------------------------
 		MOVi $i #0 	; i = 0
-	.l0:	ADDi $i $i #1	; i = i + 1
-		LSSi $i #3 @.l0	; } while (i < 3)
+	.l0:	NOOP
+	.l1:	ADDi $i $i #1	; i = i + 1
+		LSSi $i #3 @.l1	; } while (i < 3)
 		LSSi $i #5 @.l0	; } while (i < 5)
 		MOVi $n $i 	; n = i
 		RETU   	; }

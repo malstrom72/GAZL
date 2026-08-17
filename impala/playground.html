@@ -44,7 +44,7 @@
 		<label><input id="retab" type="checkbox" checked /> align</label>
 		<label><input id="legacy" type="checkbox" /> --legacy</label>
 		<label><input id="ranges" type="checkbox" /> --range-checks</label>
-		<label><input id="keeplabels" type="checkbox" /> --keep-labels</label>
+		<label><input id="collapselabels" type="checkbox" /> --collapse-labels</label>
 	</div>
 	<div id="status">&nbsp;</div>
 </header>
@@ -111,7 +111,7 @@
 		retabEl = document.getElementById("retab"),
 		legacyEl = document.getElementById("legacy"),
 		rangesEl = document.getElementById("ranges"),
-		keepLabelsEl = document.getElementById("keeplabels");
+		collapseLabelsEl = document.getElementById("collapselabels");
 
 	function esc(s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;"); }
 
@@ -128,7 +128,7 @@
 			sourceName: "input.impala",
 			legacy: legacyEl.checked,
 			rangeChecks: rangesEl.checked,   // the emitted guards are `DEBUG`-gated, so they need `const int DEBUG`
-			keepLabels: keepLabelsEl.checked,   // a NOOP per coincident label, so a `goto` name stays in the listing
+			collapseLabels: collapseLabelsEl.checked,   // merge coincident labels; off keeps a `goto` name in the listing
 			warn: function (message, offset, code, hint) {
 				var c = caretLine(source, offset);
 				var pos = "input.impala:" + c.lc.line + ":" + c.lc.col;
@@ -190,7 +190,7 @@
 	var STORAGE_KEY = "impala.playground.src";
 	// The toggles are remembered too, keyed by element id so adding a fourth needs no code here. The
 	// SEED deliberately is not: it is per-experiment, and a stale one silently changes every label.
-	var flagEls = [retabEl, legacyEl, rangesEl, keepLabelsEl];
+	var flagEls = [retabEl, legacyEl, rangesEl, collapseLabelsEl];
 	function flagKey(el) { return "impala.playground." + el.id; }
 	function persist() { try { localStorage.setItem(STORAGE_KEY, srcEl.value); } catch (e) {} }
 	function persistFlags() {
