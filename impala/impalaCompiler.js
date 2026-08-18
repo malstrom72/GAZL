@@ -958,40 +958,43 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
            minted one, so a name someone can `goto` never disappears from the listing.
            NOT merged: a name holding `#` is a switch table entry (`.sN#k`), where the case value IS
            part of the name and two entries are different addresses that merely render alike here.
-           OFF unless `--collapse-labels` asks for it. Collapsing is a DISTRIBUTION optimization and it
-           costs the one thing a reader wants: a source label whose name still appears in the listing -
-           two coincident USER labels collapse too, so a name someone can `goto` does disappear, which
-           `wasFunction`/`repeat` in calc.impala showed. A `NOOP` is free at run time, so the trade only
-           pays when SIZE does; by default Impala:GAZL stays as close to 1:1 as it can. */
-        var alias = {}, run = [];
-        if (!collapseLabels) { run = undefined; }
-        for (i = 0; run !== undefined && i <= metacode.length; ++i) {
-            rec = (i < metacode.length ? metacode[i] : { operator: null });
-            if (rec.operator === ';' || (rec.operator == null && i < metacode.length)) continue;
-            if (rec.operator === '<--' && rec.operands[0].indexOf('#') < 0) {
-                run.push(rec);
-                continue;
-            }
-            if (run.length > 1) {                                 /* a lone label has nothing to merge */
-                var keep = run[0];
-                for (var u = 0; u < run.length; ++u) {            /* prefer a name the user wrote */
-                    if (run[u].operands[0].charAt(1) !== '.') { keep = run[u]; break; }
+           OFF unless `--collapse-labels` asks for it: a `NOOP` is free at run time, so by default
+           Impala:GAZL stays as close to 1:1 as it can and the trade only pays when SIZE does.
+           A USER name is never merged away, on or off. The original pass kept one survivor and preferred
+           a user name for it, which holds only while at most ONE label in the run is user-written -
+           `wasFunction: ;` immediately before `repeat: {` in calc.impala made `repeat` vanish and
+           `goto repeat` emit as `GOTO @wasFunction`. Only MINTED names (`.f0`, `.e2`, ...) fold now, and
+           those are the bulk of it: across the corpus 147 minted names merge against 2 user ones. */
+        if (collapseLabels) {
+            var alias = {}, run = [];
+            for (i = 0; i <= metacode.length; ++i) {
+                rec = (i < metacode.length ? metacode[i] : { operator: null });
+                if (rec.operator === ';' || (rec.operator == null && i < metacode.length)) continue;
+                if (rec.operator === '<--' && rec.operands[0].indexOf('#') < 0) {
+                    run.push(rec);
+                    continue;
                 }
-                for (u = 0; u < run.length; ++u) {
-                    if (run[u] === keep) continue;
-                    alias[run[u].operands[0]] = keep.operands[0];
-                    delete defined[run[u].operands[0]];           /* the reference check below now covers this */
-                    keep.mayRide = (keep.mayRide === true && run[u].mayRide === true);
-                    run[u].operator = null;
+                if (run.length > 1) {                             /* a lone label has nothing to merge */
+                    var keep = run[0];
+                    for (var u = 0; u < run.length; ++u) {        /* prefer a name the user wrote */
+                        if (run[u].operands[0].charAt(1) !== '.') { keep = run[u]; break; }
+                    }
+                    for (u = 0; u < run.length; ++u) {
+                        if (run[u] === keep || run[u].operands[0].charAt(1) !== '.') continue;
+                        alias[run[u].operands[0]] = keep.operands[0];
+                        delete defined[run[u].operands[0]];       /* the reference check below now covers this */
+                        keep.mayRide = (keep.mayRide === true && run[u].mayRide === true);
+                        run[u].operator = null;
+                    }
                 }
+                run.length = 0;
             }
-            run.length = 0;
-        }
-        for (i = 0; i < metacode.length; ++i) {
-            rec = metacode[i];
-            if (rec.operator == null || rec.operator === ';') continue;
-            for (var a = 0; a < 3; ++a) {
-                if (alias[rec.operands[a]] !== undefined) rec.operands[a] = alias[rec.operands[a]];
+            for (i = 0; i < metacode.length; ++i) {
+                rec = metacode[i];
+                if (rec.operator == null || rec.operator === ';') continue;
+                for (var a = 0; a < 3; ++a) {
+                    if (alias[rec.operands[a]] !== undefined) rec.operands[a] = alias[rec.operands[a]];
+                }
             }
         }
 
@@ -2277,7 +2280,7 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
        layout block writes through `output()` with its own hand-picked `<t>`, and mulAddAxis fuses the
        following add and chooses between a transient and a scratch. */
     scaleByStride = function (k, sym) {
-        var n = '#' + dropHash('' + k);
+        var n = '#' + k;                                      /* every caller passes it unhashed */
         if (constInt(n) === 1) { return sym; }
         var w = borrow('<');
         emit('<> *', 'i', w, n, '#' + sym);

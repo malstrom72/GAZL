@@ -39,7 +39,7 @@ const { compileProgram } = require("./impala.node.js");
    silence is the exact defect this gate is for. `files` adds units beside the root for the import sample. */
 const SAMPLES = [
 	{
-		name: "upgrading a 1.0 program",
+		name: "what is worth rewriting",
 		expect: null,
 		/* Ordered so every block of the page's "What is worth rewriting" section is a contiguous
 		   substring of this one program. Each pair compiles BOTH ways - that is the section's claim:

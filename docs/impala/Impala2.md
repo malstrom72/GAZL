@@ -1528,8 +1528,8 @@ foo.impala:12:9: note: use a cast: (int pointer)
 - **First-error stop.** The compiler is single-pass with immediate code generation; error recovery
   in that architecture produces cascading nonsense. One correct error beats five speculative ones.
 - A structured `--json` output mode can be added later if tooling demands it; the line format is
-  the contract. **It does not exist today** - the complete flag set is `--legacy`, `--dead-strip`
-  and `--range-checks`.
+  the contract. **It does not exist today** - the flag set is what `node impala/impala.node.js`
+  prints with no arguments (today: `--legacy`, `--dead-strip`, `--range-checks`, `--collapse-labels`).
 
 ### Code registry
 

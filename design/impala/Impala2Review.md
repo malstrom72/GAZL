@@ -377,7 +377,8 @@ the two entries still marked open.
   compile`. Packaging a launcher is a separate wish, not a doc defect: no doc promises one now.
 - ~~`--json`, `--emit-metadata`, `--no-metadata` do not exist. The complete flag set is `--legacy` and
   `--dead-strip`.~~ The three phantom flags are still absent, but the flag set is **three**, not two:
-  `--legacy`, `--dead-strip` and `--range-checks` (corrected 2026-08-04; `--range-checks` shipped with
+  `--legacy`, `--dead-strip`, `--range-checks` and `--collapse-labels` (corrected twice, 2026-08-04 and
+  2026-08-18 - the lesson is to cite the usage text rather than copy it; `--range-checks` shipped with
   E461).
 - ~~`import "x.gazl"` blob imports do not work — the closure walker parses every import as Impala source.~~
   RESOLVED 2026-08-04 by **deferring the feature to Impala 3.0**, not by building it: nothing needs it, and

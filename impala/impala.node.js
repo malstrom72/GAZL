@@ -47,15 +47,14 @@ function readStdinLatin1Sync() {
 function usageAndExit() {
 	console.error('Usage:');
 	console.error('  node impala/impala.node.js compile [--legacy] [--dead-strip] [--range-checks] [--collapse-labels] [<input.impala>] [<output.gazl>|-] [<random id>]');
-	console.error('  node impala/impala.node.js run [--legacy] [--range-checks] [<input.impala>]');
+	console.error('  node impala/impala.node.js run [--legacy] [--range-checks] [--collapse-labels] [<input.impala>]');
 	console.error('  --legacy downgrades Impala 2 strict-expression errors to warnings');
 	console.error('  --dead-strip drops everything unreachable from an `export`');
 	console.error('  --range-checks emits DEBUG-gated runtime bounds tests (off by default: they stay in the');
 	console.error('                 .gazl TEXT even when DEBUG is 0, and that text is what ships)');
-	console.error('  --collapse-labels merges a run of coincident labels onto one survivor, dropping the NOOP');
-	console.error('                 each of the others was spent on. Off by default: it is a size win for a');
-	console.error('                 .gazl that SHIPS, and it costs a source label its name in the listing, so');
-	console.error('                 by default the mapping stays 1:1 - a NOOP costs no cycles either way.');
+	console.error('  --collapse-labels merges runs of coincident MINTED labels, dropping the NOOP each was');
+	console.error('                 spent on (off by default: a NOOP costs no cycles, so it only pays on a');
+	console.error('                 .gazl that ships). A name you wrote is never merged away.');
 	process.exit(1);
 }
 
@@ -194,7 +193,8 @@ function runCommand(args, opts) {
 
 function main() {
 	const argv = process.argv.slice(2);
-	// One list, so adding a flag touches one place instead of three. An UNKNOWN `--flag` is rejected
+	// One list for PARSING, so the argv loop never grows. A flag still has to be passed on below and
+	// listed in impalaJsCompilerRunner's, plus usage above. An UNKNOWN `--flag` is rejected
 	// rather than taken for a filename: `--range-cheks` used to be silently dropped and compile anyway.
 	const FLAGS = { '--legacy': 'legacy', '--dead-strip': 'deadStrip', '--range-checks': 'rangeChecks',
 			'--collapse-labels': 'collapseLabels' };

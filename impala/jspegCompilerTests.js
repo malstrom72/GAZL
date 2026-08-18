@@ -1357,21 +1357,41 @@ console.log("impala.jspeg compiler spills initializer constants only once the sc
 }
 
 // Two source labels with nothing between them name ONE address, and only one GAZL line can carry a name.
-// BY DEFAULT each keeps its own NOOP, so the listing maps 1:1 onto the source. Collapsing the run is a size
-// win for a .gazl that SHIPS and a loss for one being read: it merges two USER labels as readily as a minted
-// one, so a name the source can `goto` simply disappears - `repeat` did exactly that in calc.gazl, leaving
-// `goto repeat` emitted as `GOTO @wasFunction`. `--collapse-labels` opts into the trade; a NOOP is free.
+// BY DEFAULT each keeps its own NOOP, so the listing maps 1:1 onto the source and a `NOOP` is free anyway.
+// A USER name is never merged away even WITH `--collapse-labels`: the pass once kept a single survivor and
+// merely preferred a user name for it, which holds only while at most one label in the run is user-written,
+// and `wasFunction: ;` sitting immediately before `repeat: {` in calc.impala is what broke it - `repeat`
+// left the listing and `goto repeat` came out as `GOTO @wasFunction`. Minted runs still fold: see the
+// `--collapse-labels` block further down, which is what pays for the flag.
 {
 	const src = "const int DEBUG = 0\nextern native printInt\nexport function main()\nlocals int i\n{\n\ti = 0;\n\tif (i == 0) goto alpha;\n\ti = 1;\nalpha: ;\nbeta: ;\n\tprintInt(i);\n\tif (i == 5) goto beta;\n}\n";
-	const kept = compileWithJsImpala(src, { randomId: 42 });
-	const collapsed = compileWithJsImpala(src, { randomId: 42, collapseLabels: true });
-	assert(/^\s*alpha:\s+NOOP/m.test(kept) && /^\s*beta:/m.test(kept),
-		`by default each coincident label must keep its own NOOP\n${kept}`);
-	assert(/^\s*alpha:/m.test(collapsed) && !/^\s*beta:/m.test(collapsed),
-		`--collapse-labels must merge the run onto one survivor\n${collapsed}`);
-	assert(/GOTO @beta\b/.test(kept) && /GOTO @alpha\b/.test(collapsed),
-		`each spelling must branch to the label it names\n${kept}`);
-	console.log("impala.jspeg compiler keeps coincident labels apart unless --collapse-labels asks");
+	for (const [label, out] of [ [ "by default", compileWithJsImpala(src, { randomId: 42 }) ],
+			[ "even under --collapse-labels", compileWithJsImpala(src, { randomId: 42, collapseLabels: true }) ] ]) {
+		assert(/^\s*alpha:\s+NOOP/m.test(out) && /^\s*beta:/m.test(out) && /GOTO @beta\b/.test(out),
+			`${label}, two coincident USER labels must both keep their name\n${out}`);
+	}
+	console.log("impala.jspeg compiler never merges one user label into another");
+}
+
+// With collapsing OFF by default the 100-program golden gate no longer runs that pass AT ALL - its only
+// remaining coverage is the toy programs above, so a regression in it would be invisible to the byte
+// compare. One real program therefore goes through it both ways here. Two properties, and they are the
+// whole bargain: it must actually pay (fewer NOOPs), and it must not cost one written-down name.
+if (fs.existsSync(path.join(dir, "..", "tests", "impala", "sources", "calc.impala"))) {
+	const src = canonicalizeNewlines(fs.readFileSync(
+		path.join(dir, "..", "tests", "impala", "sources", "calc.impala"), IMPALA_ENCODING));
+	const opts = { randomId: 42, sourceName: "calc.impala", retabulate: false };
+	const kept = compileWithJsImpala(src, opts);
+	const collapsed = compileWithJsImpala(src, Object.assign({ collapseLabels: true }, opts));
+	const noops = (text) => (text.match(/\bNOOP\b/g) || []).length;
+	assert(noops(collapsed) < noops(kept),
+		`--collapse-labels must remove NOOPs on a real program (${noops(kept)} -> ${noops(collapsed)})`);
+	// A name with no leading `.` is one someone wrote - a label or a function. None may be merged away.
+	const written = (text) => (text.match(/^[A-Za-z_][A-Za-z_0-9]*:/gm) || []).sort().join(" ");
+	assert(written(kept) !== "" && written(kept) === written(collapsed),
+		`--collapse-labels must not cost a written-down name\n  kept:      ${written(kept)}\n`
+			+ `  collapsed: ${written(collapsed)}`);
+	console.log("impala.jspeg compiler collapses a real program's labels without losing one of its names");
 }
 
 // Each 1.0/2.0 port pair claims IN ITS HEADER that the ported data table assembles to the same words as
@@ -2048,8 +2068,8 @@ console.log("impala.jspeg compiler never bounds-checks ADDRESS formation");
 	assert(!/NOOP/.test(coincident) && (coincident.match(/@\.f\d/g) || []).length === 2
 			&& new Set(coincident.match(/@\.f\d/g)).size === 1,
 		"coincident labels: not collapsed onto one survivor\n" + coincident);
-	// A user label survives in preference to a MINTED one. Against another USER label it does not - one
-	// of the two names goes, which is the reason collapsing is opt-in rather than the default.
+	// A user label survives in preference to a MINTED one, which is the case this pass is FOR. Against
+	// another user label nothing merges at all - see "never merges one user label into another" above.
 	const userLabel = compileWithJsImpala(
 		"function main() locals int x { if (x == 1) { x = 2; } top: ; x = 3; goto top; }\n",
 		{ randomId: 42, collapseLabels: true });
@@ -2060,7 +2080,7 @@ console.log("impala.jspeg compiler never bounds-checks ADDRESS formation");
 	// `.s0#7` are different addresses that merely render alike before the assembler resolves them.
 	const caseLabels = compileWithJsImpala(
 		"function main() locals int x, int y { switch (x == 0 to 8) { case 3, 7: { y = 1; } } }\n",
-		{ randomId: 42 });
+		{ randomId: 42, collapseLabels: true });
 	assert(/\.s0#3:/.test(caseLabels) && /\.s0#7:/.test(caseLabels),
 		"switch: a case label was merged away\n" + caseLabels);
 	const symAddr = compileWithJsImpala(konst

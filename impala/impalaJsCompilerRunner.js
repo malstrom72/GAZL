@@ -252,11 +252,16 @@ function compileWithJsImpala(source, options = {}) {
 	if (legacy) {
 		compilerOptions.legacy = true;
 	}
-	if (options.rangeChecks) {
-		compilerOptions.rangeChecks = true;   // --range-checks: DEBUG-gated runtime bounds tests, off by default
-	}
-	if (options.collapseLabels) {
-		compilerOptions.collapseLabels = true;   // --collapse-labels: merge coincident labels, off by default
+	// The BOOLEAN compiler flags, in ONE list. Copied rather than spread because `options` also carries
+	// runner-only keys (`compilerPath`, `retabulate`, `onWarning`) and keys this function TRANSFORMS
+	// (`warn`, `sourceName`), so an `Object.assign` would hand the compiler nonsense. But the per-flag
+	// `if` chain this replaces is where a flag goes to die: `--collapse-labels` was threaded through the
+	// CLI, arrived here, was not in the chain, and compiled clean with the option silently ignored - the
+	// same failure `impala.node.js`'s FLAGS map exists to prevent one layer up. Add a flag here.
+	for (const flag of [ "rangeChecks", "collapseLabels" ]) {
+		if (options[flag]) {
+			compilerOptions[flag] = true;
+		}
 	}
 	compilerOptions.warn = (message, offset, code, hint) => {
 		const formatted = formatDiagnostic(source, options, offset ?? 0, "warning", code, message, hint);

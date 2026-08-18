@@ -241,7 +241,8 @@ global int array names[MAX_FILES, 32]
 
 `files[i].size` lowers to the same three instructions `FILES[i * FILE_FIELD_COUNT + FILE_FIELD_SIZE]` did -
 `.z.File` and `.o.File.size` replace the hand-written constants, so the layout cannot drift from the code
-that reads it. Converting `fileList.impala` removed **20** hand-computed offset expressions and left the
+that reads it. Converting `fileList.impala` removed all **19** uses of `FILE_FIELD_*` outside their own
+declarations, and left the
 emitted data words byte-identical. A rectangular `[MAX_FILES, 32]` does the same for a row walk: `&names[i, 0]`
 instead of a pointer the author has to remember to advance by the row length.
 
