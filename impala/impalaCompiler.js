@@ -966,8 +966,10 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
            assembles, 0/87). It is still not here, for a duller reason - it then changes ONE line in the
            whole corpus, and that line is in a synthetic fixture. The backward walk above already
            collapses every chain that runs in the direction it scans, which is all of them in practice.
-              Note this is also why the coincident-label merge above IS safe: it re-points a reference to
-           a label at the SAME address, so no skip region moves. */
+              The same reasoning bounds what a label transform may do at all: re-pointing a reference to a
+           label at the SAME address moves no skip region and is safe, while threading to a LATER one is
+           what grows the region. The removed coincident-label merge was the former (see
+           design/gazl/GAZLAssemblerOptimizations.md); items 4 and 5 there are the latter. */
         var leadsTo = {};
         for (i = 0; i < metacode.length; ++i) {
             if (metacode[i].operator !== '<--') continue;
