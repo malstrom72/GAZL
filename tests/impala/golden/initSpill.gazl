@@ -1,0 +1,125 @@
+; Compiled with Impala version 2.0
+
+; signatures version=1
+DEBUG:	! DEFi #0	; signature const DEBUG : int @ initSpill.impala:23:1
+K:	! DEFi #100	; signature const K : int @ initSpill.impala:24:1
+HALF:	! DEFf #1.5	; signature const HALF : float @ initSpill.impala:25:1
+; signature extern native printInt() -> unknown @ initSpill.impala:27:1
+; signature extern native printFloat() -> unknown @ initSpill.impala:28:1
+; signature extern native printLF() -> unknown @ initSpill.impala:29:1
+	! MULi <A> #4 #8
+.z.m:	! DEFi #<A>
+.d.m.0:	! DEFi #8
+.d.m.1:	! DEFi #4
+m:	GLOB *.z.m	; signature array m[4x8] : int @ initSpill.impala:31:1
+	! ADDi <A> #K #1
+	! ADDi <B> #K #2
+	! ADDi <C> #K #3
+	! ADDi <D> #K #4
+	! ADDi <E> #K #5
+	! ADDi <F> #K #6
+	! ADDi <G> #K #7
+	! ADDi <H> #K #8
+	! ADDi <I> #K #9
+	! ADDi <J> #K #10
+	! ADDi <K> #K #11
+	! ADDi <L> #K #12
+	! ADDi <M> #K #13
+	! ADDi <N> #K #14
+	! ADDi <O> #K #15
+	! ADDi <P> #K #16
+	! ADDi <Q> #K #17
+	! ADDi <R> #K #18
+	! ADDi <S> #K #19
+	! ADDi <T> #K #20
+	! ADDi <U> #K #21
+	! ADDi <V> #K #22
+	! ADDi <W> #K #23
+	! ADDi <X> #K #24
+	! ADDi <Y> #K #25
+	! ADDi <Z> #K #26
+.k0:	! DEFi #<Z>
+	! ADDi <Z> #K #27
+.k1:	! DEFi #<Z>
+	! ADDi <Z> #K #28
+.k2:	! DEFi #<Z>
+	! ADDi <Z> #K #29
+.k3:	! DEFi #<Z>
+	! ADDi <Z> #K #30
+.k4:	! DEFi #<Z>
+	! ADDi <Z> #K #31
+.k5:	! DEFi #<Z>
+	! ADDi <Z> #K #32
+.k6:	! DEFi #<Z>
+	DATi <A>
+	DATi <B>
+	DATi <C>
+	DATi <D>
+	DATi <E>
+	DATi <F>
+	DATi <G>
+	DATi <H>
+	DATi <I>
+	DATi <J>
+	DATi <K>
+	DATi <L>
+	DATi <M>
+	DATi <N>
+	DATi <O>
+	DATi <P>
+	DATi <Q>
+	DATi <R>
+	DATi <S>
+	DATi <T>
+	DATi <U>
+	DATi <V>
+	DATi <W>
+	DATi <X>
+	DATi <Y>
+	DATi #.k0 #.k1 #.k2 #.k3 #.k4 #.k5 #.k6
+	! MOVi <a> #0	; layout of struct Pair
+.o.Pair.lo:	! DEFi #<a>
+	! ADDi <a> #<a> #1
+.o.Pair.hi:	! DEFi #<a>
+	! ADDi <a> #<a> #1
+.z.Pair:	! DEFi #<a>
+; signature struct Pair { lo : float, hi : float } @ initSpill.impala:36:1
+p:	CNST *.z.Pair	; signature readonly p : Pair @ initSpill.impala:37:1
+	! MULf <Y> #HALF #1.0
+	! MULf <X> #HALF #2.0
+	DATA <Y>
+	DATA <X>
+
+;-----------------------------------------------------------------------------
+main:	FUNC	; signature export func main() -> void @ initSpill.impala:39:1
+		PARA *1
+	$y:	LOCi
+	$x:	LOCi
+	$total:	LOCi
+;-----------------------------------------------------------------------------
+		PEEK %1 &m:0 	; printInt(global m[0, 0])
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ initSpill.impala:42:26
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ initSpill.impala:43:11
+		! MULi <X> #3 #.d.m.0	; printInt(global m[3, 7])
+		! ADDi <X> <X> #7
+		PEEK %1 &m:<X> 
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ initSpill.impala:44:26
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ initSpill.impala:45:11
+		MOVi $total #0 	; total = 0
+		MOVi $y #0 	; for (y = 0 to 4) 
+		GEQi #0 #4 @.e0
+	.l1:	MOVi $x #0 	; for (x = 0 to 8) total = total + global m[y, x]
+		GEQi #0 #8 @.e2
+	.l3:	MULi %0 $y #.d.m.0	; total = total + global m[y, x]
+		ADDi %0 %0 $x
+		PEEK %0 &m %0
+		ADDi $total $total %0
+		FORi $x #8 @.l3
+	.e2:	FORi $y #4 @.l1	; }
+	.e0:	MOVi %1 $total 	; printInt(total)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ initSpill.impala:51:17
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ initSpill.impala:52:11
+		PEEK %1 &p:.o.Pair.lo 	; printFloat(global p.lo)
+		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ initSpill.impala:54:25
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ initSpill.impala:55:11
+		RETU   	; }

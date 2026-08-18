@@ -32,15 +32,13 @@ main:	FUNC	; signature export func main() -> void @ pointerStride.impala:17:1
 	$i:	LOCi
 ;-----------------------------------------------------------------------------
 		MOVp $p &bank 	; p = &global bank[0]
-		! MULi <A> #1 #.z.S	; q = &p[1]
-		ADDp %0 $p #<A>
+		ADDp %0 $p #.z.S	; q = &p[1]
 		MOVp $q %0 
 		PEEK %1 $q #.o.S.a	; printInt(q->a)
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ pointerStride.impala:22:16
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ pointerStride.impala:22:27
-		! MULi <A> #1 #.z.S	; printInt(p[1].a)
-		! ADDi <B> #<A> #.o.S.a
-		PEEK %1 $p #<B>
+		! ADDi <A> #.z.S #.o.S.a	; printInt(p[1].a)
+		PEEK %1 $p #<A>
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ pointerStride.impala:23:18
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ pointerStride.impala:23:29
 		MOVi $i #2 	; i = 2
@@ -55,8 +53,8 @@ main:	FUNC	; signature export func main() -> void @ pointerStride.impala:17:1
 		PEEK %1 %1 #.o.S.a
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ pointerStride.impala:28:18
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ pointerStride.impala:28:29
-		! MULi <B> #3 #.z.S	; q = &global bank[3]
-		ADDp %0 &bank #<B>
+		! MULi <A> #3 #.z.S	; q = &global bank[3]
+		ADDp %0 &bank #<A>
 		MOVp $q %0 
 		DIFp %0 $q $p	; n = ((pointer) q - (pointer) p) / sizeof(S)
 		DIVi $n %0 #.z.S
@@ -77,15 +75,14 @@ main:	FUNC	; signature export func main() -> void @ pointerStride.impala:17:1
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ pointerStride.impala:40:16
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ pointerStride.impala:40:27
 		MOVp $p &bank 	; p = &global bank[0]
-		! MULi <B> #4 #.z.S	; end = &global bank[4]
-		ADDp %0 &bank #<B>
+		! MULi <A> #4 #.z.S	; end = &global bank[4]
+		ADDp %0 &bank #<A>
 		MOVp $end %0 
 	.l0:	GEQp $p $end @.e1	; while (p < end) 
 		PEEK %1 $p #.o.S.a	; printInt(p->a)
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ pointerStride.impala:47:17
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ pointerStride.impala:47:28
-		! MULi <B> #1 #.z.S	; p = &p[1]
-		ADDp %0 $p #<B>
+		ADDp %0 $p #.z.S	; p = &p[1]
 		MOVp $p %0 
 		GOTO @.l0  	; }
 	.e1:	RETU   	; }

@@ -1,0 +1,49 @@
+/*
+	Calling a function pointer that lives in a STRUCT FIELD, dispatched out of a readonly struct array.
+
+	This is the shape a 1.0 dispatch table takes once it is ported - `calc2.impala`'s FUNCTIONS is
+	exactly it - and nothing in the corpus covered it. funcType, funcTypePointer and funcTypeCasts all
+	call through a local, an array of BARE funcptrs, or a cast - no source declared a funcptr-typed struct
+	FIELD at all before this file and calc2.impala. So "a `t`-typed field, initialized by name in a brace
+	initializer, then called through a dynamic subscript" had no test, in a language where the funcptr type
+	was split out of `p` precisely so the call could be checked.
+
+	Three things have to hold at once here, and only the last is visible in a golden:
+	  - the initializer takes a FUNCTION NAME as a field value and lays down its address,
+	  - `readonly` puts the table in CNST, so the funcptr words must survive being constant data,
+	  - `OPS[i].fn(7)` scales by `.z.Op`, adds `.o.Op.fn`, PEEKs, and CALLs what it read.
+
+	Expected (GAZLCmd structFuncTable.gazl main): 14 -7 49 twice
+*/
+
+const int DEBUG = 0
+
+extern native printInt
+extern native print
+extern native printLF
+
+functype IntFn(int x) returns int
+
+function twice(int x) returns int r { r = x * 2; }
+function negate(int x) returns int r { r = 0 - x; }
+function square(int x) returns int r { r = x * x; }
+
+struct Op { int pointer name; IntFn fn }
+
+readonly Op array OPS[3] = {
+	  { name: "twice",  fn: twice }
+	, { name: "negate", fn: negate }
+	, { name: "square", fn: square }
+}
+
+export function main()
+locals int i, int v
+{
+	for (i = 0 to 3) {
+		v = global OPS[i].fn(7);			/* 14, -7, 49 */
+		printInt(v);
+		printLF();
+	}
+	print(global OPS[0].name);					/* the other field still reads back */
+	printLF();
+}

@@ -204,6 +204,7 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
     var topNames = {};                                   /// name -> kind ('global'/'function'/'const'/'struct'/'functype'), one flat namespace
     var guardCounter = 0;                                /// mints `.g<N>` skip labels for deferred assertions; NOT labelCounter, which resets per function
     var emittedGuards = {};                              /// (array, index) pairs already asserted in this function - the same assertion twice says nothing new
+    var holdCounter = 0;                                 /// names minted by holdConstant when the scratch pool ran dry
     var initTarget = undefined;                          /// element DESCRIPTOR an `InitList`'s entries answer to; undefined = untyped array, accept what comes
     var reservedAt = undefined;                          /// offset of the last name reported as reserved - two doors check one name, one reports it
     var switchStack = [];
@@ -991,46 +992,6 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
             defined[name] = true;
         }
 
-        /* COINCIDENT LABELS. A run of `<--` with nothing emitted between them all name the same
-           address, but only one LINE can carry a name - so each of the others was spent on a `NOOP`
-           whose entire job was to exist (adventCode had seven in a row). Collapse the run onto one
-           survivor and rewrite the references to it. Safe HERE and not during the walk above: every
-           alias and deletion is settled by now, so nothing re-points afterwards - which is what sank
-           the prototype that tried to do this while walking. A user label survives in preference to a
-           minted one, so a name someone can `goto` never disappears from the listing.
-           NOT merged: a name holding `#` is a switch table entry (`.sN#k`), where the case value IS
-           part of the name and two entries are different addresses that merely render alike here. */
-        var alias = {}, run = [];
-        for (i = 0; i <= metacode.length; ++i) {
-            rec = (i < metacode.length ? metacode[i] : { operator: null });
-            if (rec.operator === ';' || (rec.operator == null && i < metacode.length)) continue;
-            if (rec.operator === '<--' && rec.operands[0].indexOf('#') < 0) {
-                run.push(rec);
-                continue;
-            }
-            if (run.length > 1) {                                 /* a lone label has nothing to merge */
-                var keep = run[0];
-                for (var u = 0; u < run.length; ++u) {            /* prefer a name the user wrote */
-                    if (run[u].operands[0].charAt(1) !== '.') { keep = run[u]; break; }
-                }
-                for (u = 0; u < run.length; ++u) {
-                    if (run[u] === keep) continue;
-                    alias[run[u].operands[0]] = keep.operands[0];
-                    delete defined[run[u].operands[0]];           /* the reference check below now covers this */
-                    keep.mayRide = (keep.mayRide === true && run[u].mayRide === true);
-                    run[u].operator = null;
-                }
-            }
-            run.length = 0;
-        }
-        for (i = 0; i < metacode.length; ++i) {
-            rec = metacode[i];
-            if (rec.operator == null || rec.operator === ';') continue;
-            for (var a = 0; a < 3; ++a) {
-                if (alias[rec.operands[a]] !== undefined) rec.operands[a] = alias[rec.operands[a]];
-            }
-        }
-
         /* BRANCH THREADING and RETURN DUPLICATION (design/gazl/GAZLAssemblerOptimizations.md items 4 and 5).
            The walk above resolves an alias AT VISIT TIME, so it is not transitive: a chain it meets in
            the wrong order survives. Here everything has settled, so following one is just a lookup.
@@ -1050,8 +1011,10 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
            assembles, 0/87). It is still not here, for a duller reason - it then changes ONE line in the
            whole corpus, and that line is in a synthetic fixture. The backward walk above already
            collapses every chain that runs in the direction it scans, which is all of them in practice.
-              Note this is also why the coincident-label merge above IS safe: it re-points a reference to
-           a label at the SAME address, so no skip region moves. */
+              The same reasoning bounds what a label transform may do at all: re-pointing a reference to a
+           label at the SAME address moves no skip region and is safe, while threading to a LATER one is
+           what grows the region. The removed coincident-label merge was the former (see
+           design/gazl/GAZLAssemblerOptimizations.md); items 4 and 5 there are the latter. */
         var leadsTo = {};
         for (i = 0; i < metacode.length; ++i) {
             if (metacode[i].operator !== '<--') continue;
@@ -1384,12 +1347,22 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
        two questions callers ask part company here. It is an assemble-time value, so it folds into an
        offset like any other constant. But `<A>` is recycled - the next folded subscript in the same
        function rebinds it (`! ADDi <A> #K #1` ... `! ADDi <A> #M #1`) - so it can never KEY a bounds
-       assertion, which dedups by index text and would then answer for whichever value landed last. */
+       assertion, which dedups by index text and would then answer for whichever value landed last.
+
+       A COMPILER-MINTED name is as assemble-time as a user's: `#.d.g.0` is a layout constant the assembler
+       resolves, and only the leading dot ever made it look otherwise. Reading it as `runtime` was the gap
+       this table exists to close - it demoted whatever consumed it from `! MULi` to a real multiply, which
+       is how `cube[1, 0, 0]` came to need a materializing `! MOVi` to get its tier back. The leading dot is
+       the same mark `claimTopName` reads ("no Impala identifier starts with `.`"), minted only by
+       extentSymbol / fieldSymbol / axisSymbol - change the scheme in those and this must follow.
+       It also widens what `checkConstIndex` will DEFER on, which is safe only because foldAxes clears a
+       shape's extent before a minted index can reach it. */
     indexKind = function (op) {
         if (/^#?<[A-Za-z]>$/.test(op)) return 'scratch';          /* an assemble-time fold under a recycled name */
         if (op.charAt(0) !== '#') return 'runtime';               /* $local, %transient */
         if (constInt(op) !== undefined) return 'now';    /* a literal - Impala decides it */
-        return /^#[A-Za-z_]/.test(op) ? 'assembly' : 'runtime';   /* #NAME is the assembler's */
+        return /^#\.?[A-Za-z_]/.test(op) ? 'assembly' : 'runtime'; /* #NAME - and #.z.NAME, #.d.NAME.k,
+                                                                     #.o.S.f - are all the assembler's */
     };
 
     checkConstIndex = function (extent, idxRV, sourceCode, sourceOffset) {
@@ -1557,9 +1530,8 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         var w;
         if (op.ext.stride !== undefined && !op.own) {             /* `.z.` counts WORDS, the index counts
                                                                      ELEMENTS - scale before comparing */
-            w = borrow('<');
-            emit('<> *', 'i', w, lhs, '#' + op.ext.stride);
-            lhs = '#' + w;
+            w = scaleByStride(op.k, op.ext.stride);
+            lhs = '#' + w;                                        /* freed below - a no-op when it folded */
         }
         var low;
         if (typeof op.k !== 'number') {
@@ -2599,9 +2571,15 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
             } else if (f.type === 'A') {                          /* array: name the extent, THEN advance by it */
                 var x = extentSymbol(f.name, name);
                 var words = f.size;
-                if (isStructAtom(f.elem)) {              /* count * element size, folded now */
-                    emitLine(T + '! MULi <t> #' + f.size + ' #' + extentSymbol(descName(f.elem)));
-                    words = '<t>';
+                if (isStructAtom(f.elem)) {              /* count * element size, folded now - except at
+                                                                    a count of one, where the size IS the answer */
+                    var esym = extentSymbol(descName(f.elem));
+                    if (constInt('#' + f.size) === 1) {
+                        words = esym;
+                    } else {
+                        emitLine(T + '! MULi <t> #' + f.size + ' #' + esym);
+                        words = '<t>';
+                    }
                 }
                 emitLine(x + ':' + T + '! DEFi #' + words);
                 /* A SHAPE also names each axis, so a subscript can stride by one and a bounds check can
@@ -2631,6 +2609,22 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
             }
         }
         emitLine(extentSymbol(name) + ':' + T + '! DEFi #<a>');
+    };
+
+    /* `k * sym` as ONE assemble-time operand, with the k == 1 identity folded - a VALUE test, so `0x1`
+       and `+1` fold exactly as `1` does. Returns an UNHASHED operand: the stride symbol itself when it
+       folds, which costs no emitted line and no borrow, else a `<X>` the caller owns. `returnBack`
+       no-ops on a plain symbol, so a caller frees the result unconditionally without caring which it
+       got - that is what lets four callers share this at all.
+       The other two sites that scale a count by a symbolic element size keep their own shape: the struct
+       layout block writes through `output()` with its own hand-picked `<t>`, and mulAddAxis fuses the
+       following add and chooses between a transient and a scratch. */
+    scaleByStride = function (k, sym) {
+        var n = '#' + k;                                      /* every caller passes it unhashed */
+        if (constInt(n) === 1) { return sym; }
+        var w = borrow('<');
+        emit('<> *', 'i', w, n, '#' + sym);
+        return w;
     };
 
     /* Fold a place's compile-time offset PARTS (field-offset symbols + constant strides) into one
@@ -2817,8 +2811,11 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
     axesProduct = function (dims) {
         var acc = dims[0];
         for (var i = 1; i < dims.length; ++i) {
-            var next = borrow('<');
-            emit('<> *', 'i', next, '#' + acc, '#' + dims[i]);
+            /* An axis of one contributes nothing to the product, and neither borrows nor emits for it. Safe
+               against the ownership rule below because a skipped step creates no intermediate: `acc` can only
+               BE one at i === 1, where it is axis 0's text rather than a borrow. */
+            if (constInt('#' + dims[i]) === 1) { continue; }
+            var next = scaleByStride(acc, dims[i]);
             if (i > 1 && ('' + acc).charAt(0) === '<') {
                 returnBack(acc);                     /* an intermediate product, not an axis */
             }                                                 /* i === 1: acc IS axis 0, and `.d.<S>.<f>.0`
@@ -2832,8 +2829,8 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         var symbol = extentSymbol(name, owner);
         var value = count;
         if (isStructAtom(elemDesc)) {
-            value = borrow('<');
-            emit('<> *', 'i', value, '#' + count, '#' + extentSymbol(descName(elemDesc)));
+            value = scaleByStride(count,             /* one element: the size IS the allocation */
+                    extentSymbol(descName(elemDesc)));
         }
         /* A DERIVED name must never be the one that reports a user's mistake. This runs as an ARGUMENT to
            the `declare` that registers the array itself, so JS evaluates it FIRST - and on a duplicate
@@ -3002,43 +2999,12 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
             if (f.type === 'S') {
                 buildStructInit(f.struct, (item && item.braced) || [], out, sourceCode, sourceOffset);
             } else if (f.type === 'A') {
-                var arr = (item && item.braced) || [];
-                var structEl = isStructAtom(f.elem);
-                /* A symbolic extent is fillable, but only up to the values actually given, and only if
-                   they FIT - an over-filled array spills into whatever follows: `v[N]` with N=2 given
-                   three values, and a `z` after it, emits four words that fit `1+N+1` exactly, so the
-                   assembler passes it and z gets v's third value. Impala cannot do that comparison, but
-                   it can hand it to the assembler, which by then knows the extent (assertFitsExtent).
-                   What stays blocked is everything AFTER the field: the words it did not fill are a
-                   symbolic count, and DATA cannot skip them. (The loop used to compare against the
-                   extent OPERAND, get NaN, run zero times, and emit a short row that shifted every
-                   later field.) */
-                var count = constInt('#' + f.size);
-                var symbolic = (count === undefined);
-                if (symbolic) {
-                    count = arr.length;                       /* fill what was given; the rest zero-fills */
-                } else if (arr.length > count) {
-                    failSurplus(f.name, 'values', arr.length, count,
-                            arr[count] && arr[count].at, sourceCode, sourceOffset);
-                }
-                var from = out.length;
-                for (var e = 0; e < count; ++e) {
-                    var ev = (e < arr.length)
-                            ? indexedEntry(arr[e], sourceCode, sourceOffset) : undefined;
-                    if (structEl) {
-                        buildStructInit(descName(f.elem), (ev && ev.braced) || [], out, sourceCode, sourceOffset);
-                    } else {
-                        var et = descTypeElem(f.elem);   /* `p:i` is a pointer TO int, not a type */
-                        pushInitScalar(out, ev, et.type, et.elem, f.name, sourceCode, sourceOffset);
-                    }
-                }
-                if (symbolic && out.blocked === undefined) {
-                    /* WORDS given, not elements: a struct-element array contributes .z.Elem each, and
-                       the extent symbol is in words too. Nothing to assert once the row is already
-                       blocked - emitInitData drops these words rather than placing them, and
-                       blockInitFrom keeps the FIRST block, so both calls are no-ops past that point. */
-                    assertFitsExtent(out.length - from, structName, f.name,
-                            sourceCode, sourceOffset);
+                /* Every array slot - 1-D or shaped, struct- or scalar-element, literal or symbolic extent -
+                   goes through the one filler. The only thing a FIELD adds is that something may follow it
+                   in the same allocation, so a gap of unknown size makes those later words unplaceable. */
+                if (fillArray(f, structName, (item && item.braced) || [], out,
+                        sourceCode, sourceOffset)
+                        && out.blocked === undefined) {
                     blockInitFrom(out,
                             'the extent of ' + f.name + ' is not resolved until GAZL assembly time, so '
                                     + 'Impala cannot tell which word this would land in',
@@ -3054,9 +3020,154 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         }
     };
 
+    /* Is every axis of a shape a literal Impala can count HERE? A symbolic axis (`sym[H, W * 2]`) has no
+       compile-time length, so its nested init is checked at GAZL assembly instead - this picks which. */
+    axesAllLiteral = function (dims) {
+        for (var i = 0; i < dims.length; ++i) {
+            if (constInt('#' + dims[i]) === undefined) {
+                return false;
+            }
+        }
+        return true;
+    };
+
+    /* Where a diagnostic about one initializer entry points: the entry's own position when it has one, else
+       the initializer start. One helper so a caret rule cannot be right in one shaped-init message and wrong
+       in the next. */
+    entryAt = function (entry, sourceOffset) {
+        return (entry !== undefined && entry.at !== undefined ? entry.at : sourceOffset);
+    };
+
+    /* The entry a COUNT complaint points at: the first surplus one when too many were given, else the last
+       one actually given - a short group's mistake is at its end, not at the declaration's `=`. */
+    countAt = function (group, want, sourceOffset) {
+        return entryAt((group.length > want ? group[want] : group[group.length - 1]), sourceOffset);
+    };
+
+    /* Emit ONE array element into the buffer: a struct element recurses into buildStructInit, a scalar runs
+       the full assignment check via pushInitScalar. The single leaf every array fill shares - the flat struct
+       field loop, the shaped walk, and the struct-element global - so a rule added here reaches all three. */
+    fillEntry = function (out, ev, structEl, elemDesc, name, sourceCode, sourceOffset) {
+        if (structEl) {
+            buildStructInit(descName(elemDesc), (ev && ev.braced) || [], out, sourceCode, sourceOffset);
+        } else {
+            var et = descTypeElem(elemDesc);
+            pushInitScalar(out, ev, et.type, et.elem, name, sourceCode, sourceOffset);
+        }
+    };
+
+    /* THE array filler. One slot record (`{ name, elem, size, dims }` - a struct FIELD entry, or a global
+       array's declarator, which already share those keys) covers every case that used to be its own loop:
+       1-D or shaped, struct- or scalar-element, field or standalone, literal or symbolic extent. A 1-D array
+       is simply the rank-1 shape `[size]`, so there is no separate 1-D path to drift.
+
+       Axes are innermost-first, as `dims` stores them; nesting level 0 is the OUTERMOST group, i.e. axis
+       `rank-1-level`. This walker owns that conversion - callers pass `dims` untouched.
+
+       Extent is a CHECK, never a fill bound. A literal axis is compared here; a symbolic one is handed to
+       GAZL assembly, and the two checks it needs are different because the layout consequences are:
+         - the OUTERMOST axis may stop short. That is a prefix, and the region zero-fills the rest, so only
+           `words <= .z.name` has to hold (assertFitsExtent, emitted once over the whole array).
+         - an INTERIOR axis must be exactly full, because a short group there leaves a gap of unknown size
+           and positional `DATA` cannot skip one. Impala cannot know "full", so it requires every group to
+           match the leftmost (rectangular) and asserts that length against `.d.name.k` with `! EQUi`.
+       At rank 1 there are no interior axes, so the rule degenerates to "fill the prefix given, assert it
+       fits" with nothing special written down for it.
+
+       Returns true when the fill left a gap of unknown size, which is the caller's business: a struct FIELD
+       has words after it that then become unplaceable (E454), a standalone array has nothing after it. */
+    fillArray = function (slot, owner, tree, out, sourceCode, sourceOffset) {
+        var axes = (slot.dims !== undefined ? slot.dims : [ slot.size ]);
+        var rank = axes.length, from = out.length, k;
+        var expected;                                         /* per-level counts; set only when an axis is symbolic */
+        if (!axesAllLiteral(axes)) {
+            expected = [];                                    /* leftmost spine gives one count per nesting level */
+            var spine = [], node = tree;                      /* the groups themselves, so a count error can name one */
+            for (k = 0; k < rank; ++k) {
+                spine.push(node);
+                expected.push(node.length);
+                node = (node[0] && node[0].braced) || [];
+            }
+            for (k = 1; k < rank; ++k) {                      /* INTERIOR axes only - level 0 may be a prefix */
+                var lit = constInt('#' + axes[rank - 1 - k]);
+                if (lit !== undefined) {
+                    if (expected[k] !== lit) {
+                        fail('A shaped array with a symbolic axis must be filled exactly: axis '
+                                + (rank - k) + ' holds ' + lit + ', but ' + expected[k] + ' given',
+                                sourceCode, countAt(spine[k], lit, sourceOffset), 'E460',
+                                'a partial fill cannot skip a symbolic stride - give every element');
+                    }
+                } else {
+                    assembleAssert([['EQU?', '#' + expected[k] + ' #'
+                            + axisSymbol(slot.name, owner, rank - 1 - k)]],
+                            'initializer for ' + slot.name + ' has the wrong length on axis ' + (rank - k)
+                                    + ': ' + expected[k] + ' given', sourceCode, sourceOffset);
+                }
+            }
+        }
+        fillAxis(slot, axes, 0, expected, tree, out, sourceCode, sourceOffset);
+        if (expected !== undefined) {                         /* the one bound a symbolic extent still needs */
+            assertFitsExtent(out.length - from, slot.name, owner, sourceCode, sourceOffset);
+        }
+        return (expected !== undefined);
+    };
+
+    fillAxis = function (slot, axes, level, expected, tree, out, sourceCode, sourceOffset) {
+        var rank = axes.length;
+        var inner = (level + 1 >= rank);
+        var structEl = isStructAtom(slot.elem);
+        var count;
+        if (!inner && tree.length > 0) {
+            /* a scalar where a brace group belongs - a flat list given for a shape. Reported before the
+               count checks so `{ 1, 2, 3, 4, 5, 6 }` for a `[2, 3]` reads as "needs nesting", not "too many".
+               indexedEntry FIRST, so a `field:` name here still gets its own E458 rather than this message. */
+            var first = indexedEntry(tree[0], sourceCode, sourceOffset);
+            if (first !== undefined && first.braced === undefined) {
+                fail('Not enough braces in initializer for ' + slot.name
+                        + ': a shaped array nests one group per axis', sourceCode,
+                        entryAt(first, sourceOffset), 'E422');
+            }
+        }
+        var axisLen = constInt('#' + axes[rank - 1 - level]);
+        if (axisLen !== undefined) {
+            if (tree.length > axisLen) {
+                failSurplus(slot.name, (inner ? 'elements' : 'groups'), tree.length, axisLen,
+                        tree[axisLen] && tree[axisLen].at, sourceCode, sourceOffset);
+            }
+            /* Pad to the axis: a short group in the MIDDLE must still occupy its slots or everything after
+               it shifts. A short group at the END costs nothing either - emitInitData drops a trailing run
+               of zero words, so "fill only what is needed" is decided once, there, not in this loop. */
+            count = axisLen;
+        } else {
+            count = tree.length;                              /* unknown length - place the prefix given */
+            if (level > 0 && tree.length !== expected[level]) {
+                fail('A shaped array with a symbolic axis must be rectangular: axis '
+                        + (rank - level) + ' holds ' + expected[level] + ', but a group gives ' + tree.length,
+                        sourceCode, countAt(tree, expected[level], sourceOffset), 'E460',
+                        'give every group the same length');
+            }
+        }
+        for (var e = 0; e < count; ++e) {
+            var ev = (e < tree.length) ? indexedEntry(tree[e], sourceCode, sourceOffset) : undefined;
+            if (!inner) {
+                if (ev !== undefined && ev.braced === undefined) {
+                    fail('Not enough braces in initializer for ' + slot.name
+                            + ': a shaped array nests one group per axis', sourceCode,
+                            entryAt(ev, sourceOffset), 'E422');
+                }
+                fillAxis(slot, axes, level + 1, expected, (ev && ev.braced) || [], out,
+                        sourceCode, sourceOffset);
+            } else {
+                fillEntry(out, ev, structEl, slot.elem, slot.name, sourceCode, sourceOffset);
+            }
+        }
+    };
+
     pushInitScalar = function (out, item, type, elem, fieldName, sourceCode, sourceOffset) {
         if (item === undefined) {
-            out.push(ZEROES[type]);                      /* omitted -> zero */
+            out.push(ZEROES[type]);                      /* omitted -> zero, and INVENTED: `out.given`
+                                                                     does not advance, so emitInitData may drop
+                                                                     it if nothing explicit follows */
             return;
         }
         if (item.braced !== undefined) {
@@ -3086,6 +3197,8 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
                     sourceCode, (item.at !== undefined ? item.at : sourceOffset), b.code, b.hint);
         }
         out.push(item.op);
+        out.given = out.length;                               /* the source WROTE this word - an explicit `0`
+                                                                 is kept, unlike the padding around it */
     };
 
     /* Mark every word from here on UNPLACEABLE: Impala cannot say which GAZL word it would land in.
@@ -3122,13 +3235,15 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
        field and assembles silently; and where the total DOES overflow, whichever check comes first in
        the file wins, so emitting below the rows would trade this message for the coarser one. Verified
        against GAZLCmd on 2026-08-02: words == extent passes, both over-fill shapes fail here. */
-    assertFitsExtent = function (words, structName, fieldName, sourceCode, sourceOffset) {
+    /* `owner` is the struct a FIELD belongs to, or undefined for a standalone array - the same two spellings
+       `extentSymbol` and `axisSymbol` already take, so one rule serves a field and a global alike. */
+    assertFitsExtent = function (words, name, owner, sourceCode, sourceOffset) {
         if (words <= 0) {
             return;                                           /* nothing given - trivially fits */
         }
-        var extent = extentSymbol(fieldName, structName);
+        var extent = extentSymbol(name, owner);
         assembleAssert([['LEQ?', '#' + words + ' #' + extent]],
-                'too many initializer values for ' + structName + '.' + fieldName + ': '
+                'too many initializer values for ' + (owner !== undefined ? owner + '.' : '') + name + ': '
                         + words + ' given, room for ' + extent, sourceCode, sourceOffset);
     };
 
@@ -3146,13 +3261,51 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
        a funcptr element head is a TYPE NAME it would not recognise - so the funcptr and pointer-element
        questions belong to `checkInitTarget`, which reads the same descriptor whole. Derived, not stored:
        one `initTarget` cannot disagree with itself, where three parallel slots could. */
-    initCoarseType = function () {
-        var t = descTypeElem(initTarget).type;
+    coarseType = function (desc) {
+        if (desc === undefined) {
+            return undefined;                                 /* untyped: a struct's row spans mixed field types */
+        }
+        var t = descTypeElem(desc).type;
         return (t === 'i' || t === 'f' || t === 'p' ? t : undefined);
+    };
+
+    initCoarseType = function () {
+        return coarseType(initTarget);
     };
 
     initElemRow = function () {
         return (initCoarseType() !== undefined ? 'DAT?' : 'DATA');
+    };
+
+    /* How many compile-time scratches could still be handed out: `counters` is how many names have ever been
+       minted, `stock` the ones handed back, and `borrow` mints at most 26. */
+    freeScratches = function () {
+        return (26 - counters['<']) + stock['<'].length;
+    };
+
+    /* Make a computed initializer value DURABLE so its scratch can go back to the pool.
+
+       A value only the assembler can fold - `1 << P` on a named const - arrives as `<A>`, one of 26, and a
+       brace initializer holds every entry's value until the whole group is placed (it must: named fields may
+       be written out of order). So a list of 27 folded constants ran the pool dry and died with "expression
+       too complex" - which is what capped EVERY nested initializer at 26 computed entries while the flat,
+       streaming one had no limit.
+
+       Capturing into a named define is what this compiler already does for `.z.`/`.d.` (`! MULi <A> ...`
+       then `.z.g: ! DEFi #<A>`), and it is safe for exactly the reason it first looks unsafe: the emitted
+       line that names `<A>` is its DEFINITION, which is what gives the capture its value, and the only
+       PENDING reference is the operand string in the entry - still in memory, and it is what this returns.
+       `declare` hands the scratch back itself, since returnBack reads the trailing `<X>` of `#<A>`.
+
+       Done only once the pool is EMPTY, so an initializer that fits emits exactly what it always did. */
+    holdConstant = function (op, type, sourceCode, sourceOffset) {
+        if (op.charAt(0) !== '<' || freeScratches() > 0) {
+            return op;
+        }
+        var name = '.k' + (holdCounter++);
+        declare('! DEF?', 'defines', name, (type === 'f' ? 'f' : 'i'), true, '#' + op,
+                sourceCode, sourceOffset);
+        return '#' + name;
     };
 
     /* One entry of a flat initializer list: the full assignment check, then the rendered constant. Both
@@ -3164,7 +3317,8 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         if (coarse === undefined) {
             coarse = metaSlot(x).type;                            /* untyped array: accept what comes */
         }
-        return { op: makeConstant(x, coarse, sourceCode, sourceOffset), type: coarse };
+        return { op: holdConstant(makeConstant(x, coarse, sourceCode, sourceOffset),
+                coarse, sourceCode, sourceOffset), type: coarse };
     };
 
     blockInitFrom = function (out, why, code, hint) {
@@ -3189,23 +3343,51 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         return v !== '' && Number(v) === 0;                   /* NaN for a symbol -> not zero */
     };
 
-    /* emit a flat constant list as one or more DATA rows (mirrors InitList chunking) */
+    /* emit a flat constant list as one or more data rows (mirrors InitList chunking). The element type
+       rides on the BUFFER (`ops.target`), set by whoever built it, NOT on the parser-lifetime `initTarget`:
+       a scalar-element array states its element type, so its rows come out typed (`DATi`/`DATf`/`DATp`) and
+       the assembler re-checks each word; a struct states no target, so it stays the untyped `DATA` one
+       mixed-type row needs. Reading `initTarget` here instead would inherit a stale value from a previous
+       declaration - an all-int array before a `{ int, float }` struct emitted `DATi #2.5`, which the
+       assembler rejects. */
     emitInitData = function (ops, sourceCode, sourceOffset) {
         if (ops.blocked !== undefined) {
             ops.length = ops.blocked.at;                      /* the region zero-fills the remainder;
                                                                  pushInitScalar already refused any
                                                                  non-zero word past this point */
         }
+        /* THE short-fill rule, in the one place every initializer passes through: drop the words the SOURCE
+           NEVER WROTE. `out.given` is the high-water mark pushInitScalar sets for an explicit entry, so the
+           padding invented for omitted elements and fields falls off the end while an explicit `0` stays -
+           writing `{ a: 1, b: 0, c: 0 }` still emits three words, because you asked for three. Only the
+           invention is dropped, and only the region's own zeros replace it (verified on GAZLCmd for GLOB,
+           CNST and TEMP alike), which is what turned a `[100]` struct array given 14 entries from 400 words
+           back into 56. Deciding it here rather than in each fill loop is what lets those loops pad honestly
+           to the extent, which is what keeps a SHORT INTERIOR group from shifting everything after it. */
+        if (ops.given === undefined) {
+            ops.length = 0;                                   /* nothing explicit at all - the region is already this */
+        } else if (ops.given < ops.length) {
+            ops.length = ops.given;
+        }
+        var coarse = coarseType(ops.target);
+        var row = (coarse !== undefined ? 'DAT?' : 'DATA'), type = (coarse || 'i');
+        /* A `<X>` SCRATCH OPERAND GETS ITS OWN ROW, and that is a correctness rule, not formatting.
+           `declare` ends by handing its emitted value back to the pool (`returnBack(value)`), and returnBack
+           only recognises an operand it can parse whole - a scratch buried in `#8 <A> #7` is silently never
+           returned, and the run dies on the boundary assert "compile-time scratch leak before main".
+           `readonly S s = { x: 1 << P }` with P a named const did exactly that and never compiled. The flat
+           `InitList` has always had this rule; the buffered path was written without it. */
         var line = '';
         for (var i = 0; i < ops.length; ++i) {
-            if (line !== '' && (line + ' ' + ops[i]).length >= 55) {
-                declare('DATA', 'globals', undefined, 'i', true, line, sourceCode, sourceOffset);
+            if (line !== '' && (ops[i].charAt(0) === '<' || line.charAt(0) === '<'
+                    || (line + ' ' + ops[i]).length >= 55)) {
+                declare(row, 'globals', undefined, type, true, line, sourceCode, sourceOffset);
                 line = '';
             }
             line += (line === '' ? '' : ' ') + ops[i];
         }
         if (line !== '') {
-            declare('DATA', 'globals', undefined, 'i', true, line, sourceCode, sourceOffset);
+            declare(row, 'globals', undefined, type, true, line, sourceCode, sourceOffset);
         }
     };
 
@@ -3294,9 +3476,10 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
 
     /* One Horner step: `acc * stride + idx`. Assemble-time throughout when every part is - a constant
        subscript then costs nothing at run time, exactly as a constant 1-D one does.
-       The two DEGENERATE steps are skipped, and both identities hold whatever the stride turns out to be -
-       so a host-owned axis folds exactly as a literal one does and nothing is baked. `0 * W + idx` is
-       `idx`, which is the whole of `grid[0, x]`, the row-0 idiom; `acc * W + 0` is the multiply alone.
+       The three DEGENERATE steps are skipped, and every identity holds whatever the stride turns out to be
+       - so a host-owned axis folds exactly as a literal one does and nothing is baked. `0 * W + idx` is
+       `idx`, which is the whole of `grid[0, x]`, the row-0 idiom; `acc * W + 0` is the multiply alone;
+       `1 * W + idx` is `W + idx`, the row-1 one.
        Emitting them cost two and one RUNTIME instructions per access, inside whatever loop the subscript
        sat in. `subscriptStruct` has always skipped the flat `+ 0` (its `k !== '0'` test); this is the
        same rule reaching the axes. */
@@ -3309,10 +3492,22 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         var zero = (indexKind(idx) === 'now' && constInt(idx) === 0);
         var live = (indexKind(acc) === 'runtime'
                 || (!zero && indexKind(idx) === 'runtime'));
+        var one = (indexKind(acc) === 'now' && constInt(acc) === 1);
+        if (one && zero) {                                        /* `1 * stride + 0` IS `stride`, and a minted
+                                                                     name carries its own tier - see indexKind */
+            returnBack(acc);
+            returnBack(idx);
+            return stride;
+        }
         var dst = borrow(live ? '%' : '<');
-        emit(live ? '*' : '<> *', 'i', dst, acc, stride);
-        if (!zero) {
-            emit(live ? '+' : '<> +', 'i', dst, dst, idx);
+        if (one) {                                                /* `1 * stride` IS `stride` - the THIRD degenerate
+                                                                     step, and `a[1, x]` is as ordinary as row 0 */
+            emit(live ? '+' : '<> +', 'i', dst, stride, idx);
+        } else {
+            emit(live ? '*' : '<> *', 'i', dst, acc, stride);
+            if (!zero) {
+                emit(live ? '+' : '<> +', 'i', dst, dst, idx);
+            }
         }
         returnBack(acc);
         returnBack(idx);
@@ -3428,10 +3623,10 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
             }
             if (k !== '0') {
                 var part = k;                                    /* scalar stride is 1 word -> the offset is just k */
-                if (elemStruct) {
-                    part = borrow('<');
-                    emit('<> *', 'i', part, '#' + k, '#' + extentSymbol(elemName));
-                    if (scratch) { returnBack(k); }
+                if (elemStruct) {                                /* `&p[1]` is the canonical walk, so the fold
+                                                                    inside scaleByStride is the common case here */
+                    part = scaleByStride(k, extentSymbol(elemName));
+                    if (scratch) { returnBack(k); }     /* a folded k is a literal, never a scratch */
                 }
                 /* A folded `<X>` cannot key a deferred assertion, so the guard takes its OWN copy while the
                    value is still live - the pushed one is freed by foldOffset long before the use decides
@@ -4812,6 +5007,7 @@ var _sn = strideStruct(field.elem);
         functypes        = {};
         topNames         = {};
         guardCounter     = 0;
+        holdCounter      = 0;
         exportNext       = false;
 
         /* reset deferred string tables */
@@ -4865,15 +5061,15 @@ function StructDecl($){var $nmAt,$id=createParserContext(),$sname,$f=createParse
 function FuncTypeDecl($){var $nmAt,$id=createParserContext(),$ftname,$p=createParserContext(),$r=createParserContext();return (function(){var _b=_i;return FUNCTYPE($)&&_($)&&(function(){ $nmAt = _i; ; return true})()&&Identifier($id)&&(function(){ $ftname = $id._; beginFuncType($id._, _s, $nmAt); ; return true})()&&(_s[_i]==="(")&&(++_i,true)&&_($)&&((function(){var _b=_i;return TypeDeclr($p)&&(function(){ addFuncTypeParam($ftname, $p.type, $p.elem, $p.struct, $p.words, $p.name, _s, _i); ; return true})()&&((function(){while((function(){var _b=_i;return (_s[_i]===",")&&(++_i,true)&&_($)&&TypeDeclr($p)&&(function(){ addFuncTypeParam($ftname, $p.type, $p.elem, $p.struct, $p.words, $p.name, _s, _i); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&(_s[_i]===")")&&(++_i,true)&&_($)&&((function(){var _b=_i;return RETURNS($)&&_($)&&TypeDeclr($r)&&(function(){ addFuncTypeReturn($ftname, $r.type, $r.elem, $r.struct, $r.words, _s, _i); ; return true})()&&((function(){while((function(){var _b=_i;return (_s[_i]===",")&&(++_i,true)&&_($)&&TypeDeclr($r)&&(function(){   /* PARKED for Impala 3.0 - see design/ParkedFeatures.md */ fail('Multiple return values are not supported in Impala 2.0', _s, _i, 'E428', 'declare a single return type for this funcptr type'); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&(function(){ endFuncType($ftname); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function TypeDeclr($){var $base=createParserContext(),$desc,$id=createParserContext();return (function(){var _b=_i;return TypeBase($base)&&(function(){ $desc = $base._; ; return true})()&&((function(){while((function(){var _b=_i;return POINTER($)&&_($)&&(function(){ $desc = pointerDesc($desc); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&((function(){var _b=_i;return Identifier($id)&&(function(){ $.name = $id._; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&(function(){ var td = descTypeElem($desc); if (td.type === 'S') { $.type = 'S'; $.struct = td.elem; $.elem = undefined; $.words = structWords(td.elem); } else { $.type = td.type; $.elem = td.elem; $.struct = undefined; $.words = (td.type === 't' ? 1 : undefined);   /* scalar funcptr: one word */ } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function FuncDecl($){var $inl,$inlAt,$fnAt,$id=createParserContext(),$inp=createParserContext(),$out=createParserContext(),$v=createParserContext(),$,$loc=createParserContext();return (function(){var _b=_i;return (function(){ $inl = false; ; return true})()&&((function(){var _b=_i;return INLINE($)&&(function(){ $inl = true; $inlAt = _i; ; return true})()&&_($)||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&FUNCTION($)&&_($)&&(function(){ $fnAt = _i; ; return true})()&&Identifier($id)&&(_s[_i]==="(")&&(++_i,true)&&_($)&&(function(){ /* E439 (`inline` is parked) belongs to the Impala 2 line, which must run on GAZL 1.0 engines. This branch HAS the `SCOP`/`ENDS` an expansion needs, so the feature is live here and the rejection does not come across. */ inlineMode = $inl; inlineLocals = []; if ($inl && symbols.functions[$id._] !== undefined) { fail('The inline function ' + $id._ + ' was already declared', _s, $fnAt, 'E436', 'an inline function emits no symbol, so it cannot be forward declared or redeclared'); } if ($inl && exportNext) { fail('An inline function cannot be exported', _s, $fnAt, 'E434', 'there is no out-of-line copy to link against; a caller needs the source, via `import`'); } assert(validateStock('%')); assert(validateStock('<')); /* every compile-time scratch borrowed by the previous function/globals must be back in the pool at this clean boundary - catches offset-scratch leaks at the source */ assert(stock['<'].length === counters['<'], 'compile-time scratch leak before ' + $id._ + ': ' + (counters['<'] - stock['<'].length) + ' unreturned'); if (!inlineMode) { emitLine(''); emitLine(';-----------------------------------------------------------------------------'); } /* Buffer this function's head until the body is parsed - see emitLine. Nothing is added to it yet, so the replay below is byte-identical to emitting directly. */ headSink = []; /* declare the function symbol */ declare( undefined, 'functions', $id._, 'U', true, undefined, _s, $fnAt   /* the NAME, not the `(` this action already ate */ ); var entry = symbols.functions[$id._]; if (entry) { if (!entry.signature) { entry.signature = {}; } entry.signature.params = []; entry.signature.returns = '?'; entry.signature.returnElem = undefined; entry.signature.returnName = undefined; entry.signature.sourceCode = _s; entry.signature.sourceOffset = declOffset; entry.signature.sourceName = sourceName; entry.signature.returnResolved = false; entry.pendingReturnPlaceholder = undefined; entry.pendingReturnDeclaration = undefined; } ; return true})()&&ArgsDecl($inp)&&(_s[_i]===")")&&(++_i,true)&&_($)&&(function(){var _b=_i;return RETURNS($)&&_($)&&VarDecl($out)&&(function(){ var entry = symbols.functions[$id._]; if (entry) { entry.pendingReturns = undefined; /* `$out.at` is the NAME; `_i` here has already skipped past the whole declarator onto the next clause, which put E463's caret on `locals`. */ addReturn(entry, $out.name, $out.type, $out.elem, $out.size, _s, $out.at, $out.struct, $out.words); } ; return true})()&&((function(){while((function(){var _b=_i;return (_s[_i]===",")&&(++_i,true)&&_($)&&VarDecl($v)&&(function(){   /* PARKED for Impala 3.0 - see design/ParkedFeatures.md */ fail('Multiple return values are not supported in Impala 2.0', _s, _i, 'E428', 'return one value, or pass extra results back through pointer out-parameters'); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(function(){ var entry = symbols.functions[$id._]; if (entry && entry.signature) { var rl = entry.pendingReturns; entry.signature.returnList = rl; entry.signature.returnCount = rl.length; entry.signature.returns = rl[0].type; entry.signature.returnElem = rl[0].elem; entry.signature.returnName = rl[0].rawName; entry.signature.returnStruct = rl[0].struct; var _rw = 0;                    /* total output-window words (struct returns span >1) */ for (var _wi = 0; _wi < rl.length; ++_wi) _rw += (rl[_wi].type === 'S' ? rl[_wi].words : 1); entry.signature.returnWords = _rw; resolveFunctionReturnType($id._, rl[0].type, _s, _i); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||(function(){ /* implicit 1-word return: even void functions expose a single-word PARA so legacy call sites keep a deterministic return slot and the JSPEG output matches the historical PPEG layout. */ var entry = symbols.functions[$id._]; if (entry) { entry.pendingReturns = undefined; entry.pendingReturnPlaceholder = { sourceCode: _s, sourceOffset: _i }; } if (entry && entry.signature) { entry.signature.returns = 'V'; entry.signature.returnElem = undefined; entry.signature.returnName = undefined; entry.signature.returnCount = 0; entry.signature.returnList = []; resolveFunctionReturnType($id._, 'V', _s, _i); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&(function(){ /* declare input parameters */ var entry = symbols.functions[$id._]; if (entry && entry.signature) { entry.signature.params = copyParams($inp._, $inp.n); } emitFunctionSignature($id._, _s, _i); if (entry) { if (entry.pendingReturns && entry.pendingReturns.length > 0) { for (var _ri = 0; _ri < entry.pendingReturns.length; ++_ri) { var ret = entry.pendingReturns[_ri]; rejectByValueStruct(ret.type, ret.struct, ret.rawName, true, ret.sourceCode, ret.sourceOffset); { declare( 'OUT?', 'locals', ret.name, ret.type, false, ret.size, ret.sourceCode, ret.sourceOffset, undefined, ret.elem ); } } entry.pendingReturns = undefined; } else if (entry.pendingReturnPlaceholder) { var placeholder = entry.pendingReturnPlaceholder; declare( 'PARA', 'locals', undefined, '?', false, '*1', placeholder.sourceCode, placeholder.sourceOffset ); entry.pendingReturnPlaceholder = undefined; } } iterate($inp._, function (p) { rejectByValueStruct(p.type, p.struct, p.name, false, _s, p.at); { declare( 'INP?', 'locals', '$' + p.name, p.type, true, (p.size !== undefined ? '*' + p.size : undefined), _s, p.at, undefined, p.elem ); } }); ; return true})()&&((function(){var _b=_i;return LOCALS($)&&_($)&&LocalsDecl($loc)&&(function(){ iterate($loc._, function (v) { /* Compute the allocation size ONCE: the declaration below needs it, and for an `inline` function so does every expansion site, which re-declares the local inside its own SCOP. Calling arrayAllocSize twice would borrow two scratches - and now that it also names each axis, redeclare every `.d.` symbol too. An array's size is a NAMED `.z.` extent, so it is a symbol every expansion can repeat verbatim - no re-rendering the pieces it was folded from. */ var isStruct = (v.type === 'S'); var kind = (isStruct ? 'LOCA' : 'LOC?'); var type = (isStruct ? 'S' : v.type); var elem = (isStruct ? structDesc(v.struct) : v.elem); var size = (isStruct ? structAllocSize(v.struct, _s, v.at) : (v.type === 'A' ? arrayAllocSize(v.elem, v.size, v.name, $id._, v.dims) : (v.words !== undefined ? '*' + v.words : undefined))); if (inlineMode) { inlineLocals.push({ name: '$' + v.name, kind: kind, type: type, size: size, elem: elem }); } declare(kind, 'locals', '$' + v.name, type, false, size, _s, v.at, undefined, elem); if (v.type === 'A') {   /* the ONLY place the owning function's name is in scope, so what a later subscript needs to bounds-check this array is recorded here - see arrayExtent's shape */ symbols.locals['$' + v.name].extent = arrayExtent(v.name, $id._, v.name, v.size, v.dims); } }); returnExtent('locals of ' + $id._, $loc._); /* the count and axis scratches ArrayDecl held for this clause (see there) */ ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&(function(){ /* The head/body separator is emitted at the REPLAY below, not here: an inline expansion appends its SCOP block to the head while the body is being parsed, so anything written here would end up above those declarations. */ ; return true})()&&Block($)&&(function(){ /* wrap-up body */ /* The closing RETU goes in BEFORE the pass, so the pass can see it: `goto out;` where `out:` is the end-of-body label is Impala's only early-exit idiom, and it lands exactly here. NOT for an `inline` body - that is captured for substitution, and an expansion pasted mid-caller must not return. */ if (!inlineMode) { emit('--^', undefined, undefined, undefined, undefined); } checkReturnAssigned(symbols.functions[$id._]); processBranches(); /* The body (and every inline expansion in it) is now known, so the head is final: replay it, then let flushMetaCode write the body straight out. */ var _head = headSink; headSink = null; if (_head !== null) { for (var _h = 0; _h < _head.length; ++_h) emitLine(_head[_h]); } if (!inlineMode) { emitLine(';-----------------------------------------------------------------------------'); } if (inlineMode) {                       /* no out-of-line copy: keep the body, emit nothing */ captureInlineBody($id._, _s, _i); metacode.length = 0; } else { flushMetaCode('\t');   /* the RETU went in above the pass */ } emittedGuards = {};   /* per function: labels are too */ prune(symbols.locals); labelCounter = 0; if (!inlineMode) emitLine(''); inlineMode = false; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
-function ExternDecl($){var $at,$id=createParserContext(),$sname,$f=createParserContext(),$nmAt,$inp=createParserContext(),$out=createParserContext(),$a=createParserContext();return (function(){var _b=_i;return EXTERN($)&&_($)&&(function(){ $.scope = 'globals'; $.structFwd = false; $at = _i;   /* the declaration itself - end-of-rule positions have skipped past it */ pendingProto = undefined; ; return true})()&&(function(){var _b=_i;return STRUCT($)&&_($)&&Identifier($id)&&(function(){ $.structFwd = true; $sname = $id._; beginExternStruct($id._, _s, _i); ; return true})()&&((function(){var _b=_i;return (_s[_i]==="{")&&(++_i,true)&&_($)&&(function(){ /* a bodyless `extern struct G` never reaches endStruct, so only the braced form opens */ openStruct = $sname; ; return true})()&&((function(){while((function(){var _b=_i;return (function(){var _b=_i;return ArrayDecl($f)||(_im=(_i>_im?_i:_im),_i=_b,false)||VarDecl($f)||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&(function(){ addStructField($sname, { name: $f.name, type: $f.type, elem: $f.elem, struct: $f.struct, size: $f.size, dims: $f.dims }, _s, _i); ; return true})()&&((function(){var _b=_i;return (_s[_i]===";")&&(++_i,true)&&_($)||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(_s[_i]==="}")&&(++_i,true)&&_($)&&(function(){   /* Declare the host-owned interface so a signature-row consumer can check the layout the host supplies (.o.Name.field / .z.Name) against what Impala assumed, the way extern globals and function signatures are already checked. A re-declaration of a struct DEFINED here describes no host layout, so it publishes no row - the definition already published the real one. */ if (!endStruct($sname)) { emitStandaloneSignatureComment( structSignatureRow( $sname, true, sourceName, _s, declOffset)); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)||(function(){var _b=_i;return FUNCTION($)&&(function(){ $.type  = 'U';  $.scope = 'functions'; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||NATIVE($)&&(function(){ $.type  = 'N';  $.scope = 'functions'; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&_($)&&(function(){ $nmAt = _i; ; return true})()&&Identifier($id)&&(function(){ $.name  = $id._; $.at = $nmAt; ; return true})()&&((function(){var _b=_i;return (_s[_i]==="(")&&(++_i,true)&&_($)&&ArgsDecl($inp)&&(_s[_i]===")")&&(++_i,true)&&_($)&&(function(){   /* Optional PROTOTYPE. Name-only stays valid and asserts nothing (a wildcard a consumer skips); a prototype is a checkable assertion, so calls get argument type-checking and the emitted signature row carries real types. */ pendingProto = { args: copyParams($inp._, $inp.n), ret: undefined }; ; return true})()&&((function(){var _b=_i;return RETURNS($)&&_($)&&VarDecl($out)&&(function(){ if (pendingProto) pendingProto.ret = { type: $out.type, elem: $out.elem, struct: $out.struct, name: $out.name }; ; return true})()&&((function(){while((function(){var _b=_i;return (_s[_i]===",")&&(++_i,true)&&_($)&&VarDecl($)&&(function(){   /* PARKED for Impala 3.0 - see design/ParkedFeatures.md */ fail('Multiple return values are not supported in Impala 2.0', _s, _i, 'E428', 'declare a single return value for this extern'); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)||(function(){ externArray = true; ; return true})()&&ArrayDecl($a)&&(function(){ externArray = false; $.type = 'A'; $.name = $a.name; $.at   = $a.at; $.elem = $a.elem; $.dims = $a.dims; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||(function(){ externArray = false; ; return true})()&&VarDecl($)||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&(function(){ if ($.structFwd) { cancelStructRedeclaration($sname); return true; } declare( undefined,                 // no section for extern
+function ExternDecl($){var $at,$id=createParserContext(),$sname,$f=createParserContext(),$nmAt,$inp=createParserContext(),$out=createParserContext(),$a=createParserContext();return (function(){var _b=_i;return EXTERN($)&&_($)&&(function(){ $.scope = 'globals'; $.structFwd = false; $at = _i;   /* the declaration itself - end-of-rule positions have skipped past it */ pendingProto = undefined; ; return true})()&&(function(){var _b=_i;return STRUCT($)&&_($)&&Identifier($id)&&(function(){ $.structFwd = true; $sname = $id._; beginExternStruct($id._, _s, _i); ; return true})()&&((function(){var _b=_i;return (_s[_i]==="{")&&(++_i,true)&&_($)&&(function(){ /* a bodyless `extern struct G` never reaches endStruct, so only the braced form opens */ openStruct = $sname; ; return true})()&&((function(){while((function(){var _b=_i;return (function(){var _b=_i;return ArrayDecl($f)||(_im=(_i>_im?_i:_im),_i=_b,false)||VarDecl($f)||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&(function(){ addStructField($sname, { name: $f.name, type: $f.type, elem: $f.elem, struct: $f.struct, size: $f.size, dims: $f.dims }, _s, _i); ; return true})()&&((function(){var _b=_i;return (_s[_i]===";")&&(++_i,true)&&_($)||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(_s[_i]==="}")&&(++_i,true)&&_($)&&(function(){   /* Declare the host-owned interface so a signature-row consumer can check the layout the host supplies (.o.Name.field / .z.Name) against what Impala assumed, the way extern globals and function signatures are already checked. A re-declaration of a struct DEFINED here describes no host layout, so it publishes no row - the definition already published the real one. */ if (!endStruct($sname)) { emitStandaloneSignatureComment( structSignatureRow( $sname, true, sourceName, _s, declOffset)); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)||(function(){var _b=_i;return FUNCTION($)&&(function(){ $.type  = 'U';  $.scope = 'functions'; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||NATIVE($)&&(function(){ $.type  = 'N';  $.scope = 'functions'; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&_($)&&(function(){ $nmAt = _i; ; return true})()&&Identifier($id)&&(function(){ $.name  = $id._; $.at = $nmAt; ; return true})()&&((function(){var _b=_i;return (_s[_i]==="(")&&(++_i,true)&&_($)&&ArgsDecl($inp)&&(_s[_i]===")")&&(++_i,true)&&_($)&&(function(){   /* Optional PROTOTYPE. Name-only stays valid and asserts nothing (a wildcard a consumer skips); a prototype is a checkable assertion, so calls get argument type-checking and the emitted signature row carries real types. */ pendingProto = { args: copyParams($inp._, $inp.n), ret: undefined }; ; return true})()&&((function(){var _b=_i;return RETURNS($)&&_($)&&TypeDeclr($out)&&(function(){   /* The name is OPTIONAL, as it already was for the sibling `functype ... returns V`: only type/elem/struct are read out of it, so `returns int` says everything `returns int n` did without making the author invent an identifier that is never printed nor referenced. TypeDeclr rather than a second rule for exactly that reason - the two declaration forms had no business differing. */ if (pendingProto) pendingProto.ret = { type: $out.type, elem: $out.elem, struct: $out.struct }; ; return true})()&&((function(){while((function(){var _b=_i;return (_s[_i]===",")&&(++_i,true)&&_($)&&TypeDeclr($)&&(function(){   /* PARKED for Impala 3.0 - see design/ParkedFeatures.md */ fail('Multiple return values are not supported in Impala 2.0', _s, _i, 'E428', 'declare a single return value for this extern'); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)||(function(){ externArray = true; ; return true})()&&ArrayDecl($a)&&(function(){ externArray = false; $.type = 'A'; $.name = $a.name; $.at   = $a.at; $.elem = $a.elem; $.dims = $a.dims; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||(function(){ externArray = false; ; return true})()&&VarDecl($)||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&(function(){ if ($.structFwd) { cancelStructRedeclaration($sname); return true; } declare( undefined,                 // no section for extern
                                                                              $.scope, $.name, $.type, false,                     // not readonly
                                                                              '?', _s, $.at, undefined, $.elem ); /* A host-owned SHAPE needs an extent record even though every value in it belongs to the host: `dims` names the axes so a subscript can stride by `.d.g.0` and defer its bounds against it, and its LENGTH is the rank a subscript is checked against. Only for a shape - a rank-1 `extern array` keeps carrying no extent, exactly as before, so its every path is unchanged. `declare` rebuilds the record, so this has to land after it. */ if ($.type === 'A' && $.dims !== undefined) { symbols.globals[$.name].extent = arrayExtent($.name, undefined, $.name, undefined, $.dims); } if ($.scope === 'functions') { var entry = symbols.functions[$.name]; var signature = entry && entry.signature; if (entry) { if (!signature) { signature = entry.signature = {}; } if (signature.sourceName === undefined) { signature.sourceName = sourceName; } if (signature.sourceCode === undefined) { signature.sourceCode = _s; signature.sourceOffset = declOffset; signature.sourceName = sourceName; } if (entry.kind !== 'FUNC') {  /* a definition here already resolved it - do not un-resolve it */ signature.returnResolved = false; } } var role = ($.type === 'N' ? 'extern native' : 'extern func'); var placeholderSignature = { params: [], returns: undefined, sourceName: sourceName, sourceCode: _s, sourceOffset: declOffset, }; var _proto = pendingProto; pendingProto = undefined; if (_proto !== undefined) {   /* a declared prototype: real params + at most one return */ for (var _pi = 0; _pi < _proto.args.length; ++_pi) { var _p = _proto.args[_pi]; rejectByValueStruct(_p.type, _p.struct, _p.name, false, _s, $at); } var _pp = copyParams(_proto.args, _proto.args.length); var _pr = _proto.ret; if (_pr !== undefined) rejectByValueStruct(_pr.type, _pr.struct, _pr.name, true, _s, $at); placeholderSignature.params      = _pp; placeholderSignature.returns     = (_pr !== undefined ? _pr.type : 'V'); placeholderSignature.returnElem  = (_pr !== undefined ? _pr.elem : undefined); placeholderSignature.returnCount = (_pr !== undefined ? 1 : 0); placeholderSignature.returnWords = (_pr !== undefined ? 1 : 0); placeholderSignature.returnResolved = true; if (entry) { var _defined = (entry.kind === 'FUNC'); checkExternAgreement($.name, placeholderSignature, (_defined ? entry.signature : entry.externProto), _defined, _s, $at); entry.externProto = placeholderSignature; if (!_defined) {               /* a definition here outranks it; otherwise publish it so call sites check against it */ entry.signature.params         = _pp; entry.signature.returns        = placeholderSignature.returns; entry.signature.returnElem     = placeholderSignature.returnElem; entry.signature.returnCount    = placeholderSignature.returnCount; entry.signature.returnWords    = placeholderSignature.returnWords; entry.signature.returnResolved = true; } } } emitStandaloneSignatureComment( formatFunctionSignatureComment( $.name, placeholderSignature, role, sourceName, _s, declOffset ) ); } else if ($.scope === 'globals') { emitStandaloneSignatureComment( formatGlobalSignatureComment( 'GLOB', $.name, $.type, $.size, 'extern', sourceName, _s, declOffset, $.elem ) ); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function ConstDecl($){var $base=createParserContext(),$desc,$nf,$t,$telem,$cStart,$id=createParserContext(),$cInitStart,$x=createParserContext();return (function(){var _b=_i;return CONST($)&&_($)&&TypeBase($base)&&(function(){ /* Same type grammar as every other declarator (TypeBase, not bare BASE_TYPE), so a const can name a struct pointer or a named functype - a const is an assembler-level address/scalar constant, and those two are just addresses. A struct VALUE is the one shape that has no scalar constant form. */ $desc = $base._; $nf = noForward; noForward = true; ; return true})()&&((function(){while((function(){var _b=_i;return POINTER($)&&_($)&&(function(){ $desc = pointerDesc($desc); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(function(){ var cd = descTypeElem($desc); if (cd.type === 'S') { fail('A const cannot be a struct value - use a struct pointer (' + 'const ' + cd.elem + ' pointer)', _s, _i, 'E447'); } $t = cd.type; $telem = cd.elem;    /* 't' + name for a funcptr constant */ $cStart = _i;   /* `Identifier` eats trailing space, so _i would name the NEXT declaration (E453) */ ; return true})()&&Identifier($id)&&(function(){var _b=_i;return (_s[_i]==="=")&&(++_i,true)&&_($)&&(function(){ $cInitStart = _i; ; return true})()&&Expr($x)&&(function(){ checkInitTarget($t, $telem, $x._, _s, $cInitStart); declare( '! DEF?', 'defines', $id._, $t, true, makeConstant($x._, $t, _s, $cInitStart), _s, $cStart, formatConstSignatureComment( $id._, $t, sourceName, _s, declOffset, $telem ), $telem ); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||(function(){ /* `export` says "this unit provides it"; a valueless const says "someone else does". The row below publishes it as an extern either way, so the keyword was silently dropped. */ if (exportNext) { fail('`export` contradicts a valueless `const` - ' + $id._ + ' is provided elsewhere, not by this unit', _s, $cStart, 'E453', 'give it a value to export it, or drop `export`'); } declare( undefined, 'defines', $id._, $t, true, undefined, _s, $cStart, undefined, $telem ); emitStandaloneSignatureComment(  /* valueless -> host/runtime defines it: publish it as an extern so it links-checks */ formatConstSignatureComment( $id._, $t, sourceName, _s, declOffset, $telem, true ) ); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&(function(){ noForward = $nf; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
-function GlobalDecl($){var $section,$v=createParserContext(),$vStruct,$init,$initStart,$d=createParserContext(),$binit,$x=createParserContext(),$a=createParserContext(),$aStructEl,$aStruct,$aCount;return (function(){var _b=_i;return (function(){var _b=_i;return GLOBAL($)&&(function(){ $section = 'GLOB'; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||READONLY($)&&(function(){ $section = 'CNST'; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||TEMPORARY($)&&(function(){ $section = 'TEMP'; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&_($)&&(function(){var _b=_i;return VarDecl($v)&&(function(){ $vStruct = ($v.type === 'S'); if ($vStruct) {              /* struct value global -> one zeroed GLOB/CNST/TEMP *sizeof */ declare( $section, 'globals', $v.name, 'S', ($section === 'CNST'), structAllocSize($v.struct, _s, $v.at), _s, $v.at, formatGlobalSignatureComment( $section, $v.name, 'S', undefined, undefined, sourceName, _s, declOffset, $v.struct), structDesc($v.struct) ); } else { declare( $section, 'globals', undefined, $v.type, ($section === 'CNST'), '*1', _s, $v.at ); $init = ZEROES[$v.type]; } ; return true})()&&((function(){var _b=_i;return (_s[_i]==="=")&&(++_i,true)&&_($)&&(function(){ $initStart = _i; ; return true})()&&(function(){var _b=_i;return Braced($d)&&(function(){ if (!$vStruct) fail('Brace initializers are only for struct values', _s, $initStart, 'E422'); $binit = []; buildStructInit($v.struct, $d._, $binit, _s, $initStart); emitInitData($binit, _s, $initStart); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||Expr($x)&&(function(){ if ($vStruct)                    /* $initStart, not _i: `Expr` ate the trailing space too */ fail('A struct value needs a brace initializer', _s, $initStart, 'E421'); checkInitTarget($v.type, $v.elem, $x._, _s, $initStart); $init = makeConstant($x._, $v.type, _s, $initStart); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&(function(){ if (!$vStruct) declare( 'DAT?', 'globals', $v.name, $v.type, ($section === 'CNST'), $init, _s, $v.at, formatGlobalSignatureComment( $section, $v.name, $v.type, undefined, undefined, sourceName, _s, declOffset, $v.elem ), $v.elem ); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||ArrayDecl($a)&&(function(){ declare( $section, 'globals', $a.name, 'A', ($section === 'CNST'), arrayAllocSize($a.elem, $a.size, $a.name, undefined, $a.dims), _s, $a.at, formatGlobalSignatureComment( $section, $a.name, 'A', $a.size, undefined, sourceName, _s, declOffset, $a.elem, $a.dims ), $a.elem ); symbols.globals[$a.name].extent = arrayExtent($a.name, undefined, $a.name, $a.size, $a.dims); returnExtent('global ' + $a.name,   /* declared: this consumer is done. Fields spelled out because bare `$a._` is the rule's return value, not its context - see declEntry */ [ { size: $a.size, dims: $a.dims } ]); $aStructEl = isStructAtom($a.elem); $aStruct = ($aStructEl ? descName($a.elem) : $a.elem); $aCount = constInt('#' + $a.size); ; return true})()&&((function(){var _b=_i;return (_s[_i]==="=")&&(++_i,true)&&_($)&&(function(){   /* the list is fully consumed before these checks run, so _i would land on the NEXT declaration - name the initializer itself */ $initStart = _i; /* Hand InitList the DECLARED element type. Without it every entry was checked against its own type, which no value can fail, so `int array A[2] = { 1, "s" }` stored a pointer in an int slot and `float array F[2] = { 1, 2 }` stored the INTEGER bit pattern and read back 1.4013e-45. The scalar paths have always been this strict (`global float f = 1` is E407); only the array path was not. A struct-element array keeps reporting the friendlier E422 below, so it states no target at all. */ initTarget = ($aStructEl ? undefined : $a.elem); ; return true})()&&(function(){var _b=_i;return InitList($d)&&(function(){   /* flat list -> scalar-element arrays only */ if ($aStructEl) fail('A struct-element array needs nested braces, one group per element', _s, $initStart, 'E422'); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||Braced($d)&&(function(){   /* nested braces -> struct-element arrays */ if (!$aStructEl) fail('Nested brace initializers are for struct-element arrays', _s, $initStart, 'E422'); if (isNaN($aCount)) fail('An initialized struct-element array needs a literal size', _s, $initStart, 'E414'); var _arr = $d._; if (_arr.length > $aCount) { failSurplus($a.name, 'elements', _arr.length, $aCount, _arr[$aCount] && _arr[$aCount].at, _s, $initStart); } $binit = []; for (var _ae = 0; _ae < $aCount; ++_ae) { var _aev = (_ae < _arr.length) ? indexedEntry(_arr[_ae], _s, $initStart) : undefined; buildStructInit($aStruct, (_aev && _aev.braced) || [], $binit, _s, $initStart); } emitInitData($binit, _s, $initStart); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
+function GlobalDecl($){var $section,$v=createParserContext(),$vStruct,$init,$initStart,$d=createParserContext(),$binit,$x=createParserContext(),$a=createParserContext(),$aStructEl,$shaped,$needNested;return (function(){var _b=_i;return (function(){var _b=_i;return GLOBAL($)&&(function(){ $section = 'GLOB'; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||READONLY($)&&(function(){ $section = 'CNST'; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||TEMPORARY($)&&(function(){ $section = 'TEMP'; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&_($)&&(function(){var _b=_i;return VarDecl($v)&&(function(){ $vStruct = ($v.type === 'S'); if ($vStruct) {              /* struct value global -> one zeroed GLOB/CNST/TEMP *sizeof */ declare( $section, 'globals', $v.name, 'S', ($section === 'CNST'), structAllocSize($v.struct, _s, $v.at), _s, $v.at, formatGlobalSignatureComment( $section, $v.name, 'S', undefined, undefined, sourceName, _s, declOffset, $v.struct), structDesc($v.struct) ); } else { declare( $section, 'globals', undefined, $v.type, ($section === 'CNST'), '*1', _s, $v.at ); $init = ZEROES[$v.type]; } ; return true})()&&((function(){var _b=_i;return (_s[_i]==="=")&&(++_i,true)&&_($)&&(function(){ $initStart = _i; ; return true})()&&(function(){var _b=_i;return Braced($d)&&(function(){ if (!$vStruct) fail('Brace initializers are only for struct values', _s, $initStart, 'E422'); $binit = []; buildStructInit($v.struct, $d._, $binit, _s, $initStart); emitInitData($binit, _s, $initStart); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||Expr($x)&&(function(){ if ($vStruct)                    /* $initStart, not _i: `Expr` ate the trailing space too */ fail('A struct value needs a brace initializer', _s, $initStart, 'E421'); checkInitTarget($v.type, $v.elem, $x._, _s, $initStart); $init = makeConstant($x._, $v.type, _s, $initStart); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&(function(){ if (!$vStruct) declare( 'DAT?', 'globals', $v.name, $v.type, ($section === 'CNST'), $init, _s, $v.at, formatGlobalSignatureComment( $section, $v.name, $v.type, undefined, undefined, sourceName, _s, declOffset, $v.elem ), $v.elem ); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||ArrayDecl($a)&&(function(){ declare( $section, 'globals', $a.name, 'A', ($section === 'CNST'), arrayAllocSize($a.elem, $a.size, $a.name, undefined, $a.dims), _s, $a.at, formatGlobalSignatureComment( $section, $a.name, 'A', $a.size, undefined, sourceName, _s, declOffset, $a.elem, $a.dims ), $a.elem ); symbols.globals[$a.name].extent = arrayExtent($a.name, undefined, $a.name, $a.size, $a.dims); returnExtent('global ' + $a.name,   /* declared: this consumer is done. Fields spelled out because bare `$a._` is the rule's return value, not its context - see declEntry */ [ { size: $a.size, dims: $a.dims } ]); $aStructEl = isStructAtom($a.elem); ; return true})()&&((function(){var _b=_i;return (_s[_i]==="=")&&(++_i,true)&&_($)&&(function(){   /* the list is fully consumed before these checks run, so _i would land on the NEXT declaration - name the initializer itself */ $initStart = _i; /* Hand InitList the DECLARED element type. Without it every entry was checked against its own type, which no value can fail, so `int array A[2] = { 1, "s" }` stored a pointer in an int slot and `float array F[2] = { 1, 2 }` stored the INTEGER bit pattern and read back 1.4013e-45. The scalar paths have always been this strict (`global float f = 1` is E407); only the array path was not. A struct-element array keeps reporting the friendlier E422 below, so it states no target at all. */ initTarget = ($aStructEl ? undefined : $a.elem); /* Every multi-dim shape mirrors its axes in the braces (`[2, 3]` -> `{ {,,}, {,,} }`), so a shape mistake is caught rather than silently shifting every element; a struct-element array nests one group per element the same way. Both need nested braces (a plain 1-D array stays flat). A literal shape is checked here; a symbolic one is validated at GAZL assembly - see buildShapedInit. */ $shaped = ($a.dims !== undefined); $needNested = ($shaped || $aStructEl); ; return true})()&&(function(){var _b=_i;return InitList($d)&&(function(){   /* flat list -> 1-D scalar arrays and symbolic-axis shapes. `{ }` states nothing, so there is nothing to nest and nothing to place: it zero-fills, exactly as it already did for a struct value and a plain array. Rejecting it here asked for "one group per element" when no element had been given. */ if ($needNested && $d._ > 0) fail(($aStructEl ? 'A struct-element array needs nested braces, one group per element' : 'A shaped array needs nested braces, one group per axis'), _s, $initStart, 'E422'); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||Braced($d)&&(function(){   /* nested braces -> struct-element arrays and literal shapes */ if (!$needNested) fail('Nested brace initializers are for struct-element or shaped arrays', _s, $initStart, 'E422'); $binit = []; $binit.target = ($aStructEl ? undefined : $a.elem);   /* types the DATA rows; see emitInitData */ /* The same filler a struct FIELD uses. Nothing follows a standalone array inside its own allocation, so the gap it may report needs no blockInitFrom here. Fields spelled out because bare `$a._` is the rule's return value, not its context - see declEntry. */ fillArray({ name: $a.name, elem: $a.elem, size: $a.size, dims: $a.dims }, undefined, $d._, $binit, _s, $initStart); emitInitData($binit, _s, $initStart); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function Braced($){var $i=createParserContext();return (function(){var _b=_i;return (_s[_i]==="{")&&(++_i,true)&&_($)&&(function(){ $._ = []; $.n = 0; ; return true})()&&((function(){var _b=_i;return BracedEntry($i)&&(function(){ $._[$.n++] = $i._; ; return true})()&&((function(){while((function(){var _b=_i;return (_s[_i]===",")&&(++_i,true)&&_($)&&BracedEntry($i)&&(function(){ $._[$.n++] = $i._; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&(_s[_i]==="}")&&(++_i,true)&&_($)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function BracedEntry($){var $fname,$fat,$id=createParserContext(),$e=createParserContext();return (function(){var _b=_i;return (function(){ $fname = undefined; $fat = _i; ; return true})()&&((function(){var _b=_i;return Identifier($id)&&(_s[_i]===":")&&(++_i,true)&&_($)&&(function(){ $fname = $id._; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&BracedItem($e)&&(function(){ var _v = $e._;   /* bare `$e._` is the VALUE; `$e.field` would set a CONTEXT property, and `Braced` stores only the value */ _v.field = $fname; _v.at = $fat; $._ = _v; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
-function BracedItem($){var $b=createParserContext(),$x=createParserContext();return (function(){var _b=_i;return Braced($b)&&(function(){ $._ = { braced: $b._ }; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||Expr($x)&&(function(){ var m = metaSlot($x._); var op = makeRValue(m, '#<&'); if (span(op[0] || '', '#<&') !== 1) fail('Initializer must be a constant', _s, _i, 'E407'); $._ = { op: op, type: m.type, elem: m.elem }; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
-function InitList($){var $d,$type,$entryAt,$x=createParserContext();return (function(){var _b=_i;return (_s[_i]==="{")&&(++_i,true)&&_($)&&(function(){ $d = ' '; $type = undefined; ; return true})()&&((function(){var _b=_i;return (function(){var _l=_i,_x=(function(){var _b=_i;return Identifier($)&&(_s[_i]===":")&&(++_i,true)||(_im=(_i>_im?_i:_im),_i=_b,false)})();_i=_l;return !_x})()&&(function(){ $entryAt = _i; ; return true})()&&Expr($x)&&(function(){ var first = initEntry(metaSlot($x._), _s, $entryAt); $type = first.type; $d += first.op; ; return true})()&&((function(){while((function(){var _b=_i;return (_s[_i]===",")&&(++_i,true)&&_($)&&(function(){var _l=_i,_x=(function(){var _b=_i;return Identifier($)&&(_s[_i]===":")&&(++_i,true)||(_im=(_i>_im?_i:_im),_i=_b,false)})();_i=_l;return !_x})()&&(function(){ $entryAt = _i; ; return true})()&&Expr($x)&&(function(){ var next = initEntry(metaSlot($x._), _s, $entryAt); var xType = next.type, constant = next.op; /* decide if we need to flush DATA */ if (  constant[0] === '<' || $d[1] === '<' || ($d + ' ' + constant).length >= 55) { declare( initElemRow(), 'globals', undefined, xType, true, $d.substr(1), _s, _i ); $d = ''; } $d += ' ' + constant; $type = xType; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&(_s[_i]==="}")&&(++_i,true)&&_($)&&(function(){ if ($d.substr(1) !== '') { declare( initElemRow(), 'globals', undefined, $type, true, $d.substr(1), _s, _i ); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
+function BracedItem($){var $b=createParserContext(),$x=createParserContext();return (function(){var _b=_i;return Braced($b)&&(function(){ $._ = { braced: $b._ }; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||Expr($x)&&(function(){ var m = metaSlot($x._); var op = makeRValue(m, '#<&'); if (span(op[0] || '', '#<&') !== 1) fail('Initializer must be a constant', _s, _i, 'E407'); $._ = { op: holdConstant(op, m.type, _s, _i), type: m.type, elem: m.elem }; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
+function InitList($){var $d,$type,$n,$entryAt,$x=createParserContext(),$;return (function(){var _b=_i;return (_s[_i]==="{")&&(++_i,true)&&_($)&&(function(){ $d = ' '; $type = undefined; $n = 0; ; return true})()&&((function(){var _b=_i;return (function(){var _l=_i,_x=(function(){var _b=_i;return Identifier($)&&(_s[_i]===":")&&(++_i,true)||(_im=(_i>_im?_i:_im),_i=_b,false)})();_i=_l;return !_x})()&&(function(){ $entryAt = _i; ; return true})()&&Expr($x)&&(function(){ var first = initEntry(metaSlot($x._), _s, $entryAt); $type = first.type; $d += first.op; ++$n; ; return true})()&&((function(){while((function(){var _b=_i;return (_s[_i]===",")&&(++_i,true)&&_($)&&(function(){var _l=_i,_x=(function(){var _b=_i;return Identifier($)&&(_s[_i]===":")&&(++_i,true)||(_im=(_i>_im?_i:_im),_i=_b,false)})();_i=_l;return !_x})()&&(function(){ $entryAt = _i; ; return true})()&&Expr($x)&&(function(){ var next = initEntry(metaSlot($x._), _s, $entryAt); var xType = next.type, constant = next.op; /* decide if we need to flush DATA */ if (  constant[0] === '<' || $d[1] === '<' || ($d + ' ' + constant).length >= 55) { declare( initElemRow(), 'globals', undefined, xType, true, $d.substr(1), _s, _i ); $d = ''; } $d += ' ' + constant; $type = xType; ++$n; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&(_s[_i]==="}")&&(++_i,true)&&_($)&&(function(){ $._ = $n;   /* entry count, set at the END: the `!(Identifier ':')` predicate compiles to `Identifier($)` and clobbers `$._` mid-rule */ if ($d.substr(1) !== '') { declare( initElemRow(), 'globals', undefined, $type, true, $d.substr(1), _s, _i ); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function ArgsDecl($){var $v=createParserContext();return (function(){var _b=_i;return (function(){ $._ = []; $.n = 0; ; return true})()&&((function(){var _b=_i;return VarDecl($v)&&(function(){ $._[$.n++] = declEntry($v.type, $v.elem, $v.struct, $v.words, $v.name, $v.size, $v.dims, $v.at); ; return true})()&&((function(){while((function(){var _b=_i;return (_s[_i]===",")&&(++_i,true)&&_($)&&VarDecl($v)&&(function(){ $._[$.n++] = declEntry($v.type, $v.elem, $v.struct, $v.words, $v.name, $v.size, $v.dims, $v.at); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function LocalsDecl($){var $v=createParserContext();return (function(){var _b=_i;return (function(){ $._ = []; $.n = 0; ; return true})()&&((function(){var _b=_i;return (function(){var _b=_i;return VarDecl($v)||(_im=(_i>_im?_i:_im),_i=_b,false)||ArrayDecl($v)||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&(function(){ $._[$.n++] = declEntry($v.type, $v.elem, $v.struct, $v.words, $v.name, $v.size, $v.dims, $v.at); ; return true})()&&((function(){while((function(){var _b=_i;return (_s[_i]===",")&&(++_i,true)&&_($)&&(function(){var _b=_i;return VarDecl($v)||(_im=(_i>_im?_i:_im),_i=_b,false)||ArrayDecl($v)||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&(function(){ $._[$.n++] = declEntry($v.type, $v.elem, $v.struct, $v.words, $v.name, $v.size, $v.dims, $v.at); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function TypeBase($){var $t=createParserContext(),$id=createParserContext();return (function(){var _b=_i;return BASE_TYPE($t)&&_($)&&(function(){ $._ = CASTS_TO_TYPES[$t._]; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||Identifier($id)&&(function(){ /* the ONE place a raw type name becomes a descriptor */ if (isStructName($id._)) $._ = structDesc($id._); else if (isFuncTypeName($id._)) $._ = funcTypeDesc($id._); else fail('Unknown type ' + $id._, _s, _i, 'E413'); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};

@@ -79,7 +79,8 @@ update:	FUNC	; signature func update() -> void @ BitMaskMod_code.impala:114:1
 		EQUi %0 #0 @.f2
 		IORi $x $x #0xF	; x = x | 0xF
 	.f2:	POKE &mask $x 	; global mask = x
-	.s0:	RETU   	; }
+	.s0:	NOOP
+	.e1:	RETU   	; }
 
 
 ;-----------------------------------------------------------------------------

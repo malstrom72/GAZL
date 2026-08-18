@@ -185,7 +185,8 @@
 	});
 
 	var STORAGE_KEY = "impala.playground.src";
-	// The toggles are remembered too, keyed by element id so adding a fourth needs no code here. The
+	// The toggles are remembered too, keyed by element id - a new one needs only its entry in `flagEls`
+	// below and its own line in `opts`. The
 	// SEED deliberately is not: it is per-experiment, and a stale one silently changes every label.
 	var flagEls = [retabEl, legacyEl, rangesEl];
 	function flagKey(el) { return "impala.playground." + el.id; }

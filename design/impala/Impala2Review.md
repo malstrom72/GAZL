@@ -378,7 +378,8 @@ the two entries still marked open.
 - ~~`--json`, `--emit-metadata`, `--no-metadata` do not exist. The complete flag set is `--legacy` and
   `--dead-strip`.~~ The three phantom flags are still absent, but the flag set is **three**, not two:
   `--legacy`, `--dead-strip` and `--range-checks` (corrected 2026-08-04; `--range-checks` shipped with
-  E461).
+  E461). A fourth, `--collapse-labels`, existed for one day and was deleted - do not copy this list,
+  cite what `impala.node.js` prints with no arguments.
 - ~~`import "x.gazl"` blob imports do not work — the closure walker parses every import as Impala source.~~
   RESOLVED 2026-08-04 by **deferring the feature to Impala 3.0**, not by building it: nothing needs it, and
   the builder's concatenate-then-compile shape leaves a blob no seam to enter through. The Step 5 bullet in

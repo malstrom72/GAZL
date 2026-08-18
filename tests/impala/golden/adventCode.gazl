@@ -515,7 +515,7 @@ fMAPLIN:	FUNC	; signature func fMAPLIN(int FIL) -> void @ adventCode.impala:380:
 	.e4:	POKE &LNLENG #0 	; global LNLENG=0
 		MOVi $I #1 	; for (I=1 to 100+1) 
 		! ADDi <A> #100 #1
-		GEQi #1 <A> @break1
+		GEQi #1 <A> @.e5
 	.l6:	PEEK %0 &INLINE $I	; if ((int)global INLINE[I] == 0) goto break1
 		NEQi %0 #0 @.f7
 		GOTO @break1  	; goto break1
@@ -527,6 +527,7 @@ fMAPLIN:	FUNC	; signature func fMAPLIN(int FIL) -> void @ adventCode.impala:380:
 		EQUi %0 #0 @.f8
 		POKE &LNLENG $I 	; global LNLENG=I
 	.f8:	FORi $I <A> @.l6	; } /* end loop */
+	.e5:	NOOP
 	break1:	POKE &LNPOSN #1 	; break1:
 		EQUi $FIL #FALSE @.f9	; } while (FIL != FALSE && global LNLENG == 0)
 		PEEK %0 &LNLENG 
@@ -1003,10 +1004,11 @@ fPSPEAK:	FUNC	; signature func fPSPEAK(int MSG, int SKIP) -> void @ adventCode.i
 		MOVi $I #0 	; for (I=0 to SKIP+1) 
 		ADDi %0 $SKIP #1
 		GEQi #0 %0 @.f0
-	.l2:	PEEK %1 &LINES $M	; M=abs((int)global LINES[M])
+	.l2:	NOOP
+	.l3:	PEEK %1 &LINES $M	; M=abs((int)global LINES[M])
 		ABSi $M %1 
 		PEEK %1 &LINES $M	; } while ((int)global LINES[M] >= 0)
-		GEQi %1 #0 @.l2
+		GEQi %1 #0 @.l3
 		FORi $I %0 @.l2	; } /* end loop */
 	.f0:	MOVi %1 $M 	; fSPEAK(M)
 		CALL &fSPEAK %0 *2	; expects fSPEAK(int) -> void @ adventCode.impala:724:11
@@ -1049,7 +1051,8 @@ fGETIN:	FUNC	; signature func fGETIN(ptr wORD1, ptr wORD1X, ptr wORD2, ptr wORD2
 	$wORD2X:	INPp
 	$JUNK:	LOCi
 ;-----------------------------------------------------------------------------
-	L10:	PEEK %0 &BLKLIN 	; if(global BLKLIN != FALSE)fTYPE0()
+	L10:	NOOP
+	.l0:	PEEK %0 &BLKLIN 	; if(global BLKLIN != FALSE)fTYPE0()
 		EQUi %0 #FALSE @.f1
 		CALL &fTYPE0 %0 *1	; expects fTYPE0() -> void @ adventCode.impala:756:37
 	.f1:	MOVi %1 #FALSE 	; fMAPLIN(FALSE)
@@ -1063,7 +1066,7 @@ fGETIN:	FUNC	; signature func fGETIN(ptr wORD1, ptr wORD1X, ptr wORD2, ptr wORD2
 		PEEK %0 &BLKLIN 	; } while (global BLKLIN != FALSE && (int)(*wORD1) < 0)
 		EQUi %0 #FALSE @.f2
 		PEEK %0 $wORD1 
-		LSSi %0 #0 @L10
+		LSSi %0 #0 @.l0
 	.f2:	MOVi %1 #FALSE 	; (*wORD1X)=fGETTXT(FALSE,TRUE,TRUE,0)
 		MOVi %2 #TRUE 
 		MOVi %3 #TRUE 
@@ -1889,7 +1892,7 @@ discard:	FUNC	; signature func discard(int just_do_it) -> int @ adventCode.impal
 ;-----------------------------------------------------------------------------
 		PEEK $lLOC &gLOC 	; lLOC = global gLOC
 		PEEK $lOBJ &gOBJ 	; lOBJ = global gOBJ
-		NEQi $just_do_it #FALSE @.e32	; if(just_do_it == FALSE) 
+		NEQi $just_do_it #FALSE @.f0	; if(just_do_it == FALSE) 
 		MOVi %1 #ROD2 	; if((int)TOTING(ROD2) != FALSE && lOBJ == ROD && (int)TOTING(ROD) == FALSE) 
 		CALL &TOTING %0 *2	; expects TOTING(int) -> int @ adventCode.impala:1238:24
 		EQUi %0 #FALSE @.f2
@@ -1904,7 +1907,7 @@ discard:	FUNC	; signature func discard(int just_do_it) -> int @ adventCode.impal
 		NEQi %0 #FALSE @.f3
 		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
 		RETU   	; return
-		GOTO @.e32  	; }
+		GOTO @.e4  	; }
 	.f3:	NEQi $lOBJ #BIRD @.f6	; if(!(lOBJ != BIRD || (int)HERE(SNAKE, lLOC) == FALSE)) 
 		MOVi %1 #SNAKE 
 		MOVi %2 $lLOC 
@@ -1919,7 +1922,7 @@ discard:	FUNC	; signature func discard(int just_do_it) -> int @ adventCode.impal
 	.f7:	MOVi %1 #SNAKE 	; fDSTROY(SNAKE)
 		CALL &fDSTROY %0 *2	; expects fDSTROY(int) -> void @ adventCode.impala:1243:18
 		POKE &PROP:SNAKE #1 	; global PROP[SNAKE]=1
-		GOTO @.e32  	; } else if(!(!((int)GSTONE(lOBJ) != FALSE && (int)AT(CAVITY, lLOC) != FALSE && (int)global PROP[CAVITY] != 0))) 
+		GOTO @.e8  	; } else if(!(!((int)GSTONE(lOBJ) != FALSE && (int)AT(CAVITY, lLOC) != FALSE && (int)global PROP[CAVITY] != 0))) 
 	.f6:	MOVi %1 $lOBJ 	; if(!(!((int)GSTONE(lOBJ) != FALSE && (int)AT(CAVITY, lLOC) != FALSE && (int)global PROP[CAVITY] != 0))) 
 		CALL &GSTONE %0 *2	; expects GSTONE(int) -> int @ adventCode.impala:1246:35
 		EQUi %0 #FALSE @.f10
@@ -1936,13 +1939,13 @@ discard:	FUNC	; signature func discard(int just_do_it) -> int @ adventCode.impal
 		MOVi %1 #RUG 	; if(!((int)HERE(RUG, lLOC) == FALSE || !((lOBJ == EMRALD && (int)global PROP[RUG] != 2) || (lOBJ == RUBY && (int)global PROP[RUG] == 2)))) 
 		MOVi %2 $lLOC 
 		CALL &HERE %0 *3	; expects HERE(int, int) -> int @ adventCode.impala:1250:30
-		EQUi %0 #FALSE @.e32
+		EQUi %0 #FALSE @.e20
 		NEQi $lOBJ #EMRALD @.f12
 		PEEK %0 &PROP:RUG 
 		NEQi %0 #2 @.t13
-	.f12:	NEQi $lOBJ #RUBY @.e32
+	.f12:	NEQi $lOBJ #RUBY @.e20
 		PEEK %0 &PROP:RUG 
-		NEQi %0 #2 @.e32
+		NEQi %0 #2 @.e20
 	.t13:	POKE &SPK #219 	; global SPK=219
 		MOVi %1 #RUG 	; if((int)TOTING(RUG) != FALSE)global SPK=220
 		CALL &TOTING %0 *2	; expects TOTING(int) -> int @ adventCode.impala:1252:25
@@ -1953,7 +1956,7 @@ discard:	FUNC	; signature func discard(int just_do_it) -> int @ adventCode.impal
 	.f17:	PEEK %1 &SPK 	; fRSPEAK(global SPK)
 		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ adventCode.impala:1254:24
 		PEEK %0 &SPK 	; if(!(global SPK == 220)) 
-		EQUi %0 #220 @.e32
+		EQUi %0 #220 @.e20
 		PEEK %0 &PROP:RUG 	; lK=2-(int)global PROP[RUG]
 		SUBi $lK #2 %0
 		POKE &PROP:RUG $lK 	; global PROP[RUG]=lK
@@ -1962,7 +1965,7 @@ discard:	FUNC	; signature func discard(int just_do_it) -> int @ adventCode.impal
 	.f19:	ADDi %1 #RUG #100	; fMOVE(RUG+100,lK)
 		MOVi %2 $lK 
 		CALL &fMOVE %0 *3	; expects fMOVE(int, int) -> void @ adventCode.impala:1259:23
-		GOTO @.e32  	; } else if(!(lOBJ != COINS || (int)HERE(VEND, lLOC) == FALSE)) 
+		GOTO @.e20  	; } else if(!(lOBJ != COINS || (int)HERE(VEND, lLOC) == FALSE)) 
 	.f10:	NEQi $lOBJ #COINS @.f22	; if(!(lOBJ != COINS || (int)HERE(VEND, lLOC) == FALSE)) 
 		MOVi %1 #VEND 
 		MOVi %2 $lLOC 
@@ -1978,7 +1981,7 @@ discard:	FUNC	; signature func discard(int just_do_it) -> int @ adventCode.impal
 		CALL &fPSPEAK %0 *3	; expects fPSPEAK(int, int) -> void @ adventCode.impala:1265:21
 		MOVi $goValue #GOTO2012 	; goValue = GOTO2012
 		RETU   	; return
-		GOTO @.e32  	; } else if(!(lOBJ != BIRD || (int)AT(DRAGON, lLOC) == FALSE || (int)global PROP[DRAGON] != 0)) 
+		GOTO @.e23  	; } else if(!(lOBJ != BIRD || (int)AT(DRAGON, lLOC) == FALSE || (int)global PROP[DRAGON] != 0)) 
 	.f22:	NEQi $lOBJ #BIRD @.f25	; if(!(lOBJ != BIRD || (int)AT(DRAGON, lLOC) == FALSE || (int)global PROP[DRAGON] != 0)) 
 		MOVi %1 #DRAGON 
 		MOVi %2 $lLOC 
@@ -1993,7 +1996,7 @@ discard:	FUNC	; signature func discard(int just_do_it) -> int @ adventCode.impal
 		POKE &PROP:BIRD #0 	; global PROP[BIRD]=0
 		MOVi $goValue #GOTO2012 	; goValue = GOTO2012
 		RETU   	; return
-		GOTO @.e32  	; } else if(!(lOBJ != BEAR || (int)AT(TROLL, lLOC) == FALSE)) 
+		GOTO @.e26  	; } else if(!(lOBJ != BEAR || (int)AT(TROLL, lLOC) == FALSE)) 
 	.f25:	NEQi $lOBJ #BEAR @.f28	; if(!(lOBJ != BEAR || (int)AT(TROLL, lLOC) == FALSE)) 
 		MOVi %1 #TROLL 
 		MOVi %2 $lLOC 
@@ -2016,7 +2019,7 @@ discard:	FUNC	; signature func discard(int just_do_it) -> int @ adventCode.impal
 		MOVi %1 #CHASM 	; fJUGGLE(CHASM)
 		CALL &fJUGGLE %0 *2	; expects fJUGGLE(int) -> void @ adventCode.impala:1278:18
 		POKE &PROP:TROLL #2 	; global PROP[TROLL]=2
-		GOTO @.e32  	; } else if(!(lOBJ == VASE && lLOC != (int)global PLAC[PILLOW])) 
+		GOTO @.e29  	; } else if(!(lOBJ == VASE && lLOC != (int)global PLAC[PILLOW])) 
 	.f28:	NEQi $lOBJ #VASE @.f30	; if(!(lOBJ == VASE && lLOC != (int)global PLAC[PILLOW])) 
 		PEEK %0 &PLAC:PILLOW 
 		NEQi $lLOC %0 @.f31
@@ -2034,9 +2037,16 @@ discard:	FUNC	; signature func discard(int just_do_it) -> int @ adventCode.impal
 		ADDi %2 %2 #1
 		CALL &fPSPEAK %0 *3	; expects fPSPEAK(int, int) -> void @ adventCode.impala:1285:42
 		PEEK %0 &PROP:VASE 	; if((int)global PROP[VASE] != 0)global FIXED[VASE]= -1
-		EQUi %0 #0 @.e32
+		EQUi %0 #0 @.f0
 		POKE &FIXED:VASE #-1 	; global FIXED[VASE]= -1
-	.e32:	CALL &LIQ %0 *1	; expects LIQ() -> int @ adventCode.impala:1290:15
+	.e32:	NOOP
+	.e29:	NOOP
+	.e26:	NOOP
+	.e23:	NOOP
+	.e20:	NOOP
+	.e8:	NOOP
+	.e4:	NOOP
+	.f0:	CALL &LIQ %0 *1	; expects LIQ() -> int @ adventCode.impala:1290:15
 		MOVi $lK %0 
 		POKE &gK $lK 	; global gK = lK
 		NEQi $lK $lOBJ @.f35	; if(lK == lOBJ) 
@@ -2750,7 +2760,7 @@ doThrow:	FUNC	; signature func doThrow() -> int @ adventCode.impala:1554:1
 		MOVi %1 #7 	; if((int)fRAN(7) >= global DFLAG) 
 		CALL &fRAN %0 *2	; expects fRAN(int) -> int @ adventCode.impala:1600:18
 		PEEK %1 &DFLAG 
-		LSSi %0 %1 @L9175
+		LSSi %0 %1 @.f15
 		POKE &DSEEN $I #FALSE	; global DSEEN[I]=FALSE
 		POKE &DLOC $I #0	; global DLOC[I]=0
 		POKE &SPK #47 	; global SPK=47
@@ -2758,8 +2768,9 @@ doThrow:	FUNC	; signature func doThrow() -> int @ adventCode.impala:1554:1
 		ADDi %0 %0 #1
 		POKE &DKILL %0 
 		PEEK %0 &DKILL 	; if(global DKILL == 1)global SPK=149
-		NEQi %0 #1 @L9175
+		NEQi %0 #1 @.f15
 		POKE &SPK #149 	; global SPK=149
+	.f15:	NOOP
 	L9175:	PEEK %1 &SPK 	; L9175:
 		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ adventCode.impala:1608:21
 		MOVi %1 #AXE 	; fDROP(AXE,lLOC)
@@ -2818,7 +2829,7 @@ action:	FUNC	; signature func action(int STARTAT) -> int @ adventCode.impala:162
 		CALL &carry %0 *1	; expects carry() -> int @ adventCode.impala:1655:30
 		MOVi $goValue %0 
 		RETU   	; return
-		GOTO @.s6  	; }
+		GOTO @.e7  	; }
 	.s6#1:	NOOP
 	.s6#8:	NOOP
 	.s6#9:	NOOP
@@ -2830,7 +2841,7 @@ action:	FUNC	; signature func action(int STARTAT) -> int @ adventCode.impala:162
 	.s6#27:	NOOP
 	.s6#28:	MOVi $goValue #GOTO8000 	; goValue = GOTO8000
 		RETU   	; return
-		GOTO @.s6  	; }
+		GOTO @.e7  	; }
 	.s6#3:	NOOP
 	.s6#5:	POKE &SPK #28 	; global SPK=28
 		MOVi %1 #CLAM 	; if((int)HERE(CLAM, lLOC) != FALSE) 
@@ -2870,9 +2881,10 @@ action:	FUNC	; signature func action(int STARTAT) -> int @ adventCode.impala:162
 		EQUi %0 #FALSE @.f16
 		MOVi $lOBJ #CHAIN 	; lOBJ=CHAIN
 		POKE &gOBJ #CHAIN 	; global gOBJ = CHAIN
-	.f16:	NEQi $lOBJ #0 @L9040	; if(lOBJ == 0) 
+	.f16:	NEQi $lOBJ #0 @.f17	; if(lOBJ == 0) 
 		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
 		RETU   	; return
+	.f17:	NOOP
 	L9040:	EQUi $lOBJ #CLAM @.f19	; L9040:
 		EQUi $lOBJ #OYSTER @.f19
 		NEQi $lOBJ #DOOR @.f20	; if(lOBJ == DOOR)global SPK=111
@@ -2998,10 +3010,10 @@ action:	FUNC	; signature func action(int STARTAT) -> int @ adventCode.impala:162
 		CALL &fDROP %0 *3	; expects fDROP(int, int) -> void @ adventCode.impala:1727:22
 		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
 		RETU   	; return
-		GOTO @.s6  	; }
+		GOTO @.e7  	; }
 	.s6#4:	MOVi $goValue #GOTO2009 	; goValue = GOTO2009
 		RETU   	; return
-		GOTO @.s6  	; }
+		GOTO @.e7  	; }
 	.s6#6:	MOVi %1 #LAMP 	; if((int)HERE(LAMP, lLOC) != FALSE && (int)global PROP[LAMP] == 0 && global LIMIT >= 0) 
 		MOVi %2 $lLOC 
 		CALL &HERE %0 *3	; expects HERE(int, int) -> int @ adventCode.impala:1735:31
@@ -3022,9 +3034,10 @@ action:	FUNC	; signature func action(int STARTAT) -> int @ adventCode.impala:162
 		ADDi $lOBJ %0 #URN
 		POKE &gOBJ $lOBJ 	; global gOBJ = lOBJ
 	.f50:	EQUi $lOBJ #0 @.t51	; if(lOBJ == 0 || lOBJ > 100) 
-		LEQi $lOBJ #100 @L9070
+		LEQi $lOBJ #100 @.f52
 	.t51:	MOVi $goValue #GOTO8000 	; goValue = GOTO8000
 		RETU   	; return
+	.f52:	NOOP
 	L9070:	EQUi $lOBJ #URN @.f53	; L9070:
 		EQUi $lOBJ #LAMP @.f54	; if(lOBJ != LAMP) 
 		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
@@ -3052,7 +3065,7 @@ action:	FUNC	; signature func action(int STARTAT) -> int @ adventCode.impala:162
 		POKE &PROP:URN #2 	; global PROP[URN]=2
 		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
 		RETU   	; return
-		GOTO @.s6  	; }
+		GOTO @.e7  	; }
 	.s6#7:	MOVi %1 #LAMP 	; if((int)HERE(LAMP, lLOC) != FALSE && (int)global PROP[LAMP] == 1) 
 		MOVi %2 $lLOC 
 		CALL &HERE %0 *3	; expects HERE(int, int) -> int @ adventCode.impala:1759:31
@@ -3071,9 +3084,10 @@ action:	FUNC	; signature func action(int STARTAT) -> int @ adventCode.impala:162
 		ADDi $lOBJ %0 #URN
 		POKE &gOBJ $lOBJ 	; global gOBJ = lOBJ
 	.f61:	EQUi $lOBJ #0 @.t62	; if(lOBJ == 0 || lOBJ > 100) 
-		LEQi $lOBJ #100 @L9080
+		LEQi $lOBJ #100 @.f63
 	.t62:	MOVi $goValue #GOTO8000 	; goValue = GOTO8000
 		RETU   	; return
+	.f63:	NOOP
 	L9080:	EQUi $lOBJ #URN @.f64	; L9080:
 		NEQi $lOBJ #LAMP @.f65	; if(lOBJ == LAMP) 
 		POKE &PROP:LAMP #0 	; global PROP[LAMP]=0
@@ -3097,14 +3111,14 @@ action:	FUNC	; signature func action(int STARTAT) -> int @ adventCode.impala:162
 		POKE &SPK #210 	; global SPK=210
 		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
 		RETU   	; return
-		GOTO @.s6  	; }
+		GOTO @.e7  	; }
 	.s6#10:	MOVi $goValue #GOTO2011 	; goValue = GOTO2011
 		RETU   	; return
-		GOTO @.s6  	; }
+		GOTO @.e7  	; }
 	.s6#11:	CALL &attack %0 *1	; expects attack() -> int @ adventCode.impala:1780:39
 		MOVi $goValue %0 
 		RETU   	; return
-		GOTO @.s6  	; }
+		GOTO @.e7  	; }
 	.s6#12:	NOOP
 	L9130:	EQUi $lOBJ #BOTTLE @.t69	; L9130:
 		NEQi $lOBJ #0 @.f70
@@ -3179,7 +3193,7 @@ action:	FUNC	; signature func action(int STARTAT) -> int @ adventCode.impala:162
 		CALL &fill %0 *2	; expects fill(int) -> int @ adventCode.impala:1815:33
 		MOVi $goValue %0 
 		RETU   	; return
-		GOTO @.s6  	; }
+		GOTO @.e7  	; }
 	.s6#13:	MOVi %1 #FOOD 	; if((int)HERE(FOOD, lLOC) == FALSE) 
 		MOVi %2 $lLOC 
 		CALL &HERE %0 *3	; expects HERE(int, int) -> int @ adventCode.impala:1821:31
@@ -3191,7 +3205,7 @@ action:	FUNC	; signature func action(int STARTAT) -> int @ adventCode.impala:162
 		POKE &SPK #72 	; global SPK=72
 		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
 		RETU   	; return
-		GOTO @.s6  	; }
+		GOTO @.e7  	; }
 	.s6#14:	NOOP
 	L9150:	NEQi $lOBJ #0 @.f85	; L9150:
 		MOVi %1 $lLOC 
@@ -3233,7 +3247,7 @@ action:	FUNC	; signature func action(int STARTAT) -> int @ adventCode.impala:162
 		POKE &SPK #240 	; global SPK=240
 		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
 		RETU   	; return
-		GOTO @.s6  	; }
+		GOTO @.e7  	; }
 	.s6#17:	MOVi %1 #22 	; if((int)fYES(22,54,54) != FALSE) score(1)
 		MOVi %2 #54 
 		MOVi %3 #54 
@@ -3243,7 +3257,7 @@ action:	FUNC	; signature func action(int STARTAT) -> int @ adventCode.impala:162
 		CALL &score %0 *2	; expects score(int) -> void @ adventCode.impala:1851:47
 	.f91:	MOVi $goValue #GOTO2012 	; goValue = GOTO2012
 		RETU   	; return
-		GOTO @.s6  	; }
+		GOTO @.e7  	; }
 	.s6#19:	POKE &SPK #98 	; global SPK=98
 		MOVi $I #1 	; for (I=1 to 100+1) 
 		! ADDi <A> #100 #1
@@ -3269,12 +3283,12 @@ action:	FUNC	; signature func action(int STARTAT) -> int @ adventCode.impala:162
 		POKE &SPK #141 	; global SPK=141
 	.f97:	MOVi $goValue #GOTO2011 	; goValue = GOTO2011
 		RETU   	; return
-		GOTO @.s6  	; }
+		GOTO @.e7  	; }
 	.s6#21:	MOVi %1 $lOBJ 	; goValue = (int)fill(lOBJ)
 		CALL &fill %0 *2	; expects fill(int) -> int @ adventCode.impala:1870:41
 		MOVi $goValue %0 
 		RETU   	; return
-		GOTO @.s6  	; }
+		GOTO @.e7  	; }
 	.s6#22:	NOOP
 	L9230:	PEEK %0 &PROP:ROD2 	; L9230:
 		LSSi %0 #0 @.t98
@@ -3294,7 +3308,7 @@ action:	FUNC	; signature func action(int STARTAT) -> int @ adventCode.impala:162
 		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ adventCode.impala:1879:27
 		MOVi %1 #0 	; score(0)
 		CALL &score %0 *2	; expects score(int) -> void @ adventCode.impala:1880:14
-		GOTO @.s6  	; }
+		GOTO @.e7  	; }
 	.s6#23:	MOVi %1 #-1 	; score(-1)
 		CALL &score %0 *2	; expects score(int) -> void @ adventCode.impala:1885:15
 		MOVi %1 #1 	; fSETPRM(1,global SCORE,global MXSCOR)
@@ -3309,7 +3323,7 @@ action:	FUNC	; signature func action(int STARTAT) -> int @ adventCode.impala:162
 		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ adventCode.impala:1888:18
 		MOVi $goValue #GOTO2012 	; goValue = GOTO2012
 		RETU   	; return
-		GOTO @.s6  	; }
+		GOTO @.e7  	; }
 	.s6#24:	PEEK %1 &WD1 	; lK=(int)fVOCAB(global WD1,3)
 		MOVi %2 #3 
 		CALL &fVOCAB %0 *3	; expects fVOCAB(int, int) -> int @ adventCode.impala:1896:34
@@ -3366,13 +3380,13 @@ action:	FUNC	; signature func action(int STARTAT) -> int @ adventCode.impala:162
 		CALL &fPSPEAK %0 *3	; expects fPSPEAK(int, int) -> void @ adventCode.impala:1912:22
 		MOVi $goValue #GOTO2012 	; goValue = GOTO2012
 		RETU   	; return
-		GOTO @.s6  	; }
+		GOTO @.e7  	; }
 	.s6#25:	POKE &ABBNUM #10000 	; global ABBNUM=10000
 		POKE &DETAIL #3 	; global DETAIL=3
 		POKE &SPK #156 	; global SPK=156
 		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
 		RETU   	; return
-		GOTO @.s6  	; }
+		GOTO @.e7  	; }
 	.s6#26:	MOVi $I #1 	; for (I=1 to 100+1) 
 		! ADDi <A> #100 #1
 		GEQi #1 <A> @.e112
@@ -3392,9 +3406,10 @@ action:	FUNC	; signature func action(int STARTAT) -> int @ adventCode.impala:162
 		EQUi $lOBJ #0 @.t116
 		MOVi %1 $lLOC 
 		CALL &DARK %0 *2	; expects DARK(int) -> int @ adventCode.impala:1929:52
-		EQUi %0 #FALSE @L9270
+		EQUi %0 #FALSE @.f117
 	.t116:	MOVi $goValue #GOTO8000 	; goValue = GOTO8000
 		RETU   	; return
+	.f117:	NOOP
 	L9270:	MOVi %1 $lLOC 	; L9270:
 		CALL &DARK %0 *2	; expects DARK(int) -> int @ adventCode.impala:1932:25
 		EQUi %0 #FALSE @.f118
@@ -3422,14 +3437,14 @@ action:	FUNC	; signature func action(int STARTAT) -> int @ adventCode.impala:162
 		POKE &CLSHNT %0 
 		MOVi $goValue #GOTO2012 	; goValue = GOTO2012
 		RETU   	; return
-		GOTO @.s6  	; }
+		GOTO @.e7  	; }
 	.s6#29:	NOOP
 	.s6#30:	MOVp %1 &.s_SorryF_4d4 	; output("Sorry. File operationrs are disabled.\n")
 		CALL ^output %0 *2	; expects output(int-ptr) -> unknown @ adventCode.impala:1943:55
 		POKE &gK #NUL 	; global gK = NUL
 		MOVi $goValue #GOTO8 	; goValue = GOTO8
 		RETU   	; return
-		GOTO @.s6  	; }
+		GOTO @.e7  	; }
 	.s6#31:	PEEK %0 &PROP:RUG 	; if((int)global PROP[RUG] != 2)global SPK=224
 		EQUi %0 #2 @.f123
 		POKE &SPK #224 	; global SPK=224
@@ -3469,7 +3484,7 @@ action:	FUNC	; signature func action(int STARTAT) -> int @ adventCode.impala:162
 		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ adventCode.impala:1964:25
 		MOVi $goValue #GOTO2 	; goValue = GOTO2
 		RETU   	; return
-		GOTO @.s6  	; }
+		GOTO @.e7  	; }
 	.s6#32:	POKE &SPK #228 	; global SPK=228
 		PEEK $lK &LOCSND $lLOC	; lK=(int)global LOCSND[lLOC]
 		POKE &gK $lK 	; global gK = lK
@@ -3513,7 +3528,7 @@ action:	FUNC	; signature func action(int STARTAT) -> int @ adventCode.impala:162
 	.f134:	FORi $I <A> @.l132	; } /* end loop */
 	.e131:	MOVi $goValue #GOTO2011 	; goValue = GOTO2011
 		RETU   	; return
-		GOTO @.s6  	; }
+		GOTO @.e7  	; }
 	.s6#33:	NOOP
 	L8340:	MOVi %1 #RESER 	; L8340:
 		MOVi %2 $lLOC 
@@ -3543,9 +3558,10 @@ action:	FUNC	; signature func action(int STARTAT) -> int @ adventCode.impala:162
 		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ adventCode.impala:1999:18
 		MOVi $goValue #GOTO2 	; goValue = GOTO2
 		RETU   	; return
-	.s6:	MOVi %1 #23 	; fBUG(23)
+	.s6:	NOOP
+	.e7:	MOVi %1 #23 	; fBUG(23)
 		CALL &fBUG %0 *2	; expects fBUG(int) -> void @ adventCode.impala:2003:12
-		GOTO @.s0  	; }
+		GOTO @.e1  	; }
 	.s0#1:	NOOP
 	L4090:	PEEK %0 &VERB 	; L4090:
 		SUBi %0 %0 #1
@@ -3553,12 +3569,12 @@ action:	FUNC	; signature func action(int STARTAT) -> int @ adventCode.impala:162
 	.s140#0:	CALL &carry %0 *1	; expects carry() -> int @ adventCode.impala:2014:37
 		MOVi $goValue %0 
 		RETU   	; return
-		GOTO @.s140  	; }
+		GOTO @.e141  	; }
 	.s140#1:	MOVi %1 #FALSE 	; goValue = (int)discard(FALSE)
 		CALL &discard %0 *2	; expects discard(int) -> int @ adventCode.impala:2015:44
 		MOVi $goValue %0 
 		RETU   	; return
-		GOTO @.s140  	; }
+		GOTO @.e141  	; }
 	.s140#2:	MOVi %1 #1 	; fSETPRM(1,global WD2,global WD2X)
 		PEEK %2 &WD2 
 		PEEK %3 &WD2X 
@@ -3591,17 +3607,17 @@ action:	FUNC	; signature func action(int STARTAT) -> int @ adventCode.impala:162
 		POKE &gOBJ #0 	; global gOBJ = 0
 		MOVi $goValue #GOTO2630 	; goValue = GOTO2630
 		RETU   	; return
-		GOTO @.s140  	; }
+		GOTO @.e141  	; }
 	.s140#3:	NOOP
 	.s140#5:	GOTO @L9040  	; goto L9040
-		GOTO @.s140  
+		GOTO @.e141  
 	.s140#4:	MOVi $goValue #GOTO2009 	; goValue = GOTO2009
 		RETU   	; return
-		GOTO @.s140  	; }
+		GOTO @.e141  	; }
 	.s140#6:	GOTO @L9070  	; goto L9070
-		GOTO @.s140  
+		GOTO @.e141  
 	.s140#7:	GOTO @L9080  	; goto L9080
-		GOTO @.s140  
+		GOTO @.e141  
 	.s140#8:	MOVi %1 $lOBJ 	; if(((int)TOTING(lOBJ) == FALSE) && (lOBJ != ROD || (int)TOTING(ROD2) == FALSE))global SPK=29
 		CALL &TOTING %0 *2	; expects TOTING(int) -> int @ adventCode.impala:2040:28
 		NEQi %0 #FALSE @.f148
@@ -3677,7 +3693,7 @@ action:	FUNC	; signature func action(int STARTAT) -> int @ adventCode.impala:162
 		POKE &SPK #208 	; global SPK=208
 		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
 		RETU   	; return
-		GOTO @.s140  	; }
+		GOTO @.e141  	; }
 	.s140#9:	NOOP
 	.s140#10:	NOOP
 	.s140#17:	NOOP
@@ -3688,13 +3704,13 @@ action:	FUNC	; signature func action(int STARTAT) -> int @ adventCode.impala:162
 	.s140#30:	NOOP
 	.s140#32:	MOVi $goValue #GOTO2011 	; goValue = GOTO2011
 		RETU   	; return
-		GOTO @.s140  	; }
+		GOTO @.e141  	; }
 	.s140#11:	CALL &attack %0 *1	; expects attack() -> int @ adventCode.impala:2060:39
 		MOVi $goValue %0 
 		RETU   	; return
-		GOTO @.s140  	; }
+		GOTO @.e141  	; }
 	.s140#12:	GOTO @L9130  	; goto L9130
-		GOTO @.s140  
+		GOTO @.e141  
 	.s140#13:	NEQi $lOBJ #FOOD @.f160	; if(lOBJ == FOOD) 
 		MOVi %1 #FOOD 	; fDSTROY(FOOD)
 		CALL &fDSTROY %0 *2	; expects fDSTROY(int) -> void @ adventCode.impala:2066:20
@@ -3713,9 +3729,9 @@ action:	FUNC	; signature func action(int STARTAT) -> int @ adventCode.impala:162
 	.t161:	POKE &SPK #71 	; global SPK=71
 	.f162:	MOVi $goValue #GOTO2011 	; goValue = GOTO2011
 		RETU   	; return
-		GOTO @.s140  	; }
+		GOTO @.e141  	; }
 	.s140#14:	GOTO @L9150  	; goto L9150
-		GOTO @.s140  
+		GOTO @.e141  
 	.s140#15:	EQUi $lOBJ #LAMP @.f163	; if(lOBJ != LAMP)global SPK=76
 		POKE &SPK #76 	; global SPK=76
 	.f163:	NEQi $lOBJ #URN @.t164	; if(lOBJ != URN || (int)global PROP[URN] != 2) 
@@ -3738,11 +3754,11 @@ action:	FUNC	; signature func action(int STARTAT) -> int @ adventCode.impala:162
 		POKE &SPK #216 	; global SPK=216
 		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
 		RETU   	; return
-		GOTO @.s140  	; }
+		GOTO @.e141  	; }
 	.s140#16:	CALL &doThrow %0 *1	; expects doThrow() -> int @ adventCode.impala:2091:40
 		MOVi $goValue %0 
 		RETU   	; return
-		GOTO @.s140  	; }
+		GOTO @.e141  	; }
 	.s140#18:	NOOP
 	.s140#19:	MOVi %1 $lOBJ 	; if((int)AT(lOBJ, lLOC) != FALSE || ((int)LIQ() == lOBJ && (int)AT(BOTTLE, lLOC) != FALSE) || lK == (int)LIQLOC(lLOC) || (lOBJ ==
 		MOVi %2 $lLOC 
@@ -3771,21 +3787,21 @@ action:	FUNC	; signature func action(int STARTAT) -> int @ adventCode.impala:162
 		POKE &SPK #24 	; global SPK=24
 	.f171:	MOVi $goValue #GOTO2011 	; goValue = GOTO2011
 		RETU   	; return
-		GOTO @.s140  	; }
+		GOTO @.e141  	; }
 	.s140#20:	MOVi %1 $lOBJ 	; goValue = (int)feed(lOBJ)
 		CALL &feed %0 *2	; expects feed(int) -> int @ adventCode.impala:2101:41
 		MOVi $goValue %0 
 		RETU   	; return
-		GOTO @.s140  	; }
+		GOTO @.e141  	; }
 	.s140#21:	MOVi %1 $lOBJ 	; goValue = (int)fill(lOBJ)
 		CALL &fill %0 *2	; expects fill(int) -> int @ adventCode.impala:2102:41
 		MOVi $goValue %0 
 		RETU   	; return
-		GOTO @.s140  	; }
+		GOTO @.e141  	; }
 	.s140#22:	GOTO @L9230  	; goto L9230
-		GOTO @.s140  
+		GOTO @.e141  
 	.s140#26:	GOTO @L9270  	; goto L9270
-		GOTO @.s140  
+		GOTO @.e141  
 	.s140#27:	NEQi $lOBJ #MIRROR @.f172	; if(lOBJ == MIRROR)global SPK=148
 		POKE &SPK #148 	; global SPK=148
 	.f172:	NEQi $lOBJ #VASE @.f173	; if(!(lOBJ == VASE && (int)global PROP[VASE] == 0)) 
@@ -3810,7 +3826,7 @@ action:	FUNC	; signature func action(int STARTAT) -> int @ adventCode.impala:162
 		POKE &FIXED:VASE #-1 	; global FIXED[VASE]= -1
 		MOVi $goValue #GOTO2011 	; goValue = GOTO2011
 		RETU   	; return
-		GOTO @.s140  	; }
+		GOTO @.e141  	; }
 	.s140#28:	NEQi $lOBJ #DWARF @.t178	; if(lOBJ != DWARF || global CLOSED == FALSE) 
 		PEEK %0 &CLOSED 
 		NEQi %0 #FALSE @.f179
@@ -3819,13 +3835,14 @@ action:	FUNC	; signature func action(int STARTAT) -> int @ adventCode.impala:162
 	.f179:	POKE &SPK #199 	; global SPK=199
 		MOVi $goValue #GOTO18999 	; goValue = GOTO18999
 		RETU   	; return
-		GOTO @.s140  	; }
+		GOTO @.e141  	; }
 	.s140#31:	GOTO @L9320  	; goto L9320
-		GOTO @.s140  
+		GOTO @.e141  
 	.s140#33:	GOTO @L8340  	; goto L8340
-	.s140:	MOVi %1 #24 	; fBUG(24)
+	.s140:	NOOP
+	.e141:	MOVi %1 #24 	; fBUG(24)
 		CALL &fBUG %0 *2	; expects fBUG(int) -> void @ adventCode.impala:2131:12
-		GOTO @.s0  	; }
+		GOTO @.e1  	; }
 	.s0#2:	MOVi $lOBJ $lK 	; lOBJ=lK
 		POKE &gOBJ $lK 	; global gOBJ = lK
 		MOVi %1 $lK 	; if((int)HERE(lK, lLOC) != FALSE) 
@@ -3926,7 +3943,8 @@ action:	FUNC	; signature func action(int STARTAT) -> int @ adventCode.impala:162
 		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ adventCode.impala:2177:16
 		MOVi $goValue #GOTO2012 	; goValue = GOTO2012
 		RETU   	; return
-	.s0:	MOVi %1 #99 	; fBUG(99)
+	.s0:	NOOP
+	.e1:	MOVi %1 #99 	; fBUG(99)
 		CALL &fBUG %0 *2	; expects fBUG(int) -> void @ adventCode.impala:2181:10
 		MOVi $goValue #GOTO8000 	; goValue = GOTO8000
 		RETU   	; }
@@ -3977,8 +3995,9 @@ main:	FUNC	; signature func main() -> void @ adventCode.impala:2189:1
 		MOVi $lLOC #1 	; lLOC=1
 		POKE &LIMIT #330 	; global LIMIT=330
 		PEEK %0 &NOVICE 	; if(global NOVICE != FALSE)global LIMIT=1000
-		EQUi %0 #FALSE @L2
+		EQUi %0 #FALSE @.f0
 		POKE &LIMIT #1000 	; global LIMIT=1000
+	.f0:	NOOP
 	L2:	PEEK %1 &NEWLOC 	; L2:
 		CALL &OUTSID %0 *2	; expects OUTSID(int) -> int @ adventCode.impala:2235:34
 		EQUi %0 #FALSE @.f2
@@ -3994,16 +4013,16 @@ main:	FUNC	; signature func main() -> void @ adventCode.impala:2189:1
 		POKE &CLOCK2 #15 	; global CLOCK2=15
 	.f3:	POKE &PANIC #TRUE 	; global PANIC=TRUE
 	.f2:	PEEK %0 &NEWLOC 	; if(!(global NEWLOC == lLOC || ((int)global COND[lLOC] == 2) || (int)CNDBIT(lLOC,3) != FALSE)) 
-		EQUi %0 $lLOC @break1
+		EQUi %0 $lLOC @.f5
 		PEEK %0 &COND $lLOC
-		EQUi %0 #2 @break1
+		EQUi %0 #2 @.f5
 		MOVi %1 $lLOC 
 		MOVi %2 #3 
 		CALL &CNDBIT %0 *3	; expects CNDBIT(int, int) -> int @ adventCode.impala:2246:85
-		NEQi %0 #FALSE @break1
+		NEQi %0 #FALSE @.f5
 		MOVi $I #1 	; for (I=1 to 5+1) 
 		! ADDi <A> #5 #1
-		GEQi #1 <A> @break1
+		GEQi #1 <A> @.f5
 	.l7:	PEEK %0 &ODLOC $I	; if(!((int)global ODLOC[I] != global NEWLOC || (int)global DSEEN[I] == FALSE)) 
 		PEEK %1 &NEWLOC 
 		NEQi %0 %1 @.f9
@@ -4014,7 +4033,8 @@ main:	FUNC	; signature func main() -> void @ adventCode.impala:2189:1
 		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ adventCode.impala:2250:15
 		GOTO @break1  	; goto break1
 	.f9:	FORi $I <A> @.l7	; } /* end loop */
-	break1:	PEEK $lLOC &NEWLOC 	; lLOC=global NEWLOC
+	break1:	NOOP
+	.f5:	PEEK $lLOC &NEWLOC 	; lLOC=global NEWLOC
 		EQUi $lLOC #0 @L2000	; if(lLOC == 0 || ((int)global COND[lLOC] == 2) || (int)CNDBIT(global NEWLOC,3) != FALSE) goto L2000
 		PEEK %0 &COND $lLOC
 		EQUi %0 #2 @L2000
@@ -4080,7 +4100,7 @@ main:	FUNC	; signature func main() -> void @ adventCode.impala:2189:1
 		! ADDi <A> #6 #1
 		GEQi #1 <A> @.e25
 	.l26:	PEEK %0 &DLOC $I	; if((int)global DLOC[I] != 0) 
-		EQUi %0 #0 @L6030
+		EQUi %0 #0 @.f27
 		MOVi $J #1 	; J=1
 		PEEK $KK &DLOC $I	; KK=(int)global DLOC[I]
 		PEEK $KK &KEY $KK	; KK=(int)global KEY[KK]
@@ -4154,7 +4174,7 @@ main:	FUNC	; signature func main() -> void @ adventCode.impala:2189:1
 		POKE &DTOTAL %0 
 		PEEK %0 &ODLOC $I	; if((int)global ODLOC[I] == (int)global DLOC[I]) 
 		PEEK %1 &DLOC $I
-		NEQi %0 %1 @L6030
+		NEQi %0 %1 @.e68
 		ADDi $ATTACK $ATTACK #1	; ATTACK=ATTACK+1
 		PEEK %0 &KNFLOC 	; if(global KNFLOC >= 0)global KNFLOC=lLOC
 		LSSi %0 #0 @.f41
@@ -4164,12 +4184,12 @@ main:	FUNC	; signature func main() -> void @ adventCode.impala:2189:1
 		PEEK %1 &DFLAG 
 		SUBi %1 %1 #2
 		MULi %1 #95 %1
-		GEQi %0 %1 @L6030
+		GEQi %0 %1 @.e68
 		ADDi $STICK $STICK #1	; STICK=STICK+1
-		GOTO @L6030  	; } else if (!(lLOC == CHLOC || (int)global PROP[CHEST] >= 0)) 
-	.f39:	EQUi $lLOC #CHLOC @L6030	; if (!(lLOC == CHLOC || (int)global PROP[CHEST] >= 0)) 
+		GOTO @.e68  	; } else if (!(lLOC == CHLOC || (int)global PROP[CHEST] >= 0)) 
+	.f39:	EQUi $lLOC #CHLOC @.e68	; if (!(lLOC == CHLOC || (int)global PROP[CHEST] >= 0)) 
 		PEEK %0 &PROP:CHEST 
-		GEQi %0 #0 @L6030
+		GEQi %0 #0 @.e68
 		MOVi $lK #0 	; lK=0
 		MOVi $J #50 	; for (J=50 to MAXTRS+1) 
 		! ADDi <B> #MAXTRS #1
@@ -4251,20 +4271,23 @@ main:	FUNC	; signature func main() -> void @ adventCode.impala:2189:1
 		POKE &DLOC:6 #CHLOC 	; global DLOC[6]=CHLOC
 		POKE &ODLOC:6 #CHLOC 	; global ODLOC[6]=CHLOC
 		POKE &DSEEN:6 #FALSE 	; global DSEEN[6]=FALSE
-		GOTO @L6030  	; } else 
+		GOTO @.e68  	; } else 
 	.f64:	PEEK %0 &ODLOC:6 	; if((int)global ODLOC[6] != (int)global DLOC[6] && ((int)fRAN(100) < (20)))fRSPEAK(127)
 		PEEK %1 &DLOC:6 
-		EQUi %0 %1 @L6030
+		EQUi %0 %1 @.e68
 		MOVi %1 #100 
 		CALL &fRAN %0 *2	; expects fRAN(int) -> int @ adventCode.impala:2378:73
-		GEQi %0 #20 @L6030
+		GEQi %0 #20 @.e68
 		MOVi %1 #127 	; fRSPEAK(127)
 		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ adventCode.impala:2378:93
-	.e65:	GOTO @L6030  	; } else 
+	.e65:	NOOP
+	.e43:	GOTO @.e68  	; } else 
 	.f38:	POKE &DSEEN $I #FALSE	; global DSEEN[I]=FALSE
+	.e68:	NOOP
+	.f27:	NOOP
 	L6030:	FORi $I <A> @.l26	; } /* end loop */
 	.e25:	PEEK %0 &DTOTAL 	; if(global DTOTAL != 0) 
-		EQUi %0 #0 @L2000
+		EQUi %0 #0 @.f69
 		MOVi %1 #1 	; fSETPRM(1,global DTOTAL,0)
 		PEEK %2 &DTOTAL 
 		MOVi %3 #0 
@@ -4273,7 +4296,7 @@ main:	FUNC	; signature func main() -> void @ adventCode.impala:2189:1
 		DIVi %1 #1 %1
 		ADDi %1 #4 %1
 		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ adventCode.impala:2394:29
-		EQUi $ATTACK #0 @L2000	; if(ATTACK != 0) 
+		EQUi $ATTACK #0 @.f69	; if(ATTACK != 0) 
 		PEEK %0 &DFLAG 	; if(global DFLAG == 2)global DFLAG=3
 		NEQi %0 #2 @.f71
 		POKE &DFLAG #3 	; global DFLAG=3
@@ -4295,9 +4318,10 @@ main:	FUNC	; signature func main() -> void @ adventCode.impala:2189:1
 		DIVi %1 #2 %1
 		ADDi %1 %2 %1
 		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ adventCode.impala:2402:29
-		EQUi $STICK #0 @L2000	; if(STICK != 0) 
+		EQUi $STICK #0 @.f69	; if(STICK != 0) 
 		POKE &OLDLC2 $lLOC 	; global OLDLC2=lLOC
 		GOTO @L99  	; goto L99
+	.f69:	NOOP
 	L2000:	NEQi $lLOC #0 @.f74	; L2000:
 		GOTO @L99  	; goto L99
 	.f74:	PEEK $KK &STEXT $lLOC	; KK=(int)global STEXT[lLOC]
@@ -4393,7 +4417,7 @@ main:	FUNC	; signature func main() -> void @ adventCode.impala:2189:1
 		! ADDi <A> #HNTMAX #1
 		GEQi #1 <A> @.f98
 	.l100:	PEEK %0 &HINTED $HINT	; if((int)global HINTED[HINT] == FALSE) 
-		NEQi %0 #FALSE @L2602
+		NEQi %0 #FALSE @.f101
 		MOVi %1 $lLOC 	; if((int)CNDBIT(lLOC,HINT+10) == FALSE)global HINTLC[HINT]= -1
 		ADDi %2 $HINT #10
 		CALL &CNDBIT %0 *3	; expects CNDBIT(int, int) -> int @ adventCode.impala:2491:34
@@ -4406,7 +4430,7 @@ main:	FUNC	; signature func main() -> void @ adventCode.impala:2189:1
 		ADDi %0 %0 #1
 		PEEK %1 &HINTLC $HINT
 		PEEK %0 &HINTS %0
-		LSSi %1 %0 @L2602
+		LSSi %1 %0 @.f101
 		SUBi %1 $HINT #1	; switch (HINT == 1 to 11) 
 		SWCH %1 *10 @.s104
 	.s104#0:	PEEK %1 &PROP:GRATE 	; if(!((int)global PROP[GRATE] == 0 && !((int)AT(KEYS, lLOC) != FALSE || (int)TOTING(KEYS) != FALSE))) goto L40020
@@ -4497,7 +4521,7 @@ main:	FUNC	; signature func main() -> void @ adventCode.impala:2189:1
 		MOVi %2 #0 
 		MOVi %3 #54 
 		CALL &fYES %0 *4	; expects fYES(int, int, int) -> int @ adventCode.impala:2551:52
-		EQUi %0 #FALSE @L40020
+		EQUi %0 #FALSE @.f125
 		MOVi %1 #1 	; fSETPRM(1,global HINTS[HINT * 5 + 2],global HINTS[HINT * 5 + 2])
 		MULi %2 $HINT #5
 		ADDi %2 %2 #2
@@ -4516,9 +4540,9 @@ main:	FUNC	; signature func main() -> void @ adventCode.impala:2189:1
 		CALL &fYES %0 *4	; expects fYES(int, int, int) -> int @ adventCode.impala:2554:71
 		POKE &HINTED $HINT %0
 		PEEK %0 &HINTED $HINT	; if((int)global HINTED[HINT] != FALSE && global LIMIT > 30)global LIMIT=global LIMIT+30*(int)global HINTS[HINT * 5 + 2]
-		EQUi %0 #FALSE @L40020
+		EQUi %0 #FALSE @.f125
 		PEEK %0 &LIMIT 
-		LEQi %0 #30 @L40020
+		LEQi %0 #30 @.f125
 		MULi %0 $HINT #5	; global LIMIT=global LIMIT+30*(int)global HINTS[HINT * 5 + 2]
 		ADDi %0 %0 #2
 		PEEK %0 &HINTS %0
@@ -4526,7 +4550,9 @@ main:	FUNC	; signature func main() -> void @ adventCode.impala:2189:1
 		MULi %0 #30 %0
 		ADDi %1 %1 %0
 		POKE &LIMIT %1 
+	.f125:	NOOP
 	L40020:	POKE &HINTLC $HINT #0	; L40020:
+	.f101:	NOOP
 	L2602:	FORi $HINT <A> @.l100	; } /* end loop */
 	.f98:	PEEK %1 &CLOSED 	; if(global CLOSED != FALSE) 
 		EQUi %1 #FALSE @.f128
@@ -4653,7 +4679,7 @@ main:	FUNC	; signature func main() -> void @ adventCode.impala:2189:1
 		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ adventCode.impala:2656:15
 		POKE &CLOCK1 #-1 	; global CLOCK1= -1
 		POKE &CLOSNG #TRUE 	; global CLOSNG=TRUE
-		GOTO @.f164  	; } else 
+		GOTO @.e150  	; } else 
 	.f146:	PEEK %0 &CLOCK1 	; if(global CLOCK1 < 0)global CLOCK2=global CLOCK2-1
 		GEQi %0 #0 @.f151
 		PEEK %0 &CLOCK2 	; global CLOCK2=global CLOCK2-1
@@ -4782,7 +4808,7 @@ main:	FUNC	; signature func main() -> void @ adventCode.impala:2189:1
 		ADDi %0 %0 #2500
 		POKE &LIMIT %0 
 		POKE &LMWARN #FALSE 	; global LMWARN=FALSE
-		GOTO @.f164  	; } else  if(global LIMIT == 0) 
+		GOTO @.e160  	; } else  if(global LIMIT == 0) 
 	.f158:	PEEK %0 &LIMIT 	; if(global LIMIT == 0) 
 		NEQi %0 #0 @.f161
 		POKE &LIMIT #-1 	; global LIMIT= -1
@@ -4790,10 +4816,10 @@ main:	FUNC	; signature func main() -> void @ adventCode.impala:2189:1
 		MOVi %1 #LAMP 	; if((int)HERE(LAMP, lLOC) != FALSE)fRSPEAK(184)
 		MOVi %2 $lLOC 
 		CALL &HERE %0 *3	; expects HERE(int, int) -> int @ adventCode.impala:2723:29
-		EQUi %0 #FALSE @.f164
+		EQUi %0 #FALSE @.e163
 		MOVi %1 #184 	; fRSPEAK(184)
 		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ adventCode.impala:2723:50
-		GOTO @.f164  	; } else if(global LIMIT <= 30) 
+		GOTO @.e163  	; } else if(global LIMIT <= 30) 
 	.f161:	PEEK %0 &LIMIT 	; if(global LIMIT <= 30) 
 		GRTi %0 #30 @.f164
 		PEEK %0 &LMWARN 	; if(!(global LMWARN != FALSE || (int)HERE(LAMP, lLOC) == FALSE)) 
@@ -4812,7 +4838,10 @@ main:	FUNC	; signature func main() -> void @ adventCode.impala:2189:1
 		POKE &SPK #189 	; global SPK=189
 	.f168:	PEEK %1 &SPK 	; fRSPEAK(global SPK)
 		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ adventCode.impala:2730:24
-	.f164:	MOVi $lK #43 	; lK=43
+	.f164:	NOOP
+	.e163:	NOOP
+	.e160:	NOOP
+	.e150:	MOVi $lK #43 	; lK=43
 		MOVi %1 $lLOC 	; if((int)LIQLOC(lLOC) == WATER)lK=70
 		CALL &LIQLOC %0 *2	; expects LIQLOC(int) -> int @ adventCode.impala:2736:23
 		NEQi %0 #WATER @.f169
@@ -4853,20 +4882,21 @@ main:	FUNC	; signature func main() -> void @ adventCode.impala:2189:1
 		POKE &WD2 %0 
 	.f178:	NOOP
 		! ADDi <A> #1000 #CAGE	; if(V1 == 1000+CAGE && V2 == 1000+BIRD && (int)HERE(CAGE, lLOC) != FALSE && (int)HERE(BIRD, lLOC) != FALSE)global WD1=(int)fMAKEWD(301200308)
-		NEQi $V1 <A> @L2620
+		NEQi $V1 <A> @.f181
 		! ADDi <A> #1000 #BIRD
-		NEQi $V2 <A> @L2620
+		NEQi $V2 <A> @.f181
 		MOVi %1 #CAGE 
 		MOVi %2 $lLOC 
 		CALL &HERE %0 *3	; expects HERE(int, int) -> int @ adventCode.impala:2744:65
-		EQUi %0 #FALSE @L2620
+		EQUi %0 #FALSE @.f181
 		MOVi %1 #BIRD 
 		MOVi %2 $lLOC 
 		CALL &HERE %0 *3	; expects HERE(int, int) -> int @ adventCode.impala:2744:99
-		EQUi %0 #FALSE @L2620
+		EQUi %0 #FALSE @.f181
 		MOVi %1 #301200308 	; global WD1=(int)fMAKEWD(301200308)
 		CALL &fMAKEWD %0 *2	; expects fMAKEWD(int) -> int @ adventCode.impala:2744:142
 		POKE &WD1 %0 
+	.f181:	NOOP
 	L2620:	MOVi %1 #23051920 	; L2620:
 		CALL &fMAKEWD %0 *2	; expects fMAKEWD(int) -> int @ adventCode.impala:2746:41
 		PEEK %1 &WD1 
@@ -4881,16 +4911,17 @@ main:	FUNC	; signature func main() -> void @ adventCode.impala:2189:1
 	.f182:	MOVi %1 #715 	; if(!(global WD1 != (int)fMAKEWD( 715) || global WD2 == 0)) 
 		CALL &fMAKEWD %0 *2	; expects fMAKEWD(int) -> int @ adventCode.impala:2750:40
 		PEEK %1 &WD1 
-		NEQi %1 %0 @L2630
+		NEQi %1 %0 @.f185
 		PEEK %1 &WD2 
-		EQUi %1 #0 @L2630
+		EQUi %1 #0 @.f185
 		PEEK %1 &IGO 	; global IGO=global IGO+1
 		ADDi %1 %1 #1
 		POKE &IGO %1 
 		PEEK %1 &IGO 	; if(global IGO == 10)fRSPEAK(276)
-		NEQi %1 #10 @L2630
+		NEQi %1 #10 @.f185
 		MOVi %1 #276 	; fRSPEAK(276)
 		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ adventCode.impala:2752:35
+	.f185:	NOOP
 	L2630:	PEEK %1 &WD1 	; L2630:
 		MOVi %2 #-1 
 		CALL &fVOCAB %0 *3	; expects fVOCAB(int, int) -> int @ adventCode.impala:2755:30
@@ -4909,15 +4940,16 @@ main:	FUNC	; signature func main() -> void @ adventCode.impala:2189:1
 		SUBi %0 $KQ #1	; switch (KQ-1 == 0 to 4) 
 		SWCH %0 *4 @.s188
 	.s188#0:	GOTO @L8  	; goto L8
-		GOTO @.s188  
+		GOTO @.e189  
 	.s188#1:	MOVi $I #2 	; I=2
 		GOTO @Laction  	; goto Laction
-		GOTO @.s188  	; }
+		GOTO @.e189  	; }
 	.s188#2:	MOVi $I #0 	; I=0
 		GOTO @Laction  	; goto Laction
-		GOTO @.s188  	; }
+		GOTO @.e189  	; }
 	.s188#3:	GOTO @L2010  	; goto L2010
-	.s188:	MOVi %1 #22 	; fBUG(22)
+	.s188:	NOOP
+	.e189:	MOVi %1 #22 	; fBUG(22)
 		CALL &fBUG %0 *2	; expects fBUG(int) -> void @ adventCode.impala:2771:10
 	L2800:	PEEK %0 &WD2 	; L2800:
 		POKE &WD1 %0 
@@ -5156,9 +5188,10 @@ main:	FUNC	; signature func main() -> void @ adventCode.impala:2189:1
 		DIVi %0 %0 #100
 		PEEK %1 &PROP $lK
 		SUBi %0 %0 #3
-		EQUi %1 %0 @L12
+		EQUi %1 %0 @.l242
 		GOTO @L16  	; goto L16
-	L12:	PEEK %1 &TRAVEL $KK	; if((int)global TRAVEL[KK] < 0)fBUG(25)
+	L12:	NOOP
+	.l242:	PEEK %1 &TRAVEL $KK	; if((int)global TRAVEL[KK] < 0)fBUG(25)
 		GEQi %1 #0 @.f243
 		MOVi %1 #25 	; fBUG(25)
 		CALL &fBUG %0 *2	; expects fBUG(int) -> void @ adventCode.impala:2930:42
@@ -5168,7 +5201,7 @@ main:	FUNC	; signature func main() -> void @ adventCode.impala:2189:1
 		DIVi %0 %0 #1000
 		POKE &NEWLOC %0 
 		PEEK %0 &NEWLOC 	; } while (global NEWLOC == LL)
-		EQUi %0 $LL @L12
+		EQUi %0 $LL @.l242
 		PEEK $LL &NEWLOC 	; LL=global NEWLOC
 		GOTO @L11  	; goto L11
 	.f240:	PEEK %0 &NEWLOC 	; if(global NEWLOC > 100) 
@@ -5185,12 +5218,13 @@ main:	FUNC	; signature func main() -> void @ adventCode.impala:2189:1
 		GOTO @L16  	; goto L16
 		GOTO @L12  	; goto L12
 	.f244:	PEEK %0 &NEWLOC 	; if(global NEWLOC != 0 && !((int)fRAN(100) < (global NEWLOC))) goto L12
-		EQUi %0 #0 @L16
+		EQUi %0 #0 @.f249
 		MOVi %1 #100 
 		CALL &fRAN %0 *2	; expects fRAN(int) -> int @ adventCode.impala:2943:44
 		PEEK %1 &NEWLOC 
-		LSSi %0 %1 @L16
+		LSSi %0 %1 @.f249
 		GOTO @L12  	; goto L12
+	.f249:	NOOP
 	L16:	MODi %0 $LL #1000	; L16:
 		POKE &NEWLOC %0 
 		PEEK %0 &NEWLOC 	; if(global NEWLOC <= 300) goto L2
@@ -5225,12 +5259,12 @@ main:	FUNC	; signature func main() -> void @ adventCode.impala:2189:1
 		MOVi %1 #117 	; fRSPEAK(117)
 		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ adventCode.impala:2966:16
 		GOTO @L2  	; goto L2
-		GOTO @.s252  	; }
+		GOTO @.e253  	; }
 	.s252#1:	MOVi %1 #EMRALD 	; fDROP(EMRALD,lLOC)
 		MOVi %2 $lLOC 
 		CALL &fDROP %0 *3	; expects fDROP(int, int) -> void @ adventCode.impala:2975:22
 		GOTO @L12  	; goto L12
-		GOTO @.s252  	; }
+		GOTO @.e253  	; }
 	.s252#2:	PEEK %0 &PROP:TROLL 	; if((int)global PROP[TROLL] != 1) 
 		EQUi %0 #1 @.f257
 		PEEK %0 &PLAC:TROLL 	; global NEWLOC=(int)global PLAC[TROLL]+(int)global FIXD[TROLL]-lLOC
@@ -5277,7 +5311,8 @@ main:	FUNC	; signature func main() -> void @ adventCode.impala:2189:1
 		CALL &fJUGGLE %0 *2	; expects fJUGGLE(int) -> void @ adventCode.impala:3006:18
 		POKE &NEWLOC $lLOC 	; global NEWLOC=lLOC
 		GOTO @L2  	; goto L2
-	.s252:	MOVi %1 #20 	; fBUG(20)
+	.s252:	NOOP
+	.e253:	MOVi %1 #20 	; fBUG(20)
 		CALL &fBUG %0 *2	; expects fBUG(int) -> void @ adventCode.impala:3011:10
 	L90:	MOVi %1 #23 	; L90:
 		CALL &fRSPEAK %0 *2	; expects fRSPEAK(int) -> void @ adventCode.impala:3035:13

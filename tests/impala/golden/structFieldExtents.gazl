@@ -68,26 +68,23 @@ main:	FUNC	; signature func main() -> void @ structFieldExtents.impala:39:1
 		! LSSi #3 #.z.S.b @.g1
 		! FAIL index 3 outside S.b (resolved only at assembly)  
 	.g1:	MOVi $s:<C> #33 
-		! MULi <C> #1 #.z.Pair	; s.p[1].hi = 5
-		! MULi <B> #1 #.z.Pair
-		! LSSi #<B> #.z.S.p @.g2
+		! LSSi #.z.Pair #.z.S.p @.g2	; s.p[1].hi = 5
 		! FAIL index 1 outside S.p (resolved only at assembly)  
-	.g2:	! ADDi <B> #.o.S.p #<C>
-		! ADDi <B> #<B> #.o.Pair.hi
-		MOVi $s:<B> #5 
+	.g2:	! ADDi <C> #.o.S.p #.z.Pair
+		! ADDi <C> #<C> #.o.Pair.hi
+		MOVi $s:<C> #5 
 		MOVi %1 $s:.o.S.n 	; printInt(s.n)
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ structFieldExtents.impala:51:15
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structFieldExtents.impala:51:26
-		! ADDi <B> #.o.S.a #11	; printInt(s.a[11])
-		MOVi %1 $s:<B> 
+		! ADDi <C> #.o.S.a #11	; printInt(s.a[11])
+		MOVi %1 $s:<C> 
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ structFieldExtents.impala:52:19
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structFieldExtents.impala:52:30
-		! ADDi <B> #.o.S.b #3	; printInt(s.b[3])
-		MOVi %1 $s:<B> 
+		! ADDi <C> #.o.S.b #3	; printInt(s.b[3])
+		MOVi %1 $s:<C> 
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ structFieldExtents.impala:53:18
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structFieldExtents.impala:53:29
-		! MULi <B> #1 #.z.Pair	; printInt(s.p[1].hi)
-		! ADDi <C> #.o.S.p #<B>
+		! ADDi <C> #.o.S.p #.z.Pair	; printInt(s.p[1].hi)
 		! ADDi <C> #<C> #.o.Pair.hi
 		MOVi %1 $s:<C> 
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ structFieldExtents.impala:54:21

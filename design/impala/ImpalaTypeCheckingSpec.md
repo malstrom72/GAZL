@@ -8,7 +8,7 @@ in `docs/impala/Impala.md`.
 
 **Status: parts of this plan did not ship as written.** In particular the compiler flags it proposes -
 `--emit-metadata` and `--no-metadata` - do **not** exist; metadata is always emitted, and the complete
-flag set is `--legacy`, `--dead-strip` and `--range-checks`. Read the flag passages below as design
+flag set is whatever `impala.node.js` prints with no arguments. Read the flag passages below as design
 intent, not as documentation of a shipped option.
 
 The status disclaimer covers the flags only. It does NOT warrant the rest of the document as current:

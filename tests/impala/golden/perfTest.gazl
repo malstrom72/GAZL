@@ -75,10 +75,11 @@ log:	FUNC	; signature func log(float x) -> float @ perfTest.impala:85:1
 		MULf $m $m #2.0	; m = m * 2.0
 		SUBf $b $b #LOG2	; b = b - LOG2
 		GOTO @.l3  	; }
-	.e4:	LEQf $m #1.5 @.e6	; while (m > 1.5) 
+	.e4:	NOOP
+	.l5:	LEQf $m #1.5 @.e6	; while (m > 1.5) 
 		MULf $m $m #0.5	; m = m * 0.5
 		ADDf $b $b #LOG2	; b = b + LOG2
-		GOTO @.e4  	; }
+		GOTO @.l5  	; }
 	.e6:	SUBf $m #1.0 $m	; m = 1.0 - m
 		MOVf $a #-1.0 	; a = -1.0
 		MOVf $n #1.0 	; n = 1.0
@@ -228,12 +229,13 @@ pow:	FUNC	; signature func pow(float x, float y) -> float @ perfTest.impala:187:
 		MULf %1 %1 $y
 		CALL &exp %0 *2	; expects exp(float) -> float @ perfTest.impala:194:48
 		MOVf $z %0 
-		GOTO @.f5  
+		GOTO @.e3  
 	.f2:	LSSf $a #0.0 @.t4	; if (a < 0.0 || y <= 0.0) error("Domain error")
 		GRTf $y #0.0 @.f5
 	.t4:	MOVp %1 &.s_Domain_4d3 	; error("Domain error")
 		CALL &error %0 *2	; expects error(ptr) -> void @ perfTest.impala:195:53
-	.f5:	EQUf $a $x @.f7	; if (a != x && (y * 0.5) != floor(y * 0.5)) z = -z
+	.f5:	NOOP
+	.e3:	EQUf $a $x @.f7	; if (a != x && (y * 0.5) != floor(y * 0.5)) z = -z
 		MULf %0 $y #0.5
 		MULf %1 $y #0.5
 		FLOf %0 %0 

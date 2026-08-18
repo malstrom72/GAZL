@@ -1,0 +1,56 @@
+/*
+	An initializer entry whose value only the ASSEMBLER can fold - `K + 1` on a named const - arrives as a
+	compile-time scratch `<A>`, and the pool is `<A>`..`<Z>`. A brace initializer holds every entry's value
+	until the whole group is placed, so 27 folded constants used to run the pool dry and abort the compile
+	with "compile-time scratch pool exhausted (expression too complex)". That capped EVERY nested
+	initializer - multidimensional, struct-element, struct value - at 26 computed entries, while the flat
+	one-dimensional list, which writes its rows as it parses and frees each scratch immediately, had no
+	limit at all. The 32 entries below are past that line.
+
+	The fix is to make the value durable instead: once the pool is empty, the next computed entry is
+	captured into a named define and the scratch handed straight back, so at most one is ever tied up.
+	`! MULi <A> ...` followed by `.z.g: ! DEFi #<A>` is the same move the compiler already makes for every
+	symbolic array extent - and it is sound for the reason it first looks unsound, that the emitted line
+	naming `<A>` is its DEFINITION, while the only pending reference is an operand string still held in the
+	entry. Only the entries past the pool spill, so an initializer that fits emits exactly what it did
+	before; here that is the last few, as `.k0`, `.k1`, ...
+
+	Expected (GAZLCmd initSpill.gazl main): 101 132 3728 1.5
+
+	See design/impala/Impala2Slices.md for why the flat and nested paths still differ.
+*/
+
+const int DEBUG = 0
+const int K = 100
+const float HALF = 1.5
+
+extern native printInt
+extern native printFloat
+extern native printLF
+
+global int array m[4, 8] = { { K + 1,  K + 2,  K + 3,  K + 4,  K + 5,  K + 6,  K + 7,  K + 8  }
+						   , { K + 9,  K + 10, K + 11, K + 12, K + 13, K + 14, K + 15, K + 16 }
+						   , { K + 17, K + 18, K + 19, K + 20, K + 21, K + 22, K + 23, K + 24 }
+						   , { K + 25, K + 26, K + 27, K + 28, K + 29, K + 30, K + 31, K + 32 } }
+
+struct Pair { float lo; float hi }						/* a spilled FLOAT must mint `! DEFf`, not `! DEFi` */
+readonly Pair p = { lo: HALF * 1.0, hi: HALF * 2.0 }
+
+export function main()
+locals int y, int x, int total
+{
+	printInt(global m[0, 0]);				/* 101 */
+	printLF();
+	printInt(global m[3, 7]);				/* 132 - the deepest spilled entry */
+	printLF();
+
+	total = 0;
+	for (y = 0 to 4) {
+		for (x = 0 to 8) total = total + global m[y, x];
+	}
+	printInt(total);						/* 101 + ... + 132 = 3728 */
+	printLF();
+
+	printFloat(global p.lo);				/* 1.5 */
+	printLF();
+}

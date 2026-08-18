@@ -189,7 +189,8 @@ function runCommand(args, opts) {
 
 function main() {
 	const argv = process.argv.slice(2);
-	// One list, so adding a flag touches one place instead of three. An UNKNOWN `--flag` is rejected
+	// One list for PARSING, so the argv loop never grows. A flag still has to be passed on below and
+	// listed in impalaJsCompilerRunner's, plus usage above. An UNKNOWN `--flag` is rejected
 	// rather than taken for a filename: `--range-cheks` used to be silently dropped and compile anyway.
 	const FLAGS = { '--legacy': 'legacy', '--dead-strip': 'deadStrip', '--range-checks': 'rangeChecks' };
 	const opts = {};

@@ -1,7 +1,7 @@
 /* Command-line Impala compiler for the NuXJS REPL.
 
    Usage:
-     NuXJS impala/impala.nuxjs.js [--legacy] [--dead-strip] source.impala [output.gazl|-] [randomId] [sourceName] [compiler.js]
+     NuXJS impala/impala.nuxjs.js [--legacy] [--dead-strip] [--range-checks] source.impala [output.gazl|-] [randomId] [sourceName] [compiler.js]
 
    NuXJS exposes global `arguments` as [script.js, arguments...]. With no output
    path, or output path `-`, this script emits compiled GAZL to stdout.
@@ -14,27 +14,40 @@
 */
 
 var impalaNuxRawArgs = arguments;
-var impalaNuxLegacy = false;
-var impalaNuxDeadStrip = false;
+/* ONE table, matching the FLAGS map in impala.node.js so the two front ends take the same set - they
+   compile the same corpus and are byte-compared against each other, so a flag only one of them accepts
+   is a hole in that comparison. Parsed below `fail`, which it needs.
+   Every key starts with `--`, so none can collide with an Object.prototype member. */
+var impalaNuxFlags = { "--legacy": false, "--dead-strip": false, "--range-checks": false };
 var impalaNuxArgs = [];
-for (var impalaNuxArgIndex = 0; impalaNuxArgIndex < impalaNuxRawArgs.length; ++impalaNuxArgIndex) {
-	if ("" + impalaNuxRawArgs[impalaNuxArgIndex] === "--legacy") {
-		impalaNuxLegacy = true;
-	} else if ("" + impalaNuxRawArgs[impalaNuxArgIndex] === "--dead-strip") {
-		impalaNuxDeadStrip = true;
-	} else {
-		impalaNuxArgs[impalaNuxArgs.length] = impalaNuxRawArgs[impalaNuxArgIndex];
-	}
-}
 
 function usage() {
-	print("Usage: NuXJS impala/impala.nuxjs.js [--legacy] [--dead-strip] source.impala [output.gazl|-] [randomId] [sourceName] [compiler.js]");
+	print("Usage: NuXJS impala/impala.nuxjs.js [--legacy] [--dead-strip] [--range-checks] source.impala [output.gazl|-] [randomId] [sourceName] [compiler.js]");
 }
 
 function fail(message) {
 	usage();
 	throw new Error(message);
 }
+
+/* An unrecognised `--flag` is REJECTED, not appended to the positional list. It used to fall through to
+   the `else` below and land in `impalaNuxArgs`, where index 0 is the SCRIPT path and 1 the source - so a
+   misspelling did not merely get ignored, it shifted every positional by one and the compile failed
+   somewhere unrelated, or worse succeeded on the wrong file. impala.node.js hardened its own argv loop
+   against exactly this ("`--range-cheks` used to be silently dropped and compile anyway"). */
+for (var impalaNuxArgIndex = 0; impalaNuxArgIndex < impalaNuxRawArgs.length; ++impalaNuxArgIndex) {
+	var impalaNuxArg = "" + impalaNuxRawArgs[impalaNuxArgIndex];
+	if (impalaNuxArg.substr(0, 2) === "--") {
+		if (impalaNuxFlags[impalaNuxArg] === undefined) {
+			fail("Unknown option: " + impalaNuxArg);
+		}
+		impalaNuxFlags[impalaNuxArg] = true;
+	} else {
+		impalaNuxArgs[impalaNuxArgs.length] = impalaNuxArg;
+	}
+}
+var impalaNuxLegacy = impalaNuxFlags["--legacy"];
+var impalaNuxDeadStrip = impalaNuxFlags["--dead-strip"];
 
 function loadCompilerPath(path) {
 	var previous = typeof impalaCompiler === "function" ? impalaCompiler : undefined;
@@ -188,6 +201,9 @@ if (impalaNuxHasRandomId) {
 }
 if (impalaNuxLegacy) {
 	impalaNuxCompilerOptions.legacy = true;
+}
+if (impalaNuxFlags["--range-checks"]) {
+	impalaNuxCompilerOptions.rangeChecks = true;
 }
 var impalaNuxResult;
 try {

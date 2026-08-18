@@ -5,7 +5,8 @@ const vm = require("vm");
 
 const { wrapCompilerSource, applyImpalaHardening } = require("./updateJSPEG.js");
 const { compileWithJsImpala } = require("./impalaJsCompilerRunner");
-const { haveGazlCmd, assembleOnly, NEEDS_HOST } = require("./gazlAssembleCheck");
+const { haveGazlCmd, runGazlCmd, assembleOnly, NEEDS_HOST, NO_ENTRY_POINT }
+	= require("./gazlAssembleCheck");
 
 const dir = __dirname;
 const IMPALA_ENCODING = "latin1";
@@ -1334,7 +1335,8 @@ const litInit = compileWithJsImpala(
 assert(/DATA #1 #7 #8 #9 #2/.test(litInit),
 	`a literal-extent struct initializer must emit all five words\n${litInit}`);
 // A symbolic field emits exactly the words it was GIVEN and the row stops there - the ones it did not
-// fill are a symbolic count DATA cannot skip, and `z` lies past them.
+// fill are a symbolic count DATA cannot skip, and `z` lies past them. The two `#0`s are WRITTEN in the
+// source, so emitInitData keeps them: it drops only the padding invented for what the source omitted.
 const symInit = compileWithJsImpala(SYM_ZERO_SRC, { randomId: 42 });
 assert(/DATA #1 #0 #0(\s|$)/.test(symInit),
 	`a symbolic initializer must stop at the last placeable word\n${symInit}`);
@@ -1363,6 +1365,193 @@ assertLoadFails("an over-filled symbolic array field",
 		+ "global S s = { head: 1, v: { 1, 2, 3 } }\nfunction main() { }\n",
 	"too many initializer values for S.v: 3 given, room for .z.S.v");
 console.log("impala.jspeg compiler defers the symbolic value-count check to GAZL assembly time");
+
+// A spilled `.kN` define is the ESCAPE HATCH that lets a nested initializer hold more folded constants than
+// the 26-deep `<A>`..`<Z>` pool (holdConstant). It has to stay an escape hatch, and that is worth pinning
+// from both sides, because the failure is silent and ugly rather than loud: anything that drains the pool -
+// a scratch leak somewhere else being the obvious one - now shows up as `.k` defines appearing in ordinary
+// programs instead of as the abort it used to be. So: nothing that FITS may spill, and something that does
+// not fit must spill rather than die. The spilled values are proved correct on the VM by
+// tests/impala/sources/initSpill.impala; this only guards when the hatch opens.
+function computedInitSource(n) {
+	const entries = [];
+	for (let i = 1; i <= n; ++i) {
+		entries.push("K + " + i);
+	}
+	return "const int K = 100\nglobal int array a[1, " + n + "] = { { " + entries.join(", ") + " } }\n"
+		+ "function main() { }\n";
+}
+const initFits = compileWithJsImpala(computedInitSource(25), { randomId: 42 });
+assert(!/\.k\d/.test(initFits),
+	`an initializer that fits the scratch pool must spill nothing\n${initFits}`);
+const initSpills = compileWithJsImpala(computedInitSource(40), { randomId: 42 });
+assert(/\.k\d+:\s+! DEFi /.test(initSpills),
+	`an initializer past the scratch pool must spill, not abort\n${initSpills}`);
+console.log("impala.jspeg compiler spills initializer constants only once the scratch pool is empty");
+
+// The corpus is the wider net for two properties at once, so it is read ONCE here. A `.k` appearing in any
+// golden means something started draining the scratch pool - every one of these programs fitted it before
+// holdConstant existed. And an `! MULi <X> #1 #...` means an index was "scaled" by one: the degenerate step
+// alongside the `0 * W + idx` and `acc * W + 0` that mulAddAxis already folds, which went unnoticed because
+// `&p[1]` is the CANONICAL struct-pointer walk - the commonest subscript in the language carried the one
+// line that says nothing, and burned a `<X>` from that same 26-deep pool doing it. SIX sites scale a count
+// or index by a symbolic stride (struct layout, axesProduct, arrayAllocSize, the offset parts, the Horner
+// axis step, the deferred bounds guard); all six fold, which is what lets this ask the whole corpus instead
+// of naming one of them. The byte-compare gate would flag either diff, but not say what it meant.
+{
+	const goldenDir = path.join(dir, "..", "tests", "impala", "golden");
+	const goldens = fs.readdirSync(goldenDir)
+		.filter((f) => f.endsWith(".gazl"))
+		.map((f) => [ f, fs.readFileSync(path.join(goldenDir, f), IMPALA_ENCODING) ]);
+	const matching = (re) => goldens.filter((g) => re.test(g[1])).map((g) => g[0]);
+
+	const spilling = matching(/^\.k\d+:/m);
+	assert(spilling.length === 1 && spilling[0] === "initSpill.gazl",
+		`only initSpill.gazl may spill initializer constants, but these do: ${spilling.join(", ")}`);
+	console.log("impala.jspeg compiler leaves every corpus program inside the scratch pool");
+
+	// By VALUE, not spelling: `#0x1` and `#+1` mean one too, and a `k !== '1'` test in one of the six sites
+	// left both of those paying the multiply while this scan - matching `#1` - could not see it.
+	const scaling = matching(/^\s*! MULi <[A-Za-z]> #[-+]?(?:0[xX]0*1|0*1) #/m);
+	assert(scaling.length === 0,
+		`multiplying an index by one is not a scale, but these goldens do: ${scaling.join(", ")}`);
+	console.log("impala.jspeg compiler folds away the multiply-by-one in a scaled index");
+}
+
+// The one port that can be checked by RUNNING it. fileList2, disasm2 and calc2 are all compile-only - they
+// need a host - so their evidence is a GAZL diff plus an argument that the instructions match. Priyome is a
+// chess engine whose only externs are print/printInt/printLF/input, every one of which GAZLCmd supplies,
+// and its randomness is an in-source xor-shift. So both versions play the SAME SCRIPTED GAME and the two
+// transcripts are compared byte for byte: a typing mistake a diff might argue away shows up as a different
+// move. The script exercises the struct too - `back` and `new` are what drive the HalfMove history.
+if (haveGazlCmd()) {
+	const goldenDir = path.join(dir, "..", "tests", "impala", "golden");
+	const game = "level 2\nd2d4\ngo\ng1f3\ngo\nback\nnew\nlevel 1\ne2e4\ngo\nquit\n";
+	const play = (name) => runGazlCmd(path.join(goldenDir, name), [ "main" ], game).stdout;
+	const before = play("Priyome.gazl");
+	const after = play("Priyome2.gazl");
+	const lines = (t) => t.split("\n");
+	assert(/Last move/.test(before) && lines(before).length > 100,
+		`the scripted game must actually play - got ${lines(before).length} lines`);
+	assert(before === after,
+		"Priyome2 must play the 1.0 engine's game move for move\n"
+			+ lines(before).filter((l, i) => l !== lines(after)[i]).slice(0, 6).join("\n"));
+	console.log("impala.jspeg compiler ports Priyome without changing a single move it plays");
+}
+
+// Each 1.0/2.0 port pair claims IN ITS HEADER that the ported data table assembles to the same words as
+// the original - fileList2's "the DATA rows assemble to the same words as the 1.0 version's, that
+// equivalence is the point", calc2's "the emitted table is the same words in the same order". Nothing
+// checked either: every golden is byte-compared against ITSELF, and no gate looks across two files, so a
+// regold could quietly move one side and leave the claim standing. Reading the rows back is the check.
+{
+	const goldenDir = path.join(dir, "..", "tests", "impala", "golden");
+	const tableWords = (file, label) => {
+		const lines = canonicalizeNewlines(
+			fs.readFileSync(path.join(goldenDir, file), IMPALA_ENCODING)).split("\n");
+		let i = lines.findIndex((l) => l.indexOf(label + ":") === 0);
+		assert(i >= 0, `${file} has no ${label} table`);
+		const words = [];
+		for (++i; i < lines.length; ++i) {
+			const row = lines[i].match(/^\s+DAT[AipfsT]?\s+(\S.*)$/);
+			if (row) { words.push.apply(words, row[1].trim().split(/\s+/)); continue; }
+			if (/^\s*!/.test(lines[i]) || lines[i].trim() === "") { continue; }
+			if (/^\.g\d+:/.test(lines[i])) { continue; }      /* an assemble-time guard label, still the table */
+			break;                                            /* any other label ends it */
+		}
+		return words;
+	};
+	for (const pair of [ [ "calc.gazl", "calc2.gazl", "FUNCTIONS" ],
+			[ "fileList.gazl", "fileList2.gazl", "FILES" ] ]) {
+		const one = tableWords(pair[0], pair[2]), two = tableWords(pair[1], pair[2]);
+		assert(one.length > 0, `${pair[0]}: ${pair[2]} table read back empty - the extractor is broken`);
+		assert(one.join(" ") === two.join(" "),
+			`${pair[2]} must assemble to the same words in ${pair[0]} and ${pair[1]}\n`
+				+ `  1.0: ${one.join(" ")}\n  2.0: ${two.join(" ")}`);
+	}
+	console.log("impala.jspeg compiler ports keep their data tables word-identical to the 1.0 originals");
+}
+
+// A subscript built ENTIRELY from constants must cost no runtime arithmetic - every step is a layout name
+// the assembler resolves. indexKind decides that, and it used to read the leading dot of a COMPILER-minted
+// name (`#.d.cube.0`) as `runtime` while accepting a user's `#KONST` as `assembly`, so the moment a Horner
+// step consumed one it emitted a real multiply inside whatever loop the subscript sat in. Nothing caught it:
+// the demotion is invisible in a golden unless you notice the missing `!`, and the arithmetic is correct
+// either way. So this asserts the TIER, which is the part that silently rots.
+{
+	const src = "global int array cube[2, 3, 4]\n"
+		+ "function main()\nlocals int v\n{\n\tv = global cube[1, 0, 0];\n}\n";
+	const out = compileWithJsImpala(src, { randomId: 42 });
+	const atRuntime = out.split("\n").filter((line) => /^\s+(MULi|ADDi)\s/.test(line));
+	assert(atRuntime.length === 0,
+		`a wholly constant subscript must fold at assembly, but this runs:\n${atRuntime.join("\n")}`);
+	console.log("impala.jspeg compiler folds a wholly constant multidimensional subscript at assembly");
+}
+
+// An extern prototype's RETURN NAME is the one declarator name nothing reads: the proto keeps only
+// type/elem/struct, and the emitted row prints `-> int`. Requiring one made the author invent an
+// identifier that is never printed nor referenced - and the sibling `functype f() returns V` had never
+// required it, so the two declaration forms disagreed for no reason. Both spellings must now mean
+// exactly the same thing, which is what this pins: same row, same everything.
+{
+	const proto = (ret) => "extern native f(int a, int b) returns " + ret
+		+ "\nfunction main() locals int r { r = f(1, 2); }\n";
+	const bare = compileWithJsImpala(proto("int"), { randomId: 42 });
+	const named = compileWithJsImpala(proto("int n"), { randomId: 42 });
+	assert(bare === named, `a prototype return name must not change anything it emits\n${bare}\n---\n${named}`);
+	assert(/signature extern native f\(int a, int b\) -> int\b/.test(bare),
+		`the row must carry the real types either way\n${bare}`);
+	// The name being optional must not make the RETURN optional: no `returns` at all is still void, and
+	// the by-value and multi-return doors still shut on the bare form.
+	expectCompileOutcome("bare prototype return", "void is not int",
+		"extern native f(int a)\nfunction main() locals int r { r = f(1); }\n", "E303");
+	expectCompileOutcome("bare prototype return", "struct by value",
+		"struct V { int a; int b }\nextern native n() returns V\nfunction main() { }\n", "E427");
+	expectCompileOutcome("bare prototype return", "multiple returns",
+		"extern native n() returns int, int\nfunction main() { }\n", "E428");
+	console.log("impala.jspeg compiler takes an extern prototype return with or without a name, identically");
+}
+
+// TWO Impala modules meeting on one struct layout. fileList2.impala DEFINES `struct File` and emits
+// `.o.File.*` / `.z.File` as `! DEFi`; disasm2.impala declares the same shape `extern struct` and emits
+// only references. Nothing else covers this: externStruct.impala proves a HOST can supply the layout, and
+// the per-file gate cannot see it either - assembleOnly deliberately reads any unresolved `.o.`/`.z.` as
+// NEEDS_HOST, so disasm2 alone is waved through by design.
+//
+// The two GAZLCmd stages are what make this decidable. Assembly resolves `!` directives and complains
+// "Symbol not previously defined" WITH a line; linking resolves calls and complains "Symbol not found"
+// WITHOUT one. So reaching the link stage proves every `.o.File.*` reference in disasm2 found its
+// definition in fileList2 - and the negative case below proves the check is not vacuous.
+if (haveGazlCmd()) {
+	const sourcesDir = path.join(dir, "..", "tests", "impala", "sources");
+	const read = (name) => canonicalizeNewlines(
+		fs.readFileSync(path.join(sourcesDir, name), IMPALA_ENCODING));
+	// Only the CONSUMER side varies between the two runs, so the definer is compiled once. Distinct random
+	// ids: both modules mint `.s_<text>_<id>` string labels, and one pool would collide.
+	const definer = compileWithJsImpala(read("fileList2.impala"), { randomId: 0x1000 });
+	const disasm = read("disasm2.impala");
+	const link = (disasmSource) => {
+		const linkedPath = path.join(dir, "..", "tests", "impala", "erroneous", "structLink.gazl");
+		fs.mkdirSync(path.dirname(linkedPath), { recursive: true });
+		fs.writeFileSync(linkedPath,
+			definer + "\n" + compileWithJsImpala(disasmSource, { randomId: 0x9000 }), IMPALA_ENCODING);
+		return runGazlCmd(linkedPath, [ NO_ENTRY_POINT, "DEBUG", "0" ]).line;
+	};
+
+	// Linking throws, so its complaint arrives as `Exception: Symbol not found ...`; assembly's does not.
+	const agreed = link(disasm);
+	assert(/Symbol not found\b/.test(agreed) && !/\.[oz]\.File/.test(agreed),
+		`fileList2 + disasm2 must agree on the File layout and reach linking, but assembly said: ${agreed}`);
+
+	// Rename ONE field on the extern side only. Same size, same order, same everything else. A vacuous
+	// rename cannot pass: the assertion demands `.o.File.kind` by name, which only a real one produces.
+	const disagreed = link(disasm.replace("int type; int size", "int kind; int size")
+		.replace("global FILES[file].type", "global FILES[file].kind"));
+	assert(/Symbol not previously defined\b/.test(disagreed) && /\.o\.File\.kind/.test(disagreed),
+		`a field the definer does not have must fail to assemble, but got: ${disagreed}`);
+
+	console.log("impala.jspeg compiler links two modules through one struct layout, and refuses a mismatch");
+}
 
 // Surplus initializer values used to be read by nobody and vanish: the fill loops stop at the extent, so
 // nothing was emitted for them and the assembler had nothing wrong to see. (A surplus FIELD is already
@@ -1912,29 +2101,19 @@ console.log("impala.jspeg compiler never bounds-checks ADDRESS formation");
 	assert(!/! FAIL/.test(exprAddr) && !/! MOVi <\w> #<\w>/.test(exprAddr),
 		"expression index: an ADDRESS kept the guard or its copy\n" + exprAddr);
 
-	// COINCIDENT LABELS collapse. Nested `if`s end at the same address, and only one line can carry a
-	// name, so every label but one used to be spent on a `NOOP` that existed for no other reason
-	// (adventCode had seven in a row). processBranches folds the run onto one survivor and rewrites the
-	// references, which is only safe after every alias and deletion it makes has settled.
+	// COINCIDENT LABELS each keep their own name. A run of labels with nothing emitted between them all
+	// names ONE address and only one LINE can carry a name, so every label but the last is spent on a
+	// `NOOP` that exists for no other reason. Impala once folded such a run onto a single survivor, which
+	// bought ~0.65% of the corpus text and cost names: two coincident USER labels merged as readily as
+	// minted ones, so `repeat` left calc.gazl entirely and `goto repeat` came out as `GOTO @wasFunction`.
+	// A NOOP costs no cycles, so the listing now maps 1:1 onto the source instead - both the name a `goto`
+	// can reach, and the minted one that says WHICH construct ended there.
 	const coincident = compileWithJsImpala(
-		"function main() locals int x, int y { if (x == 1) { if (y == 2) { x = 3; } } x = 4; }\n",
+		"function main() locals int x { if (x == 1) { x = 2; } top: ; x = 3; goto top; }\n",
 		{ randomId: 42 });
-	assert(!/NOOP/.test(coincident) && (coincident.match(/@\.f\d/g) || []).length === 2
-			&& new Set(coincident.match(/@\.f\d/g)).size === 1,
-		"coincident labels: not collapsed onto one survivor\n" + coincident);
-	// A user label survives in preference to a minted one, so a `goto` target never leaves the listing.
-	const userLabel = compileWithJsImpala(
-		"function main() locals int x { if (x == 1) { x = 2; } top: ; x = 3; goto top; }\n", { randomId: 42 });
-	assert(!/NOOP/.test(userLabel) && /GOTO @top/.test(userLabel) && /^\s*top:/m.test(userLabel)
-			&& /NEQi \$x #1 @top/.test(userLabel),
-		"coincident labels: the user's name did not survive\n" + userLabel);
-	// ...but a switch table entry must NOT merge: the case VALUE is part of the name, so `.s0#3` and
-	// `.s0#7` are different addresses that merely render alike before the assembler resolves them.
-	const caseLabels = compileWithJsImpala(
-		"function main() locals int x, int y { switch (x == 0 to 8) { case 3, 7: { y = 1; } } }\n",
-		{ randomId: 42 });
-	assert(/\.s0#3:/.test(caseLabels) && /\.s0#7:/.test(caseLabels),
-		"switch: a case label was merged away\n" + caseLabels);
+	assert(/^\s*\.f\d+:\s+NOOP/m.test(coincident) && /^\s*top:/m.test(coincident)
+			&& /GOTO @top/.test(coincident) && /NEQi \$x #1 @\.f\d/.test(coincident),
+		"coincident labels: a name was merged away\n" + coincident);
 	const symAddr = compileWithJsImpala(konst
 		+ "export function main() locals int pointer p { p = &global xxx.b[KONST]; }\n", { randomId: 42 });
 	assert(!/! FAIL index/.test(symAddr),
@@ -2473,9 +2652,13 @@ const typedPointerCases = [
 		expectError: null,
 	},
 	{
-		label: "an initialized struct-element array still needs a literal size",
+		/* Was "still needs a literal size" (E414). The extent is a CHECK, not a fill bound: the loop now
+		   runs over the entries GIVEN, so a size Impala cannot evaluate is deferred to the assembler
+		   (`! LEQi #words #.z.bank`) exactly as a symbolically-sized struct FIELD already was. The emitted
+		   form is pinned by tests/impala/sources/structArrayGiven.impala, which assembles and runs. */
+		label: "an initialized struct-element array accepts a named-constant size",
 		source: ["struct V { int n }", "const int N = 2", "global V array bank[N] = { { n: 1 }, { n: 2 } }"].join("\n"),
-		expectError: "literal size",
+		expectError: null,
 	},
 	{
 		label: "array fields inside a struct index correctly",

@@ -12,3 +12,4 @@ externals/NuXJS/**/*.dSYM/
 externals/NuXJS/**/xcuserdata/
 *.pdb
 impala/fuzzCampaign.log
+/fuzzlogs

@@ -53,15 +53,14 @@ main:	FUNC	; signature func main() -> void @ structArraysMixed.impala:13:1
 		MOVi %1 $b:<A> 
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ structArraysMixed.impala:19:25
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structArraysMixed.impala:19:36
-		! MULi <A> #1 #.z.Cell	; printInt(b.cells[1].lo)
-		! ADDi <B> #.o.Bank.cells #<A>
-		! ADDi <B> #<B> #.o.Cell.lo
-		MOVi %1 $b:<B> 
+		! ADDi <A> #.o.Bank.cells #.z.Cell	; printInt(b.cells[1].lo)
+		! ADDi <A> #<A> #.o.Cell.lo
+		MOVi %1 $b:<A> 
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ structArraysMixed.impala:20:25
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structArraysMixed.impala:20:36
-		! MULi <B> #2 #.z.Cell	; printInt(global top[2].hi)
-		! ADDi <A> #<B> #.o.Cell.hi
-		PEEK %1 &top:<A> 
+		! MULi <A> #2 #.z.Cell	; printInt(global top[2].hi)
+		! ADDi <B> #<A> #.o.Cell.hi
+		PEEK %1 &top:<B> 
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ structArraysMixed.impala:21:28
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structArraysMixed.impala:21:39
 		RETU   	; }

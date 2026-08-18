@@ -104,14 +104,12 @@ main:	FUNC	; signature export func main() -> void @ multidimFields.impala:71:1
 		CALL &sum %1 *3	; expects sum(Grid-ptr, int) -> int @ multidimFields.impala:82:28
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ multidimFields.impala:82:29
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ multidimFields.impala:83:11
-		! MULi <A> #1 #.d.Grid.cube.1	; global g.cube[1, 2, 3] = 3
-		! ADDi <A> <A> #2
+		! ADDi <A> #.d.Grid.cube.1 #2	; global g.cube[1, 2, 3] = 3
 		! MULi <C> #<A> #.d.Grid.cube.0
 		! ADDi <C> <C> #3
 		! ADDi <A> #.o.Grid.cube #<C>
 		POKE &g:<A> #3 
-		! MULi <A> #1 #.d.Grid.cube.1	; printInt(global g.cube[1, 2, 3])
-		! ADDi <A> <A> #2
+		! ADDi <A> #.d.Grid.cube.1 #2	; printInt(global g.cube[1, 2, 3])
 		! MULi <C> #<A> #.d.Grid.cube.0
 		! ADDi <C> <C> #3
 		! ADDi <A> #.o.Grid.cube #<C>

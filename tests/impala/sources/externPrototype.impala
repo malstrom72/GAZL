@@ -11,6 +11,10 @@
 	    ; signature extern native printInt(int) -> void      <- prototyped, checked
 	    ; signature extern native printLF() -> unknown       <- name-only, wildcard
 
+	The return may be NAMED or bare - `returns int` and `returns int n` record the same thing,
+	since a prototype keeps only the type. Parameter names are not optional: they are printed in
+	the signature row, which is what a consumer reads.
+
 	Multi-value returns are parked for Impala 3.0, so a second result comes back through a
 	pointer out-parameter.
 
