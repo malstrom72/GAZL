@@ -142,6 +142,9 @@ values at load, so the same `.gazl` runs against any layout with no recompile. A
 still parses and still asserts nothing. When a prototype and a real definition disagree in one build, that
 is `E437`.
 
+The return may be named or bare - `returns int` and `returns int n` compile to the same thing, because a
+prototype records only the type. Parameter names are not optional: they are printed in the signature row.
+
 ## Diagnostics became citable
 
 1.0 already had a caret and a line and column. What it did not have: a code, a fix-it note, warnings, or
@@ -203,6 +206,107 @@ avoids the question entirely - multidimensional only as a struct field, reached 
 was designed and rejected on cost: what it adds over writing `y * W + x` is subscript sugar plus shape
 typing, the sugar already works today, and the shape typing *is* the unsolved question.
 [`ParkedFeatures.md`](../../design/ParkedFeatures.md) has the full argument and the branch, for this and every row above.
+
+## What is worth rewriting
+
+The table above is what 2.0 REFUSES. This is the other half: what it lets you delete. None of it is
+required - every 1.0 spelling below still compiles, so a rewrite is a choice - and none of it changes the
+emitted code, which is the reason to treat it as tidying rather than as risk. The measurements are from
+converting three real programs in `tests/impala/sources` (`fileList2`, `disasm2`, `calc2`), each of which
+sits beside its 1.0 original so the diff is readable.
+
+### A record built from index constants becomes a struct
+
+1.0 has no record type, so a table of them is a flat array plus a set of offsets the author keeps in step
+by hand:
+
+```impala
+const int FILE_FIELD_NAME = 0
+const int FILE_FIELD_SIZE = 1
+const int FILE_FIELD_COUNT = 2
+const int MAX_FILES = 8
+
+global array FILES[MAX_FILES * FILE_FIELD_COUNT]
+global array NAMES[MAX_FILES * 32]
+```
+
+The offsets, the stride and the row length are now the assembler's job:
+
+```impala
+struct File { int pointer name; int size }
+
+global File array files[MAX_FILES]
+global int array names[MAX_FILES, 32]
+```
+
+`files[i].size` lowers to the same three instructions `FILES[i * FILE_FIELD_COUNT + FILE_FIELD_SIZE]` did -
+`.z.File` and `.o.File.size` replace the hand-written constants, so the layout cannot drift from the code
+that reads it. Converting `fileList.impala` removed all **19** uses of `FILE_FIELD_*` outside their own
+declarations, and left the
+emitted data words byte-identical. A rectangular `[MAX_FILES, 32]` does the same for a row walk: `&names[i, 0]`
+instead of a pointer the author has to remember to advance by the row length.
+
+### A signature in a comment becomes a checked prototype
+
+An `extern` may state its parameters and a single return, which turns a comment into an assertion:
+
+```impala
+extern native loadText(int pointer name, int offset, int pointer dest) returns int
+```
+
+Calls are then argument-checked and the result has a real type - which is what retires the `(int)` casts
+around them. The return name is optional (`returns int` and `returns int n` mean the same). Name-only
+externs stay valid and stay unchecked; declare a prototype only where you actually know the shape.
+
+### A dispatch table becomes a struct of typed function pointers
+
+A 1.0 table of alternating names and functions pairs them only in the `* 2 + 0` / `* 2 + 1` at each use,
+and the call needs a `(funcptr)` cast because a flat array has no element type:
+
+```impala
+functype MathFn(float x) returns float
+
+function half(float x) returns float y { y = x * 0.5; }
+
+struct MathOp { int pointer name; MathFn fn }
+
+readonly MathOp array OPS[1] = { { name: "half", fn: half } }
+```
+
+The pairing is now the struct and the call is checked against `MathFn`. This one is not only tidier: in
+1.0 a two-argument `pow`, or a `(pointer, pointer) -> int` `strcmp`, could be stored in that table and
+**compiled clean**, to be called as `float(float)` at run time. Both are `E441` in 2.0.
+
+### An untyped pointer becomes a typed one, and the casts go
+
+`pointer` and `array` are still accepted and still mean "untyped". Because they have no element type,
+every dereference has to say what it read:
+
+```impala
+function strlen10(pointer s)
+returns int n
+locals pointer p
+{
+	p = s;
+	while ((int) *p != 0) p = p + 1;
+	n = p - s;
+}
+```
+
+```impala
+function strlen(int pointer s)
+returns int n
+locals int pointer p
+{
+	p = s;
+	while (*p != 0) p = p + 1;
+	n = p - s;
+}
+```
+
+Those two lower to *identical* instructions. The cast was never doing work - it existed because `*p` had
+no type to begin with. Typing the declarations in `calc.impala` deleted **88** casts and changed not one
+emitted instruction.
 
 ## Upgrading a 1.0 program
 

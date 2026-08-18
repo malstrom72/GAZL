@@ -82,11 +82,9 @@ main:	FUNC	; signature export func main() -> void @ multidimArrays.impala:36:1
 	.e10:	MOVi %1 $total 	; printInt(total)
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ multidimArrays.impala:66:17
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ multidimArrays.impala:67:11
-		! MULi <A> #1 #.d.main.b.0	; b[1, 2] = 7
-		! ADDi <A> <A> #2
+		! ADDi <A> #.d.main.b.0 #2	; b[1, 2] = 7
 		MOVi $b:<A> #7 
-		! MULi <A> #1 #.d.main.b.0	; printInt(b[1, 2])
-		! ADDi <A> <A> #2
+		! ADDi <A> #.d.main.b.0 #2	; printInt(b[1, 2])
 		MOVi %1 $b:<A> 
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ multidimArrays.impala:70:19
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ multidimArrays.impala:71:11

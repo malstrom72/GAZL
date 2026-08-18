@@ -136,11 +136,41 @@ the flat deferred `! LSSi` / `! FAIL` triple and the `! MOVi` guard copy that fe
 GAZL per shaped access, restating a settled question. This was sound only once every axis had to be
 stated; before the rank fix, `cells[11]` cleared no axis at all.
 
+**Slice 2b - shaped initializers.** IMPLEMENTED. A subscript states every axis, so an initializer does too:
+the braces mirror the shape, `int array m[2, 3] = { {1,2,3}, {4,5,6} }`, one group per axis, stored
+row-major. A flat list on a multi-dim array is now `E422` - the whole point is that the brace tree is
+checked against the shape, so a row miscount is caught instead of a flat list silently shifting every
+element. `buildShapedInit` is the array-of-structs fill loop (`buildStructInit`'s array branch) generalised
+from one axis to N; the innermost axis holds elements - a scalar checked exactly as a flat entry is, or a
+struct group - so a `Grid array[2, 3]` nests axes then fields. The rows come out typed (`DATi`/`DATf`/`DATp`),
+so the assembler re-checks each word as it does for a flat 1-D array. Literal shapes may be filled short and
+zero-fill the tail (C-style); 1-D arrays keep the flat form.
+
+A **symbolic** axis has no length Impala can count here, but the assembler knows it - so the shape is
+validated THERE, not rejected. `sym[2, W] = { {10,20,30}, {40,50,60} }` flattens to a contiguous prefix and
+mints one `! EQUi #given #.d.sym.k` per symbolic axis: if the host- or const-supplied axis disagrees,
+assembly fails naming that axis, at zero runtime cost. This is the two-stage move `assertFitsExtent` already
+makes, and it is the **first caller of the deferred `! EQUi` shape compare** that slice 3 below built and
+proved but had no user for. Because a symbolic stride cannot be skipped by positional `DATA`, such an init
+must be full and rectangular (a ragged group is `E460` at parse; a wrong total fails the `! EQUi` at
+assembly) - the one narrowing versus a literal shape's partial fill.
+
+A struct FIELD shape is initialized the identical way: `buildStructInit`'s array-field branch routes a
+field with axes (`f.dims`) through the same `buildShapedInit`, keyed on `.d.Struct.field.k` instead of
+`.d.name.k`. So `struct Mat { int array cells[2, 3] }; readonly Mat m = { cells: { {1,2,3}, {4,5,6} } }`
+nests exactly as the standalone form, a flat field list is the same `E422`, and a symbolic field
+(`md[OJ, OJ]`) mints its `! EQUi` per axis. A full shape fills exactly its `.z`, so no later field is
+displaced and nothing is blocked - unlike a symbolic *1-D* field, which may still be partially filled and
+blocks the tail (`E454`). Standalone and field shapes now read a shape the same way; the split where only
+standalone arrays enforced nesting is gone. Covered by `tests/impala/sources/multidimArrayInit.impala`.
+
 **Slice 3 - shape identity across standalone arrays. DEFERRED TO 3.0, and it is not a gap.** The deferred
 `! EQUi` compare in [`deferredShapeCheck.gazl`](../../design/proofs/deferredShapeCheck.gazl) works exactly as documented -
 re-run all three ways on 2026-08-04: `[4][3]` against `[N][W-1]` passes with `N 4 W 4`, and each mismatch
-names its own axis, at zero runtime cost. **What it has no caller.** Its scenario is "`f` takes an
-`int[4][3]`, the call passes `b`", and Impala cannot express that: an array parameter does not exist
+names its own axis, at zero runtime cost. **The compare mechanism now has a caller - the shaped initializer
+of slice 2b uses `! EQUi` per symbolic axis - but the PARAMETER scenario below still has none.** Its
+scenario is "`f` takes an `int[4][3]`, the call passes `b`", and Impala cannot express that: an array
+parameter does not exist
 (`int array a[4]` as a parameter is `E001`, with or without an extent), a pointer parameter carries no
 extent, and arrays by value are on the not-in-scope list below.
 
@@ -152,7 +182,8 @@ the park branch built as slice 2c/2d, `3781f8c`). Treat this section as a condit
 adds those types, this is the sound way to check them, with a running proof - and not as pending work.
 
 **Not in scope at all:** arrays by value, array parameters, `:` open axes and slices, `&a` as an lvalue,
-nested-brace initializers, C-style `a[y][x]` chains.
+C-style `a[y][x]` subscript chains. (Nested-brace *initializers* WERE listed here and are now in scope -
+see slice 2b above.)
 
 ## Decisions (2026-08-04)
 

@@ -92,6 +92,40 @@ threaded value, adapting the implementation to JavaScript’s object model.
 - Threaded value: Every rule receives `$$` as both input and output. Without a tag, sub-rules operate on the same value; tags and captures introduce additional temporaries that actions can read.
 - JS adaptation: JSPEG keeps these rules. Because JavaScript lacks by‑reference variables, JSPEG implements names as holders with `._` for their value, and rewrites bare uses of a name to `name._` unless you explicitly access a field on the holder.
 
+## Authoring Hazards
+
+The rewriter is textual and its rules are positional, so several mistakes produce *silently wrong
+JavaScript* rather than a grammar error. These are the ones that have actually cost time; each is
+verifiable from `impala/jspeg.jspeg` and from the generated `impalaCompiler.js`.
+
+- **Comment syntax depends on where you are.** At grammar level (between rules, between terms)
+  comments are `#`-to-end-of-line only — `Comment <- '#' (!EndOfLine .)* …` (`impala/jspeg.jspeg:243`).
+  A `/* … */` there is a syntax error, and `updateJSPEG.js` reports it as a byte *index* into the
+  grammar with no line number. Inside an action block, `/* */` and `//` are both fine (`PikaComment`,
+  `impala/jspeg.jspeg:285`).
+- **The action rewriter walks into `/* */` comments.** It special-cases `//` (copied verbatim to the
+  newline, `impala/jspeg.jspeg:124-131`) but never `/*`, so `$` tokens inside a block comment are
+  rewritten and its line breaks are collapsed. A real example from `impala.jspeg`'s `VarDecl`: the
+  source comment says “an end-of-rule `$$i`” and the generated file says “an end-of-rule `_i`”. Prose
+  about `$$`/`$$i`/`$name` is safest in a `#` comment above the rule, or in a `//` comment.
+- **To hand the holder to a helper, write `$$.` — not `$$`.** A bare `$$` compiles to `$._`, the
+  *value slot*, which is usually still unset when an action starts; `helper($$, …)` therefore passes
+  `undefined`-ish and every field the helper writes is silently lost. The trailing dot is the escape
+  hatch: `helper($$., …)` compiles to `helper($, …)` and hands over the holder itself, so shared
+  field-assignment *can* be factored out. Getting this wrong is quiet — the symptom is a downstream
+  consumer reading `undefined` out of a rule that looked like it populated fine. (`$$.field` compiles
+  to `$.field`, a property on that same holder.)
+- **Whether `$name` gains `._` depends on how the name was introduced, earlier in the file.** A name
+  registered as a tag gets `._`; a capture does not (`impala/jspeg.jspeg:118-122`). The meaning of
+  action text therefore depends on distant grammar context — see `JSPEGFuture.md:93-96`.
+- **Before reaching for a new rule, check whether one exists** — and before merging two that look
+  alike, measure. `TypeDeclr` (optionally-named) and `VarDecl` (required-name) already cover both
+  declarator shapes, so a third rule written for an extern prototype's return was deleted once
+  `TypeDeclr` was found. But they are *not* redundant: their `words` differ for a funcptr type
+  (`TypeDeclr` sets 1, `VarDecl` leaves it undefined), and making them agree reds four goldens. Reuse
+  the rule whose fields the call site actually reads — the extern-return site reads only
+  `type`/`elem`/`struct`, which is why `TypeDeclr` is safe there.
+
 ## Regenerating Compilers
 
 Use `updateJSPEG.js` to keep generated artifacts in sync with their grammars. It also runs the JSPEG regression suite.

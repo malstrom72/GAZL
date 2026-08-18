@@ -123,16 +123,16 @@ update:	FUNC	; signature func update() -> void @ beatrick_code.impala:114:1
 		POKE &holds $i #0	; global holds[i] = 0
 		POKE &sfxs $i #0	; global sfxs[i] = 0
 		FORi $i #16 @.l1	; }
-	.e0:	SWCH $topOperator *5 @.e16	; switch (topOperator == 0 to 5) 
+	.e0:	SWCH $topOperator *5 @.s2	; switch (topOperator == 0 to 5) 
 	.s2#MUTE:	MOVi $i #0 	; for (i = 0 to 16) 
-		GEQi #0 #16 @.e16
+		GEQi #0 #16 @.e3
 	.l5:	POKE &gains $i #0xFFFF	; global gains[i] = 0xFFFF
 		SHRi %0 #0x8000 $i	; if ((topBits & (0x8000 >> i)) == 0) global gains[i] = 0
 		ANDi %0 $topBits %0
 		NEQi %0 #0 @.f6
 		POKE &gains $i #0	; global gains[i] = 0
 	.f6:	FORi $i #16 @.l5	; }
-		GOTO @.e16  	; }
+		GOTO @.e3  	; }
 	.s2#REPEAT:	MOVi $j #0 	; j = 0
 		MOVi $i #1 	; for (i = 1 to 16) if ((topBits & (0x8000 >> i)) != 0) j = i
 		GEQi #1 #16 @.e7
@@ -142,15 +142,15 @@ update:	FUNC	; signature func update() -> void @ beatrick_code.impala:114:1
 		MOVi $j $i 	; j = i
 	.f9:	FORi $i #16 @.l8
 	.e7:	MOVi $i #0 	; for (i = 0 to 16) 
-		GEQi #0 #16 @.e16
+		GEQi #0 #16 @.e3
 	.l11:	SHRi %0 #0x8000 $i	; if ((topBits & (0x8000 >> i)) != 0) j = i
 		ANDi %0 $topBits %0
 		EQUi %0 #0 @.f12
 		MOVi $j $i 	; j = i
 	.f12:	POKE &steps $i $j	; global steps[i] = j
 		FORi $i #16 @.l11	; }
-		GOTO @.e16  	; }
-	.s2#SKIP:	EQUi $topBits #0 @.e16	; if (topBits != 0) 
+		GOTO @.e3  	; }
+	.s2#SKIP:	EQUi $topBits #0 @.e3	; if (topBits != 0) 
 		MOVi $i #0 	; i = 0
 		MOVi $j #0 	; j = 0
 	.l14:	SHRi %0 #0x8000 $j	; if ((topBits & (0x8000 >> j)) != 0) 
@@ -161,17 +161,19 @@ update:	FUNC	; signature func update() -> void @ beatrick_code.impala:114:1
 	.f15:	ADDi %0 $j #1	; j = (j + 1) & 15
 		ANDi $j %0 #15
 		LSSi $i #16 @.l14	; } while (i < 16)
-		GOTO @.e16  	; }
+		GOTO @.e3  	; }
 	.s2#HOLD:	MOVi $i #0 	; for (i = 0 to 16) global holds[i] = (topBits & (0x8000 >> i))
 		GEQi #0 #16 @.e16
 	.l17:	SHRi %0 #0x8000 $i	; global holds[i] = (topBits & (0x8000 >> i))
 		ANDi %0 $topBits %0
 		POKE &holds $i %0
 		FORi $i #16 @.l17
-	.e16:	PEEK %0 &bottomOperator 	; switch (global bottomOperator == 0 to 5) 
-		SWCH %0 *5 @.e24
+	.e16:	NOOP
+	.s2:	NOOP
+	.e3:	PEEK %0 &bottomOperator 	; switch (global bottomOperator == 0 to 5) 
+		SWCH %0 *5 @.s18
 	.s18#ACCENT:	MOVi $i #0 	; for (i = 0 to 16) 
-		GEQi #0 #16 @.e24
+		GEQi #0 #16 @.e19
 	.l21:	PEEK $g &gains $i	; g = (int) global gains[i]
 		SHRi %0 #0x8000 $i	; if ((bottomBits & (0x8000 >> i)) == 0) g = g >> 1
 		ANDi %0 $bottomBits %0
@@ -190,7 +192,9 @@ update:	FUNC	; signature func update() -> void @ beatrick_code.impala:114:1
 		ANDi %0 $bottomBits %0
 		POKE &sfxs $i %0
 		FORi $i #16 @.l25
-	.e24:	RETU   	; }
+	.e24:	NOOP
+	.s18:	NOOP
+	.e19:	RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
@@ -239,7 +243,7 @@ process:	FUNC	; signature func process() -> void @ beatrick_code.impala:178:1
 		MOVi %2 #1 
 		ADRL %3 $localSignal *0
 		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ beatrick_code.impala:199:49
-		GOTO @.s4  	; } else 
+		GOTO @.e3  	; } else 
 	.f2:	PEEK %0 &bottomOperator 	; switch (global bottomOperator == 0 to 5) 
 		SWCH %0 *5 @.s4
 	.s4#REVERSE:	ANDi %1 $localClock #0xFFF	; read(i + ((localClock & 0xFFF) ^ 0xFFFFFFFFF), 1, localSignal)
@@ -248,13 +252,13 @@ process:	FUNC	; signature func process() -> void @ beatrick_code.impala:178:1
 		MOVi %2 #1 
 		ADRL %3 $localSignal *0
 		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ beatrick_code.impala:202:80
-		GOTO @.s4  
+		GOTO @.e5  
 	.s4#STUTTER:	ANDi %1 $localClock #0x3FF	; read(i | (localClock & 0x3FF), 1, localSignal)
 		IORi %1 $i %1
 		MOVi %2 #1 
 		ADRL %3 $localSignal *0
 		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ beatrick_code.impala:203:64
-		GOTO @.s4  
+		GOTO @.e5  
 	.s4#TAPE_STOP:	MOVi $si #0x0 	; si = 0x0
 		MOVi $sr #0x10000 	; sr = 0x10000
 		PEEK %0 &lastInStep 	; if (global lastInStep == inStep) 
@@ -279,7 +283,9 @@ process:	FUNC	; signature func process() -> void @ beatrick_code.impala:178:1
 		POKE &stopIndex %0 
 		SUBi %0 $sr #0x10	; global stopRate = sr - 0x10
 		POKE &stopRate %0 
-	.s4:	MOVi $gc #0x10000 	; gc = 0x10000
+	.s4:	NOOP
+	.e5:	NOOP
+	.e3:	MOVi $gc #0x10000 	; gc = 0x10000
 		ADDi %0 $localClock #LOOKAHEAD	; gain = (int) global gains[(((localClock + LOOKAHEAD) & 0xFFFF) >> 12)]
 		ANDi %0 %0 #0xFFFF
 		SHRi %0 %0 #12

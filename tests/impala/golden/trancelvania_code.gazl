@@ -310,14 +310,14 @@ process:	FUNC	; signature func process() -> void @ trancelvania_code.impala:267:
 	.f2:	MOVf $gateR #EPSILON 	; gateL = gateR = EPSILON
 		MOVf $gateL #EPSILON 
 		PEEK %0 &params:OPERATOR_1_PARAM_INDEX 	; switch ((int) global params[OPERATOR_1_PARAM_INDEX] == 0 to 5) 
-		SWCH %0 *5 @.f11
+		SWCH %0 *5 @.s3
 	.s3#0:	POKE &displayLEDs:1 #0 	; global displayLEDs[0] = global displayLEDs[1] = 0
 		POKE &displayLEDs:0 #0 
 		ANDi %0 $clock #65535	; if ((clock & 65535) >= 32768) 
-		LSSi %0 #32768 @.f11
+		LSSi %0 #32768 @.e4
 		MOVf $gateR #1.0 	; gateL = gateR = 1.0
 		MOVf $gateL #1.0 
-		GOTO @.f11  	; }
+		GOTO @.e4  	; }
 	.s3#1:	SHRi %0 $clock #12	; step = (clock >> 12) & 15
 		ANDi $step %0 #15
 		SHRi %0 #128 $step	; global displayLEDs[0] = 128 >> step
@@ -330,10 +330,10 @@ process:	FUNC	; signature func process() -> void @ trancelvania_code.impala:267:
 		IORi %0 %0 %1
 		SHRu %1 #0x8000 $step
 		ANDi %0 %0 %1
-		EQUi %0 #0 @.f11
+		EQUi %0 #0 @.e4
 		MOVf $gateR #1.0 	; gateL = gateR = 1.0
 		MOVf $gateL #1.0 
-		GOTO @.f11  	; }
+		GOTO @.e4  	; }
 	.s3#2:	SHRi %0 $clock #11	; step = (clock >> 11) & 15
 		ANDi $step %0 #15
 		SHRi %0 #128 $step	; global displayLEDs[0] = 128 >> step
@@ -346,10 +346,10 @@ process:	FUNC	; signature func process() -> void @ trancelvania_code.impala:267:
 		IORi %0 %0 %1
 		SHRu %1 #0x8000 $step
 		ANDi %0 %0 %1
-		EQUi %0 #0 @.f11
+		EQUi %0 #0 @.e4
 		MOVf $gateR #1.0 	; gateL = gateR = 1.0
 		MOVf $gateL #1.0 
-		GOTO @.f11  	; }
+		GOTO @.e4  	; }
 	.s3#3:	SHRi %0 $clock #12	; step = (clock >> 12) & 7
 		ANDi $step %0 #7
 		SHRi %0 #128 $step	; global displayLEDs[0] = 128 >> step
@@ -367,7 +367,7 @@ process:	FUNC	; signature func process() -> void @ trancelvania_code.impala:267:
 		EQUi %0 #0 @.f9
 		ADDf $gateL $gateL #0.333333333333	; gateL = gateL + 0.333333333333
 	.f9:	MOVf $gateR $gateL 	; gateR = gateL
-		GOTO @.f11  	; }
+		GOTO @.e4  	; }
 	.s3#4:	SHRi %0 $clock #12	; step = (clock >> 12) & 7
 		ANDi $step %0 #7
 		SHRi %0 #128 $step	; global displayLEDs[0] = 128 >> step
@@ -384,7 +384,9 @@ process:	FUNC	; signature func process() -> void @ trancelvania_code.impala:267:
 		ANDi %0 %0 %1
 		EQUi %0 #0 @.f11
 		MOVf $gateR #1.0 	; gateR = 1.0
-	.f11:	PEEK $outputChoice &params:OPERATOR_2_PARAM_INDEX 	; outputChoice = (int) global params[OPERATOR_2_PARAM_INDEX]
+	.f11:	NOOP
+	.s3:	NOOP
+	.e4:	PEEK $outputChoice &params:OPERATOR_2_PARAM_INDEX 	; outputChoice = (int) global params[OPERATOR_2_PARAM_INDEX]
 		PEEK %0 &params:OPERAND_2_HIGH_PARAM_INDEX 	; attackRate = (float) global rateTable[(int) global params[OPERAND_2_HIGH_PARAM_INDEX]]
 		PEEK $attackRate &rateTable %0
 		PEEK %0 &params:OPERAND_2_LOW_PARAM_INDEX 	; decayRate = (float) global rateTable[(int) global params[OPERAND_2_LOW_PARAM_INDEX]]
@@ -480,16 +482,17 @@ process:	FUNC	; signature func process() -> void @ trancelvania_code.impala:267:
 		MULf $r $r $gainR	; r = r * gainR
 		ADDf $gainL $gainL $gainLD	; gainL = gainL + gainLD
 		ADDf $gainR $gainR $gainRD	; gainR = gainR + gainRD
-		GOTO @.s19  	; }
+		GOTO @.e20  	; }
 	.s19#1:	MOVf $l $lpL 	; l = lpL
 		MOVf $r $lpR 	; r = lpR
-		GOTO @.s19  	; }
+		GOTO @.e20  	; }
 	.s19#2:	MOVf $l $bpL 	; l = bpL
 		MOVf $r $bpR 	; r = bpR
-		GOTO @.s19  	; }
+		GOTO @.e20  	; }
 	.s19#3:	MOVf $l $hpL 	; l = hpL
 		MOVf $r $hpR 	; r = hpR
-	.s19:	fTOi %0 $l #2048.0	; global signal[0] = ftoi(l * 2048.0)
+	.s19:	NOOP
+	.e20:	fTOi %0 $l #2048.0	; global signal[0] = ftoi(l * 2048.0)
 		POKE &signal:0 %0 
 		fTOi %0 $r #2048.0	; global signal[1] = ftoi(r * 2048.0)
 		POKE &signal:1 %0 

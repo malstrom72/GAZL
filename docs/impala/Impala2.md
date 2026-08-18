@@ -1528,8 +1528,8 @@ foo.impala:12:9: note: use a cast: (int pointer)
 - **First-error stop.** The compiler is single-pass with immediate code generation; error recovery
   in that architecture produces cascading nonsense. One correct error beats five speculative ones.
 - A structured `--json` output mode can be added later if tooling demands it; the line format is
-  the contract. **It does not exist today** - the complete flag set is `--legacy`, `--dead-strip`
-  and `--range-checks`.
+  the contract. **It does not exist today** - the flag set is what `node impala/impala.node.js`
+  prints with no arguments (today: `--legacy`, `--dead-strip` and `--range-checks`).
 
 ### Code registry
 
@@ -1564,7 +1564,6 @@ foo.impala:12:9: note: use a cast: (int pointer)
 | E411 | duplicate field in struct |
 | E412 | field has an incomplete struct type (define it, or use a pointer) |
 | E413 | unknown type |
-| E414 | an initialized struct-element array needs a literal size |
 | E415 | field access requires a struct or struct pointer |
 | E416 | wrong field operator (`.` on a pointer, or `->` on a value) |
 | E417 | struct has no such field |

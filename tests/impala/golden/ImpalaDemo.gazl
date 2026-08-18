@@ -190,16 +190,17 @@ showoff:	FUNC	; signature func showoff() -> void @ ImpalaDemo.impala:193:1
 		NEQi #1 #1 @.f8	; if (1 == 1) 
 		! EQUi #DEBUG #0 @.a9	; assert((pointer)global initedArray[2] == &global futureArray[4])
 		PEEK %0 &initedArray:2 
-		EQUp %0 &futureArray:4 @.a11
+		EQUp %0 &futureArray:4 @.e10
 		MOVp %1 &.a_pointe_4d2 
 		CALL ^assertFail %0 *1
-	.a9:	GOTO @.a11  	; } else 
+	.a9:	GOTO @.e10  	; } else 
 	.f8:	NOOP
 		! EQUi #DEBUG #0 @.a11	; assert(0 == 1)
 		EQUi #0 #1 @.a11
 		MOVp %1 &.a_01_4d3 
 		CALL ^assertFail %0 *1
-	.a11:	POKE &aFuncPointer &showoff 	; global aFuncPointer = showoff
+	.a11:	NOOP
+	.e10:	POKE &aFuncPointer &showoff 	; global aFuncPointer = showoff
 		PEEK %0 &aFuncPointer 	; if (global aFuncPointer == nullfunc) global aFuncPointer()
 		NEQp %0 &NULL @.f12
 		PEEK %1 &aFuncPointer 	; expects function() -> unknown @ ImpalaDemo.impala:253:59

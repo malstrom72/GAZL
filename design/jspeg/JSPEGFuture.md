@@ -21,24 +21,59 @@ the `Prefix` codegen runs the captured expression (actions included) and restore
 (`jspeg.jspeg:144-147`). Since the Impala compiler emits code and mutates symbol tables *from
 actions*, a speculative parse would emit phantom code.
 
-`impala.jspeg` works around this with a hand-rolled transaction flag: **one** lookahead site sets
-`$$parser.dry` (the `Comp` rule's `!Group` probe, used to decide whether a parenthesized thing is
-a boolean group or an expression), and **~16 `if (!$$parser.dry)` guards spread across the grammar
-exist solely to serve that one site. Two costs: every new action must remember its guard (a
-silent-corruption bug when forgotten), and every parenthesized condition is parsed twice (once
-dry, once wet).
+`impala.jspeg` avoids hitting this at every backtrack point only because its actions are hand-placed
+at **sequence ends** - they fire after an alternative has committed, so ordered-choice / `?` / `*`
+backtracking unwinds *before* any action runs. That discipline breaks in exactly two spots, patched
+two different ways:
+
+1. **The `Comp` `!Group` probe** (deciding whether a parenthesized thing is a boolean group or an
+   expression) - a predicate *forces* its sub-parse's actions to run and then discards them. Handled
+   by a hand-rolled transaction flag: **one** site sets `$$parser.dry` and **~16 `if (!$$parser.dry)`
+   guards** spread across the grammar serve it.
+2. **The `FuncCall` prologue**, which borrows the call window *before* parsing the arguments - a
+   mid-sequence effect that cannot sit at the end, so it cannot use `dry` (the borrow must really
+   happen for the wet parse). Patched instead by **hard-failing** (E442) rather than allowing a
+   backtrack out of a half-borrowed call.
+
+So the grammar already carries **two** speculation mechanisms plus a positional convention holding the
+rest together. Costs of the `dry` half: every new action must remember its guard (silent corruption
+when forgotten), and every parenthesized condition is parsed twice (once dry, once wet).
 
 ### What it would take
 
-- **Near term - automate `dry` in JSPEG itself.** Same mechanics, centralized: the code generator
-  wraps every action in an implicit `if (!_dry)` and makes `&`/`!` predicates set/restore `_dry`
-  automatically. Predicates become side-effect-free by construction.
-  *Impact on `impala.jspeg`: pure deletion - the two `$$parser.dry` toggles and all ~16 guards go
-  away; no rule changes. Impact on JSPEG semantics: actions inside predicates no longer run, which
-  must be audited across grammars (for `impala.jspeg` that is exactly the intent).*
-- **Long term - two-phase compilation (parse → AST → emit).** Actions become pure node
+The framing that matters: `dry`, and every variant of it, **manages** speculation inside an emit-now
+model - and PEG speculates pervasively, so that is whack-a-mole. `FuncCall` was already a second mole,
+patched differently from the first. Two of the options below only manage; **only the last removes the
+problem.**
+
+- **Does not generalize - automate `dry`, or swap the receiver.** Two tempting shortcuts, both dead
+  ends, for the same reason. *(a) Automate `dry` in the codegen:* the generator wraps every action in
+  an implicit `if (!_dry)` and predicates set/restore `_dry` - deletes the ~16 guards, but teaches the
+  PEG *code generator* Impala's dry/wet semantics (the wrong layer), and still only covers the "don't
+  run it" case. *(b) Swap the receiving object to a no-op twin* while a probe runs (route all effects
+  through one `sb`, point it at a do-nothing board during speculation) - keeps the generator
+  semantics-free, but covers even less. Both only answer **"don't perform it"** (the predicate case).
+  Neither answers **"already performed it, now undo it"** - which is what ordered-choice / `?` / `*`
+  backtracking needs, and which is the *majority* of PEG speculation. By the time such an alternative
+  fails, the effect already happened, so a no-op board is unreachable. This is `FuncCall` restated:
+  there the borrow must really happen, so no-op is useless and the grammar hard-fails instead of
+  undoing.
+- **Generalizes, but IS two-phase - a recording board.** The seam in (b) is right; the *twin* is
+  wrong. Swap to a board that does not emit but **buffers** each effect into the current rule,
+  discarding the buffer on backtrack and flushing it to the parent on commit - that covers all
+  speculation uniformly. But an action that appends to a per-rule buffer instead of emitting, thrown
+  away if the rule fails, is two-phase in miniature. So this is not a separate option; it is the
+  incremental on-ramp to the one below. *Precondition either way, verified 2026-08-11: `$$parser.x`
+  FLATTENS to bare closure locals (`var $$parser = {}` is a near-empty shell; `dry`/`binaryOp`/
+  `symbols`/`metacode` all generate as plain locals inside the compiler function), so there is no
+  object to swap or buffer on today - step 0 is moving parser state onto a real object, the same "thin
+  the fat inline actions into `$$parser`" surface `RefactorPlan.md` and collect mode already want.*
+- **Removes the problem - two-phase compilation (parse → AST → emit).** The only option where
+  **nothing observable happens until a rule commits.** Actions become pure node
   constructors; a separate walk emits GAZL. Backtracking discards half-built nodes (garbage), so
-  the side-effect problem ceases to exist rather than being managed. This also unlocks: multi-error
+  the side-effect problem ceases to exist rather than being managed - both `dry` and the `FuncCall`
+  hard-fail dissolve, because the borrow and the emit move to the walk, after the parse succeeded.
+  This also unlocks: multi-error
   diagnostics, free lookahead for new syntax (destructuring `x, y = f()` vs expression statement),
   and Impala 2.0's `import` interface mode (parse, take declarations, emit nothing) as a trivial
   variant instead of a special mode. *That last one is a convenience, **not** a dependency: import
@@ -131,24 +166,42 @@ Modest codegen change, no grammar changes, and it can land before any Impala 2.0
 
 ## Adjacent gap: the PikaScript emulation layer
 
-`impala.jspeg`'s prelude still runs on a shim of hand-ported PikaScript builtins - `bake`, `evaluate`,
-`replace`, `char`, `ordinal`, `args`, and the `resetQueue`/`pushBack`/`queueSize` wrappers over plain
-Arrays. They were the cheapest possible port from the PikaScript original, not a design, and they are
-dead weight now that the host is JavaScript: `replace(s, a, b)` is `s.split(a).join(b)` spelled longer,
-the queue wrappers are `[]`, `evaluate` is `JSON.parse`.
+`impala.jspeg`'s prelude still carries a shim of hand-ported PikaScript builtins - `bake`, `evaluate`,
+`replace`, `char`, `ordinal`, `args`, and the `resetQueue`/`queueSize`/`pushBack`/`popBack`/`pushFront`/
+`popFront` wrappers over plain Arrays. They were the cheapest possible port from the PikaScript original,
+not a design. Most are now removable, but the set splits three ways (call-site counts exclude each
+definition itself, verified 2026-08-11):
 
-**`bake` is the one that bites.** Every `$$parser.fail` message is passed through it, and it **`eval`s
-whatever sits between braces** - that is how `{$type1}` interpolation in `typeError` works. So any
-diagnostic whose text happens to contain braces is executed as JavaScript. A struct row
-(`struct S { a : int }`) in an error message throws `Unexpected token ':'` from deep inside `JSON.parse`,
-with nothing in the stack naming the real cause; `E438` has to render its rows with parentheses to dodge
-it. It is also an eval of compiler-controlled text on the error path, which is a poor place for one.
+- **Already dead - `args`, `queueSize`, `pushBack`, `popBack`, `pushFront`, `popFront`.** Zero call
+  sites. Pure deletion.
+- **Live but a pure alias - `evaluate` (1 site) is `JSON.parse`; `resetQueue` (2 sites) is `q.length = 0`.**
+  Inline and delete.
+- **Keep - `replace` (11 sites), `char`/`ordinal` (3/2), `find`/`span`/`rspan`.** These are NOT
+  builtin-aliases. `replace(s, a, b)` is a GLOBAL replace - `String.prototype.replace` with a string
+  argument hits only the first match - so each call site would grow to `s.split(a).join(b)`; the helper
+  spells them shorter, not longer (the reverse of what this note used to claim). `char`/`ordinal` carry
+  a `& 0xFF` mask over `fromCharCode`/`charCodeAt`. Inlining any of these ADDS lines and loses meaning.
 
-**What it would take:** replace `bake` with an explicit substitution - `format(template, values)` over a
-`{name}` placeholder, no `eval` - and migrate the ~10 `typeError` call sites that rely on `{$type1}` /
-`{$type2}`. Then delete the rest of the shim in favour of the JS builtins. Mechanical, fixture-gated,
-and independent of everything else in this document; the messages are covered by
-`impala/jspegCompilerTests.js`, so drift shows up immediately.
+**`bake` is the one that bites - and it turns out to be functionally dead.** Every `$$parser.fail`
+message is passed through it, and it **`eval`s whatever sits between braces**. This note used to say that
+is how `{$type1}` interpolation in `typeError` works - it is NOT: the `typeError` helper does its own
+substitution with `replace(desc, '{$type1}', verboseType(...))` BEFORE it calls `fail`, so by the time
+`bake` sees the message the braces are already gone. `bake`'s eval therefore never fires for
+interpolation; its only live effect is the HAZARD that a stray `{…}` in a diagnostic is executed as
+JavaScript. A struct row (`struct S { a : int }`) in an error message throws a `SyntaxError` from inside
+`eval` with nothing in the stack naming the real cause, so `E438` mangles its rows `{`->`(` to dodge it,
+and one other site (the E407 "Expected constant" message) redundantly double-bakes a brace-free string.
+Both are workarounds for a routine that was never needed.
+
+**What it would take:** delete `bake` outright - `fail` uses its `error` argument directly, the E438
+row-mangling and the E407 double-bake both drop out (E438's message regains its true `{ }` rendering),
+and NO `format(template, values)` replacement is required, because the interpolation the shim was
+credited with is already `replace`'s job. Then inline the two pure aliases and delete the six dead
+wrappers. Mechanical, fixture-gated, behaviour-preserving, and a net line reduction. The messages are
+covered by `impala/jspegCompilerTests.js` with substring assertions, so the `{ }` restoration surfaces
+as a golden check rather than a test break. NuXJS-safe by construction: every builtin the inlines lean
+on (`JSON.parse`, `arr.length =`, `split`/`join`, `fromCharCode`) is already exercised by the shim code
+being removed.
 
 ## Sequencing
 
@@ -159,8 +212,8 @@ fixtures.
 
 | When | Work | `impala.jspeg` impact | Ordering constraint |
 |---|---|---|---|
-| Any time, independent | Expected-set error reporting; finish `RefactorPlan.md` return-style helpers; retire the PikaScript emulation layer (`bake` first) | none / mechanical helper migration | error reporting should exist by the time 2.0 *ships* (Diagnostics contract); none blocks Step 1 |
-| Before Steps 4/5, *if adopted* | Automatic `dry` for predicates in JSPEG; de-IIFE + char-class codegen | delete the dry toggles and ~16 guards; otherwise none | destructuring lookahead and import interface mode are the two features that lean on the side-effect weakness - the only real ordering edge in this document |
+| Any time, independent | Expected-set error reporting; finish `RefactorPlan.md` return-style helpers; retire the PikaScript emulation shim (delete `bake` - a vestigial eval hazard - plus six dead wrappers; inline `evaluate`/`resetQueue`) | none / mechanical; net line reduction | error reporting should exist by the time 2.0 *ships* (Diagnostics contract); none blocks Step 1 |
+| Before Steps 4/5, *if adopted* | Retire the speculation patches (`dry` + the `FuncCall` hard-fail) - flag/receiver tricks only *manage* it and don't generalize (see Problem 1); the general fix is two-phase, whose on-ramp is a recording board (needs state on a real object first, a superset of `RefactorPlan`); de-IIFE + char-class codegen | rule structure unchanged; actions move from emit-now to build-node | destructuring lookahead and import interface mode are the two features that lean on the side-effect weakness - the only real ordering edge in this document |
 | After 2.0 stabilizes, if ever ("JSPEG 2") | Value-returning rules - the `$$`/holder change, and the only breaking change to JSPEG itself | mechanical migration of the ~126 `$$.` sites; holders and the `._` convention retired | none - optional end-state |
 | Independent of JSPEG entirely | Two-phase AST in `impala.jspeg` (actions build nodes, a walk emits) | rules unchanged; every action rewritten as a node constructor | not a JSPEG change at all - possible today; convenient to do alongside JSPEG 2, not gated on it |
 

@@ -41,9 +41,9 @@ compare) were protecting. The one-word temporary invariant is never touched. Ris
 > `GLOB/LOCA *(count*sizeof)`; a struct array decays to a struct pointer, and subscripting a struct
 > pointer (`structSubscript`) yields a place - constant index folds `C*sizeof` into the offset,
 > dynamic index emits one `MULi` stride; global bases use `&name:off`, runtime pointers use
-> PEEK/POKE; an INITIALIZED struct-element array needs a numeric literal size, E414 - an uninitialized
-> one takes a named `const` extent, so `const int N = 4; global S array bank[N]` compiles clean
-> (narrowed 2026-08-04)). Slice 7: **array fields**
+> PEEK/POKE; a struct-element array takes a named `const` extent whether or not it is initialized, so
+> `const int N = 4; global S array bank[N] = { { n: 1 } }` compiles clean - the 2026-08-04 narrowing of
+> the INITIALIZED case to a numeric literal (E414) was LIFTED 2026-08-13, see Slice 2.4). Slice 7: **array fields**
 > inside a struct (`struct Filter { float array state[4] }` → `f.state[i]`) - the array field
 > decays to a typed pointer at base+offset (global `&v:off`, local ADRL+add, pointer base+add),
 > subscript handles the rest incl. arrays-of-structs inside a struct. Slice 8: **brace
@@ -92,7 +92,52 @@ all base-kind combinations, and read-back verification after every write.
 - `Filter array banks[4]` = `LOCA`/`GLOB *(4*sizeof)`; constant index → place with
   `offset = i*sizeof + …` (still free); dynamic index → stride `MULi`, base becomes a computed
   pointer temp, terminal access is `PEEK`/`POKE`/`GETL`-style - the Step 1 dynamic-index shapes.
-  Lifts error E414.
+  **Lifts error E414 - DONE 2026-08-13, by unifying the fill.** There were three array-fill loops - a
+  struct FIELD's, a standalone array's, and the shaped walk - each re-deciding what the extent meant, and
+  E414 was one of them deciding it needed a compile-time count. They are now ONE `fillArray`/`fillAxis`
+  taking a slot record (`{ name, elem, size, dims }`, which a field entry and an array declarator already
+  share); a 1-D array is just the rank-1 shape `[size]`, so there is no separate 1-D path left to drift.
+
+  **The extent is a CHECK, never a fill bound**, and the two checks a symbolic extent needs differ because
+  the layout consequences do: the OUTERMOST axis may stop short (a prefix - the region zero-fills the
+  rest), so only `words <= .z.<name>` must hold; an INTERIOR axis must be exactly full, because a short
+  group there leaves a gap of unknown size that positional `DATA` cannot skip, so it is asserted against
+  `.d.<name>.k` with `! EQUi`. At rank 1 there are no interior axes and the rule degenerates to "place the
+  prefix, assert it fits" - which is E414's case, now with nothing special written down for it. A symbolic
+  OUTERMOST axis gained a prefix fill for free; it previously demanded an exact count.
+
+  **Short fill is decided once, in `emitInitData`**, which drops a trailing run of zero words - exactly
+  what the region supplies (verified on GAZLCmd for a `CNST` section as well as a `GLOB` one). That is what
+  lets every fill loop pad honestly to its axis, which is what keeps a short INTERIOR group from shifting
+  everything after it, while a `[100]` array given 14 entries still emits 56 words rather than 400.
+  Covered by `tests/impala/sources/structArrayGiven.impala`.
+
+  **`InitList` STAYS A SEPARATE PATH, and the reason is the scratch pool - do not re-attempt the merge
+  without answering it.** The flat list writes its `DATA` rows WHILE PARSING; everything else buffers the
+  words and writes them at the end. Merging the flat list into the buffered filler was built and reverted
+  2026-08-13: an entry like `STRIDE + 1` on a named const is folded by emitting `! ADDi <A> ...` and using
+  `<A>` as the word, and `declare` returns a scratch to the pool only when it writes the row quoting it. The
+  pool is `<A>`..`<Z>`. Collecting entries before placing them therefore holds one scratch per computed
+  entry and aborts at 27 with "compile-time scratch pool exhausted"; measured exactly - 26 entries compile,
+  30 do not - while the streaming form has no limit. `chess.impala` and `Priyome.impala` are the corpus
+  programs that prove it. The merge is possible only by making the shared writer EMIT AS IT FILLS, which
+  additionally needs a pending-zero run (so a trailing run can still be dropped, and an interior one still
+  written) - a real design, not a rename. An emit-as-you-fill sink WAS built and reverted the same day: it
+  is byte-identical and costs 20 lines, but it does not lift the cap, because the scratches are borrowed
+  while the tree is PARSED, before any placement can free one.
+
+  **The CAP itself is gone, separately (`holdConstant`, `tests/impala/sources/initSpill.impala`).** Once the
+  pool is empty the next computed entry is captured into a named define and the scratch handed straight
+  back, so at most one is ever tied up and a nested initializer has no entry limit (200 verified). It looks
+  unsound and is not: the emitted line naming `<A>` is its DEFINITION, which is what gives the capture its
+  value, while the only pending reference is an operand string still held in the entry - so redirecting it
+  costs nothing. This is the same move `.z.`/`.d.` already make (`! MULi <A> ...` then `.z.g: ! DEFi #<A>`).
+  Only entries past the pool spill, so every initializer that already fitted emits exactly what it did
+  before - no golden moved.
+
+  What the merge attempt also landed is the rule it exposed: a scratch gets a row to itself in the buffered
+  writer too, without which `readonly S s = { x: 1 << P }` never compiled at all
+  (`tests/impala/sources/structInitScratch.impala`).
 - Brace initializers recurse the existing `InitList` machinery with a field cursor: each value
   checked against the field type, nested `{}` descends into struct/array fields, trailing
   omission zero-fills. Lowering is the flat `DATA` rows the braces describe.

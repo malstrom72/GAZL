@@ -663,16 +663,18 @@ TextToPhonemes:	FUNC	; signature func TextToPhonemes(ptr input) -> int @ sam.imp
 		ANDi $A %0 #127
 		LSSi $A #112 @.f2	; if (A >= 112) A = A & 95
 		ANDi $A $A #95	; A = A & 95
-		GOTO @.f4  
+		GOTO @.e3  
 	.f2:	LSSi $A #96 @.f4	; if (A >= 96) A = A & 79
 		ANDi $A $A #79	; A = A & 79
-	.f4:	ADDi %0 $Y #1	; inputCopy[Y + 1] = A
+	.f4:	NOOP
+	.e3:	ADDi %0 $Y #1	; inputCopy[Y + 1] = A
 		SETL $inputCopy %0 $A
 		FORi $Y #255 @.l1	; }
 	.e0:	MOVi $inputCopy:255 #27 	; inputCopy[255] = 27
 		MOVi $mem61 #-1 	; mem61 = -1
 		MOVi $mem56 #-1 	; mem56 = -1
-	pos36554:	ADDi $mem61 $mem61 #1	; mem61 = mem61 + 1
+	pos36554:	NOOP
+	.l5:	ADDi $mem61 $mem61 #1	; mem61 = mem61 + 1
 		MOVi $X $mem61 	; X = mem61
 		GETL $currentChar $inputCopy $X	; currentChar = (int)inputCopy[X]
 		NEQi $currentChar #27 @.f6	; if (currentChar == 27) 
@@ -690,7 +692,7 @@ TextToPhonemes:	FUNC	; signature func TextToPhonemes(ptr input) -> int @ sam.imp
 		GOTO @break0  	; goto break0
 	.f8:	ADDi $mem56 $mem56 #1	; mem56 = mem56 + 1
 		POKE $input $mem56 #'.'	; input[mem56] = '.'
-		GOTO @pos36554  	; } //while
+		GOTO @.l5  	; } //while
 	break0:	MOVi $Y $currentChar 	; break0:
 		PEEK $mem57 &someFlags $currentChar	; mem57 = (int)global someFlags[currentChar]
 		ANDi %0 $mem57 #2	; if((mem57 & 2) != 0) 
@@ -755,7 +757,8 @@ TextToPhonemes:	FUNC	; signature func TextToPhonemes(ptr input) -> int @ sam.imp
 		GOTO @.l20  	; }
 	break2:	MOVi $A $mem61 	; break2:
 		MOVi $mem59 $mem61 	; mem59 = mem61
-	.l23:	SUBi $openPos $openPos #1	; openPos = openPos - 1
+	.l23:	NOOP
+	.l24:	SUBi $openPos $openPos #1	; openPos = openPos - 1
 		PEEK $mem57 $p $openPos	; mem57 = (int)p[openPos]
 		ANDi %0 $mem57 #128	; if ((mem57 & 128) != 0) goto break4
 		EQUi %0 #0 @.f25
@@ -770,7 +773,7 @@ TextToPhonemes:	FUNC	; signature func TextToPhonemes(ptr input) -> int @ sam.imp
 		EQUi %0 $mem57 @.f27
 		GOTO @nextRule  	; goto nextRule
 	.f27:	MOVi $mem59 $X 	; mem59 = X
-		GOTO @.l23  	; }
+		GOTO @.l24  	; }
 	break3:	SUBi $X $mem59 #1	; break3:
 		SWCH $mem57 *256 @.s28	; switch (mem57 == 0 to 256) 
 	.s28#' ':	GETL %0 $inputCopy $X	; if(((int)global someFlags[(int)inputCopy[X]] & 128) != 0) goto nextRule
@@ -841,6 +844,7 @@ TextToPhonemes:	FUNC	; signature func TextToPhonemes(ptr input) -> int @ sam.imp
 	.e29:	MOVi $mem59 $X 	; mem59 = X
 		GOTO @.l23  	; }
 	break4:	MOVi $mem58 $mem60 	; break4:
+	.l46:	NOOP
 	continue1:	ADDi $Y $closePos #1	; continue1:
 		NEQi $Y $equalPos @.f47	; if (Y == equalPos) 
 		MOVi $Y $equalPos 	; Y = equalPos
@@ -974,11 +978,12 @@ TextToPhonemes:	FUNC	; signature func TextToPhonemes(ptr input) -> int @ sam.imp
 		GETL $A $inputCopy $X	; A = (int)inputCopy[X]
 		EQUi $A #89 @.e54	; if (A != 89) goto nextRule
 		GOTO @nextRule  	; goto nextRule
-	.e83:	GOTO @.e54  	; }
+	.e83:	NOOP
+	.e75:	GOTO @.e54  	; }
 	.s53:	MOVi $r #0 	; r = 0
 		RETU   	; goto _return
 	.e54:	MOVi $mem58 $X 	; mem58 = X
-		GOTO @continue1  	; }
+		GOTO @.l46  	; }
 	_return:	RETU   	; }
 
 .z.stressInputTable:	! DEFi #9
@@ -1498,9 +1503,11 @@ Parser1:	FUNC	; signature func Parser1() -> int @ sam.impala:1352:1
 		MOVi $A #0 	; A = 0
 		MOVi $Y #0 	; Y = 0
 		MOVi $i #0 	; for (i = 0 to 256) global stress[i] = 0
-		GEQi #0 #256 @continue0
+		GEQi #0 #256 @.e0
 	.l1:	POKE &stress $i #0	; global stress[i] = 0
 		FORi $i #256 @.l1
+	.e0:	NOOP
+	.l2:	NOOP
 	continue0:	PEEK $sign1 &input $X	; continue0:
 		NEQi $sign1 #155 @.f3	; if (sign1 == 155) 
 		POKE &phonemeIndex $position #255	; (int)global phonemeIndex[position] = 255
@@ -1541,7 +1548,7 @@ Parser1:	FUNC	; signature func Parser1() -> int @ sam.impala:1352:1
 		RETU   	; goto _return
 	.f16:	SUBi %0 $position #1	; (int)global stress[position-1] = Y
 		POKE &stress %0 $Y
-		GOTO @continue0  	; } //while
+		GOTO @.l2  	; } //while
 	_return:	RETU   	; }
 
 
@@ -1613,12 +1620,13 @@ Parser2:	FUNC	; signature func Parser2() -> void @ sam.impala:1427:1
 		GRTi $A #80 @.f7
 		NEQi $A #78 @.f8	; if (A == 78) 
 		MOVi $A #24 	; A = 24
-		GOTO @.e11  	; } else if (A == 79) 
+		GOTO @.e9  	; } else if (A == 79) 
 	.f8:	NEQi $A #79 @.f10	; if (A == 79) 
 		MOVi $A #27 	; A = 27
 		GOTO @.e11  	; } else 
 	.f10:	MOVi $A #28 	; A = 28
-	.e11:	PEEK $mem58 &stress $X	; mem58 = (int)global stress[X]
+	.e11:	NOOP
+	.e9:	PEEK $mem58 &stress $X	; mem58 = (int)global stress[X]
 		POKE &phonemeIndex $X #13	; (int)global phonemeIndex[X] = 13
 		ADDi %1 $X #1	; Insert(X+1, A, 0, mem58)
 		MOVi %2 $A 
@@ -1690,9 +1698,9 @@ Parser2:	FUNC	; signature func Parser2() -> void @ sam.impala:1427:1
 		EQUi $Y #255 @.t27	; if (Y == 255 || ((int)global flags[Y] & 32) == 0) (int)global phonemeIndex[pos] = 75
 		PEEK %0 &flags $Y
 		ANDi %0 %0 #32
-		NEQi %0 #0 @.f30
+		NEQi %0 #0 @.e29
 	.t27:	POKE &phonemeIndex $pos #75	; (int)global phonemeIndex[pos] = 75
-		GOTO @.f30  	; } else if (A == 60) 
+		GOTO @.e29  	; } else if (A == 60) 
 	.f26:	NEQi $A #60 @.f30	; if (A == 60) 
 		ADDi %0 $pos #1	; index = (int)global phonemeIndex[pos+1]
 		PEEK $index &phonemeIndex %0
@@ -1703,10 +1711,11 @@ Parser2:	FUNC	; signature func Parser2() -> void @ sam.impala:1427:1
 		GOTO @continue0  	; goto continue0
 	.f32:	POKE &phonemeIndex $pos #63	; (int)global phonemeIndex[pos] = 63
 		GOTO @continue0  	; goto continue0
-	.f30:	PEEK $Y &phonemeIndex $pos	; Y = (int)global phonemeIndex[pos]
+	.f30:	NOOP
+	.e29:	PEEK $Y &phonemeIndex $pos	; Y = (int)global phonemeIndex[pos]
 		PEEK %0 &flags $Y	; A = (int)global flags[Y] & 1
 		ANDi $A %0 #1
-		EQUi $A #0 @pos41749	; if (A != 0) 
+		EQUi $A #0 @.f33	; if (A != 0) 
 		SUBi %0 $pos #1	; A = (int)global phonemeIndex[pos-1]
 		PEEK $A &phonemeIndex %0
 		EQUi $A #32 @.f34	; if (A != 32) 
@@ -1715,8 +1724,9 @@ Parser2:	FUNC	; signature func Parser2() -> void @ sam.impala:1427:1
 	.f34:	SUBi %0 $Y #12	; (int)global phonemeIndex[pos] = Y-12
 		POKE &phonemeIndex $pos %0
 		GOTO @continue0  	; goto continue0
+	.f33:	NOOP
 	pos41749:	PEEK $A &phonemeIndex $X	; pos41749:
-		NEQi $A #53 @pos41779	; if (A == 53) 
+		NEQi $A #53 @.f35	; if (A == 53) 
 		SUBi %0 $X #1	; Y = (int)global phonemeIndex[X-1]
 		PEEK $Y &phonemeIndex %0
 		PEEK %0 &flags2 $Y	; A = (int)global flags2[Y] & 4
@@ -1724,20 +1734,23 @@ Parser2:	FUNC	; signature func Parser2() -> void @ sam.impala:1427:1
 		EQUi $A #0 @continue0	; if (A != 0) (int)global phonemeIndex[X] = 16
 		POKE &phonemeIndex $X #16	; (int)global phonemeIndex[X] = 16
 		GOTO @continue0  	; goto continue0
-	pos41779:	NEQi $A #42 @pos41788	; pos41779:
+	.f35:	NOOP
+	pos41779:	NEQi $A #42 @.f37	; pos41779:
 		ADDi %1 $X #1	; Insert(X+1, A+1, 0, global stress[X])
 		ADDi %2 $A #1
 		MOVi %3 #0 
 		PEEK %4 &stress $X
 		CALL &Insert %0 *5	; expects Insert(int, int, int, int) -> void @ sam.impala:1556:41
 		GOTO @continue0  	; goto continue0
-	pos41788:	NEQi $A #44 @pos41812	; pos41788:
+	.f37:	NOOP
+	pos41788:	NEQi $A #44 @.f38	; pos41788:
 		ADDi %1 $X #1	; Insert(X+1, A+1, 0, global stress[X])
 		ADDi %2 $A #1
 		MOVi %3 #0 
 		PEEK %4 &stress $X
 		CALL &Insert %0 *5	; expects Insert(int, int, int, int) -> void @ sam.impala:1562:41
 		GOTO @continue0  	; goto continue0
+	.f38:	NOOP
 	pos41812:	EQUi $A #69 @.f39	; pos41812:
 		NEQi $A #57 @continue0
 	.f39:	SUBi %0 $X #1
@@ -1756,14 +1769,16 @@ Parser2:	FUNC	; signature func Parser2() -> void @ sam.impala:1427:1
 		EQUi %0 #0 @.f44
 		GOTO @continue0  	; goto continue0
 	.f44:	POKE &phonemeIndex $pos #30	; (int)global phonemeIndex[pos] = 30
-		GOTO @continue0  	; } else 
+		GOTO @.e45  	; } else 
 	.f42:	ADDi %0 $X #1	; A = (int)global phonemeIndex[X+1]
 		PEEK $A &phonemeIndex %0
-		EQUi $A #255 @continue0	; if (A != 255 && ((int)global flags[A] & 128) != 0) (int)global phonemeIndex[pos] = 30
+		EQUi $A #255 @.f47	; if (A != 255 && ((int)global flags[A] & 128) != 0) (int)global phonemeIndex[pos] = 30
 		PEEK %0 &flags $A
 		ANDi %0 %0 #128
-		EQUi %0 #0 @continue0
+		EQUi %0 #0 @.f47
 		POKE &phonemeIndex $pos #30	; (int)global phonemeIndex[pos] = 30
+	.f47:	NOOP
+	.e45:	NOOP
 	continue0:	ADDi $pos $pos #1	; continue0:
 		GOTO @.l0  	; } // while
 	_return:	RETU   	; }
@@ -1810,6 +1825,7 @@ Code48619:	FUNC	; signature func Code48619() -> void @ sam.impala:1606:1
 ;-----------------------------------------------------------------------------
 		MOVi $X #0 	; X = 0
 		MOVi $mem66 #0 	; mem66=0
+	.l0:	NOOP
 	continue0:	PEEK $index &phonemeIndex $X	; continue0:
 		NEQi $index #255 @.f1	; if (index == 255) goto break0
 		GOTO @break0  	; goto break0
@@ -1848,7 +1864,7 @@ Code48619:	FUNC	; signature func Code48619() -> void @ sam.impala:1606:1
 	.f7:	ADDi $X $X #1	; X = X + 1
 		NEQi $X $mem66 @.l6	; } while (X != mem66)
 		ADDi $X $X #1	; X = X + 1
-		GOTO @continue0  	; }  // while
+		GOTO @.l0  	; }  // while
 	break0:	MOVi $mem66 #0 	; break0:
 	.l12:	MOVi $X $mem66 	; X = mem66
 		PEEK $index &phonemeIndex $X	; index = (int)global phonemeIndex[X]
@@ -1863,30 +1879,30 @@ Code48619:	FUNC	; signature func Code48619() -> void @ sam.impala:1606:1
 		ANDi %0 %0 #64
 		NEQi %0 #0 @.f15
 		EQUi $index #18 @.t16	; if ((index == 18) || (index == 19)) 
-		NEQi $index #19 @.f36
+		NEQi $index #19 @.e26
 	.t16:	ADDi $X $X #1	; X = X + 1
 		PEEK $index &phonemeIndex $X	; index = (int)global phonemeIndex[X]
 		PEEK %0 &flags $index	; if (((int)global flags[index] & 64) != 0)
 		ANDi %0 %0 #64
-		EQUi %0 #0 @.f36
+		EQUi %0 #0 @.e26
 		PEEK %0 &phonemeLength $mem66	; (int)global phonemeLength[mem66] = (int)global phonemeLength[mem66] - 1
 		SUBi %0 %0 #1
 		POKE &phonemeLength $mem66 %0
-		GOTO @.f36  	; } else 
+		GOTO @.e26  	; } else 
 	.f15:	MOVi $mem56 #65 	; mem56 = 65
 		EQUi $index #255 @.f20	; if (index != 255) mem56 = (int)global flags[index]
 		PEEK $mem56 &flags $index	; mem56 = (int)global flags[index]
 	.f20:	ANDi %0 $mem56 #4	; if ((mem56 & 4) == 0) 
 		NEQi %0 #0 @.f21
 		ANDi %0 $mem56 #1	; if((mem56 & 1) != 0) 
-		EQUi %0 #0 @.f36
+		EQUi %0 #0 @.e26
 		SUBi $X $X #1	; X = X - 1
 		PEEK %0 &phonemeLength $X	; mem56 = (int)global phonemeLength[X] >> 3
 		SHRi $mem56 %0 #3
 		PEEK %0 &phonemeLength $X	; (int)global phonemeLength[X] = (int)global phonemeLength[X] - mem56
 		SUBi %0 %0 $mem56
 		POKE &phonemeLength $X %0
-		GOTO @.f36  	; } else 
+		GOTO @.e26  	; } else 
 	.f21:	SUBi %0 $X #1	; A = (int)global phonemeLength[X-1]
 		PEEK $A &phonemeLength %0
 		SUBi %0 $X #1	; (int)global phonemeLength[X-1] = (A >> 2) + A + 1
@@ -1900,33 +1916,35 @@ Code48619:	FUNC	; signature func Code48619() -> void @ sam.impala:1606:1
 		GRTi #0 %1 @.f25
 		SUBi %1 $X #1
 		PEEK %1 &phonemeLength %1
-		LEQi %1 #255 @.f36
+		LEQi %1 #255 @.e26
 	.f25:	MOVp %1 &.a_0intgl_4d5 
 		CALL ^assertFail %0 *1
-	.a24:	GOTO @.f36  	; } else if (((int)global flags2[index] & 8) != 0) 
+	.a24:	NOOP
+	.e23:	NOOP
+	.e19:	GOTO @.e26  	; } else if (((int)global flags2[index] & 8) != 0) 
 	.f14:	PEEK %0 &flags2 $index	; if (((int)global flags2[index] & 8) != 0) 
 		ANDi %0 %0 #8
 		EQUi %0 #0 @.f27
 		ADDi $X $X #1	; X = X + 1
 		PEEK $index &phonemeIndex $X	; index = (int)global phonemeIndex[X]
-		EQUi $index #255 @.f36	; if (index != 255 && ((int)global flags[index] & 2) != 0) 
+		EQUi $index #255 @.e30	; if (index != 255 && ((int)global flags[index] & 2) != 0) 
 		PEEK %0 &flags $index
 		ANDi %0 %0 #2
-		EQUi %0 #0 @.f36
+		EQUi %0 #0 @.e30
 		POKE &phonemeLength $X #6	; (int)global phonemeLength[X] = 6
 		SUBi %0 $X #1	; (int)global phonemeLength[X-1] = 5
 		POKE &phonemeLength %0 #5
-		GOTO @.f36  	; } else if (((int)global flags[index] & 2) != 0) 
+		GOTO @.e30  	; } else if (((int)global flags[index] & 2) != 0) 
 	.f27:	PEEK %0 &flags $index	; if (((int)global flags[index] & 2) != 0) 
 		ANDi %0 %0 #2
 		EQUi %0 #0 @.f31
 	.l32:	ADDi $X $X #1	; X = X + 1
 		PEEK $index &phonemeIndex $X	; index = (int)global phonemeIndex[X]
 		EQUi $index #0 @.l32	; } while (index == 0)
-		EQUi $index #255 @.f36	; if (index != 255 && ((int)global flags[index] & 2) != 0) 
+		EQUi $index #255 @.e35	; if (index != 255 && ((int)global flags[index] & 2) != 0) 
 		PEEK %0 &flags $index
 		ANDi %0 %0 #2
-		EQUi %0 #0 @.f36
+		EQUi %0 #0 @.e35
 		PEEK %0 &phonemeLength $X	; (int)global phonemeLength[X] = ((int)global phonemeLength[X] >> 1) + 1
 		SHRi %0 %0 #1
 		ADDi %0 %0 #1
@@ -1936,7 +1954,7 @@ Code48619:	FUNC	; signature func Code48619() -> void @ sam.impala:1606:1
 		SHRi %0 %0 #1
 		ADDi %0 %0 #1
 		POKE &phonemeLength $mem66 %0
-		GOTO @.f36  	; } else if (((int)global flags2[index] & 16) != 0) 
+		GOTO @.e35  	; } else if (((int)global flags2[index] & 16) != 0) 
 	.f31:	PEEK %0 &flags2 $index	; if (((int)global flags2[index] & 16) != 0) 
 		ANDi %0 %0 #16
 		EQUi %0 #0 @.f36
@@ -1948,7 +1966,10 @@ Code48619:	FUNC	; signature func Code48619() -> void @ sam.impala:1606:1
 		PEEK %0 &phonemeLength $X	; (int)global phonemeLength[X] = (int)global phonemeLength[X] - 2
 		SUBi %0 %0 #2
 		POKE &phonemeLength $X %0
-	.f36:	ADDi $mem66 $mem66 #1	; mem66 = mem66 + 1
+	.f36:	NOOP
+	.e35:	NOOP
+	.e30:	NOOP
+	.e26:	ADDi $mem66 $mem66 #1	; mem66 = mem66 + 1
 		GOTO @.l12  	; }
 	_return:	RETU   	; }
 
@@ -1998,7 +2019,7 @@ Code41240:	FUNC	; signature func Code41240() -> int @ sam.impala:1723:1
 		GOTO @.e3  	; } else if (((int)global flags[index]&1) == 0) 
 	.f2:	PEEK %0 &flags $index	; if (((int)global flags[index]&1) == 0) 
 		ANDi %0 %0 #1
-		NEQi %0 #0 @.e3
+		NEQi %0 #0 @.l5
 		ADDi %1 $pos #1	; Insert(pos+1, index+1, (int)global phonemeLengthTable1[index+1], (int)global stress[pos])
 		ADDi %2 $index #1
 		ADDi %3 $index #1
@@ -2012,9 +2033,10 @@ Code41240:	FUNC	; signature func Code41240() -> int @ sam.impala:1723:1
 		PEEK %4 &stress $pos
 		CALL &Insert %0 *5	; expects Insert(int, int, int, int) -> void @ sam.impala:1738:93
 		GOTO @inc3AndContinue0  	; goto inc3AndContinue0
-	.e3:	ADDi $X $X #1	; X = X + 1
+	.e3:	NOOP
+	.l5:	ADDi $X $X #1	; X = X + 1
 		PEEK $A &phonemeIndex $X	; A = (int)global phonemeIndex[X]
-		EQUi $A #0 @.e3	; } while (A==0)
+		EQUi $A #0 @.l5	; } while (A==0)
 		EQUi $A #255 @.f8	; if (A != 255 && (((int)global flags[A] & 8) != 0 || (A == 36) || (A == 37))) 
 		PEEK %0 &flags $A
 		ANDi %0 %0 #8
@@ -2062,16 +2084,18 @@ InitPlayback:	FUNC	; signature func InitPlayback() -> int @ sam.impala:1760:1
 		CALL &Code48619 %0 *1	; expects Code48619() -> void @ sam.impala:1775:13
 		CALL &Code41240 %0 *1	; expects Code41240() -> int @ sam.impala:1776:28
 		MOVi $X %0 
-		GEQi %0 #256 @break0
+		GEQi %0 #256 @.e1
 	.l2:	PEEK %0 &phonemeIndex $X	; if ((int)global phonemeIndex[X] > 80) 
 		LEQi %0 #80 @.f3
 		POKE &phonemeIndex $X #255	; (int)global phonemeIndex[X] = 255
 		GOTO @break0  	; goto break0
 	.f3:	FORi $X #256 @.l2	; }
+	.e1:	NOOP
 	break0:	MOVi $mem54 #255 	; break0:
 		ADDi $X $X #1	; X = X + 1
 		MOVi $mem55 #0 	; mem55 = 0
 		MOVi $mem66 #0 	; mem66 = 0
+	.l4:	NOOP
 	continue1:	MOVi $X $mem66 	; continue1:
 		PEEK $index &phonemeIndex $X	; index = (int)global phonemeIndex[X]
 		NEQi $index #255 @.f5	; if (index == 255) goto break1
@@ -2095,7 +2119,7 @@ InitPlayback:	FUNC	; signature func InitPlayback() -> int @ sam.impala:1760:1
 	.f7:	NEQi $index #0 @.f9	; if (index == 0) mem54 = X
 		MOVi $mem54 $X 	; mem54 = X
 	.f9:	ADDi $mem66 $mem66 #1	; mem66 = mem66 + 1
-		GOTO @continue1  	; } else 
+		GOTO @.l4  	; } else 
 	.f6:	MOVi $X $mem54 	; X = mem54
 		POKE &phonemeIndex $X #31	; (int)global phonemeIndex[X] = 31
 		POKE &phonemeLength $X #4	; (int)global phonemeLength[X] = 4
@@ -2109,7 +2133,7 @@ InitPlayback:	FUNC	; signature func InitPlayback() -> int @ sam.impala:1760:1
 		CALL &Insert %0 *5	; expects Insert(int, int, int, int) -> void @ sam.impala:1816:24
 		ADDi $X $X #1	; X = X + 1
 		MOVi $mem66 $X 	; mem66 = X
-	.e10:	GOTO @continue1  	; }
+	.e10:	GOTO @.l4  	; }
 	break1:	MOVi $r #1 	; break1:
 	_return:	RETU   	; }
 
@@ -2241,11 +2265,13 @@ Special1:	FUNC	; signature func Special1(int mem48, int X) -> int @ sam.impala:1
 		MOVi $i #0 	; i = 0
 		GOTO @.e1  
 	.f0:	SUBi $i $X #30	; i = X - 30
-	.e1:	PEEK $A &pitches $i	; while ((A = (int)global pitches[i]) == 127) i = i + 1
+	.e1:	NOOP
+	.l2:	PEEK $A &pitches $i	; while ((A = (int)global pitches[i]) == 127) i = i + 1
 		NEQi $A #127 @.e3
 		ADDi $i $i #1	; i = i + 1
-		GOTO @.e1  
-	.e3:	ADDi $A $A $mem48	; A = A + mem48
+		GOTO @.l2  
+	.e3:	NOOP
+	.l4:	ADDi $A $A $mem48	; A = A + mem48
 		POKE &pitches $i $A	; (int)global pitches[i] = A
 	.l5:	ADDi %0 $i #1	; i = (i + 1) & 255
 		ANDi $i %0 #255
@@ -2253,7 +2279,7 @@ Special1:	FUNC	; signature func Special1(int mem48, int X) -> int @ sam.impala:1
 		RETU   	; goto _return
 	.f6:	PEEK %0 &pitches $i	; } while ((int)global pitches[i] == 255)
 		EQUi %0 #255 @.l5
-		GOTO @.e3  	; }
+		GOTO @.l4  	; }
 	_return:	RETU   	; }
 
 
@@ -2376,23 +2402,25 @@ ProduceOutput:	FUNC	; signature func ProduceOutput() -> void @ sam.impala:1964:1
 		MOVi $speedcounter #0 	; speedcounter = 0
 		MOVi $mem48 #0 	; mem48 = 0
 		MOVi $mem44 #0 	; for (mem44 = 0 to 256) 
-		GEQi #0 #256 @break0
+		GEQi #0 #256 @.e1
 	.l2:	PEEK $mem56 &phonemeIndexOutput $mem44	; mem56 = (int)global phonemeIndexOutput[mem44]
 		NEQi $mem56 #255 @.f3	; if (mem56 == 255) goto break0
 		GOTO @break0  	; goto break0
-		GOTO @.f7  
+		GOTO @.e4  
 	.f3:	NEQi $mem56 #1 @.f5	; if (mem56 == 1) X = (int)Special1(1, X)
 		MOVi %1 #1 	; X = (int)Special1(1, X)
 		MOVi %2 $X 
 		CALL &Special1 %0 *3	; expects Special1(int, int) -> int @ sam.impala:1987:47
 		MOVi $X %0 
-		GOTO @.f7  
+		GOTO @.e6  
 	.f5:	NEQi $mem56 #2 @.f7	; if (mem56 == 2) X = (int)Special1(255, X)
 		MOVi %1 #255 	; X = (int)Special1(255, X)
 		MOVi %2 $X 
 		CALL &Special1 %0 *3	; expects Special1(int, int) -> int @ sam.impala:1988:49
 		MOVi $X %0 
-	.f7:	PEEK %0 &stressOutput $mem44	; phase1 = (int)global tab47492[(int)global stressOutput[mem44] + 1]
+	.f7:	NOOP
+	.e6:	NOOP
+	.e4:	PEEK %0 &stressOutput $mem44	; phase1 = (int)global tab47492[(int)global stressOutput[mem44] + 1]
 		ADDi %0 %0 #1
 		PEEK $phase1 &tab47492 %0
 		PEEK $phase2 &phonemeLengthOutput $mem44	; phase2 = (int)global phonemeLengthOutput[mem44]
@@ -2417,6 +2445,7 @@ ProduceOutput:	FUNC	; signature func ProduceOutput() -> void @ sam.impala:1964:1
 		SUBi $phase2 $phase2 #1	; phase2 = phase2 - 1
 		NEQi $phase2 #0 @.l8	; } while (phase2 != 0)
 		FORi $mem44 #256 @.l2	; }
+	.e1:	NOOP
 	break0:	MOVi $A #0 	; break0:
 		MOVi $mem44 #0 	; mem44 = 0
 		MOVi $mem49 #0 	; mem49 = 0
@@ -2433,14 +2462,15 @@ ProduceOutput:	FUNC	; signature func ProduceOutput() -> void @ sam.impala:1964:1
 		NEQi $A $mem56 @.f11	; if (A == mem56) 
 		PEEK $phase1 &tab45696 $Y	; phase1 = (int)global tab45696[Y]
 		PEEK $phase2 &tab45696 $X	; phase2 = (int)global tab45696[X]
-		GOTO @.e14  	; } else if (A < mem56) 
+		GOTO @.e12  	; } else if (A < mem56) 
 	.f11:	GEQi $A $mem56 @.f13	; if (A < mem56) 
 		PEEK $phase1 &tab45776 $X	; phase1 = (int)global tab45776[X]
 		PEEK $phase2 &tab45696 $X	; phase2 = (int)global tab45696[X]
 		GOTO @.e14  	; } else 
 	.f13:	PEEK $phase1 &tab45696 $Y	; phase1 = (int)global tab45696[Y]
 		PEEK $phase2 &tab45776 $Y	; phase2 = (int)global tab45776[Y]
-	.e14:	MOVi $Y $mem44 	; Y = mem44
+	.e14:	NOOP
+	.e12:	MOVi $Y $mem44 	; Y = mem44
 		PEEK %0 &phonemeLengthOutput $mem44	; mem49 = mem49 + (int)global phonemeLengthOutput[mem44]
 		ADDi $mem49 $mem49 %0
 		ADDi $A $mem49 $phase2	; A = mem49 + phase2
@@ -2504,7 +2534,7 @@ ProduceOutput:	FUNC	; signature func ProduceOutput() -> void @ sam.impala:1964:1
 		NEQi $X #0 @.f26	; if(X == 0) goto break3
 		GOTO @break3  	; goto break3
 	.f26:	ADDi $mem56 $mem56 $mem51	; mem56 = mem56 + mem51
-		LSSi $mem56 $mem40 @.e30	; if (mem56 >= mem40) 
+		LSSi $mem56 $mem40 @.f27	; if (mem56 >= mem40) 
 		SUBi $mem56 $mem56 $mem40	; mem56 = mem56 - mem40
 		ANDi %1 $mem50 #128	; if ((mem50 & 128)==0) 
 		NEQi %1 #0 @.f28
@@ -2513,6 +2543,7 @@ ProduceOutput:	FUNC	; signature func ProduceOutput() -> void @ sam.impala:1964:1
 		GOTO @.e30  	; } else mem48 = mem48 - 1
 	.f28:	SUBi $mem48 $mem48 #1	; mem48 = mem48 - 1
 	.e30:	NOOP
+	.f27:	NOOP
 		! EQUi #DEBUG #0 @.a31	; assert(0 <= Y && Y <= 255)
 		GRTi #0 $Y @.f32
 		LEQi $Y #255 @.a31
@@ -2550,7 +2581,7 @@ ProduceOutput:	FUNC	; signature func ProduceOutput() -> void @ sam.impala:1964:1
 		MOVi $speedcounter #72 	; speedcounter = 72
 		MOVi $Y #0 	; Y = 0
 	.l37:	PEEK %1 &pleaseBreak 	; while (global pleaseBreak == FALSE) 
-		NEQi %1 #FALSE @_return
+		NEQi %1 #FALSE @.e38
 		PEEK $mem44 &pitches $Y	; mem44 = (int)global pitches[Y]
 		SHRi %1 $mem44 #2	; mem38 = mem44 - (mem44 >> 2)
 		SUBi $mem38 $mem44 %1
@@ -2568,9 +2599,9 @@ ProduceOutput:	FUNC	; signature func ProduceOutput() -> void @ sam.impala:1964:1
 		ADDi $Y %0 #2
 		PEEK $speedcounter &speed 	; speedcounter = global speed
 		SUBi $mem48 $mem48 #2	; mem48 = mem48 - 2
-		NEQi $mem48 #0 @.f43	; if (mem48 == 0) goto _return
+		NEQi $mem48 #0 @.e42	; if (mem48 == 0) goto _return
 		RETU   	; goto _return
-		GOTO @.f43  	; } else 
+		GOTO @.e42  	; } else 
 	.f40:	PEEK %0 &sinus $phase1	; mem56 = (int)global multtable[(int)global sinus[phase1] | (int)global amplitude1[Y]]
 		PEEK %1 &amplitude1 $Y
 		IORi %0 %0 %1
@@ -2605,7 +2636,8 @@ ProduceOutput:	FUNC	; signature func ProduceOutput() -> void @ sam.impala:1964:1
 		SUBi $mem48 $mem48 #1	; mem48 = mem48 - 1
 		NEQi $mem48 #0 @.f43	; if (mem48 == 0) goto _return
 		RETU   	; goto _return
-	.f43:	SUBi $mem44 $mem44 #1	; mem44 = mem44 - 1
+	.f43:	NOOP
+	.e42:	SUBi $mem44 $mem44 #1	; mem44 = mem44 - 1
 		NEQi $mem44 #0 @.f45	; if (mem44 == 0) goto break4
 		GOTO @.l37  	; goto break4
 	.f45:	SUBi $mem38 $mem38 #1	; mem38 = mem38 - 1
@@ -2629,6 +2661,7 @@ ProduceOutput:	FUNC	; signature func ProduceOutput() -> void @ sam.impala:1964:1
 		ANDi $phase3 %0 #0xFF
 		GOTO @.l39  	; }
 	break4:	GOTO @.l37  	; }
+	.e38:	NOOP
 	_return:	RETU   	; }
 
 
@@ -2650,18 +2683,18 @@ Play:	FUNC	; signature func Play() -> void @ sam.impala:2163:1
 		PEEK %2 &throat 
 		CALL &SetMouthThroat %0 *3	; expects SetMouthThroat(int, int) -> void @ sam.impala:2173:45
 	.l0:	PEEK %0 &pleaseBreak 	; while (global pleaseBreak == FALSE) 
-		NEQi %0 #FALSE @break0
+		NEQi %0 #FALSE @.e1
 		PEEK $A &phonemeIndex $X	; A = (int)global phonemeIndex[X]
 		NEQi $A #255 @.f2	; if (A == 255) 
 		POKE &phonemeIndexOutput $Y #255	; (int)global phonemeIndexOutput[Y] = 255
 		CALL &ProduceOutput %0 *1	; expects ProduceOutput() -> void @ sam.impala:2178:19
 		RETU   	; goto break0
-		GOTO @.f6  	; } else if (A == 254) 
+		GOTO @.e3  	; } else if (A == 254) 
 	.f2:	NEQi $A #254 @.f4	; if (A == 254) 
 		POKE &phonemeIndexOutput $Y #255	; (int)global phonemeIndexOutput[Y] = 255
 		CALL &ProduceOutput %0 *1	; expects ProduceOutput() -> void @ sam.impala:2182:19
 		MOVi $Y #0 	; Y = 0
-		GOTO @.f6  	; } else if (A != 0) 
+		GOTO @.e5  	; } else if (A != 0) 
 	.f4:	EQUi $A #0 @.f6	; if (A != 0) 
 		POKE &phonemeIndexOutput $Y $A	; (int)global phonemeIndexOutput[Y] = A
 		PEEK %0 &phonemeLength $X	; (int)global phonemeLengthOutput[Y] = (int)global phonemeLength[X]
@@ -2669,8 +2702,11 @@ Play:	FUNC	; signature func Play() -> void @ sam.impala:2163:1
 		PEEK %0 &stress $X	; (int)global stressOutput[Y] = (int)global stress[X]
 		POKE &stressOutput $Y %0
 		ADDi $Y $Y #1	; Y = Y + 1
-	.f6:	ADDi $X $X #1	; X = X + 1
+	.f6:	NOOP
+	.e5:	NOOP
+	.e3:	ADDi $X $X #1	; X = X + 1
 		GOTO @.l0  	; }
+	.e1:	NOOP
 	break0:	RETU   	; }
 
 
@@ -2801,14 +2837,16 @@ process:	FUNC	; signature func process() -> void @ sam.impala:2310:1
 		PARA *1
 	$c:	LOCi
 ;-----------------------------------------------------------------------------
-	.l0:	PEEK $c &clock 	; while ((c = global clock) >= global lastClock) 
+	.l0:	NOOP
+	.l1:	NOOP
+	.l2:	PEEK $c &clock 	; while ((c = global clock) >= global lastClock) 
 		PEEK %0 &lastClock 
 		LSSi $c %0 @.e3
 		POKE &lastClock $c 	; global lastClock = c
 		POKE &signal:1 #0 	; global signal[0] = global signal[1] = 0
 		POKE &signal:0 #0 
 		CALL ^yield %0 *1	; expects yield() -> unknown @ sam.impala:2320:12
-		GOTO @.l0  	; }
+		GOTO @.l2  	; }
 	.e3:	POKE &pleaseBreak #FALSE 	; global pleaseBreak = FALSE
 		CALL &Play %0 *1	; expects Play() -> void @ sam.impala:2325:10
 		PEEK %0 &pleaseBreak 	; if (global pleaseBreak == FALSE) global lastClock = global clock
@@ -2816,21 +2854,22 @@ process:	FUNC	; signature func process() -> void @ sam.impala:2310:1
 		PEEK %0 &clock 	; global lastClock = global clock
 		POKE &lastClock %0 
 	.f4:	PEEK %0 &pleaseBreak 	; } while (global pleaseBreak != FALSE || (int) global params[OPERATOR_2_PARAM_INDEX] >= 2)
-		NEQi %0 #FALSE @.l0
+		NEQi %0 #FALSE @.l1
 		PEEK %0 &params:OPERATOR_2_PARAM_INDEX 
-		GEQi %0 #2 @.l0
+		GEQi %0 #2 @.l1
 		PEEK %0 &abortWhenDone 	; if (global abortWhenDone != FALSE) exit()
 		EQUi %0 #FALSE @.f6
 		CALL ^exit %0 *1	; expects exit() -> unknown @ sam.impala:2331:44
 		GOTO @.l0  
-	.f6:	PEEK %0 &pleaseBreak 	; while (global pleaseBreak == FALSE && (int) global params[OPERATOR_2_PARAM_INDEX] < 2) 
+	.f6:	NOOP
+	.l8:	PEEK %0 &pleaseBreak 	; while (global pleaseBreak == FALSE && (int) global params[OPERATOR_2_PARAM_INDEX] < 2) 
 		NEQi %0 #FALSE @.l0
 		PEEK %0 &params:OPERATOR_2_PARAM_INDEX 
 		GEQi %0 #2 @.l0
 		POKE &signal:1 #0 	; global signal[0] = global signal[1] = 0
 		POKE &signal:0 #0 
 		CALL ^yield %0 *1	; expects yield() -> unknown @ sam.impala:2335:12
-		GOTO @.f6  	; }
+		GOTO @.l8  	; }
 	.e7:	GOTO @.l0  	; }
 		RETU   	; }
 

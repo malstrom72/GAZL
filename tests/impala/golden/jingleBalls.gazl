@@ -56,7 +56,8 @@ clamp:	FUNC	; signature func clamp(float x, float min, float max) -> float @ jin
 		RETU   
 	.f0:	LEQf $y $max @.f2	; if (y > max) y = max
 		MOVf $y $max 	; y = max
-	.f2:	RETU   	; }
+	.f2:	NOOP
+	.e1:	RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
@@ -138,7 +139,7 @@ tick:	FUNC	; signature func tick(int sampleFrames, float sampleRate) -> void @ j
 		MOVf $ballParams:BALL_Y_PARAM $ny 	; ballParams[BALL_Y_PARAM] = ny
 		MULf %1 $gravity $rsr16	; ballParams[BALL_DY_PARAM] = (float) ballParams[BALL_DY_PARAM] + gravity * rsr16
 		ADDf $ballParams:BALL_DY_PARAM $ballParams:BALL_DY_PARAM %1
-		GOTO @.e12  	; } else 
+		GOTO @.e6  	; } else 
 	.f5:	MOVf $dx $ballParams:BALL_DX_PARAM 	; dx = (float) ballParams[BALL_DX_PARAM]
 		MOVf $dy $ballParams:BALL_DY_PARAM 	; dy = (float) ballParams[BALL_DY_PARAM]
 		MULf %1 $dx $ny	; ballParams[BALL_DX_PARAM] = (dx * ny * ny - dx * nx * nx - 2.0 * nx * ny * dy) / d
@@ -199,7 +200,7 @@ tick:	FUNC	; signature func tick(int sampleFrames, float sampleRate) -> void @ j
 		GEQf %0 #MIN_SPEED @.f9
 		MOVf $ballParams:BALL_DX_PARAM #0.0 	; ballParams[BALL_DX_PARAM] = 0.0
 		MOVf $ballParams:BALL_DY_PARAM #0.0 	; ballParams[BALL_DY_PARAM] = 0.0
-		GOTO @.e12  	; } else if (v * bumperForce > MAX_SPEED) 
+		GOTO @.e10  	; } else if (v * bumperForce > MAX_SPEED) 
 	.f9:	MULf %0 $v $bumperForce	; if (v * bumperForce > MAX_SPEED) 
 		LEQf %0 #MAX_SPEED @.f11
 		MULf %0 $ballParams:BALL_DX_PARAM #MAX_SPEED	; ballParams[BALL_DX_PARAM] = (float) ballParams[BALL_DX_PARAM] * MAX_SPEED / v
@@ -209,7 +210,9 @@ tick:	FUNC	; signature func tick(int sampleFrames, float sampleRate) -> void @ j
 		GOTO @.e12  	; } else 
 	.f11:	MULf $ballParams:BALL_DX_PARAM $ballParams:BALL_DX_PARAM $bumperForce	; ballParams[BALL_DX_PARAM] = (float) ballParams[BALL_DX_PARAM] * bumperForce
 		MULf $ballParams:BALL_DY_PARAM $ballParams:BALL_DY_PARAM $bumperForce	; ballParams[BALL_DY_PARAM] = (float) ballParams[BALL_DY_PARAM] * bumperForce
-	.e12:	MULi %0 $i #BALL_PARAMS_COUNT	; copy (BALL_PARAMS_COUNT from ballParams to &global balls[i * BALL_PARAMS_COUNT])
+	.e12:	NOOP
+	.e10:	NOOP
+	.e6:	MULi %0 $i #BALL_PARAMS_COUNT	; copy (BALL_PARAMS_COUNT from ballParams to &global balls[i * BALL_PARAMS_COUNT])
 		ADDp %0 &balls %0
 		ADRL %1 $ballParams *0
 		COPY %0 %1 *BALL_PARAMS_COUNT

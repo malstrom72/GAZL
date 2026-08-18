@@ -293,7 +293,7 @@ patch:	FUNC	; signature func patch(ptr name, ptr config) -> void @ patch.impala:
 		ADRL %2 $buffer1 *0	; outputLine(buffer1)
 		CALL &outputLine %1 *2	; expects outputLine(ptr) -> void @ patch.impala:160:24
 		CALL &outputLF %1 *1	; expects outputLF() -> void @ patch.impala:161:15
-		GOTO @.f8  	; } else 
+		GOTO @.e5  	; } else 
 	.f4:	MOVi %2 #500 	; sleep(500)
 		CALL ^sleep %1 *2	; expects sleep(int) -> unknown @ patch.impala:163:15
 		MOVp %2 &.s_Patchi_4e0 	; outputLine("Patching successful.")
@@ -330,7 +330,8 @@ patch:	FUNC	; signature func patch(ptr name, ptr config) -> void @ patch.impala:
 		CALL &outputLine %1 *2	; expects outputLine(ptr) -> void @ patch.impala:178:93
 		MOVp %2 &.s_Ifyoum_4e4 	; outputLine("If you modify the .gazl file, the firmware will auto-update until GUI is closed.")
 		CALL &outputLine %1 *2	; expects outputLine(ptr) -> void @ patch.impala:179:100
-	.f8:	MOVp %2 &lastPatch 	; strcpy(global lastPatch, p)
+	.f8:	NOOP
+	.e5:	MOVp %2 &lastPatch 	; strcpy(global lastPatch, p)
 		MOVp %3 $p 
 		CALL &strcpy %1 *3	; expects strcpy(ptr, ptr) -> ptr @ patch.impala:182:31
 		MOVp %2 &lastConfig 	; strcpy(global lastConfig, config)
@@ -406,15 +407,20 @@ main:	FUNC	; signature func main() -> void @ patch.impala:200:1
 		EQUi $c #' ' @.e13
 		ADDp $p $p #1	; p = p + 1
 		GOTO @.l11  
-	.e13:	PEEK %0 $p 	; while ((int)*p == ' ') 
+	.e13:	NOOP
+	.l14:	PEEK %0 $p 	; while ((int)*p == ' ') 
 		NEQi %0 #' ' @.e15
 		POKE $p #0 	; *p = 0
 		ADDp $p $p #1	; p = p + 1
-		GOTO @.e13  	; }
+		GOTO @.l14  	; }
 	.e15:	ADRL %1 $s *0	; patch(s, p)
 		MOVp %2 $p 
 		CALL &patch %0 *3	; expects patch(ptr, ptr) -> void @ patch.impala:220:15
-	.e10:	GOTO @.l0  	; }
+	.e10:	NOOP
+	.e8:	NOOP
+	.e6:	NOOP
+	.e4:	NOOP
+	.e2:	GOTO @.l0  	; }
 	quit:	RETU   	; }
 
 .s__4d2:	CNST *2

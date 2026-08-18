@@ -216,10 +216,11 @@ floatToString:	FUNC	; signature func floatToString(float f, int precision, ptr b
 		SUBi $e $e #1	; e = e - 1
 		MULf $y $y #10.0	; y = y * 10.0
 		GOTO @.l12  	; }
-	.e13:	LSSf $y #10.0 @.l6	; while (y >= 10.0) 
+	.e13:	NOOP
+	.l14:	LSSf $y #10.0 @.l6	; while (y >= 10.0) 
 		ADDi $e $e #1	; e = e + 1
 		MULf $y $y #0.1	; y = y * 0.1
-		GOTO @.e13  	; }
+		GOTO @.l14  	; }
 		GOTO @.l6  	; }
 	broke:	ADDp $dp $buffer #2	; broke:
 	.l16:	GEQf $x #1.0 @.e18	; while (x < 1.0 && dp < buffer + 32) 
@@ -233,7 +234,8 @@ floatToString:	FUNC	; signature func floatToString(float f, int precision, ptr b
 	.f19:	ADDp $ep $ep #1	; ep = ep + 1
 		MULf $x $x #10.0	; x = x * 10.0
 		GOTO @.l16  	; }
-	.e18:	GEQp $dp $ep @.e21	; while (dp < ep) 
+	.e18:	NOOP
+	.l20:	GEQp $dp $ep @.e21	; while (dp < ep) 
 		fTOi $i $x #1.0	; i = ftoi(x)
 		ADDi %0 $i #'0'	; *dp = i + '0'
 		POKE $dp %0 
@@ -244,9 +246,9 @@ floatToString:	FUNC	; signature func floatToString(float f, int precision, ptr b
 	.f22:	iTOf %0 $i #1.0	; x = (x - itof(i)) * 10.0
 		SUBf %0 $x %0
 		MULf $x %0 #10.0
-		GOTO @.e18  	; }
+		GOTO @.l20  	; }
 	.e21:	ADDp $p $buffer #2	; p = buffer + 2
-		LSSf $x #5.0 @.e27	; if (x >= 5.0) 
+		LSSf $x #5.0 @.f23	; if (x >= 5.0) 
 	.l24:	PEEK %0 $dp #-1	; while ((int) dp[-1] == '9') *(dp = dp - 1) = '0'
 		NEQi %0 #'9' @.e25
 		SUBp $dp $dp #1	; *(dp = dp - 1) = '0'
@@ -259,7 +261,8 @@ floatToString:	FUNC	; signature func floatToString(float f, int precision, ptr b
 	.f26:	PEEK %0 $dp #-1	; dp[-1] = (int) dp[-1] + 1
 		ADDi %0 %0 #1
 		POKE $dp #-1 %0
-	.e27:	POKE $pp #'.' 	; *pp = '.'
+	.e27:	NOOP
+	.f23:	POKE $pp #'.' 	; *pp = '.'
 		LEQp $ep $pp @.f28	; if (ep > pp) while ((int) ep[-1] == '0') ep = ep - 1
 	.l29:	PEEK %0 $ep #-1	; while ((int) ep[-1] == '0') ep = ep - 1
 		NEQi %0 #'0' @.f28
@@ -297,7 +300,9 @@ floatToString:	FUNC	; signature func floatToString(float f, int precision, ptr b
 		GEQf $f #0.0 @.f36	; if (f < 0.0) *(p = p - 1) = '-'
 		SUBp $p $p #1	; *(p = p - 1) = '-'
 		POKE $p #'-' 
-	.f36:	RETU   	; }
+	.f36:	NOOP
+	.e5:	NOOP
+	.e3:	RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
@@ -818,7 +823,8 @@ process:	FUNC	; signature func process() -> void @ phaser_code.impala:605:1
 		GEQi #0 #AP12_STATE_SIZE @.e0
 	.l1:	SETL $ap12State $i #0.0	; ap12State[i] = 0.0
 		FORi $i #AP12_STATE_SIZE @.l1
-	.e0:	PEEK $stageCount &params:OPERATOR_1_PARAM_INDEX 	; stageCount = (int) global params[OPERATOR_1_PARAM_INDEX]
+	.e0:	NOOP
+	.l2:	PEEK $stageCount &params:OPERATOR_1_PARAM_INDEX 	; stageCount = (int) global params[OPERATOR_1_PARAM_INDEX]
 		PEEK %0 &params:OPERAND_1_HIGH_PARAM_INDEX 	; frequency = itof((int) global params[OPERAND_1_HIGH_PARAM_INDEX]) * (1.0 / 256.0)
 		! DIVf <A> #1.0 #256.0
 		iTOf $frequency %0 <A>
@@ -855,7 +861,7 @@ process:	FUNC	; signature func process() -> void @ phaser_code.impala:605:1
 		ADRL %3 $rightParams *0
 		CALL &setupAP12Params %0 *4	; expects setupAP12Params(float, float, ptr) -> void @ phaser_code.impala:631:80
 		MOVi $i #0 	; for (i = 0 to BATCH_SIZE) 
-		GEQi #0 #BATCH_SIZE @.e0
+		GEQi #0 #BATCH_SIZE @.l2
 	.l7:	PEEK %0 &signal:0 	; inL = itof((int) global signal[0]) * (1.0 / 2048.0)
 		! DIVf <A> #1.0 #2048.0
 		iTOf $inL %0 <A>
@@ -898,7 +904,7 @@ process:	FUNC	; signature func process() -> void @ phaser_code.impala:605:1
 		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ phaser_code.impala:648:33
 		CALL ^yield %0 *1	; expects yield() -> unknown @ phaser_code.impala:653:11
 		FORi $i #BATCH_SIZE @.l7	; }
-		GOTO @.e0  	; }
+		GOTO @.l2  	; }
 		RETU   	; }
 
 .s__4d2:	CNST *2

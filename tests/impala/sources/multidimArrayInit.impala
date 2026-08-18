@@ -1,0 +1,77 @@
+/*
+	A LITERAL-shaped array is initialized with nested braces, one group per axis: `int array m[2, 3]` takes
+	`{ {1,2,3}, {4,5,6} }`, and the brace tree is checked against the shape so a row miscount is a compile
+	error (E422/E460) rather than a flat list that silently shifts every element. The stored order is
+	row-major - `m[1, 2]` is the last word - and the rows come out TYPED (`DATi`), so the assembler
+	re-checks each one exactly as it does for a flat 1-D array.
+
+	A shape whose axes Impala cannot count at parse time - a named-const or calculated axis, `sym[2, W]`
+	here - is nested the same way and validated at GAZL ASSEMBLY: it must be full and rectangular, and each
+	axis is asserted `! EQUi #given #.d.sym.k`, so a wrong shape fails at assembly rather than silently.
+
+	Covers a 2-D and a 3-D literal shape read at constant and runtime indices, row-major order, a partial
+	initializer that zero-fills the tail, a symbolic-axis array nested and assembler-checked, and struct
+	FIELD shapes (literal and symbolic) initialized the identical way.
+
+	Expected (GAZLCmd multidimArrayInit.gazl main): 6 1 21 8 5 3 210 7 44 60
+*/
+
+const int DEBUG = 0
+const int W = 3
+const int OJ = 2
+
+extern native printInt
+extern native printLF
+
+global int array m[2, 3] = { { 1, 2, 3 }, { 4, 5, 6 } }			/* row-major: m[1,2] is the 6th word */
+global int array cube[2, 2, 2] = { { { 1, 2 }, { 3, 4 } },
+								   { { 5, 6 }, { 7, 8 } } }
+global int array part[2, 3] = { { 1, 2 } }						/* short: the rest zero-fills */
+global int array sym[2, W] = { { 10, 20, 30 }, { 40, 50, 60 } }	/* symbolic axis -> nested, checked at assembly */
+
+/* A struct FIELD shape is initialized identically: nested braces, literal `cells` checked here, symbolic
+   `grid[OJ, OJ]` checked at assembly by `! EQUi #2 #.d.Mat.grid.k`. */
+struct Mat { int tag; int array cells[2, 2]; int array grid[OJ, OJ]; }
+readonly Mat mat = { tag: 7, cells: { { 11, 22 }, { 33, 44 } }, grid: { { 50, 60 }, { 70, 80 } } }
+
+export function main()
+locals int y, int x, int total
+{
+	printInt(global m[1, 2]);					/* last word, row-major -> 6 */
+	printLF();
+	printInt(global m[0, 0]);					/* first word -> 1 */
+	printLF();
+
+	total = 0;									/* runtime indices over the whole shape */
+	for (y = 0 to 2) {
+		for (x = 0 to 3) {
+			total = total + global m[y, x];
+		}
+	}
+	printInt(total);							/* 1+2+3+4+5+6 -> 21 */
+	printLF();
+
+	printInt(global cube[1, 1, 1]);				/* deepest corner -> 8 */
+	printLF();
+	printInt(global cube[1, 0, 0]);				/* -> 5 */
+	printLF();
+
+	total = 0;									/* the partial: 1 + 2 + four zeros -> 3 */
+	for (y = 0 to 2) {
+		for (x = 0 to 3) total = total + global part[y, x];
+	}
+	printInt(total);
+	printLF();
+
+	total = 0;									/* the flat symbolic-axis array -> 210 */
+	for (x = 0 to 6) total = total + global sym[x / W, x - (x / W) * W];
+	printInt(total);
+	printLF();
+
+	printInt(global mat.tag);					/* struct field shapes -> 7 */
+	printLF();
+	printInt(global mat.cells[1, 1]);			/* literal field -> 44 */
+	printLF();
+	printInt(global mat.grid[0, 1]);			/* symbolic field -> 60 */
+	printLF();
+}

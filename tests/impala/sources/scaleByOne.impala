@@ -1,0 +1,57 @@
+/*
+	An extent or index of ONE, at every site that scales a count by a symbolic element size.
+
+	`k * .z.S` is the shape six places emit: the struct layout block, axesProduct, arrayAllocSize, a
+	subscript's offset parts, mulAddAxis's Horner step, and the deferred bounds guard. At k == 1 the
+	multiply IS the size, so all six fold it away - and each fold also skips a `<X>` borrow out of the
+	26-deep compile-time pool, which is the part that actually matters.
+
+	Three of the six had no corpus program to exercise them at all, which is exactly how the fold shipped
+	testing `k !== '1'` as TEXT at a fourth: `p[0x1]` and `p[+1]` mean one too, and both kept paying the
+	multiply while a corpus scan looking for `#1` could not see it. So the spellings are here as well.
+
+	Expected (GAZLCmd scaleByOne.gazl main): 7 8 9 11 12
+*/
+
+const int DEBUG = 0
+
+extern native printInt
+extern native printLF
+
+struct S { int a; int b }
+
+struct Bank {									/* struct layout block: one element, no multiply */
+	S array only[1];
+	int tail
+}
+
+global S array single[1] = { { a: 7, b: 0 } }	/* arrayAllocSize: .z.single IS .z.S */
+global int array row[1, 4]						/* axesProduct: an axis of one drops out */
+global int array col[3, 1]
+global S array many[4]
+
+export function main()
+locals Bank b, S pointer p, int i
+{
+	printInt(global single[0].a);				/* 7  */
+	printLF();
+
+	global row[0, 1] = 8;						/* 8  - shaped, leading axis of one */
+	printInt(global row[0, 1]);
+	printLF();
+
+	global col[2, 0] = 9;						/* 9  - trailing axis of one */
+	printInt(global col[2, 0]);
+	printLF();
+
+	b.only[0].a = 11;							/* 11 - struct-element field array of one */
+	printInt(b.only[0].a);
+	printLF();
+
+	global many[0].b = 12;						/* 12 - the three spellings of a subscript of one */
+	global many[1].b = 12;
+	p = &global many[0];
+	i = p[1].b + p[0x1].b + p[+1].b - global many[0].b - global many[1].b;
+	printInt(i);
+	printLF();
+}

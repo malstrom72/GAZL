@@ -1,0 +1,2840 @@
+; Compiled with Impala version 2.0
+
+; signatures version=1
+FALSE:	! DEFi #0	; signature const FALSE : int @ Priyome2.impala:29:1
+TRUE:	! DEFi #1	; signature const TRUE : int @ Priyome2.impala:30:1
+DEBUG:	! DEFi #0	; signature const DEBUG : int @ Priyome2.impala:31:1
+	! ADDi <A> #8 #2
+STRIDE:	! DEFi <A>	; signature const STRIDE : int @ Priyome2.impala:33:1
+	! ADDi <A> #8 #4
+	! MULi <A> <A> #STRIDE
+BOARD_SIZE:	! DEFi <A>	; signature const BOARD_SIZE : int @ Priyome2.impala:34:1
+	! MULi <A> #STRIDE #2
+RANK_1:	! DEFi <A>	; signature const RANK_1 : int @ Priyome2.impala:35:1
+	! MULi <A> #STRIDE #3
+RANK_2:	! DEFi <A>	; signature const RANK_2 : int @ Priyome2.impala:36:1
+	! MULi <A> #STRIDE #4
+RANK_3:	! DEFi <A>	; signature const RANK_3 : int @ Priyome2.impala:37:1
+	! MULi <A> #STRIDE #5
+RANK_4:	! DEFi <A>	; signature const RANK_4 : int @ Priyome2.impala:38:1
+	! MULi <A> #STRIDE #6
+RANK_5:	! DEFi <A>	; signature const RANK_5 : int @ Priyome2.impala:39:1
+	! MULi <A> #STRIDE #7
+RANK_6:	! DEFi <A>	; signature const RANK_6 : int @ Priyome2.impala:40:1
+	! MULi <A> #STRIDE #8
+RANK_7:	! DEFi <A>	; signature const RANK_7 : int @ Priyome2.impala:41:1
+	! MULi <A> #STRIDE #9
+RANK_8:	! DEFi <A>	; signature const RANK_8 : int @ Priyome2.impala:42:1
+OFFBOARD:	! DEFi #-1	; signature const OFFBOARD : int @ Priyome2.impala:44:1
+EMPTY:	! DEFi #0	; signature const EMPTY : int @ Priyome2.impala:45:1
+PAWN:	! DEFi #1	; signature const PAWN : int @ Priyome2.impala:46:1
+ROOK:	! DEFi #2	; signature const ROOK : int @ Priyome2.impala:47:1
+KNIGHT:	! DEFi #3	; signature const KNIGHT : int @ Priyome2.impala:48:1
+BISHOP:	! DEFi #4	; signature const BISHOP : int @ Priyome2.impala:49:1
+QUEEN:	! DEFi #5	; signature const QUEEN : int @ Priyome2.impala:50:1
+KING:	! DEFi #6	; signature const KING : int @ Priyome2.impala:51:1
+BLACK:	! DEFi #8	; signature const BLACK : int @ Priyome2.impala:52:1
+WHITE:	! DEFi #16	; signature const WHITE : int @ Priyome2.impala:53:1
+PIECE_MASK:	! DEFi #7	; signature const PIECE_MASK : int @ Priyome2.impala:54:1
+	! IORi <A> #BLACK #WHITE
+COLOR_MASK:	! DEFi <A>	; signature const COLOR_MASK : int @ Priyome2.impala:55:1
+	! XORi <A> #BLACK #WHITE
+COLOR_SWITCH_XOR:	! DEFi <A>	; signature const COLOR_SWITCH_XOR : int @ Priyome2.impala:56:1
+MOVED_MASK:	! DEFi #32	; signature const MOVED_MASK : int @ Priyome2.impala:57:1
+	! IORi <A> #PIECE_MASK #MOVED_MASK
+PIECE_AND_MOVED_MASK:	! DEFi <A>	; signature const PIECE_AND_MOVED_MASK : int @ Priyome2.impala:58:1
+MAX_PIECE_AND_MOVED_VALUE:	! DEFi #64	; signature const MAX_PIECE_AND_MOVED_VALUE : int @ Priyome2.impala:59:1
+MIN_DEPTH:	! DEFi #4	; signature const MIN_DEPTH : int @ Priyome2.impala:61:1
+MAX_DEPTH:	! DEFi #16	; signature const MAX_DEPTH : int @ Priyome2.impala:62:1
+QUIESCENCE_DEPTH:	! DEFi #8	; signature const QUIESCENCE_DEPTH : int @ Priyome2.impala:63:1
+TO_SHIFT:	! DEFi #8	; signature const TO_SHIFT : int @ Priyome2.impala:64:1
+SCORE_SHIFT:	! DEFi #16	; signature const SCORE_SHIFT : int @ Priyome2.impala:65:1
+MOVE_MASK:	! DEFi #0x0000FFFF	; signature const MOVE_MASK : int @ Priyome2.impala:66:1
+FROM_MASK:	! DEFi #0x000000FF	; signature const FROM_MASK : int @ Priyome2.impala:67:1
+TO_MASK:	! DEFi #0x0000FF00	; signature const TO_MASK : int @ Priyome2.impala:68:1
+	! XORi <A> #MOVE_MASK #-1
+SCORE_MASK:	! DEFi <A>	; signature const SCORE_MASK : int @ Priyome2.impala:69:1
+CHECKMATE:	! DEFi #0xFFFF	; signature const CHECKMATE : int @ Priyome2.impala:70:1
+STALEMATE:	! DEFi #0xFFFE	; signature const STALEMATE : int @ Priyome2.impala:71:1
+IN_CHECK:	! DEFi #0xFFFD	; signature const IN_CHECK : int @ Priyome2.impala:72:1
+VALID_MOVE:	! DEFi #0xFFFC	; signature const VALID_MOVE : int @ Priyome2.impala:73:1
+INVALID_MOVE:	! DEFi #-1	; signature const INVALID_MOVE : int @ Priyome2.impala:74:1
+MAX_SCORE:	! DEFi #10000	; signature const MAX_SCORE : int @ Priyome2.impala:75:1
+	! SUBi <A> #0 #MAX_SCORE
+MIN_SCORE:	! DEFi <A>	; signature const MIN_SCORE : int @ Priyome2.impala:76:1
+PAWN_VALUE:	! DEFi #100	; signature const PAWN_VALUE : int @ Priyome2.impala:77:1
+	! MULi <A> #9 #PAWN_VALUE
+QUEEN_VALUE:	! DEFi <A>	; signature const QUEEN_VALUE : int @ Priyome2.impala:78:1
+	! SUBi <A> #QUEEN_VALUE #PAWN_VALUE
+PROMOTION_SCORE:	! DEFi <A>	; signature const PROMOTION_SCORE : int @ Priyome2.impala:79:1
+	! SUBi <A> #MAX_SCORE #MAX_DEPTH
+CAPTURE_KING_MIN_SCORE:	! DEFi <A>	; signature const CAPTURE_KING_MIN_SCORE : int @ Priyome2.impala:80:1
+	! DIVi <A> #PAWN_VALUE #10
+RANDOM_AMOUNT:	! DEFi <A>	; signature const RANDOM_AMOUNT : int @ Priyome2.impala:81:1
+	! DIVi <A> #PAWN_VALUE #10
+PAWN_ADVANCE_SCORE:	! DEFi <A>	; signature const PAWN_ADVANCE_SCORE : int @ Priyome2.impala:82:1
+	! DIVi <A> #PAWN_VALUE #2
+CASTLING_SCORE:	! DEFi <A>	; signature const CASTLING_SCORE : int @ Priyome2.impala:83:1
+CASTLING_MASK:	! DEFi #0x80	; signature const CASTLING_MASK : int @ Priyome2.impala:84:1
+HISTORY_SIZE:	! DEFi #256	; signature const HISTORY_SIZE : int @ Priyome2.impala:85:1
+.z.DIRS:	! DEFi #8
+DIRS:	CNST *.z.DIRS	; signature array DIRS[8] : int @ Priyome2.impala:87:1
+	! ADDi <A> #STRIDE #1
+	DATi #STRIDE
+	DATi <A>
+	! SUBi <A> #0 #STRIDE
+	! ADDi <A> <A> #1
+	DATi #1
+	! SUBi <B> #0 #STRIDE
+	DATi <A>
+	! SUBi <A> #0 #STRIDE
+	! SUBi <A> <A> #1
+	DATi <B>
+	DATi <A>
+	! SUBi <A> #STRIDE #1
+	DATi #-1
+	DATi <A>
+.z.KNIGHT_MOVES:	! DEFi #8
+KNIGHT_MOVES:	CNST *.z.KNIGHT_MOVES	; signature array KNIGHT_MOVES[8] : int @ Priyome2.impala:88:1
+	! MULi <A> #STRIDE #2
+	! ADDi <A> <A> #1
+	! ADDi <B> #2 #STRIDE
+	DATi <A>
+	! SUBi <A> #2 #STRIDE
+	DATi <B>
+	! SUBi <B> #0 #STRIDE
+	! MULi <B> <B> #2
+	! ADDi <B> <B> #1
+	DATi <A>
+	! SUBi <A> #0 #STRIDE
+	! MULi <A> <A> #2
+	! SUBi <A> <A> #1
+	DATi <B>
+	! SUBi <B> #0 #STRIDE
+	! SUBi <B> <B> #2
+	DATi <A>
+	! SUBi <A> #STRIDE #2
+	DATi <B>
+	! MULi <B> #STRIDE #2
+	! SUBi <B> <B> #1
+	DATi <A>
+	DATi <B>
+.z.PIECE_VALUES:	! DEFi #7
+PIECE_VALUES:	CNST *.z.PIECE_VALUES	; signature array PIECE_VALUES[7] : int @ Priyome2.impala:89:1
+	! MULi <B> #5 #PAWN_VALUE
+	DATi #0 #PAWN_VALUE
+	! MULi <A> #3 #PAWN_VALUE
+	DATi <B>
+	! MULi <B> #3 #PAWN_VALUE
+	DATi <A>
+	DATi <B>
+	DATi #QUEEN_VALUE #MAX_SCORE
+	! ADDi <B> #8 #4
+.z.RANK_VALUES:	! DEFi #<B>
+RANK_VALUES:	CNST *.z.RANK_VALUES	; signature array RANK_VALUES[] : int @ Priyome2.impala:90:1
+	DATi #0 #0 #0 #30 #50 #60 #60 #50 #30 #0 #0 #0
+MAX_TARGET_SQUARES:	! DEFi #32	; signature const MAX_TARGET_SQUARES : int @ Priyome2.impala:92:1
+MAX_MOVES:	! DEFi #256	; signature const MAX_MOVES : int @ Priyome2.impala:93:1
+MAX_CAPTURES:	! DEFi #32	; signature const MAX_CAPTURES : int @ Priyome2.impala:94:1
+.z.INIT_BOARD:	! DEFi #BOARD_SIZE
+INIT_BOARD:	CNST *.z.INIT_BOARD	; signature array INIT_BOARD[BOARD_SIZE] : int @ Priyome2.impala:97:1
+	DATi #OFFBOARD #OFFBOARD #OFFBOARD #OFFBOARD #OFFBOARD
+	DATi #OFFBOARD #OFFBOARD #OFFBOARD #OFFBOARD #OFFBOARD
+	DATi #OFFBOARD #OFFBOARD #OFFBOARD #OFFBOARD #OFFBOARD
+	DATi #OFFBOARD #OFFBOARD #OFFBOARD #OFFBOARD #OFFBOARD
+	! IORi <B> #ROOK #WHITE
+	DATi #OFFBOARD
+	! IORi <A> #KNIGHT #WHITE
+	DATi <B>
+	! IORi <B> #BISHOP #WHITE
+	DATi <A>
+	! IORi <A> #QUEEN #WHITE
+	DATi <B>
+	! IORi <B> #KING #WHITE
+	DATi <A>
+	! IORi <A> #BISHOP #WHITE
+	DATi <B>
+	! IORi <B> #KNIGHT #WHITE
+	DATi <A>
+	! IORi <A> #ROOK #WHITE
+	DATi <B>
+	DATi <A>
+	! IORi <A> #PAWN #WHITE
+	DATi #OFFBOARD #OFFBOARD
+	! IORi <B> #PAWN #WHITE
+	DATi <A>
+	! IORi <A> #PAWN #WHITE
+	DATi <B>
+	! IORi <B> #PAWN #WHITE
+	DATi <A>
+	! IORi <A> #PAWN #WHITE
+	DATi <B>
+	! IORi <B> #PAWN #WHITE
+	DATi <A>
+	! IORi <A> #PAWN #WHITE
+	DATi <B>
+	! IORi <B> #PAWN #WHITE
+	DATi <A>
+	DATi <B>
+	DATi #OFFBOARD #OFFBOARD #EMPTY #EMPTY #EMPTY #EMPTY
+	DATi #EMPTY #EMPTY #EMPTY #EMPTY #OFFBOARD #OFFBOARD
+	DATi #EMPTY #EMPTY #EMPTY #EMPTY #EMPTY #EMPTY #EMPTY
+	DATi #EMPTY #OFFBOARD #OFFBOARD #EMPTY #EMPTY #EMPTY
+	DATi #EMPTY #EMPTY #EMPTY #EMPTY #EMPTY #OFFBOARD
+	DATi #OFFBOARD #EMPTY #EMPTY #EMPTY #EMPTY #EMPTY #EMPTY
+	! IORi <B> #PAWN #BLACK
+	DATi #EMPTY #EMPTY #OFFBOARD #OFFBOARD
+	! IORi <A> #PAWN #BLACK
+	DATi <B>
+	! IORi <B> #PAWN #BLACK
+	DATi <A>
+	! IORi <A> #PAWN #BLACK
+	DATi <B>
+	! IORi <B> #PAWN #BLACK
+	DATi <A>
+	! IORi <A> #PAWN #BLACK
+	DATi <B>
+	! IORi <B> #PAWN #BLACK
+	DATi <A>
+	! IORi <A> #PAWN #BLACK
+	DATi <B>
+	DATi <A>
+	! IORi <A> #ROOK #BLACK
+	DATi #OFFBOARD #OFFBOARD
+	! IORi <B> #KNIGHT #BLACK
+	DATi <A>
+	! IORi <A> #BISHOP #BLACK
+	DATi <B>
+	! IORi <B> #QUEEN #BLACK
+	DATi <A>
+	! IORi <A> #KING #BLACK
+	DATi <B>
+	! IORi <B> #BISHOP #BLACK
+	DATi <A>
+	! IORi <A> #KNIGHT #BLACK
+	DATi <B>
+	! IORi <B> #ROOK #BLACK
+	DATi <A>
+	DATi <B>
+	DATi #OFFBOARD #OFFBOARD #OFFBOARD #OFFBOARD #OFFBOARD
+	DATi #OFFBOARD #OFFBOARD #OFFBOARD #OFFBOARD #OFFBOARD
+	DATi #OFFBOARD #OFFBOARD #OFFBOARD #OFFBOARD #OFFBOARD
+	DATi #OFFBOARD #OFFBOARD #OFFBOARD #OFFBOARD #OFFBOARD
+	DATi #OFFBOARD
+.s_PRNBQK_4d2:	CNST *17
+	DATi #32
+	DATs PRNBQK  prnbqk
+	DATi #32 #0
+PIECE_CHARS:	! DEFp &.s_PRNBQK_4d2	; signature const PIECE_CHARS : int-ptr @ Priyome2.impala:112:1
+.z.PIECE_NAMES:	! DEFi #8
+PIECE_NAMES:	CNST *.z.PIECE_NAMES	; signature array PIECE_NAMES[8] : int-ptr @ Priyome2.impala:113:1
+	DATp &.s_PRNBQK_4d2:16 &.s_pawn_4d2 &.s_rook_4d3
+	DATp &.s_knight_4d4 &.s_bishop_4d5 &.s_queen_4d6
+	DATp &.s_king_4d7
+.z.board:	! DEFi #BOARD_SIZE
+board:	GLOB *.z.board	; signature array board[BOARD_SIZE] : int @ Priyome2.impala:115:1
+.z.nextPiece:	! DEFi #BOARD_SIZE
+nextPiece:	GLOB *.z.nextPiece	; signature array nextPiece[BOARD_SIZE] : int @ Priyome2.impala:116:1
+.z.prevPiece:	! DEFi #BOARD_SIZE
+prevPiece:	GLOB *.z.prevPiece	; signature array prevPiece[BOARD_SIZE] : int @ Priyome2.impala:117:1
+	GLOB *1
+xCapture:	DATi #0	; signature global xCapture : int @ Priyome2.impala:118:1
+	GLOB *1
+turnColor:	DATi #0	; signature global turnColor : int @ Priyome2.impala:119:1
+	GLOB *1
+boardHash:	DATi #0	; signature global boardHash : int @ Priyome2.impala:120:1
+	! MULi <B> #64 #1024
+HASH_TABLE_SIZE:	! DEFi <B>	; signature const HASH_TABLE_SIZE : int @ Priyome2.impala:137:1
+	! XORi <B> #0 #-1
+HASH_MASK:	! DEFi <B>	; signature const HASH_MASK : int @ Priyome2.impala:138:1
+	! MULi <B> #BOARD_SIZE #64
+.z.pieceKeys:	! DEFi #<B>
+.d.pieceKeys.0:	! DEFi #64
+.d.pieceKeys.1:	! DEFi #BOARD_SIZE
+pieceKeys:	GLOB *.z.pieceKeys	; signature array pieceKeys[BOARD_SIZEx64] : int @ Priyome2.impala:140:1
+.z.xCaptureKeys:	! DEFi #256
+xCaptureKeys:	GLOB *.z.xCaptureKeys	; signature array xCaptureKeys[256] : int @ Priyome2.impala:141:1
+	! ADDi <B> #WHITE #1
+.z.colorKeys:	! DEFi #<B>
+colorKeys:	GLOB *.z.colorKeys	; signature array colorKeys[] : int @ Priyome2.impala:142:1
+.z.hashTable:	! DEFi #HASH_TABLE_SIZE
+hashTable:	GLOB *.z.hashTable	; signature array hashTable[HASH_TABLE_SIZE] : int @ Priyome2.impala:143:1
+	GLOB *1
+evalCounter:	DATi #0	; signature global evalCounter : int @ Priyome2.impala:144:1
+	! MOVi <a> #0	; layout of struct HalfMove
+.o.HalfMove.move:	! DEFi #<a>
+	! ADDi <a> #<a> #1
+.o.HalfMove.piece:	! DEFi #<a>
+	! ADDi <a> #<a> #1
+.o.HalfMove.captured:	! DEFi #<a>
+	! ADDi <a> #<a> #1
+.o.HalfMove.xCapture:	! DEFi #<a>
+	! ADDi <a> #<a> #1
+.z.HalfMove:	! DEFi #<a>
+; signature struct HalfMove { move : int, piece : int, captured : int, xCapture : int } @ Priyome2.impala:145:1
+	! MULi <B> #HISTORY_SIZE #.z.HalfMove
+.z.history:	! DEFi #<B>
+history:	GLOB *.z.history	; signature array history[HISTORY_SIZE] : HalfMove @ Priyome2.impala:146:1
+	GLOB *1
+historyCount:	DATi #0	; signature global historyCount : int @ Priyome2.impala:147:1
+	GLOB *1
+minEvals:	DATi #10000	; signature global minEvals : int @ Priyome2.impala:148:1
+	GLOB *1
+randPX:	DATi #123456789	; signature global randPX : int @ Priyome2.impala:150:1
+	GLOB *1
+randPY:	DATi #362436069	; signature global randPY : int @ Priyome2.impala:151:1
+
+;-----------------------------------------------------------------------------
+nextRandom:	FUNC	; signature func nextRandom() -> int @ Priyome2.impala:153:1
+	$y:	OUTi
+	$x:	LOCi
+	$t:	LOCi
+;-----------------------------------------------------------------------------
+		PEEK $x &randPX 	; x = global randPX
+		PEEK $y &randPY 	; y = global randPY
+		SHLi %0 $x #10	; t = x ^ (x << 10)
+		XORi $t $x %0
+		MOVi $x $y 	; x = y
+		SHRu %0 $y #13	; y = y ^ (y >>> 13) ^ t ^ (t >>> 10)
+		XORi %0 $y %0
+		XORi %0 %0 $t
+		SHRu %1 $t #10
+		XORi $y %0 %1
+		POKE &randPX $x 	; global randPX = x
+		POKE &randPY $y 	; global randPY = y
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+initGlobals:	FUNC	; signature func initGlobals() -> void @ Priyome2.impala:168:1
+		PARA *1
+	$i:	LOCi
+	$j:	LOCi
+;-----------------------------------------------------------------------------
+		MOVi $i #0 	; for (i = 0 to BOARD_SIZE) 
+		GEQi #0 #BOARD_SIZE @.e0
+	.l1:	MOVi $j #0 	; for (j = 0 to 64) 
+		GEQi #0 #64 @.e2
+	.l3:	MULi %0 $i #.d.pieceKeys.0	; global pieceKeys[i, j] = nextRandom()
+		ADDi %0 %0 $j
+		CALL &nextRandom %1 *1	; expects nextRandom() -> int @ Priyome2.impala:179:41
+		POKE &pieceKeys %0 %1
+		FORi $j #64 @.l3	; }
+	.e2:	FORi $i #BOARD_SIZE @.l1	; }
+	.e0:	MOVi $i #0 	; for (i = 0 to 256) 
+		GEQi #0 #256 @.e4
+	.l5:	CALL &nextRandom %0 *1	; expects nextRandom() -> int @ Priyome2.impala:183:40
+		POKE &xCaptureKeys $i %0
+		FORi $i #256 @.l5	; }
+	.e4:	CALL &nextRandom %0 *1	; expects nextRandom() -> int @ Priyome2.impala:185:40
+		POKE &colorKeys:WHITE %0 
+		CALL &nextRandom %0 *1	; expects nextRandom() -> int @ Priyome2.impala:186:40
+		POKE &colorKeys:BLACK %0 
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+isOnBoard:	FUNC	; signature func isOnBoard(int square) -> int @ Priyome2.impala:189:1
+	$b:	OUTi
+	$square:	INPi
+;-----------------------------------------------------------------------------
+		MOVi $b #FALSE 	; b = FALSE
+		LSSi $square #0 @.f1	; if (square >= 0 && square < BOARD_SIZE && global INIT_BOARD[square] != OFFBOARD) 
+		GEQi $square #BOARD_SIZE @.f1
+		PEEK %0 &INIT_BOARD $square
+		EQUi %0 #OFFBOARD @.f1
+		MOVi $b #TRUE 	; b = TRUE
+	.f1:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+isValidColor:	FUNC	; signature func isValidColor(int color) -> int @ Priyome2.impala:198:1
+	$b:	OUTi
+	$color:	INPi
+;-----------------------------------------------------------------------------
+		MOVi $b #FALSE 	; b = FALSE
+		EQUi $color #WHITE @.t0	; if (color == WHITE || color == BLACK) 
+		NEQi $color #BLACK @.f1
+	.t0:	MOVi $b #TRUE 	; b = TRUE
+	.f1:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+isValidMove:	FUNC	; signature func isValidMove(int move) -> int @ Priyome2.impala:207:1
+	$b:	OUTi
+	$move:	INPi
+;-----------------------------------------------------------------------------
+		MOVi $b #FALSE 	; b = FALSE
+		ANDi %0 $move #MOVE_MASK	; if ((move & MOVE_MASK) == move && isOnBoard(move & FROM_MASK) != FALSE && isOnBoard((move & TO_MASK) >> TO_SHIFT) != FALSE) 
+		NEQi %0 $move @.f1
+		ANDi %1 $move #FROM_MASK
+		CALL &isOnBoard %0 *2	; expects isOnBoard(int) -> int @ Priyome2.impala:211:64
+		EQUi %0 #FALSE @.f1
+		ANDi %1 $move #TO_MASK
+		SHRi %1 %1 #TO_SHIFT
+		CALL &isOnBoard %0 *2	; expects isOnBoard(int) -> int @ Priyome2.impala:211:116
+		EQUi %0 #FALSE @.f1
+		MOVi $b #TRUE 	; b = TRUE
+	.f1:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+isValidPiece:	FUNC	; signature func isValidPiece(int piece) -> int @ Priyome2.impala:216:1
+	$b:	OUTi
+	$piece:	INPi
+;-----------------------------------------------------------------------------
+		MOVi $b #FALSE 	; b = FALSE
+		GRTi #1 $piece @.f1	; if (1 <= piece && piece < 64 && (piece & PIECE_MASK) >= 1 && (piece & PIECE_MASK) <= 6
+		GEQi $piece #64 @.f1
+		ANDi %0 $piece #PIECE_MASK
+		LSSi %0 #1 @.f1
+		ANDi %0 $piece #PIECE_MASK
+		GRTi %0 #6 @.f1
+		ANDi %1 $piece #COLOR_MASK
+		CALL &isValidColor %0 *2	; expects isValidColor(int) -> int @ Priyome2.impala:221:40
+		EQUi %0 #FALSE @.f1
+		MOVi $b #TRUE 	; b = TRUE
+	.f1:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+moveFrom:	FUNC	; signature func moveFrom(int move) -> int @ Priyome2.impala:226:1
+	$f:	OUTi
+	$move:	INPi
+;-----------------------------------------------------------------------------
+		! EQUi #DEBUG #0 @.a0	; assert(isValidMove(move) != FALSE)
+		MOVi %1 $move 
+		CALL &isValidMove %0 *2	; expects isValidMove(int) -> int @ Priyome2.impala:229:27
+		NEQi %0 #FALSE @.a0
+		MOVp %1 &.a_isVali_4d2 
+		CALL ^assertFail %0 *1
+	.a0:	ANDi $f $move #FROM_MASK	; f = (move & FROM_MASK)
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+moveTo:	FUNC	; signature func moveTo(int move) -> int @ Priyome2.impala:233:1
+	$t:	OUTi
+	$move:	INPi
+;-----------------------------------------------------------------------------
+		! EQUi #DEBUG #0 @.a0	; assert(isValidMove(move) != FALSE)
+		MOVi %1 $move 
+		CALL &isValidMove %0 *2	; expects isValidMove(int) -> int @ Priyome2.impala:236:27
+		NEQi %0 #FALSE @.a0
+		MOVp %1 &.a_isVali_4d2 
+		CALL ^assertFail %0 *1
+	.a0:	SHRi $t $move #TO_SHIFT	; t = (move >> TO_SHIFT)
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+makeMove:	FUNC	; signature func makeMove(int fromCol, int fromRow, int toCol, int toRow) -> int @ Priyome2.impala:240:1
+	$m:	OUTi
+	$fromCol:	INPi
+	$fromRow:	INPi
+	$toCol:	INPi
+	$toRow:	INPi
+;-----------------------------------------------------------------------------
+		ADDi %0 $fromRow #2	; m = ((fromRow + 2) * STRIDE + fromCol + 1) | (((toRow + 2) * STRIDE + toCol + 1) << TO_SHIFT)
+		MULi %0 %0 #STRIDE
+		ADDi %0 %0 $fromCol
+		ADDi %1 $toRow #2
+		MULi %1 %1 #STRIDE
+		ADDi %1 %1 $toCol
+		ADDi %1 %1 #1
+		ADDi %0 %0 #1
+		SHLi %1 %1 #TO_SHIFT
+		IORi $m %0 %1
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+switchColor:	FUNC	; signature func switchColor(int color) -> int @ Priyome2.impala:246:1
+	$c:	OUTi
+	$color:	INPi
+;-----------------------------------------------------------------------------
+		XORi $c $color #COLOR_SWITCH_XOR	; c = (color ^ COLOR_SWITCH_XOR)
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+checkInvariant:	FUNC	; signature func checkInvariant() -> int @ Priyome2.impala:252:1
+	$b:	OUTi
+	! IORi <B> #BLACK #WHITE
+	! ADDi <B> <B> #1
+	! IORi <A> #BLACK #WHITE
+	! ADDi <A> <A> #1
+	$color:	LOCi
+	$h:	LOCi
+	$i:	LOCi
+	$frm:	LOCi
+	$p:	LOCi
+.z.checkInvariant.counts:	! DEFi #<B>
+	$counts:	LOCA *.z.checkInvariant.counts
+.z.checkInvariant.countsAgain:	! DEFi #<A>
+	$countsAgain:	LOCA *.z.checkInvariant.countsAgain
+;-----------------------------------------------------------------------------
+		! EQUi #DEBUG #0 @.a0	; assert(isValidColor(global turnColor) != FALSE)
+		PEEK %1 &turnColor 
+		CALL &isValidColor %0 *2	; expects isValidColor(int) -> int @ Priyome2.impala:257:40
+		NEQi %0 #FALSE @.a0
+		MOVp %1 &.a_isVali_4d3 
+		CALL ^assertFail %0 *1
+	.a0:	PEEK %0 &xCapture 	; if (global xCapture != 0) 
+		EQUi %0 #0 @.f1
+		! EQUi #DEBUG #0 @.a2	; assert(0 <= global xCapture && global xCapture < 256)
+		PEEK %0 &xCapture 
+		GRTi #0 %0 @.f3
+		PEEK %0 &xCapture 
+		LSSi %0 #256 @.a2
+	.f3:	MOVp %1 &.a_0globa_4d4 
+		CALL ^assertFail %0 *1
+	.a2:	NOOP
+		! EQUi #DEBUG #0 @.a4	; assert(isOnBoard(global xCapture & ~128) != FALSE)
+		PEEK %1 &xCapture 
+		! XORi <A> #128 #-1
+		ANDi %1 %1 <A>
+		CALL &isOnBoard %0 *2	; expects isOnBoard(int) -> int @ Priyome2.impala:261:44
+		NEQi %0 #FALSE @.a4
+		MOVp %1 &.a_isOnBo_4d5 
+		CALL ^assertFail %0 *1
+	.a4:	PEEK %0 &xCapture 	; if (((global xCapture & CASTLING_MASK) != 0)) 
+		ANDi %0 %0 #CASTLING_MASK
+		EQUi %0 #0 @.f5
+		! EQUi #DEBUG #0 @.a6	; assert((global board[global xCapture & ~CASTLING_MASK] & PIECE_AND_MOVED_MASK) == (ROOK | MOVED_MASK))
+		PEEK %0 &xCapture 
+		! XORi <A> #CASTLING_MASK #-1
+		ANDi %0 %0 <A>
+		PEEK %0 &board %0
+		ANDi %0 %0 #PIECE_AND_MOVED_MASK
+		! IORi <A> #ROOK #MOVED_MASK
+		EQUi %0 <A> @.a6
+		MOVp %1 &.a_global_4d6 
+		CALL ^assertFail %0 *1
+	.a6:	NOOP
+		! EQUi #DEBUG #0 @.a7	; assert((global board[(global xCapture & ~CASTLING_MASK) - 1] & PIECE_AND_MOVED_MASK) == (KING | MOVED_MASK)
+		PEEK %0 &xCapture 
+		! XORi <A> #CASTLING_MASK #-1
+		ANDi %0 %0 <A>
+		SUBi %0 %0 #1
+		PEEK %0 &board %0
+		ANDi %0 %0 #PIECE_AND_MOVED_MASK
+		! IORi <A> #KING #MOVED_MASK
+		EQUi %0 <A> @.e9
+		PEEK %0 &xCapture 
+		! XORi <A> #CASTLING_MASK #-1
+		ANDi %0 %0 <A>
+		ADDi %0 %0 #1
+		PEEK %0 &board %0
+		ANDi %0 %0 #PIECE_AND_MOVED_MASK
+		! IORi <A> #KING #MOVED_MASK
+		EQUi %0 <A> @.e9
+		MOVp %1 &.a_global_4d7 
+		CALL ^assertFail %0 *1
+	.a7:	GOTO @.e9  	; } else 
+	.f5:	NOOP
+		! EQUi #DEBUG #0 @.a10	; assert((global xCapture >= RANK_3 && global xCapture < RANK_4) || (global xCapture >= RANK_6 && global xCapture < RANK_7))
+		PEEK %0 &xCapture 
+		LSSi %0 #RANK_3 @.f11
+		PEEK %0 &xCapture 
+		LSSi %0 #RANK_4 @.a10
+	.f11:	PEEK %0 &xCapture 
+		LSSi %0 #RANK_6 @.f13
+		PEEK %0 &xCapture 
+		LSSi %0 #RANK_7 @.a10
+	.f13:	MOVp %1 &.a_global_4d8 
+		CALL ^assertFail %0 *1
+	.a10:	NOOP
+		! EQUi #DEBUG #0 @.a14	; assert(global board[global xCapture + STRIDE] == (WHITE | PAWN | MOVED_MASK)
+		PEEK %0 &xCapture 
+		ADDi %0 %0 #STRIDE
+		! IORi <A> #WHITE #PAWN
+		PEEK %0 &board %0
+		! IORi <A> <A> #MOVED_MASK
+		EQUi %0 <A> @.a14
+		PEEK %0 &xCapture 
+		SUBi %0 %0 #STRIDE
+		! IORi <A> #BLACK #PAWN
+		PEEK %0 &board %0
+		! IORi <A> <A> #MOVED_MASK
+		EQUi %0 <A> @.a14
+		MOVp %1 &.a_global_4d9 
+		CALL ^assertFail %0 *1
+	.a14:	NOOP
+	.e9:	NOOP
+	.f1:	MOVi $color #BLACK 	; color = BLACK
+	.l16:	PEEK $frm &nextPiece $color	; frm = global nextPiece[color]
+		SETL $counts $color #0	; counts[color] = 0
+	.l17:	EQUi $frm $color @.e18	; while (frm != color) 
+		PEEK $p &board $frm	; p = global board[frm]
+		! EQUi #DEBUG #0 @.a19	; assert((p & COLOR_MASK) == color)
+		ANDi %0 $p #COLOR_MASK
+		EQUi %0 $color @.a19
+		MOVp %1 &.a_pCOLOR_4da 
+		CALL ^assertFail %0 *1
+	.a19:	NOOP
+		! EQUi #DEBUG #0 @.a20	; assert(isValidPiece(p) != FALSE)
+		MOVi %1 $p 
+		CALL &isValidPiece %0 *2	; expects isValidPiece(int) -> int @ Priyome2.impala:281:27
+		NEQi %0 #FALSE @.a20
+		MOVp %1 &.a_isVali_4db 
+		CALL ^assertFail %0 *1
+	.a20:	PEEK $frm &nextPiece $frm	; frm = global nextPiece[frm]
+		GETL %0 $counts $color	; counts[color] = counts[color] + 1
+		ADDi %0 %0 #1
+		SETL $counts $color %0
+		GOTO @.l17  	; }
+	.e18:	MOVi %1 $color 	; color = switchColor(color)
+		CALL &switchColor %0 *2	; expects switchColor(int) -> int @ Priyome2.impala:285:29
+		MOVi $color %0 
+		NEQi $color #BLACK @.l16	; } while (color != BLACK)
+		MOVi $h #0 	; h = 0
+		MOVi $countsAgain:WHITE #0 	; countsAgain[BLACK] = countsAgain[WHITE] = 0
+		MOVi $countsAgain:BLACK #0 
+		MOVi $i #0 	; for (i = 0 to BOARD_SIZE) 
+		GEQi #0 #BOARD_SIZE @.e21
+	.l22:	PEEK $p &board $i	; p = global board[i]
+		! EQUi #DEBUG #0 @.a23	; assert(global INIT_BOARD[i] != OFFBOARD || p == OFFBOARD)
+		PEEK %0 &INIT_BOARD $i
+		NEQi %0 #OFFBOARD @.a23
+		EQUi $p #OFFBOARD @.a23
+		MOVp %1 &.a_global_4dc 
+		CALL ^assertFail %0 *1
+	.a23:	LEQi $p #EMPTY @.f25	; if (p > EMPTY) 
+		! EQUi #DEBUG #0 @.a26	; assert(isValidPiece(p) != FALSE)
+		MOVi %1 $p 
+		CALL &isValidPiece %0 *2	; expects isValidPiece(int) -> int @ Priyome2.impala:294:27
+		NEQi %0 #FALSE @.a26
+		MOVp %1 &.a_isVali_4db 
+		CALL ^assertFail %0 *1
+	.a26:	NOOP
+		! EQUi #DEBUG #0 @.a27	; assert(0 <= p && p < 64)
+		GRTi #0 $p @.f28
+		LSSi $p #64 @.a27
+	.f28:	MOVp %1 &.a_0pp64_4dd 
+		CALL ^assertFail %0 *1
+	.a27:	MULi %0 $i #.d.pieceKeys.0	; h = (h + global pieceKeys[i, p]) & HASH_MASK
+		ADDi %0 %0 $p
+		PEEK %0 &pieceKeys %0
+		ADDi %0 $h %0
+		ANDi $h %0 #HASH_MASK
+	.f25:	ANDi %0 $p #COLOR_MASK	; countsAgain[p & COLOR_MASK] = countsAgain[p & COLOR_MASK] + 1
+		ANDi %1 $p #COLOR_MASK
+		GETL %1 $countsAgain %1
+		ADDi %1 %1 #1
+		SETL $countsAgain %0 %1
+		FORi $i #BOARD_SIZE @.l22	; }
+	.e21:	NOOP
+		! EQUi #DEBUG #0 @.a29	; assert(countsAgain[BLACK] == counts[BLACK])
+		EQUi $countsAgain:BLACK $counts:BLACK @.a29
+		MOVp %1 &.a_counts_4de 
+		CALL ^assertFail %0 *1
+	.a29:	NOOP
+		! EQUi #DEBUG #0 @.a30	; assert(countsAgain[WHITE] == counts[WHITE])
+		EQUi $countsAgain:WHITE $counts:WHITE @.a30
+		MOVp %1 &.a_counts_4df 
+		CALL ^assertFail %0 *1
+	.a30:	NOOP
+		! EQUi #DEBUG #0 @.a31	; assert(h == global boardHash)
+		PEEK %0 &boardHash 
+		EQUi $h %0 @.a31
+		MOVp %1 &.a_hgloba_4e0 
+		CALL ^assertFail %0 *1
+	.a31:	MOVi $b #TRUE 	; b = TRUE
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+putPiece:	FUNC	; signature func putPiece(int square, int piece) -> void @ Priyome2.impala:308:1
+		PARA *1
+	$square:	INPi
+	$piece:	INPi
+	$c:	LOCi
+	$n:	LOCi
+;-----------------------------------------------------------------------------
+		! EQUi #DEBUG #0 @.a0	; assert(isOnBoard(square) != FALSE)
+		MOVi %1 $square 
+		CALL &isOnBoard %0 *2	; expects isOnBoard(int) -> int @ Priyome2.impala:311:27
+		NEQi %0 #FALSE @.a0
+		MOVp %1 &.a_isOnBo_4e1 
+		CALL ^assertFail %0 *1
+	.a0:	NOOP
+		! EQUi #DEBUG #0 @.a1	; assert(isValidPiece(piece) != FALSE)
+		MOVi %1 $piece 
+		CALL &isValidPiece %0 *2	; expects isValidPiece(int) -> int @ Priyome2.impala:312:29
+		NEQi %0 #FALSE @.a1
+		MOVp %1 &.a_isVali_4e2 
+		CALL ^assertFail %0 *1
+	.a1:	NOOP
+		! EQUi #DEBUG #0 @.a2	; assert(global board[square] == EMPTY)
+		PEEK %0 &board $square
+		EQUi %0 #EMPTY @.a2
+		MOVp %1 &.a_global_4e3 
+		CALL ^assertFail %0 *1
+	.a2:	POKE &board $square $piece	; global board[square] = piece
+		ANDi $c $piece #COLOR_MASK	; c = piece & COLOR_MASK
+		PEEK $n &nextPiece $c	; n = global nextPiece[c]
+		POKE &nextPiece $square $n	; global nextPiece[square] = n
+		POKE &prevPiece $square $c	; global prevPiece[square] = c
+		POKE &prevPiece $n $square	; global prevPiece[n] = square
+		POKE &nextPiece $c $square	; global nextPiece[c] = square
+		MULi %0 $square #.d.pieceKeys.0	; global boardHash = (global boardHash + global pieceKeys[square, piece]) & HASH_MASK
+		ADDi %0 %0 $piece
+		PEEK %1 &boardHash 
+		PEEK %0 &pieceKeys %0
+		ADDi %1 %1 %0
+		ANDi %1 %1 #HASH_MASK
+		POKE &boardHash %1 
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+liftPiece:	FUNC	; signature func liftPiece(int square) -> void @ Priyome2.impala:325:1
+		PARA *1
+	$square:	INPi
+	$piece:	LOCi
+	$n:	LOCi
+	$p:	LOCi
+;-----------------------------------------------------------------------------
+		! EQUi #DEBUG #0 @.a0	; assert(isOnBoard(square) != FALSE)
+		MOVi %1 $square 
+		CALL &isOnBoard %0 *2	; expects isOnBoard(int) -> int @ Priyome2.impala:328:27
+		NEQi %0 #FALSE @.a0
+		MOVp %1 &.a_isOnBo_4e1 
+		CALL ^assertFail %0 *1
+	.a0:	PEEK $piece &board $square	; piece = global board[square]
+		! EQUi #DEBUG #0 @.a1	; assert(piece > EMPTY)
+		GRTi $piece #EMPTY @.a1
+		MOVp %1 &.a_pieceE_4e4 
+		CALL ^assertFail %0 *1
+	.a1:	MULi %0 $square #.d.pieceKeys.0	; global boardHash = (global boardHash - global pieceKeys[square, piece]) & HASH_MASK
+		ADDi %0 %0 $piece
+		PEEK %1 &boardHash 
+		PEEK %0 &pieceKeys %0
+		SUBi %1 %1 %0
+		ANDi %1 %1 #HASH_MASK
+		POKE &boardHash %1 
+		POKE &board $square #EMPTY	; global board[square] = EMPTY
+		PEEK $n &nextPiece $square	; n = global nextPiece[square]
+		PEEK $p &prevPiece $square	; p = global prevPiece[square]
+		POKE &nextPiece $p $n	; global nextPiece[p] = n
+		POKE &prevPiece $n $p	; global prevPiece[n] = p
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+movePiece:	FUNC	; signature func movePiece(int frm, int t, int newPiece) -> void @ Priyome2.impala:340:1
+		PARA *1
+	$frm:	INPi
+	$t:	INPi
+	$newPiece:	INPi
+	$oldPiece:	LOCi
+	$n:	LOCi
+	$p:	LOCi
+;-----------------------------------------------------------------------------
+		! EQUi #DEBUG #0 @.a0	; assert(isOnBoard(frm) != FALSE)
+		MOVi %1 $frm 
+		CALL &isOnBoard %0 *2	; expects isOnBoard(int) -> int @ Priyome2.impala:343:24
+		NEQi %0 #FALSE @.a0
+		MOVp %1 &.a_isOnBo_4e5 
+		CALL ^assertFail %0 *1
+	.a0:	NOOP
+		! EQUi #DEBUG #0 @.a1	; assert(isOnBoard(t) != FALSE)
+		MOVi %1 $t 
+		CALL &isOnBoard %0 *2	; expects isOnBoard(int) -> int @ Priyome2.impala:344:22
+		NEQi %0 #FALSE @.a1
+		MOVp %1 &.a_isOnBo_4e6 
+		CALL ^assertFail %0 *1
+	.a1:	NOOP
+		! EQUi #DEBUG #0 @.a2	; assert(isValidPiece(newPiece) != FALSE)
+		MOVi %1 $newPiece 
+		CALL &isValidPiece %0 *2	; expects isValidPiece(int) -> int @ Priyome2.impala:345:32
+		NEQi %0 #FALSE @.a2
+		MOVp %1 &.a_isVali_4e7 
+		CALL ^assertFail %0 *1
+	.a2:	NOOP
+		! EQUi #DEBUG #0 @.a3	; assert(frm != t)
+		NEQi $frm $t @.a3
+		MOVp %1 &.a_frmt_4e8 
+		CALL ^assertFail %0 *1
+	.a3:	NOOP
+		! EQUi #DEBUG #0 @.a4	; assert(global board[t] == EMPTY)
+		PEEK %0 &board $t
+		EQUi %0 #EMPTY @.a4
+		MOVp %1 &.a_global_4e9 
+		CALL ^assertFail %0 *1
+	.a4:	POKE &board $t $newPiece	; global board[t] = newPiece
+		PEEK $oldPiece &board $frm	; oldPiece = global board[frm]
+		! EQUi #DEBUG #0 @.a5	; assert(isValidPiece(oldPiece) != FALSE)
+		MOVi %1 $oldPiece 
+		CALL &isValidPiece %0 *2	; expects isValidPiece(int) -> int @ Priyome2.impala:351:32
+		NEQi %0 #FALSE @.a5
+		MOVp %1 &.a_isVali_4ea 
+		CALL ^assertFail %0 *1
+	.a5:	MULi %0 $t #.d.pieceKeys.0	; global boardHash = (global boardHash + global pieceKeys[t, newPiece] - global pieceKeys[frm, oldPiece]) & HASH_MASK
+		ADDi %0 %0 $newPiece
+		PEEK %1 &boardHash 
+		PEEK %0 &pieceKeys %0
+		MULi %2 $frm #.d.pieceKeys.0
+		ADDi %2 %2 $oldPiece
+		ADDi %1 %1 %0
+		PEEK %2 &pieceKeys %2
+		SUBi %1 %1 %2
+		ANDi %1 %1 #HASH_MASK
+		POKE &boardHash %1 
+		POKE &board $frm #EMPTY	; global board[frm] = EMPTY
+		PEEK $n &nextPiece $frm	; n = global nextPiece[frm]
+		PEEK $p &prevPiece $frm	; p = global prevPiece[frm]
+		POKE &prevPiece $t $p	; global prevPiece[t] = p
+		POKE &nextPiece $t $n	; global nextPiece[t] = n
+		POKE &nextPiece $p $t	; global nextPiece[p] = t
+		POKE &prevPiece $n $t	; global prevPiece[n] = t
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+restart:	FUNC	; signature func restart() -> void @ Priyome2.impala:362:1
+		PARA *1
+	$i:	LOCi
+;-----------------------------------------------------------------------------
+		POKE &prevPiece:WHITE #WHITE 	; global nextPiece[WHITE] = global prevPiece[WHITE] = WHITE
+		POKE &nextPiece:WHITE #WHITE 
+		POKE &prevPiece:BLACK #BLACK 	; global nextPiece[BLACK] = global prevPiece[BLACK] = BLACK
+		POKE &nextPiece:BLACK #BLACK 
+		POKE &boardHash #0 	; global boardHash = 0
+		MOVi $i #0 	; for (i = 0 to BOARD_SIZE) 
+		GEQi #0 #BOARD_SIZE @.e0
+	.l1:	POKE &board $i #EMPTY	; global board[i] = EMPTY
+		PEEK %1 &INIT_BOARD $i	; if (global INIT_BOARD[i] == OFFBOARD) 
+		NEQi %1 #OFFBOARD @.f2
+		POKE &board $i #OFFBOARD	; global board[i] = OFFBOARD
+		GOTO @.e3  	; } else if (global INIT_BOARD[i] > EMPTY) 
+	.f2:	PEEK %1 &INIT_BOARD $i	; if (global INIT_BOARD[i] > EMPTY) 
+		LEQi %1 #EMPTY @.f4
+		MOVi %1 $i 	; putPiece(i, global INIT_BOARD[i])
+		PEEK %2 &INIT_BOARD $i
+		CALL &putPiece %0 *3	; expects putPiece(int, int) -> void @ Priyome2.impala:373:37
+	.f4:	NOOP
+	.e3:	FORi $i #BOARD_SIZE @.l1	; }
+	.e0:	MOVi $i #0 	; for (i = 0 to HASH_TABLE_SIZE) 
+		GEQi #0 #HASH_TABLE_SIZE @.e5
+	.l6:	POKE &hashTable $i #0	; global hashTable[i] = 0
+		FORi $i #HASH_TABLE_SIZE @.l6	; }
+	.e5:	POKE &turnColor #WHITE 	; global turnColor = WHITE
+		POKE &xCapture #0 	; global xCapture = 0
+		POKE &historyCount #0 	; global historyCount = 0
+		! EQUi #DEBUG #0 @.a7	; assert(checkInvariant() != FALSE)
+		CALL &checkInvariant %0 *1	; expects checkInvariant() -> int @ Priyome2.impala:382:26
+		NEQi %0 #FALSE @.a7
+		MOVp %1 &.a_checkI_4eb 
+		CALL ^assertFail %0 *1
+	.a7:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+squareCapturesCastlingKing:	FUNC	; signature func squareCapturesCastlingKing(int square) -> int @ Priyome2.impala:385:1
+	$b:	OUTi
+	$square:	INPi
+;-----------------------------------------------------------------------------
+		MOVi $b #FALSE 	; b = FALSE
+		PEEK %0 &xCapture 	; if ((square | CASTLING_MASK) >= global xCapture - 1 && (square | CASTLING_MASK) <= global xCapture + 1) 
+		IORi %1 $square #CASTLING_MASK
+		SUBi %0 %0 #1
+		LSSi %1 %0 @.f1
+		PEEK %1 &xCapture 
+		IORi %0 $square #CASTLING_MASK
+		ADDi %1 %1 #1
+		GRTi %0 %1 @.f1
+		MOVi $b #TRUE 	; b = TRUE
+	.f1:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+squareCapturesKing:	FUNC	; signature func squareCapturesKing(int square) -> int @ Priyome2.impala:401:1
+	$b:	OUTi
+	$square:	INPi
+;-----------------------------------------------------------------------------
+		! EQUi #DEBUG #0 @.a0	; assert(isOnBoard(square) != FALSE)
+		MOVi %1 $square 
+		CALL &isOnBoard %0 *2	; expects isOnBoard(int) -> int @ Priyome2.impala:404:27
+		NEQi %0 #FALSE @.a0
+		MOVp %1 &.a_isOnBo_4e1 
+		CALL ^assertFail %0 *1
+	.a0:	MOVi $b #FALSE 	; b = FALSE
+		PEEK %0 &board $square	; if ((global board[square] & PIECE_MASK) == KING || squareCapturesCastlingKing(square) != FALSE) 
+		ANDi %0 %0 #PIECE_MASK
+		EQUi %0 #KING @.t1
+		MOVi %1 $square 
+		CALL &squareCapturesCastlingKing %0 *2	; expects squareCapturesCastlingKing(int) -> int @ Priyome2.impala:407:88
+		EQUi %0 #FALSE @.f2
+	.t1:	MOVi $b #TRUE 	; b = TRUE
+	.f2:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+doMove:	FUNC	; signature func doMove(int frm, int t, int oldPiece, int captured, int oldXCapture) -> int @ Priyome2.impala:426:1
+	$score:	OUTi
+	$frm:	INPi
+	$t:	INPi
+	$oldPiece:	INPi
+	$captured:	INPi
+	$oldXCapture:	INPi
+	$newPiece:	LOCi
+;-----------------------------------------------------------------------------
+		! EQUi #DEBUG #0 @.a0	; assert(isOnBoard(frm) != FALSE)
+		MOVi %1 $frm 
+		CALL &isOnBoard %0 *2	; expects isOnBoard(int) -> int @ Priyome2.impala:430:24
+		NEQi %0 #FALSE @.a0
+		MOVp %1 &.a_isOnBo_4e5 
+		CALL ^assertFail %0 *1
+	.a0:	NOOP
+		! EQUi #DEBUG #0 @.a1	; assert(isOnBoard(t) != FALSE)
+		MOVi %1 $t 
+		CALL &isOnBoard %0 *2	; expects isOnBoard(int) -> int @ Priyome2.impala:431:22
+		NEQi %0 #FALSE @.a1
+		MOVp %1 &.a_isOnBo_4e6 
+		CALL ^assertFail %0 *1
+	.a1:	NOOP
+		! EQUi #DEBUG #0 @.a2	; assert(isValidPiece(oldPiece) != FALSE)
+		MOVi %1 $oldPiece 
+		CALL &isValidPiece %0 *2	; expects isValidPiece(int) -> int @ Priyome2.impala:432:32
+		NEQi %0 #FALSE @.a2
+		MOVp %1 &.a_isVali_4ea 
+		CALL ^assertFail %0 *1
+	.a2:	NOOP
+		! EQUi #DEBUG #0 @.a3	; assert(captured == EMPTY || isValidPiece(captured) != FALSE)
+		EQUi $captured #EMPTY @.a3
+		MOVi %1 $captured 
+		CALL &isValidPiece %0 *2	; expects isValidPiece(int) -> int @ Priyome2.impala:433:53
+		NEQi %0 #FALSE @.a3
+		MOVp %1 &.a_captur_4ec 
+		CALL ^assertFail %0 *1
+	.a3:	NOOP
+		! EQUi #DEBUG #0 @.a5	; assert(frm != t)
+		NEQi $frm $t @.a5
+		MOVp %1 &.a_frmt_4e8 
+		CALL ^assertFail %0 *1
+	.a5:	NOOP
+		! EQUi #DEBUG #0 @.a6	; assert(checkInvariant() != FALSE)
+		CALL &checkInvariant %0 *1	; expects checkInvariant() -> int @ Priyome2.impala:436:26
+		NEQi %0 #FALSE @.a6
+		MOVp %1 &.a_checkI_4eb 
+		CALL ^assertFail %0 *1
+	.a6:	MOVi $newPiece $oldPiece 	; newPiece = oldPiece
+		CALL &nextRandom %0 *1	; expects nextRandom() -> int @ Priyome2.impala:439:24
+		ANDi %0 %0 #7
+		SUBi $score %0 #4
+		POKE &xCapture #0 	; global xCapture = 0
+		SWCH $oldPiece *MAX_PIECE_AND_MOVED_VALUE @.s7	; switch (oldPiece == 0 to MAX_PIECE_AND_MOVED_VALUE) 
+		! IORi <A> #KING #WHITE	; case KING | WHITE
+	.s7#<A>:	NOOP
+		! ADDi <A> #RANK_1 #7	; switch (t == RANK_1 + 3 to RANK_1 + 7 + 1) 
+		! ADDi <B> #RANK_1 #3
+		! ADDi <A> <A> #1
+		! SUBi <A> <A> <B>
+		SUBi %0 $t <B>
+		SWCH %0 *<A> @.s9
+		! ADDi <A> #RANK_1 #3	; case RANK_1 + 3
+		! SUBi <A> <A> <B>
+		! LSSi <A> #0 @.g11
+	.s9#<A>:	NOOP
+	.g11:	ADDi %1 #RANK_1 #1	; movePiece(RANK_1 + 1, RANK_1 + 4, ROOK | WHITE | MOVED_MASK)
+		ADDi %2 #RANK_1 #4
+		! IORi <A> #ROOK #WHITE
+		IORi %3 <A> #MOVED_MASK
+		CALL &movePiece %0 *4	; expects movePiece(int, int, int) -> void @ Priyome2.impala:449:66
+		! ADDi <A> #RANK_1 #4	; global xCapture = (RANK_1 + 4) | CASTLING_MASK
+		! IORi <A> <A> #CASTLING_MASK
+		POKE &xCapture <A> 
+		ADDi $score $score #CASTLING_SCORE	; score = score + CASTLING_SCORE
+		GOTO @.e8  	; }
+		! ADDi <A> #RANK_1 #7	; case RANK_1 + 7
+		! SUBi <A> <A> <B>
+		! LSSi <A> #0 @.g12
+	.s9#<A>:	NOOP
+	.g12:	ADDi %1 #RANK_1 #8	; movePiece(RANK_1 + 8, RANK_1 + 6, ROOK | WHITE | MOVED_MASK)
+		ADDi %2 #RANK_1 #6
+		! IORi <A> #ROOK #WHITE
+		IORi %3 <A> #MOVED_MASK
+		CALL &movePiece %0 *4	; expects movePiece(int, int, int) -> void @ Priyome2.impala:458:66
+		! ADDi <A> #RANK_1 #6	; global xCapture = (RANK_1 + 6) | CASTLING_MASK
+		! IORi <A> <A> #CASTLING_MASK
+		POKE &xCapture <A> 
+		ADDi $score $score #CASTLING_SCORE	; score = score + CASTLING_SCORE
+		GOTO @.e8  	; }
+	.s9:	DIVi %0 $t #STRIDE	; score = score + global RANK_VALUES[t / STRIDE] - global RANK_VALUES[frm / STRIDE]
+		PEEK %0 &RANK_VALUES %0
+		DIVi %1 $frm #STRIDE
+		ADDi %0 $score %0
+		PEEK %1 &RANK_VALUES %1
+		SUBi $score %0 %1
+	.e10:	GOTO @.e8  	; }
+		! IORi <B> #KING #BLACK	; case KING | BLACK
+	.s7#<B>:	NOOP
+		! ADDi <B> #RANK_8 #7	; switch (t == RANK_8 + 3 to RANK_8 + 7 + 1) 
+		! ADDi <A> #RANK_8 #3
+		! ADDi <B> <B> #1
+		! SUBi <B> <B> <A>
+		SUBi %0 $t <A>
+		SWCH %0 *<B> @.s13
+		! ADDi <B> #RANK_8 #3	; case RANK_8 + 3
+		! SUBi <B> <B> <A>
+		! LSSi <B> #0 @.g15
+	.s13#<B>:	NOOP
+	.g15:	ADDi %1 #RANK_8 #1	; movePiece(RANK_8 + 1, RANK_8 + 4, ROOK | BLACK | MOVED_MASK)
+		ADDi %2 #RANK_8 #4
+		! IORi <B> #ROOK #BLACK
+		IORi %3 <B> #MOVED_MASK
+		CALL &movePiece %0 *4	; expects movePiece(int, int, int) -> void @ Priyome2.impala:476:66
+		! ADDi <B> #RANK_8 #4	; global xCapture = (RANK_8 + 4) | CASTLING_MASK
+		! IORi <B> <B> #CASTLING_MASK
+		POKE &xCapture <B> 
+		ADDi $score $score #CASTLING_SCORE	; score = score + CASTLING_SCORE
+		GOTO @.e8  	; }
+		! ADDi <B> #RANK_8 #7	; case RANK_8 + 7
+		! SUBi <B> <B> <A>
+		! LSSi <B> #0 @.g16
+	.s13#<B>:	NOOP
+	.g16:	ADDi %1 #RANK_8 #8	; movePiece(RANK_8 + 8, RANK_8 + 6, ROOK | BLACK | MOVED_MASK)
+		ADDi %2 #RANK_8 #6
+		! IORi <B> #ROOK #BLACK
+		IORi %3 <B> #MOVED_MASK
+		CALL &movePiece %0 *4	; expects movePiece(int, int, int) -> void @ Priyome2.impala:485:66
+		! ADDi <B> #RANK_8 #6	; global xCapture = (RANK_8 + 6) | CASTLING_MASK
+		! IORi <B> <B> #CASTLING_MASK
+		POKE &xCapture <B> 
+		ADDi $score $score #CASTLING_SCORE	; score = score + CASTLING_SCORE
+		GOTO @.e8  	; }
+	.s13:	DIVi %0 $t #STRIDE	; score = score + global RANK_VALUES[t / STRIDE] - global RANK_VALUES[frm / STRIDE]
+		PEEK %0 &RANK_VALUES %0
+		DIVi %1 $frm #STRIDE
+		ADDi %0 $score %0
+		PEEK %1 &RANK_VALUES %1
+		SUBi $score %0 %1
+	.e14:	GOTO @.e8  	; }
+		! IORi <A> #PAWN #WHITE	; case PAWN | WHITE | MOVED_MASK
+		! IORi <A> <A> #MOVED_MASK
+	.s7#<A>:	NEQi $t $oldXCapture @.f17	; if (t == oldXCapture) 
+		! EQUi #DEBUG #0 @.a18	; assert(global board[t - STRIDE] == (PAWN | BLACK | MOVED_MASK))
+		SUBi %0 $t #STRIDE
+		! IORi <A> #PAWN #BLACK
+		PEEK %0 &board %0
+		! IORi <A> <A> #MOVED_MASK
+		EQUi %0 <A> @.a18
+		MOVp %1 &.a_global_4ed 
+		CALL ^assertFail %0 *1
+	.a18:	SUBi %1 $t #STRIDE	; liftPiece(t - STRIDE)
+		CALL &liftPiece %0 *2	; expects liftPiece(int) -> void @ Priyome2.impala:502:26
+		ADDi %0 $score #PAWN_ADVANCE_SCORE	; score = score + PAWN_ADVANCE_SCORE + PAWN_VALUE
+		ADDi $score %0 #PAWN_VALUE
+		GOTO @.e8  	; } else if (t >= RANK_8) 
+	.f17:	LSSi $t #RANK_8 @.f20	; if (t >= RANK_8) 
+		! IORi <A> #QUEEN #WHITE	; newPiece = QUEEN | WHITE | MOVED_MASK
+		! IORi <A> <A> #MOVED_MASK
+		MOVi $newPiece <A> 
+		ADDi $score $score #PROMOTION_SCORE	; score = score + PROMOTION_SCORE
+		GOTO @.e8  	; } else 
+	.f20:	ADDi $score $score #PAWN_ADVANCE_SCORE	; score = score + PAWN_ADVANCE_SCORE
+	.e21:	NOOP
+	.e19:	GOTO @.e8  	; }
+		! IORi <A> #PAWN #BLACK	; case PAWN | BLACK | MOVED_MASK
+		! IORi <A> <A> #MOVED_MASK
+	.s7#<A>:	NEQi $t $oldXCapture @.f22	; if (t == oldXCapture) 
+		! EQUi #DEBUG #0 @.a23	; assert(global board[t + STRIDE] == (PAWN | WHITE | MOVED_MASK))
+		ADDi %0 $t #STRIDE
+		! IORi <A> #PAWN #WHITE
+		PEEK %0 &board %0
+		! IORi <A> <A> #MOVED_MASK
+		EQUi %0 <A> @.a23
+		MOVp %1 &.a_global_4ee 
+		CALL ^assertFail %0 *1
+	.a23:	ADDi %1 $t #STRIDE	; liftPiece(t + STRIDE)
+		CALL &liftPiece %0 *2	; expects liftPiece(int) -> void @ Priyome2.impala:523:26
+		ADDi %0 $score #PAWN_ADVANCE_SCORE	; score = score + PAWN_ADVANCE_SCORE + PAWN_VALUE
+		ADDi $score %0 #PAWN_VALUE
+		GOTO @.e8  	; } else if (t < RANK_2) 
+	.f22:	GEQi $t #RANK_2 @.f25	; if (t < RANK_2) 
+		! IORi <A> #QUEEN #BLACK	; newPiece = QUEEN | BLACK | MOVED_MASK
+		! IORi <A> <A> #MOVED_MASK
+		MOVi $newPiece <A> 
+		ADDi $score $score #PROMOTION_SCORE	; score = score + PROMOTION_SCORE
+		GOTO @.e8  	; } else 
+	.f25:	ADDi $score $score #PAWN_ADVANCE_SCORE	; score = score + PAWN_ADVANCE_SCORE
+	.e26:	NOOP
+	.e24:	GOTO @.e8  	; }
+		! IORi <A> #PAWN #WHITE	; case PAWN | WHITE
+	.s7#<A>:	LSSi $t #RANK_4 @.f27	; if (t >= RANK_4) 
+		SUBi %0 $t #STRIDE	; global xCapture = t - STRIDE
+		POKE &xCapture %0 
+		ADDi $score $score #PAWN_ADVANCE_SCORE	; score = score + PAWN_ADVANCE_SCORE
+	.f27:	ADDi $score $score #PAWN_ADVANCE_SCORE	; score = score + PAWN_ADVANCE_SCORE
+		GOTO @.e8  	; }
+		! IORi <A> #PAWN #BLACK	; case PAWN | BLACK
+	.s7#<A>:	GEQi $t #RANK_6 @.f28	; if (t < RANK_6) 
+		ADDi %0 $t #STRIDE	; global xCapture = t + STRIDE
+		POKE &xCapture %0 
+		ADDi $score $score #PAWN_ADVANCE_SCORE	; score = score + PAWN_ADVANCE_SCORE
+	.f28:	ADDi $score $score #PAWN_ADVANCE_SCORE	; score = score + PAWN_ADVANCE_SCORE
+		GOTO @.e8  	; }
+	.s7:	DIVi %0 $t #STRIDE	; score = score + global RANK_VALUES[t / STRIDE] - global RANK_VALUES[frm / STRIDE]
+		PEEK %0 &RANK_VALUES %0
+		DIVi %1 $frm #STRIDE
+		ADDi %0 $score %0
+		PEEK %1 &RANK_VALUES %1
+		SUBi $score %0 %1
+	.e8:	LEQi $captured #EMPTY @.f29	; if (captured > EMPTY) 
+		MOVi %1 $t 	; liftPiece(t)
+		CALL &liftPiece %0 *2	; expects liftPiece(int) -> void @ Priyome2.impala:565:15
+	.f29:	MOVi %1 $frm 	; movePiece(frm, t, newPiece | MOVED_MASK)
+		MOVi %2 $t 
+		IORi %3 $newPiece #MOVED_MASK
+		CALL &movePiece %0 *4	; expects movePiece(int, int, int) -> void @ Priyome2.impala:567:42
+		! IORi <A> #PIECE_MASK #COLOR_MASK	; switch ((captured & (PIECE_MASK | COLOR_MASK)) == 0 to MAX_PIECE_AND_MOVED_VALUE) 
+		ANDi %0 $captured <A>
+		SWCH %0 *MAX_PIECE_AND_MOVED_VALUE @.s30
+	.s30#EMPTY:	GOTO @.e31  	; 
+		! IORi <A> #PAWN #WHITE	; case PAWN | WHITE
+	.s30#<A>:	DIVi %0 $t #STRIDE	; score = score + PAWN_VALUE + (t / STRIDE - 3) * PAWN_ADVANCE_SCORE
+		SUBi %0 %0 #3
+		ADDi %1 $score #PAWN_VALUE
+		MULi %0 %0 #PAWN_ADVANCE_SCORE
+		ADDi $score %1 %0
+		GOTO @.e31  	; }
+		! IORi <A> #PAWN #BLACK	; case PAWN | BLACK
+	.s30#<A>:	DIVi %1 $t #STRIDE	; score = score + PAWN_VALUE + (8 - t / STRIDE) * PAWN_ADVANCE_SCORE
+		SUBi %1 #8 %1
+		ADDi %0 $score #PAWN_VALUE
+		MULi %1 %1 #PAWN_ADVANCE_SCORE
+		ADDi $score %0 %1
+		GOTO @.e31  	; }
+	.s30:	ANDi %0 $captured #PIECE_MASK	; score = score + global PIECE_VALUES[captured & PIECE_MASK] + global RANK_VALUES[t / STRIDE]
+		PEEK %0 &PIECE_VALUES %0
+		DIVi %1 $t #STRIDE
+		ADDi %0 $score %0
+		PEEK %1 &RANK_VALUES %1
+		ADDi $score %0 %1
+	.e31:	PEEK %1 &turnColor 	; global turnColor = switchColor(global turnColor)
+		CALL &switchColor %0 *2	; expects switchColor(int) -> int @ Priyome2.impala:590:50
+		POKE &turnColor %0 
+		! EQUi #DEBUG #0 @.a32	; assert(checkInvariant() != FALSE)
+		CALL &checkInvariant %0 *1	; expects checkInvariant() -> int @ Priyome2.impala:592:26
+		NEQi %0 #FALSE @.a32
+		MOVp %1 &.a_checkI_4eb 
+		CALL ^assertFail %0 *1
+	.a32:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+undoMove:	FUNC	; signature func undoMove(int frm, int t, int oldPiece, int captured, int oldXCapture) -> void @ Priyome2.impala:597:1
+		PARA *1
+	$frm:	INPi
+	$t:	INPi
+	$oldPiece:	INPi
+	$captured:	INPi
+	$oldXCapture:	INPi
+;-----------------------------------------------------------------------------
+		! EQUi #DEBUG #0 @.a0	; assert(isOnBoard(frm) != FALSE)
+		MOVi %1 $frm 
+		CALL &isOnBoard %0 *2	; expects isOnBoard(int) -> int @ Priyome2.impala:599:24
+		NEQi %0 #FALSE @.a0
+		MOVp %1 &.a_isOnBo_4e5 
+		CALL ^assertFail %0 *1
+	.a0:	NOOP
+		! EQUi #DEBUG #0 @.a1	; assert(isOnBoard(t) != FALSE)
+		MOVi %1 $t 
+		CALL &isOnBoard %0 *2	; expects isOnBoard(int) -> int @ Priyome2.impala:600:22
+		NEQi %0 #FALSE @.a1
+		MOVp %1 &.a_isOnBo_4e6 
+		CALL ^assertFail %0 *1
+	.a1:	NOOP
+		! EQUi #DEBUG #0 @.a2	; assert(isValidPiece(oldPiece) != FALSE)
+		MOVi %1 $oldPiece 
+		CALL &isValidPiece %0 *2	; expects isValidPiece(int) -> int @ Priyome2.impala:601:32
+		NEQi %0 #FALSE @.a2
+		MOVp %1 &.a_isVali_4ea 
+		CALL ^assertFail %0 *1
+	.a2:	NOOP
+		! EQUi #DEBUG #0 @.a3	; assert(captured == EMPTY || isValidPiece(captured) != FALSE)
+		EQUi $captured #EMPTY @.a3
+		MOVi %1 $captured 
+		CALL &isValidPiece %0 *2	; expects isValidPiece(int) -> int @ Priyome2.impala:602:53
+		NEQi %0 #FALSE @.a3
+		MOVp %1 &.a_captur_4ec 
+		CALL ^assertFail %0 *1
+	.a3:	NOOP
+		! EQUi #DEBUG #0 @.a5	; assert(frm != t)
+		NEQi $frm $t @.a5
+		MOVp %1 &.a_frmt_4e8 
+		CALL ^assertFail %0 *1
+	.a5:	NOOP
+		! EQUi #DEBUG #0 @.a6	; assert(checkInvariant() != FALSE)
+		CALL &checkInvariant %0 *1	; expects checkInvariant() -> int @ Priyome2.impala:605:26
+		NEQi %0 #FALSE @.a6
+		MOVp %1 &.a_checkI_4eb 
+		CALL ^assertFail %0 *1
+	.a6:	POKE &xCapture $oldXCapture 	; global xCapture = oldXCapture
+		MOVi %1 $frm 	; putPiece(frm, oldPiece)
+		MOVi %2 $oldPiece 
+		CALL &putPiece %0 *3	; expects putPiece(int, int) -> void @ Priyome2.impala:608:25
+		MOVi %1 $t 	; liftPiece(t)
+		CALL &liftPiece %0 *2	; expects liftPiece(int) -> void @ Priyome2.impala:609:14
+		LEQi $captured #EMPTY @.f7	; if (captured > EMPTY) 
+		MOVi %1 $t 	; putPiece(t, captured)
+		MOVi %2 $captured 
+		CALL &putPiece %0 *3	; expects putPiece(int, int) -> void @ Priyome2.impala:611:24
+	.f7:	SWCH $oldPiece *MAX_PIECE_AND_MOVED_VALUE @.s8	; switch (oldPiece == 0 to MAX_PIECE_AND_MOVED_VALUE) 
+		! IORi <A> #KING #WHITE	; case KING | WHITE
+	.s8#<A>:	NOOP
+		! ADDi <A> #RANK_1 #7	; switch (t == RANK_1 + 3 to RANK_1 + 7 + 1) 
+		! ADDi <B> #RANK_1 #3
+		! ADDi <A> <A> #1
+		! SUBi <A> <A> <B>
+		SUBi %0 $t <B>
+		SWCH %0 *<A> @.s10
+		! ADDi <A> #RANK_1 #3	; case RANK_1 + 3
+		! SUBi <A> <A> <B>
+		! LSSi <A> #0 @.g12
+	.s10#<A>:	NOOP
+	.g12:	ADDi %1 #RANK_1 #4	; movePiece(RANK_1 + 4, RANK_1 + 1, ROOK | WHITE)
+		ADDi %2 #RANK_1 #1
+		IORi %3 #ROOK #WHITE
+		CALL &movePiece %0 *4	; expects movePiece(int, int, int) -> void @ Priyome2.impala:621:53
+		GOTO @.e9  	; }
+		! ADDi <A> #RANK_1 #7	; case RANK_1 + 7
+		! SUBi <A> <A> <B>
+		! LSSi <A> #0 @.g13
+	.s10#<A>:	NOOP
+	.g13:	ADDi %1 #RANK_1 #6	; movePiece(RANK_1 + 6, RANK_1 + 8, ROOK | WHITE)
+		ADDi %2 #RANK_1 #8
+		IORi %3 #ROOK #WHITE
+		CALL &movePiece %0 *4	; expects movePiece(int, int, int) -> void @ Priyome2.impala:628:53
+	.s10:	NOOP
+	.e11:	GOTO @.e9  	; }
+		! IORi <B> #KING #BLACK	; case KING | BLACK
+	.s8#<B>:	NOOP
+		! ADDi <B> #RANK_8 #7	; switch (t == RANK_8 + 3 to RANK_8 + 7 + 1) 
+		! ADDi <A> #RANK_8 #3
+		! ADDi <B> <B> #1
+		! SUBi <B> <B> <A>
+		SUBi %0 $t <A>
+		SWCH %0 *<B> @.s14
+		! ADDi <B> #RANK_8 #3	; case RANK_8 + 3
+		! SUBi <B> <B> <A>
+		! LSSi <B> #0 @.g16
+	.s14#<B>:	NOOP
+	.g16:	ADDi %1 #RANK_8 #4	; movePiece(RANK_8 + 4, RANK_8 + 1, ROOK | BLACK)
+		ADDi %2 #RANK_8 #1
+		IORi %3 #ROOK #BLACK
+		CALL &movePiece %0 *4	; expects movePiece(int, int, int) -> void @ Priyome2.impala:639:53
+		GOTO @.e9  	; }
+		! ADDi <B> #RANK_8 #7	; case RANK_8 + 7
+		! SUBi <B> <B> <A>
+		! LSSi <B> #0 @.g17
+	.s14#<B>:	NOOP
+	.g17:	ADDi %1 #RANK_8 #6	; movePiece(RANK_8 + 6, RANK_8 + 8, ROOK | BLACK)
+		ADDi %2 #RANK_8 #8
+		IORi %3 #ROOK #BLACK
+		CALL &movePiece %0 *4	; expects movePiece(int, int, int) -> void @ Priyome2.impala:646:53
+	.s14:	NOOP
+	.e15:	GOTO @.e9  	; }
+		! IORi <A> #PAWN #WHITE	; case PAWN | WHITE | MOVED_MASK
+		! IORi <A> <A> #MOVED_MASK
+	.s8#<A>:	NEQi $t $oldXCapture @.e9	; if (t == oldXCapture) 
+		SUBi %1 $t #STRIDE	; putPiece(t - STRIDE, PAWN | BLACK | MOVED_MASK)
+		! IORi <A> #PAWN #BLACK
+		IORi %2 <A> #MOVED_MASK
+		CALL &putPiece %0 *3	; expects putPiece(int, int) -> void @ Priyome2.impala:656:52
+		GOTO @.e9  	; }
+		! IORi <A> #PAWN #BLACK	; case PAWN | BLACK | MOVED_MASK
+		! IORi <A> <A> #MOVED_MASK
+	.s8#<A>:	NEQi $t $oldXCapture @.f19	; if (t == oldXCapture) 
+		ADDi %1 $t #STRIDE	; putPiece(t + STRIDE, PAWN | WHITE | MOVED_MASK)
+		! IORi <A> #PAWN #WHITE
+		IORi %2 <A> #MOVED_MASK
+		CALL &putPiece %0 *3	; expects putPiece(int, int) -> void @ Priyome2.impala:665:52
+	.f19:	NOOP
+	.s8:	NOOP
+	.e9:	PEEK %1 &turnColor 	; global turnColor = switchColor(global turnColor)
+		CALL &switchColor %0 *2	; expects switchColor(int) -> int @ Priyome2.impala:670:50
+		POKE &turnColor %0 
+		! EQUi #DEBUG #0 @.a20	; assert(checkInvariant() != FALSE)
+		CALL &checkInvariant %0 *1	; expects checkInvariant() -> int @ Priyome2.impala:672:26
+		NEQi %0 #FALSE @.a20
+		MOVp %1 &.a_checkI_4eb 
+		CALL ^assertFail %0 *1
+	.a20:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+traceRBQ:	FUNC	; signature func traceRBQ(int color, int frm, int toCount, int-ptr tos, int start, int step) -> int @ Priyome2.impala:675:1
+	$newToCount:	OUTi
+	$color:	INPi
+	$frm:	INPi
+	$toCount:	INPi
+	$tos:	INPp
+	$start:	INPi
+	$step:	INPi
+	$cx:	LOCi
+	$d:	LOCi
+	$toInc:	LOCi
+	$t:	LOCi
+;-----------------------------------------------------------------------------
+		! EQUi #DEBUG #0 @.a0	; assert(isOnBoard(frm) != FALSE)
+		MOVi %1 $frm 
+		CALL &isOnBoard %0 *2	; expects isOnBoard(int) -> int @ Priyome2.impala:679:24
+		NEQi %0 #FALSE @.a0
+		MOVp %1 &.a_isOnBo_4e5 
+		CALL ^assertFail %0 *1
+	.a0:	MOVi $newToCount $toCount 	; newToCount = toCount
+		MOVi %1 $color 	; cx = switchColor(color)
+		CALL &switchColor %0 *2	; expects switchColor(int) -> int @ Priyome2.impala:684:25
+		MOVi $cx %0 
+		MOVi $d $start 	; d = start
+	.l1:	GEQi $d #8 @.e2	; while (d < 8) 
+		PEEK $toInc &DIRS $d	; toInc = global DIRS[d]
+		ADDi $t $frm $toInc	; t = frm + toInc
+	.l3:	PEEK %0 &board $t	; while (global board[t] == EMPTY) 
+		NEQi %0 #EMPTY @.e4
+		POKE $tos $newToCount $t	; tos[newToCount] = t
+		ADDi $newToCount $newToCount #1	; newToCount = newToCount + 1
+		ADDi $t $t $toInc	; t = t + toInc
+		GOTO @.l3  	; }
+	.e4:	PEEK %0 &board $t	; if ((global board[t] & COLOR_MASK) == cx) 
+		ANDi %0 %0 #COLOR_MASK
+		NEQi %0 $cx @.f5
+		POKE $tos $newToCount $t	; tos[newToCount] = t
+		ADDi $newToCount $newToCount #1	; newToCount = newToCount + 1
+	.f5:	ADDi $d $d $step	; d = d + step
+		GOTO @.l1  	; }
+	.e2:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+listMoves:	FUNC	; signature func listMoves(int color, int frm, int-ptr tos) -> int @ Priyome2.impala:702:1
+	$toCount:	OUTi
+	$color:	INPi
+	$frm:	INPi
+	$tos:	INPp
+	$t:	LOCi
+	$piece:	LOCi
+	$cx:	LOCi
+	$s:	LOCi
+	$d:	LOCi
+;-----------------------------------------------------------------------------
+		! EQUi #DEBUG #0 @.a0	; assert(isOnBoard(frm) != FALSE)
+		MOVi %1 $frm 
+		CALL &isOnBoard %0 *2	; expects isOnBoard(int) -> int @ Priyome2.impala:706:24
+		NEQi %0 #FALSE @.a0
+		MOVp %1 &.a_isOnBo_4e5 
+		CALL ^assertFail %0 *1
+	.a0:	MOVi $toCount #0 	; toCount = 0
+		PEEK $piece &board $frm	; piece = global board[frm]
+		ANDi %0 $piece #PIECE_MASK	; switch ((piece & PIECE_MASK) == 0 to MAX_PIECE_AND_MOVED_VALUE) 
+		SWCH %0 *MAX_PIECE_AND_MOVED_VALUE @.s1
+	.s1#PAWN:	MOVi $s #STRIDE 	; s = STRIDE
+		NEQi $color #BLACK @.f3	; if (color == BLACK) s = -STRIDE
+		! SUBi <A> #0 #STRIDE	; s = -STRIDE
+		MOVi $s <A> 
+	.f3:	ADDi $t $frm $s	; t = frm + s
+		PEEK %0 &board $t	; if (global board[t] == EMPTY) 
+		NEQi %0 #EMPTY @.f4
+		POKE $tos $toCount $t	; tos[toCount] = t
+		ADDi $toCount $toCount #1	; toCount = toCount + 1
+		ANDi %0 $piece #MOVED_MASK	; if ((piece & MOVED_MASK) == 0 && global board[t + s] == EMPTY) 
+		NEQi %0 #0 @.f4
+		ADDi %0 $t $s
+		PEEK %0 &board %0
+		NEQi %0 #EMPTY @.f4
+		ADDi %0 $t $s	; tos[toCount] = t + s
+		POKE $tos $toCount %0
+		ADDi $toCount $toCount #1	; toCount = toCount + 1
+	.f4:	MOVi %1 $color 	; cx = switchColor(color)
+		CALL &switchColor %0 *2	; expects switchColor(int) -> int @ Priyome2.impala:723:27
+		MOVi $cx %0 
+		SUBi $t $t #1	; t = t - 1
+		PEEK %0 &board $t	; if ((global board[t] & COLOR_MASK) == cx || global xCapture == t || squareCapturesCastlingKing(t) != FALSE) 
+		ANDi %0 %0 #COLOR_MASK
+		EQUi %0 $cx @.t7
+		PEEK %0 &xCapture 
+		EQUi %0 $t @.t7
+		MOVi %1 $t 
+		CALL &squareCapturesCastlingKing %0 *2	; expects squareCapturesCastlingKing(int) -> int @ Priyome2.impala:725:102
+		EQUi %0 #FALSE @.f8
+	.t7:	POKE $tos $toCount $t	; tos[toCount] = t
+		ADDi $toCount $toCount #1	; toCount = toCount + 1
+	.f8:	ADDi $t $t #2	; t = t + 2
+		PEEK %0 &board $t	; if ((global board[t] & COLOR_MASK) == cx || global xCapture == t || squareCapturesCastlingKing(t) != FALSE) 
+		ANDi %0 %0 #COLOR_MASK
+		EQUi %0 $cx @.t9
+		PEEK %0 &xCapture 
+		EQUi %0 $t @.t9
+		MOVi %1 $t 
+		CALL &squareCapturesCastlingKing %0 *2	; expects squareCapturesCastlingKing(int) -> int @ Priyome2.impala:730:102
+		EQUi %0 #FALSE @.e2
+	.t9:	POKE $tos $toCount $t	; tos[toCount] = t
+		ADDi $toCount $toCount #1	; toCount = toCount + 1
+		GOTO @.e2  	; }
+	.s1#ROOK:	MOVi %1 $color 	; toCount = traceRBQ(color, frm, toCount, tos, 0, 2)
+		MOVi %2 $frm 
+		MOVi %3 $toCount 
+		MOVp %4 $tos 
+		MOVi %5 #0 
+		MOVi %6 #2 
+		CALL &traceRBQ %0 *7	; expects traceRBQ(int, int, int, int-ptr, int, int) -> int @ Priyome2.impala:736:64
+		MOVi $toCount %0 
+		GOTO @.e2  
+	.s1#BISHOP:	MOVi %1 $color 	; toCount = traceRBQ(color, frm, toCount, tos, 1, 2)
+		MOVi %2 $frm 
+		MOVi %3 $toCount 
+		MOVp %4 $tos 
+		MOVi %5 #1 
+		MOVi %6 #2 
+		CALL &traceRBQ %0 *7	; expects traceRBQ(int, int, int, int-ptr, int, int) -> int @ Priyome2.impala:737:66
+		MOVi $toCount %0 
+		GOTO @.e2  
+	.s1#QUEEN:	MOVi %1 $color 	; toCount = traceRBQ(color, frm, toCount, tos, 0, 1)
+		MOVi %2 $frm 
+		MOVi %3 $toCount 
+		MOVp %4 $tos 
+		MOVi %5 #0 
+		MOVi %6 #1 
+		CALL &traceRBQ %0 *7	; expects traceRBQ(int, int, int, int-ptr, int, int) -> int @ Priyome2.impala:738:65
+		MOVi $toCount %0 
+		GOTO @.e2  
+	.s1#KING:	MOVi $d #0 	; for (d = 0 to 8) 
+		GEQi #0 #8 @.e11
+	.l12:	PEEK %0 &DIRS $d	; t = frm + global DIRS[d]
+		ADDi $t $frm %0
+		PEEK %0 &board $t	; if ((global board[t] & color) == 0) 
+		ANDi %0 %0 $color
+		NEQi %0 #0 @.f13
+		POKE $tos $toCount $t	; tos[toCount] = t
+		ADDi $toCount $toCount #1	; toCount = toCount + 1
+	.f13:	FORi $d #8 @.l12	; }
+	.e11:	ANDi %0 $piece #MOVED_MASK	; if ((piece & MOVED_MASK) == 0) 
+		NEQi %0 #0 @.e2
+		MOVi $t #RANK_1 	; t = RANK_1
+		NEQi $color #BLACK @.f15	; if (color == BLACK) t = RANK_8
+		MOVi $t #RANK_8 	; t = RANK_8
+	.f15:	ADDi %0 $t #2	; if ((global board[t + 2] | global board[t + 3] | global board[t + 4]) == EMPTY
+		ADDi %1 $t #3
+		PEEK %0 &board %0
+		PEEK %1 &board %1
+		ADDi %2 $t #4
+		IORi %0 %0 %1
+		PEEK %2 &board %2
+		IORi %0 %0 %2
+		NEQi %0 #EMPTY @.f17
+		ADDi %0 $t #1
+		PEEK %0 &board %0
+		ANDi %0 %0 #PIECE_AND_MOVED_MASK
+		NEQi %0 #ROOK @.f17
+		ADDi %0 $t #3	; tos[toCount] = t + 3
+		POKE $tos $toCount %0
+		ADDi $toCount $toCount #1	; toCount = toCount + 1
+	.f17:	ADDi %0 $t #7	; if ((global board[t + 7] | global board[t + 6]) == EMPTY
+		ADDi %2 $t #6
+		PEEK %0 &board %0
+		PEEK %2 &board %2
+		IORi %0 %0 %2
+		NEQi %0 #EMPTY @.e2
+		ADDi %0 $t #8
+		PEEK %0 &board %0
+		ANDi %0 %0 #PIECE_AND_MOVED_MASK
+		NEQi %0 #ROOK @.e2
+		ADDi %0 $t #7	; tos[toCount] = t + 7
+		POKE $tos $toCount %0
+		ADDi $toCount $toCount #1	; toCount = toCount + 1
+		GOTO @.e2  	; }
+	.s1#KNIGHT:	MOVi $d #0 	; for (d = 0 to 8) 
+		GEQi #0 #8 @.e2
+	.l21:	PEEK %0 &KNIGHT_MOVES $d	; t = frm + global KNIGHT_MOVES[d]
+		ADDi $t $frm %0
+		PEEK %0 &board $t	; if ((global board[t] & color) == 0) 
+		ANDi %0 %0 $color
+		NEQi %0 #0 @.f22
+		POKE $tos $toCount $t	; tos[toCount] = t
+		ADDi $toCount $toCount #1	; toCount = toCount + 1
+	.f22:	FORi $d #8 @.l21	; }
+		GOTO @.e2  	; }
+	.s1:	NOOP
+		! EQUi #DEBUG #0 @.a23	; assert(0 != 0)
+		NEQi #0 #0 @.a23
+		MOVp %1 &.a_00_4ef 
+		CALL ^assertFail %0 *1
+	.a23:	NOOP
+	.e2:	NOOP
+		! EQUi #DEBUG #0 @.a24	; assert(toCount <= MAX_TARGET_SQUARES)
+		LEQi $toCount #MAX_TARGET_SQUARES @.a24
+		MOVp %1 &.a_toCoun_4f0 
+		CALL ^assertFail %0 *1
+	.a24:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+canCaptureKing:	FUNC	; signature func canCaptureKing(int color) -> int @ Priyome2.impala:789:1
+	$b:	OUTi
+	$color:	INPi
+.z.canCaptureKing.tos:	! DEFi #MAX_TARGET_SQUARES
+	$tos:	LOCA *.z.canCaptureKing.tos
+	$frm:	LOCi
+	$toCount:	LOCi
+	$i:	LOCi
+;-----------------------------------------------------------------------------
+		! EQUi #DEBUG #0 @.a0	; assert(isValidColor(color) != FALSE)
+		MOVi %1 $color 
+		CALL &isValidColor %0 *2	; expects isValidColor(int) -> int @ Priyome2.impala:793:29
+		NEQi %0 #FALSE @.a0
+		MOVp %1 &.a_isVali_4f1 
+		CALL ^assertFail %0 *1
+	.a0:	MOVi $b #FALSE 	; b = FALSE
+		PEEK $frm &nextPiece $color	; frm = global nextPiece[color]
+	.l1:	EQUi $frm $color @.e2	; while (frm != color) 
+		MOVi %1 $color 	; toCount = listMoves(color, frm, tos)
+		MOVi %2 $frm 
+		ADRL %3 $tos *0
+		CALL &listMoves %0 *4	; expects listMoves(int, int, int-ptr) -> int @ Priyome2.impala:797:39
+		MOVi $toCount %0 
+		MOVi $i #0 	; for (i = 0 to toCount) 
+		GEQi #0 $toCount @.e3
+	.l4:	GETL %1 $tos $i	; if (squareCapturesKing(tos[i]) != FALSE) 
+		CALL &squareCapturesKing %0 *2	; expects squareCapturesKing(int) -> int @ Priyome2.impala:799:35
+		EQUi %0 #FALSE @.f5
+		MOVi $b #TRUE 	; b = TRUE
+		RETU   	; goto returnNow
+	.f5:	FORi $i $toCount @.l4	; }
+	.e3:	PEEK $frm &nextPiece $frm	; frm = global nextPiece[frm]
+		GOTO @.l1  	; }
+	.e2:	NOOP
+	returnNow:	RETU   	; }
+
+; signature extern func search(int alpha, int beta, int depth, int score, int capturesOnly) -> int @ Priyome2.impala:812:1
+
+;-----------------------------------------------------------------------------
+findBestMove:	FUNC	; signature func findBestMove(int lowestScore, int alpha, int beta, int depth, int score, int movesCount, int-ptr moves) -> int @ Priyome2.impala:814:1
+	$bestMove:	OUTi
+	$lowestScore:	INPi
+	$alpha:	INPi
+	$beta:	INPi
+	$depth:	INPi
+	$score:	INPi
+	$movesCount:	INPi
+	$moves:	INPp
+	$bestScore:	LOCi
+	$move:	LOCi
+	$frm:	LOCi
+	$t:	LOCi
+	$oldPiece:	LOCi
+	$captured:	LOCi
+	$oldXCapture:	LOCi
+	$moveScore:	LOCi
+	$s:	LOCi
+	$i:	LOCi
+	$capturesOnly:	LOCi
+	$myAlpha:	LOCi
+;-----------------------------------------------------------------------------
+		MOVi $myAlpha $alpha 	; myAlpha = alpha
+		MOVi $bestScore $lowestScore 	; bestScore = lowestScore
+		MOVi $bestMove #0 	; bestMove = 0
+		MOVi $i #0 	; i = 0
+	.l0:	GEQi $i $movesCount @.e2	; while (i < movesCount && myAlpha < beta) 
+		GEQi $myAlpha $beta @.e2
+		PEEK $move $moves $i	; move = moves[i]
+		MOVi %1 $move 	; frm = moveFrom(move)
+		CALL &moveFrom %0 *2	; expects moveFrom(int) -> int @ Priyome2.impala:825:23
+		MOVi $frm %0 
+		MOVi %1 $move 	; t = moveTo(move)
+		CALL &moveTo %0 *2	; expects moveTo(int) -> int @ Priyome2.impala:826:19
+		MOVi $t %0 
+		PEEK $oldPiece &board $frm	; oldPiece = global board[frm]
+		PEEK $captured &board $t	; captured = global board[t]
+		PEEK $oldXCapture &xCapture 	; oldXCapture = global xCapture
+		MOVi %1 $frm 	; moveScore = doMove(frm, t, oldPiece, captured, oldXCapture)
+		MOVi %2 $t 
+		MOVi %3 $oldPiece 
+		MOVi %4 $captured 
+		MOVi %5 $oldXCapture 
+		CALL &doMove %0 *6	; expects doMove(int, int, int, int, int) -> int @ Priyome2.impala:830:62
+		MOVi $moveScore %0 
+		ADDi $s $score $moveScore	; s = score + moveScore
+		LEQi $depth #0 @.f3	; if (depth > 0) 
+		MOVi $capturesOnly #FALSE 	; capturesOnly = FALSE
+		GEQi $depth #QUIESCENCE_DEPTH @.f4	; if (depth < QUIESCENCE_DEPTH) 
+		MOVi $capturesOnly #TRUE 	; capturesOnly = TRUE
+	.f4:	SUBi %1 #0 $beta	; s = -(search(-beta, -myAlpha, depth - 1, -s, capturesOnly) >> SCORE_SHIFT)
+		SUBi %2 #0 $myAlpha
+		SUBi %3 $depth #1
+		SUBi %4 #0 $s
+		MOVi %5 $capturesOnly 
+		CALL &search %0 *6	; expects search(int, int, int, int, int) -> int @ Priyome2.impala:838:63
+		SHRi %0 %0 #SCORE_SHIFT
+		SUBi $s #0 %0
+	.f3:	GEQi $bestScore $s @.f5	; if (bestScore < s) 
+		MOVi $bestScore $s 	; bestScore = s
+		MOVi $bestMove $move 	; bestMove = move
+		GEQi $myAlpha $bestScore @.f5	; if (myAlpha < bestScore) 
+		MOVi $myAlpha $bestScore 	; myAlpha = bestScore
+	.f5:	MOVi %1 $frm 	; undoMove(frm, t, oldPiece, captured, oldXCapture)
+		MOVi %2 $t 
+		MOVi %3 $oldPiece 
+		MOVi %4 $captured 
+		MOVi %5 $oldXCapture 
+		CALL &undoMove %0 *6	; expects undoMove(int, int, int, int, int) -> void @ Priyome2.impala:848:52
+		ADDi $i $i #1	; i = i + 1
+		GOTO @.l0  	; }
+	.e2:	SHLi %0 $bestScore #SCORE_SHIFT	; bestMove = bestMove | (bestScore << SCORE_SHIFT)
+		IORi $bestMove $bestMove %0
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+searchCaptures:	FUNC	; signature func searchCaptures(int alpha, int beta, int depth, int score, int firstMove) -> int @ Priyome2.impala:854:1
+	$bestMove:	OUTi
+	$alpha:	INPi
+	$beta:	INPi
+	$depth:	INPi
+	$score:	INPi
+	$firstMove:	INPi
+	$capturesCount:	LOCi
+	$frm:	LOCi
+.z.searchCaptures.moves:	! DEFi #MAX_MOVES
+	$moves:	LOCA *.z.searchCaptures.moves
+.z.searchCaptures.tos:	! DEFi #MAX_TARGET_SQUARES
+	$tos:	LOCA *.z.searchCaptures.tos
+	$myAlpha:	LOCi
+	$toCount:	LOCi
+	$i:	LOCi
+	$t:	LOCi
+	$move:	LOCi
+;-----------------------------------------------------------------------------
+		! EQUi #DEBUG #0 @.a0	; assert(0 <= depth)
+		LEQi #0 $depth @.a0
+		MOVp %1 &.a_0depth_4f2 
+		CALL ^assertFail %0 *1
+	.a0:	NOOP
+		! EQUi #DEBUG #0 @.a1	; assert(firstMove == 0 || isValidMove(firstMove) != FALSE)
+		EQUi $firstMove #0 @.a1
+		MOVi %1 $firstMove 
+		CALL &isValidMove %0 *2	; expects isValidMove(int) -> int @ Priyome2.impala:859:50
+		NEQi %0 #FALSE @.a1
+		MOVp %1 &.a_firstM_4f3 
+		CALL ^assertFail %0 *1
+	.a1:	MOVi $myAlpha $alpha 	; myAlpha = alpha
+		GEQi $myAlpha $score @.f3	; if (myAlpha < score) 
+		MOVi $myAlpha $score 	; myAlpha = score
+	.f3:	LSSi $myAlpha $beta @.f4	; if (myAlpha >= beta) 
+		SHLi $bestMove $score #SCORE_SHIFT	; bestMove = (score << SCORE_SHIFT)
+		RETU   	; } else 
+	.f4:	MOVi $capturesCount #0 	; capturesCount = 0
+		PEEK %0 &turnColor 	; frm = global nextPiece[global turnColor]
+		PEEK $frm &nextPiece %0
+	.l6:	PEEK %0 &turnColor 	; while (frm != global turnColor) 
+		EQUi $frm %0 @.e7
+		PEEK %1 &turnColor 	; toCount = listMoves(global turnColor, frm, tos)
+		MOVi %2 $frm 
+		ADRL %3 $tos *0
+		CALL &listMoves %0 *4	; expects listMoves(int, int, int-ptr) -> int @ Priyome2.impala:872:51
+		MOVi $toCount %0 
+		MOVi $i #0 	; for (i = 0 to toCount) 
+		GEQi #0 $toCount @.e8
+	.l9:	GETL $t $tos $i	; t = tos[i]
+		SHLi %0 $t #TO_SHIFT	; move = frm | (t << TO_SHIFT)
+		IORi $move $frm %0
+		MOVi %1 $t 	; if (squareCapturesKing(t) != FALSE) 
+		CALL &squareCapturesKing %0 *2	; expects squareCapturesKing(int) -> int @ Priyome2.impala:877:31
+		EQUi %0 #FALSE @.f10
+		ADDi %0 #CAPTURE_KING_MIN_SCORE $depth	; bestMove = ((CAPTURE_KING_MIN_SCORE + depth) << SCORE_SHIFT) | move
+		SHLi %0 %0 #SCORE_SHIFT
+		IORi $bestMove %0 $move
+		RETU   	; goto returnNow
+	.f10:	PEEK %0 &board $t	; if (global board[t] > EMPTY || global xCapture == t) 
+		GRTi %0 #EMPTY @.t11
+		PEEK %0 &xCapture 
+		NEQi %0 $t @.f12
+	.t11:	NOOP
+		! EQUi #DEBUG #0 @.a13	; assert(capturesCount < MAX_MOVES)
+		LSSi $capturesCount #MAX_MOVES @.a13
+		MOVp %1 &.a_captur_4f4 
+		CALL ^assertFail %0 *1
+	.a13:	NEQi $move $firstMove @.f14	; if (move == firstMove) 
+		SETL $moves $capturesCount $moves:0	; moves[capturesCount] = moves[0]
+		ADDi $capturesCount $capturesCount #1	; capturesCount = capturesCount + 1
+		MOVi $moves:0 $move 	; moves[0] = move
+		GOTO @.e15  	; } else 
+	.f14:	SETL $moves $capturesCount $move	; moves[capturesCount] = move
+		ADDi $capturesCount $capturesCount #1	; capturesCount = capturesCount + 1
+	.e15:	NOOP
+	.f12:	FORi $i $toCount @.l9	; }
+	.e8:	PEEK $frm &nextPiece $frm	; frm = global nextPiece[frm]
+		GOTO @.l6  	; }
+	.e7:	MOVi %1 $score 	; bestMove = findBestMove(score, myAlpha, beta, depth, score, capturesCount, moves)
+		MOVi %2 $myAlpha 
+		MOVi %3 $beta 
+		MOVi %4 $depth 
+		MOVi %5 $score 
+		MOVi %6 $capturesCount 
+		ADRL %7 $moves *0
+		CALL &findBestMove %0 *8	; expects findBestMove(int, int, int, int, int, int, int-ptr) -> int @ Priyome2.impala:897:84
+		MOVi $bestMove %0 
+	.e5:	NOOP
+	returnNow:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+searchAll:	FUNC	; signature func searchAll(int alpha, int beta, int depth, int score, int firstMove) -> int @ Priyome2.impala:902:1
+	$bestMove:	OUTi
+	$alpha:	INPi
+	$beta:	INPi
+	$depth:	INPi
+	$score:	INPi
+	$firstMove:	INPi
+.z.searchAll.moves:	! DEFi #MAX_MOVES
+	$moves:	LOCA *.z.searchAll.moves
+.z.searchAll.tos:	! DEFi #MAX_TARGET_SQUARES
+	$tos:	LOCA *.z.searchAll.tos
+	$movesCount:	LOCi
+	$capturesCount:	LOCi
+	$frm:	LOCi
+	$toCount:	LOCi
+	$i:	LOCi
+	$t:	LOCi
+	$move:	LOCi
+;-----------------------------------------------------------------------------
+		! EQUi #DEBUG #0 @.a0	; assert(0 <= depth)
+		LEQi #0 $depth @.a0
+		MOVp %1 &.a_0depth_4f2 
+		CALL ^assertFail %0 *1
+	.a0:	NOOP
+		! EQUi #DEBUG #0 @.a1	; assert(firstMove == 0 || isValidMove(firstMove) != FALSE)
+		EQUi $firstMove #0 @.a1
+		MOVi %1 $firstMove 
+		CALL &isValidMove %0 *2	; expects isValidMove(int) -> int @ Priyome2.impala:908:50
+		NEQi %0 #FALSE @.a1
+		MOVp %1 &.a_firstM_4f3 
+		CALL ^assertFail %0 *1
+	.a1:	LSSi $alpha $beta @.f3	; if (alpha >= beta) 
+		! SUBi <A> #MIN_SCORE #1	; bestMove = (MIN_SCORE - 1) << SCORE_SHIFT
+		! SHLi <A> <A> #SCORE_SHIFT
+		MOVi $bestMove <A> 
+		RETU   	; } else 
+	.f3:	MOVi $movesCount #0 	; movesCount = 0
+		MOVi $capturesCount #0 	; capturesCount = 0
+		PEEK %0 &turnColor 	; frm = global nextPiece[global turnColor]
+		PEEK $frm &nextPiece %0
+	.l5:	PEEK %0 &turnColor 	; while (frm != global turnColor) 
+		EQUi $frm %0 @.e6
+		PEEK %1 &turnColor 	; toCount = listMoves(global turnColor, frm, tos)
+		MOVi %2 $frm 
+		ADRL %3 $tos *0
+		CALL &listMoves %0 *4	; expects listMoves(int, int, int-ptr) -> int @ Priyome2.impala:926:51
+		MOVi $toCount %0 
+		MOVi $i #0 	; for (i = 0 to toCount) 
+		GEQi #0 $toCount @.e7
+	.l8:	GETL $t $tos $i	; t = tos[i]
+		SHLi %0 $t #TO_SHIFT	; move = frm | (t << TO_SHIFT)
+		IORi $move $frm %0
+		MOVi %1 $t 	; if (squareCapturesKing(t) != FALSE) 
+		CALL &squareCapturesKing %0 *2	; expects squareCapturesKing(int) -> int @ Priyome2.impala:931:31
+		EQUi %0 #FALSE @.f9
+		ADDi %0 #CAPTURE_KING_MIN_SCORE $depth	; bestMove = ((CAPTURE_KING_MIN_SCORE + depth) << SCORE_SHIFT) | move
+		SHLi %0 %0 #SCORE_SHIFT
+		IORi $bestMove %0 $move
+		RETU   	; goto returnNow
+	.f9:	NOOP
+		! EQUi #DEBUG #0 @.a10	; assert(movesCount < MAX_MOVES)
+		LSSi $movesCount #MAX_MOVES @.a10
+		MOVp %1 &.a_movesC_4f5 
+		CALL ^assertFail %0 *1
+	.a10:	NEQi $move $firstMove @.f11	; if (move == firstMove) 
+		GETL %0 $moves $capturesCount	; moves[movesCount] = moves[capturesCount]
+		SETL $moves $movesCount %0
+		ADDi $movesCount $movesCount #1	; movesCount = movesCount + 1
+		! EQUi #DEBUG #0 @.a12	; assert(capturesCount < MAX_MOVES)
+		LSSi $capturesCount #MAX_MOVES @.a12
+		MOVp %1 &.a_captur_4f4 
+		CALL ^assertFail %0 *1
+	.a12:	SETL $moves $capturesCount $moves:0	; moves[capturesCount] = moves[0]
+		ADDi $capturesCount $capturesCount #1	; capturesCount = capturesCount + 1
+		MOVi $moves:0 $move 	; moves[0] = move
+		GOTO @.e13  	; } else if (global board[t] > EMPTY || global xCapture == t) 
+	.f11:	PEEK %0 &board $t	; if (global board[t] > EMPTY || global xCapture == t) 
+		GRTi %0 #EMPTY @.t14
+		PEEK %0 &xCapture 
+		NEQi %0 $t @.f15
+	.t14:	GETL %0 $moves $capturesCount	; moves[movesCount] = moves[capturesCount]
+		SETL $moves $movesCount %0
+		ADDi $movesCount $movesCount #1	; movesCount = movesCount + 1
+		! EQUi #DEBUG #0 @.a16	; assert(capturesCount < MAX_MOVES)
+		LSSi $capturesCount #MAX_MOVES @.a16
+		MOVp %1 &.a_captur_4f4 
+		CALL ^assertFail %0 *1
+	.a16:	SETL $moves $capturesCount $move	; moves[capturesCount] = move
+		ADDi $capturesCount $capturesCount #1	; capturesCount = capturesCount + 1
+		GOTO @.e17  	; } else 
+	.f15:	SETL $moves $movesCount $move	; moves[movesCount] = move
+		ADDi $movesCount $movesCount #1	; movesCount = movesCount + 1
+	.e17:	NOOP
+	.e13:	FORi $i $toCount @.l8	; }
+	.e7:	PEEK $frm &nextPiece $frm	; frm = global nextPiece[frm]
+		GOTO @.l5  	; }
+	.e6:	SUBi %1 #MIN_SCORE #1	; bestMove = findBestMove((MIN_SCORE - 1), alpha, beta, depth, score, movesCount, moves)
+		MOVi %2 $alpha 
+		MOVi %3 $beta 
+		MOVi %4 $depth 
+		MOVi %5 $score 
+		MOVi %6 $movesCount 
+		ADRL %7 $moves *0
+		CALL &findBestMove %0 *8	; expects findBestMove(int, int, int, int, int, int, int-ptr) -> int @ Priyome2.impala:964:89
+		MOVi $bestMove %0 
+	.e4:	NOOP
+	returnNow:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+search:	FUNC	; signature func search(int alpha, int beta, int depth, int score, int capturesOnly) -> int @ Priyome2.impala:969:1
+	$result:	OUTi
+	$alpha:	INPi
+	$beta:	INPi
+	$depth:	INPi
+	$score:	INPi
+	$capturesOnly:	INPi
+	$h:	LOCi
+	$hashIndex:	LOCi
+	$entry:	LOCi
+	$firstMove:	LOCi
+	$best:	LOCi
+	$bestMove:	LOCi
+	$s:	LOCi
+	$myBeta:	LOCi
+;-----------------------------------------------------------------------------
+		! EQUi #DEBUG #0 @.a0	; assert(0 <= depth)
+		LEQi #0 $depth @.a0
+		MOVp %1 &.a_0depth_4f2 
+		CALL ^assertFail %0 *1
+	.a0:	NOOP
+		! EQUi #DEBUG #0 @.a1	; assert(checkInvariant() != FALSE)
+		CALL &checkInvariant %0 *1	; expects checkInvariant() -> int @ Priyome2.impala:974:26
+		NEQi %0 #FALSE @.a1
+		MOVp %1 &.a_checkI_4eb 
+		CALL ^assertFail %0 *1
+	.a1:	MOVi $myBeta $beta 	; myBeta = beta
+		ADDi %0 #CAPTURE_KING_MIN_SCORE $depth	; if (myBeta > CAPTURE_KING_MIN_SCORE + depth) 
+		LEQi $myBeta %0 @.f2
+		ADDi $myBeta #CAPTURE_KING_MIN_SCORE $depth	; myBeta = CAPTURE_KING_MIN_SCORE + depth
+	.f2:	PEEK %0 &xCapture 	; h = (global boardHash + global xCaptureKeys[global xCapture] + global colorKeys[global turnColor]) & HASH_MASK
+		PEEK %1 &boardHash 
+		PEEK %0 &xCaptureKeys %0
+		PEEK %2 &turnColor 
+		ADDi %1 %1 %0
+		PEEK %2 &colorKeys %2
+		ADDi %1 %1 %2
+		ANDi $h %1 #HASH_MASK
+		! SUBi <A> #HASH_TABLE_SIZE #1	; hashIndex = (h & (HASH_TABLE_SIZE - 1))
+		ANDi $hashIndex $h <A>
+		! XORi <A> #MOVE_MASK #-1	; h = (h & ~MOVE_MASK)
+		ANDi $h $h <A>
+		PEEK $entry &hashTable $hashIndex	; entry = global hashTable[hashIndex]
+		MOVi $firstMove #0 	; firstMove = 0
+		! XORi <A> #MOVE_MASK #-1	; if ((entry & ~MOVE_MASK) == h) 
+		ANDi %1 $entry <A>
+		NEQi %1 $h @.f3
+		ANDi $firstMove $entry #MOVE_MASK	; firstMove = entry & MOVE_MASK
+	.f3:	EQUi $capturesOnly #FALSE @.f4	; if (capturesOnly != FALSE) 
+		MOVi %1 $alpha 	; best = searchCaptures(alpha, myBeta, depth, score, firstMove)
+		MOVi %2 $myBeta 
+		MOVi %3 $depth 
+		MOVi %4 $score 
+		MOVi %5 $firstMove 
+		CALL &searchCaptures %0 *6	; expects searchCaptures(int, int, int, int, int) -> int @ Priyome2.impala:1004:64
+		MOVi $best %0 
+		MOVi $result $best 	; result = best
+		GOTO @.e5  	; } else 
+	.f4:	MOVi %1 $alpha 	; best = searchAll(alpha, myBeta, depth, score, firstMove)
+		MOVi %2 $myBeta 
+		MOVi %3 $depth 
+		MOVi %4 $score 
+		MOVi %5 $firstMove 
+		CALL &searchAll %0 *6	; expects searchAll(int, int, int, int, int) -> int @ Priyome2.impala:1010:59
+		MOVi $best %0 
+		MOVi $result $best 	; result = best
+		SHRi $s $result #SCORE_SHIFT	; s = result >> SCORE_SHIFT
+		ADDi %0 #CAPTURE_KING_MIN_SCORE $depth	; if (s == CAPTURE_KING_MIN_SCORE + depth) 
+		NEQi $s %0 @.f6
+		ANDi %0 $result #SCORE_MASK	; result = (result & SCORE_MASK) | IN_CHECK
+		IORi $result %0 #IN_CHECK
+		GOTO @.e7  	; } else if (s == -(CAPTURE_KING_MIN_SCORE + depth - 1)) 
+	.f6:	ADDi %0 #CAPTURE_KING_MIN_SCORE $depth	; if (s == -(CAPTURE_KING_MIN_SCORE + depth - 1)) 
+		SUBi %0 %0 #1
+		SUBi %0 #0 %0
+		NEQi $s %0 @.f8
+		PEEK %2 &turnColor 	; if (canCaptureKing(switchColor(global turnColor)) != FALSE) 
+		CALL &switchColor %1 *2	; expects switchColor(int) -> int @ Priyome2.impala:1027:52
+		CALL &canCaptureKing %0 *2	; expects canCaptureKing(int) -> int @ Priyome2.impala:1027:54
+		EQUi %0 #FALSE @.f9
+		ANDi %0 $result #SCORE_MASK	; result = (result & SCORE_MASK) | CHECKMATE
+		IORi $result %0 #CHECKMATE
+		GOTO @.e10  	; } else 
+	.f9:	SHLi %0 $score #SCORE_SHIFT	; result = (score << SCORE_SHIFT) | STALEMATE
+		IORi $result %0 #STALEMATE
+	.e10:	NOOP
+	.f8:	NOOP
+	.e7:	NOOP
+	.e5:	ANDi $bestMove $best #MOVE_MASK	; bestMove = (best & MOVE_MASK)
+		EQUi $bestMove #0 @.f11	; if (bestMove != 0) 
+		! EQUi #DEBUG #0 @.a12	; assert(isValidMove(bestMove) != FALSE)
+		MOVi %1 $bestMove 
+		CALL &isValidMove %0 *2	; expects isValidMove(int) -> int @ Priyome2.impala:1037:32
+		NEQi %0 #FALSE @.a12
+		MOVp %1 &.a_isVali_4f6 
+		CALL ^assertFail %0 *1
+	.a12:	IORi %0 $h $bestMove	; global hashTable[hashIndex] = h | bestMove
+		POKE &hashTable $hashIndex %0
+	.f11:	PEEK %0 &evalCounter 	; global evalCounter = global evalCounter + 1
+		ADDi %0 %0 #1
+		POKE &evalCounter %0 
+		PEEK %0 &evalCounter 	; if (global evalCounter < 0) 
+		GEQi %0 #0 @.f13
+		PEEK %0 &evalCounter 	; global evalCounter = global evalCounter - 1
+		SUBi %0 %0 #1
+		POKE &evalCounter %0 
+	.f13:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+executeMove:	FUNC	; signature func executeMove(int move) -> int @ Priyome2.impala:1050:1
+	$status:	OUTi
+	$move:	INPi
+.z.executeMove.tos:	! DEFi #MAX_TARGET_SQUARES
+	$tos:	LOCA *.z.executeMove.tos
+	$frm:	LOCi
+	$t:	LOCi
+	$oldPiece:	LOCi
+	$captured:	LOCi
+	$oldXCapture:	LOCi
+	$toCount:	LOCi
+	$i:	LOCi
+;-----------------------------------------------------------------------------
+		! EQUi #DEBUG #0 @.a0	; assert(isValidMove(move) != FALSE)
+		MOVi %1 $move 
+		CALL &isValidMove %0 *2	; expects isValidMove(int) -> int @ Priyome2.impala:1054:27
+		NEQi %0 #FALSE @.a0
+		MOVp %1 &.a_isVali_4d2 
+		CALL ^assertFail %0 *1
+	.a0:	PEEK %0 &turnColor 	; frm = global nextPiece[global turnColor]
+		PEEK $frm &nextPiece %0
+	.l1:	PEEK %0 &turnColor 	; while (frm != global turnColor) 
+		EQUi $frm %0 @.e2
+		! EQUi #DEBUG #0 @.a3	; assert(global board[frm] > EMPTY && (global board[frm] & COLOR_MASK) == global turnColor)
+		PEEK %0 &board $frm
+		LEQi %0 #EMPTY @.f4
+		PEEK %0 &board $frm
+		ANDi %0 %0 #COLOR_MASK
+		PEEK %1 &turnColor 
+		EQUi %0 %1 @.a3
+	.f4:	MOVp %1 &.a_global_4f7 
+		CALL ^assertFail %0 *1
+	.a3:	PEEK %1 &turnColor 	; toCount = listMoves(global turnColor, frm, tos)
+		MOVi %2 $frm 
+		ADRL %3 $tos *0
+		CALL &listMoves %0 *4	; expects listMoves(int, int, int-ptr) -> int @ Priyome2.impala:1059:50
+		MOVi $toCount %0 
+		! EQUi #DEBUG #0 @.a5	; assert(toCount <= MAX_TARGET_SQUARES)
+		LEQi $toCount #MAX_TARGET_SQUARES @.a5
+		MOVp %1 &.a_toCoun_4f0 
+		CALL ^assertFail %0 *1
+	.a5:	MOVi $i #0 	; for (i = 0 to toCount) 
+		GEQi #0 $toCount @.e6
+	.l7:	GETL $t $tos $i	; t = tos[i]
+		SHLi %0 $t #TO_SHIFT	; if (move == (frm | (t << TO_SHIFT))) 
+		IORi %0 $frm %0
+		NEQi $move %0 @.f8
+		PEEK $oldPiece &board $frm	; oldPiece = global board[frm]
+		PEEK $captured &board $t	; captured = global board[t]
+		PEEK $oldXCapture &xCapture 	; oldXCapture = global xCapture
+		MOVi %1 $frm 	; doMove(frm, t, oldPiece, captured, oldXCapture)
+		MOVi %2 $t 
+		MOVi %3 $oldPiece 
+		MOVi %4 $captured 
+		MOVi %5 $oldXCapture 
+		CALL &doMove %0 *6	; expects doMove(int, int, int, int, int) -> int @ Priyome2.impala:1067:52
+		MOVi %1 #MIN_SCORE 	; switch ((search(MIN_SCORE, MAX_SCORE, 1, 0, FALSE) & MOVE_MASK) == IN_CHECK to (CHECKMATE + 1)) 
+		MOVi %2 #MAX_SCORE 
+		MOVi %3 #1 
+		MOVi %4 #0 
+		MOVi %5 #FALSE 
+		CALL &search %0 *6	; expects search(int, int, int, int, int) -> int @ Priyome2.impala:1069:56
+		! ADDi <A> #CHECKMATE #1
+		! SUBi <A> <A> #IN_CHECK
+		ANDi %0 %0 #MOVE_MASK
+		SUBi %0 %0 #IN_CHECK
+		SWCH %0 *<A> @.s9
+	.s9:	MOVi $status #VALID_MOVE 	; status = VALID_MOVE
+		RETU   	; goto returnNow
+		GOTO @.e10  	; }
+		! SUBi <A> #CHECKMATE #IN_CHECK	; case CHECKMATE
+		! LSSi <A> #0 @.g11
+	.s9#<A>:	NOOP
+	.g11:	MOVi $status #CHECKMATE 	; status = CHECKMATE
+		RETU   	; goto returnNow
+		GOTO @.e10  	; }
+		! SUBi <A> #STALEMATE #IN_CHECK	; case STALEMATE
+		! LSSi <A> #0 @.g12
+	.s9#<A>:	NOOP
+	.g12:	MOVi $status #STALEMATE 	; status = STALEMATE
+		RETU   	; goto returnNow
+		GOTO @.e10  	; }
+		! SUBi <A> #IN_CHECK #IN_CHECK	; case IN_CHECK
+		! LSSi <A> #0 @.g13
+	.s9#<A>:	NOOP
+	.g13:	MOVi %1 $frm 	; undoMove(frm, t, oldPiece, captured, oldXCapture)
+		MOVi %2 $t 
+		MOVi %3 $oldPiece 
+		MOVi %4 $captured 
+		MOVi %5 $oldXCapture 
+		CALL &undoMove %0 *6	; expects undoMove(int, int, int, int, int) -> void @ Priyome2.impala:1074:56
+		MOVi $status #IN_CHECK 	; status = IN_CHECK
+		RETU   	; goto returnNow
+	.e10:	NOOP
+	.f8:	FORi $i $toCount @.l7	; }
+	.e6:	PEEK $frm &nextPiece $frm	; frm = global nextPiece[frm]
+		GOTO @.l1  	; }
+	.e2:	MOVi $status #INVALID_MOVE 	; status = INVALID_MOVE
+	returnNow:	RETU   	; }
+
+; signature extern native print() -> unknown @ Priyome2.impala:1088:1
+; signature extern native printInt() -> unknown @ Priyome2.impala:1089:1
+; signature extern native printLF() -> unknown @ Priyome2.impala:1090:1
+; signature extern native input() -> unknown @ Priyome2.impala:1091:1
+
+;-----------------------------------------------------------------------------
+getComputerMove:	FUNC	; signature func getComputerMove() -> int @ Priyome2.impala:1096:1
+	$move:	OUTi
+	$d:	LOCi
+	$m:	LOCi
+	$printedThinking:	LOCi
+;-----------------------------------------------------------------------------
+		MOVi $printedThinking #FALSE 	; printedThinking = FALSE
+		MOVi $m #0 	; m = 0
+		POKE &evalCounter #0 	; global evalCounter = 0
+		MOVi $d #MIN_DEPTH 	; d = MIN_DEPTH
+	.l0:	GRTi $d #MAX_DEPTH @.e2	; while (d <= MAX_DEPTH && global evalCounter < global minEvals) 
+		PEEK %0 &evalCounter 
+		PEEK %1 &minEvals 
+		GEQi %0 %1 @.e2
+		PEEK %0 &evalCounter 	; if (global evalCounter > 1000000) 
+		LEQi %0 #1000000 @.f3
+		NEQi $printedThinking #FALSE @.f4	; if (printedThinking == FALSE) 
+		MOVp %1 &.s_Thinki_4d8 	; print("Thinking...")
+		CALL ^print %0 *2	; expects print(int-ptr) -> unknown @ Priyome2.impala:1107:25
+		MOVi $printedThinking #TRUE 	; printedThinking = TRUE
+	.f4:	MOVp %1 &.s_Thinki_4d8:10 	; print(".")
+		CALL ^print %0 *2	; expects print(int-ptr) -> unknown @ Priyome2.impala:1110:14
+	.f3:	MOVi %1 #MIN_SCORE 	; m = search(MIN_SCORE, MAX_SCORE, d, 0, FALSE)
+		MOVi %2 #MAX_SCORE 
+		MOVi %3 $d 
+		MOVi %4 #0 
+		MOVi %5 #FALSE 
+		CALL &search %0 *6	; expects search(int, int, int, int, int) -> int @ Priyome2.impala:1112:48
+		MOVi $m %0 
+		ADDi $d $d #1	; d = d + 1
+		GOTO @.l0  	; }
+	.e2:	EQUi $printedThinking #FALSE @.f5	; if (printedThinking != FALSE) 
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ Priyome2.impala:1116:12
+	.f5:	NOOP
+		! EQUi #DEBUG #0 @.a6	; assert((m & MOVE_MASK) == CHECKMATE || (m & MOVE_MASK) == STALEMATE || isValidMove(m & MOVE_MASK) != FALSE)
+		ANDi %0 $m #MOVE_MASK
+		EQUi %0 #CHECKMATE @.a6
+		ANDi %0 $m #MOVE_MASK
+		EQUi %0 #STALEMATE @.a6
+		ANDi %1 $m #MOVE_MASK
+		CALL &isValidMove %0 *2	; expects isValidMove(int) -> int @ Priyome2.impala:1118:100
+		NEQi %0 #FALSE @.a6
+		MOVp %1 &.a_mMOVEM_4f8 
+		CALL ^assertFail %0 *1
+	.a6:	ANDi $move $m #MOVE_MASK	; move = (m & MOVE_MASK)
+		RETU   	; }
+
+LET_COMPUTER_PLAY:	! DEFi #-1	; signature const LET_COMPUTER_PLAY : int @ Priyome2.impala:1122:1
+TAKE_BACK:	! DEFi #-2	; signature const TAKE_BACK : int @ Priyome2.impala:1123:1
+NEW_GAME:	! DEFi #-3	; signature const NEW_GAME : int @ Priyome2.impala:1124:1
+QUIT:	! DEFi #-4	; signature const QUIT : int @ Priyome2.impala:1125:1
+SYNTAX_ERROR:	! DEFi #-5	; signature const SYNTAX_ERROR : int @ Priyome2.impala:1126:1
+MATE:	! DEFi #-6	; signature const MATE : int @ Priyome2.impala:1127:1
+SET_MAXIMUM_LEVEL:	! DEFi #-93	; signature const SET_MAXIMUM_LEVEL : int @ Priyome2.impala:1128:1
+SET_MINIMUM_LEVEL:	! DEFi #-101	; signature const SET_MINIMUM_LEVEL : int @ Priyome2.impala:1129:1
+
+;-----------------------------------------------------------------------------
+strcmp:	FUNC	; signature func strcmp(int-ptr s0, int-ptr s1) -> int @ Priyome2.impala:1131:1
+	$d:	OUTi
+	$s0:	INPp
+	$s1:	INPp
+	$a:	LOCp
+	$b:	LOCp
+	$c:	LOCi
+;-----------------------------------------------------------------------------
+		MOVp $a $s0 	; a = s0
+		MOVp $b $s1 	; b = s1
+	.l0:	PEEK $c $a 	; while ((d = (c = *a) - *b) == 0 && c != 0) 
+		PEEK %0 $b 
+		SUBi $d $c %0
+		NEQi $d #0 @.e2
+		EQUi $c #0 @.e2
+		ADDp $a $a #1	; a = a + 1
+		ADDp $b $b #1	; b = b + 1
+		GOTO @.l0  	; }
+	.e2:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+strncmp:	FUNC	; signature func strncmp(int-ptr s0, int-ptr s1, int n) -> int @ Priyome2.impala:1143:1
+	$d:	OUTi
+	$s0:	INPp
+	$s1:	INPp
+	$n:	INPi
+	$a:	LOCp
+	$b:	LOCp
+	$i:	LOCi
+	$c:	LOCi
+;-----------------------------------------------------------------------------
+		MOVi $d #0 	; d = 0
+		LEQi $n #0 @.f0	; if (n > 0) 
+		MOVp $a $s0 	; a = s0
+		MOVp $b $s1 	; b = s1
+		MOVi $i #1 	; for (i = 1 to n) 
+		GEQi #1 $n @.f0
+	.l2:	PEEK $c $a 	; if ((d = (c = *a) - *b) != 0 || c == 0) goto done
+		PEEK %0 $b 
+		SUBi $d $c %0
+		NEQi $d #0 @done
+		NEQi $c #0 @.f4
+		RETU   	; goto done
+	.f4:	ADDp $a $a #1	; a = a + 1
+		ADDp $b $b #1	; b = b + 1
+		FORi $i $n @.l2	; }
+	done:	NOOP
+	.f0:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+toupper:	FUNC	; signature func toupper(int c) -> int @ Priyome2.impala:1163:1
+	$u:	OUTi
+	$c:	INPi
+;-----------------------------------------------------------------------------
+		MOVi $u $c 	; u = c
+		LSSi $u #'a' @.f1	; if (u >= 'a' && u <= 'z') 
+		GRTi $u #'z' @.f1
+		! SUBi <A> #'a' #'A'	; u = u - ('a' - 'A')
+		SUBi $u $u <A>
+	.f1:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+getUserMove:	FUNC	; signature func getUserMove() -> int @ Priyome2.impala:1172:1
+	$result:	OUTi
+	$level:	LOCi
+.z.getUserMove.s:	! DEFi #256
+	$s:	LOCA *.z.getUserMove.s
+	$l:	LOCi
+	$fromCol:	LOCi
+	$fromRow:	LOCi
+	$i:	LOCi
+	$toCol:	LOCi
+	$toRow:	LOCi
+;-----------------------------------------------------------------------------
+	.l0:	MOVi $result #SYNTAX_ERROR 	; result = SYNTAX_ERROR
+		MOVp %1 &.s__4d9 	; print(">")
+		CALL ^print %0 *2	; expects print(int-ptr) -> unknown @ Priyome2.impala:1178:13
+		MOVi %1 #1023 	; l = input(1023, s)
+		ADRL %2 $s *0
+		CALL ^input %0 *3	; expects input(int, int-ptr) -> int @ Priyome2.impala:1179:21
+		MOVi $l %0 
+		LEQi $l #0 @.f2	; if (l > 0 && s[l - 1] == '\n') 
+		SUBi %0 $l #1
+		GETL %0 $s %0
+		NEQi %0 #'\n' @.f2
+		SUBi %0 $l #1	; s[l - 1] = 0
+		SETL $s %0 #0
+	.f2:	ADRL %1 $s *0	; if (strcmp(s, "go") == 0) 
+		MOVp %2 &.s_go_4da 
+		CALL &strcmp %0 *3	; expects strcmp(int-ptr, int-ptr) -> int @ Priyome2.impala:1183:23
+		NEQi %0 #0 @.f3
+		MOVi $result #LET_COMPUTER_PLAY 	; result = LET_COMPUTER_PLAY
+		GOTO @.e4  	; } else if (strcmp(s, "back") == 0) 
+	.f3:	ADRL %1 $s *0	; if (strcmp(s, "back") == 0) 
+		MOVp %2 &.s_back_4db 
+		CALL &strcmp %0 *3	; expects strcmp(int-ptr, int-ptr) -> int @ Priyome2.impala:1185:32
+		NEQi %0 #0 @.f5
+		MOVi $result #TAKE_BACK 	; result = TAKE_BACK
+		GOTO @.e6  	; } else if (strcmp(s, "new") == 0) 
+	.f5:	ADRL %1 $s *0	; if (strcmp(s, "new") == 0) 
+		MOVp %2 &.s_new_4dc 
+		CALL &strcmp %0 *3	; expects strcmp(int-ptr, int-ptr) -> int @ Priyome2.impala:1187:31
+		NEQi %0 #0 @.f7
+		MOVi $result #NEW_GAME 	; result = NEW_GAME
+		GOTO @.e8  	; } else if (strncmp(s, "level ", 6) == 0 && l == 7 && (level = s[6] - '0') >= 1 && level <= 9) 
+	.f7:	ADRL %1 $s *0	; if (strncmp(s, "level ", 6) == 0 && l == 7 && (level = s[6] - '0') >= 1 && level <= 9) 
+		MOVp %2 &.s_level_4dd 
+		MOVi %3 #6 
+		CALL &strncmp %0 *4	; expects strncmp(int-ptr, int-ptr, int) -> int @ Priyome2.impala:1189:38
+		NEQi %0 #0 @.f10
+		NEQi $l #7 @.f10
+		SUBi $level $s:6 #'0'
+		LSSi $level #1 @.f10
+		GRTi $level #9 @.f10
+		ADDi %0 #SET_MINIMUM_LEVEL $level	; result = SET_MINIMUM_LEVEL + level - 1
+		SUBi $result %0 #1
+		GOTO @.e11  	; } else if (strcmp(s, "quit") == 0) 
+	.f10:	ADRL %1 $s *0	; if (strcmp(s, "quit") == 0) 
+		MOVp %2 &.s_quit_4de 
+		CALL &strcmp %0 *3	; expects strcmp(int-ptr, int-ptr) -> int @ Priyome2.impala:1191:32
+		NEQi %0 #0 @.f12
+		MOVi $result #QUIT 	; result = QUIT
+		GOTO @.e13  	; } else 
+	.f12:	MOVi %1 $s:0 	; fromCol = (toupper(s[0]) - 'A')
+		CALL &toupper %0 *2	; expects toupper(int) -> int @ Priyome2.impala:1194:29
+		SUBi $fromCol %0 #'A'
+		SUBi $fromRow $s:1 #'1'	; fromRow = (s[1] - '1')
+		MOVi $i #2 	; i = 2
+		NEQi $s:2 #'-' @.f14	; if (s[2] == '-') i = 3
+		MOVi $i #3 	; i = 3
+	.f14:	GETL %1 $s $i	; toCol = (toupper(s[i]) - 'A')
+		CALL &toupper %0 *2	; expects toupper(int) -> int @ Priyome2.impala:1198:27
+		SUBi $toCol %0 #'A'
+		ADDi %0 $i #1	; toRow = (s[i + 1] - '1')
+		GETL %0 $s %0
+		SUBi $toRow %0 #'1'
+		LSSi $fromCol #0 @.f16	; if (fromCol >= 0 && fromCol < 8 && fromRow >= 0 && fromRow < 8
+		GEQi $fromCol #8 @.f16
+		LSSi $fromRow #0 @.f16
+		GEQi $fromRow #8 @.f16
+		LSSi $toCol #0 @.f16
+		GEQi $toCol #8 @.f16
+		LSSi $toRow #0 @.f16
+		GEQi $toRow #8 @.f16
+		MOVi %1 $fromCol 	; result = makeMove(fromCol, fromRow, toCol, toRow)
+		MOVi %2 $fromRow 
+		MOVi %3 $toCol 
+		MOVi %4 $toRow 
+		CALL &makeMove %0 *5	; expects makeMove(int, int, int, int) -> int @ Priyome2.impala:1202:54
+		MOVi $result %0 
+		GOTO @.e17  	; } else 
+	.f16:	MOVp %1 &.s_Enterm_4df 	; print("Enter moves like 'd2d4' or:\n'level 1-9' to set computer level (default is 3).\n'go' to switch color and let the computer play.\n'back' to take back a step.\n'new' to start a new game.\n'quit' to exit.\n")
+		CALL ^print %0 *2	; expects print(int-ptr) -> unknown @ Priyome2.impala:1204:217
+	.e17:	NOOP
+	.e13:	NOOP
+	.e11:	NOOP
+	.e8:	NOOP
+	.e6:	NOOP
+	.e4:	EQUi $result #SYNTAX_ERROR @.l0	; } while (result == SYNTAX_ERROR)
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+printBoard:	FUNC	; signature func printBoard(int frm, int t) -> void @ Priyome2.impala:1210:1
+		PARA *1
+	$frm:	INPi
+	$t:	INPi
+	$y:	LOCi
+	$lastI:	LOCi
+.z.printBoard.buffer:	! DEFi #2
+	$buffer:	LOCA *.z.printBoard.buffer
+	$i:	LOCi
+	$c:	LOCi
+	$x:	LOCi
+;-----------------------------------------------------------------------------
+		MOVi $buffer:1 #0 	; buffer[1] = 0
+		MOVi $lastI #-1 	; lastI = -1
+		MOVp %1 &.s_ABCDEF_4e0 	; print("    A B C D E F G H\n")
+		CALL ^print %0 *2	; expects print(int-ptr) -> unknown @ Priyome2.impala:1215:32
+		MOVp %1 &.s__4e1 	; print("  +-----------------+\n")
+		CALL ^print %0 *2	; expects print(int-ptr) -> unknown @ Priyome2.impala:1216:34
+		MOVi $y #0 	; for (y = 0 to 8) 
+		GEQi #0 #8 @.e0
+	.l1:	SUBi $buffer:0 #'8' $y	; buffer[0] = '8' - y
+		ADRL %1 $buffer *0	; print(buffer)
+		CALL ^print %0 *2	; expects print(int-ptr) -> unknown @ Priyome2.impala:1219:16
+		MOVp %1 &.s__4e2 	; print(" |")
+		CALL ^print %0 *2	; expects print(int-ptr) -> unknown @ Priyome2.impala:1220:14
+		MOVi $x #0 	; for (x = 0 to 8) 
+		GEQi #0 #8 @.e2
+	.l3:	SUBi %0 #9 $y	; i = (9 - y) * STRIDE + (x + 1)
+		MULi %0 %0 #STRIDE
+		ADDi %1 $x #1
+		ADDi $i %0 %1
+		MOVi $c #' ' 	; c = ' '
+		EQUi $i $frm @.t4	; if (i == frm || i == t) c = '('
+		NEQi $i $t @.f5
+	.t4:	MOVi $c #'(' 	; c = '('
+	.f5:	EQUi $lastI $frm @.t6	; if (lastI == frm || lastI == t) 
+		NEQi $lastI $t @.f7
+	.t6:	NEQi $c #'(' @.f8	; if (c == '(') c = ' '
+		MOVi $c #' ' 	; c = ' '
+		GOTO @.e9  
+	.f8:	MOVi $c #')' 	; c = ')'
+	.e9:	NOOP
+	.f7:	MOVi $buffer:0 $c 	; buffer[0] = c
+		ADRL %1 $buffer *0	; print(buffer)
+		CALL ^print %0 *2	; expects print(int-ptr) -> unknown @ Priyome2.impala:1230:17
+		PEEK %0 &board $i	; c = PIECE_CHARS[global board[i] & (PIECE_MASK | BLACK)]
+		! IORi <A> #PIECE_MASK #BLACK
+		ANDi %0 %0 <A>
+		PEEK $c #PIECE_CHARS %0
+		NEQi $c #' ' @.f11	; if (c == ' ' && ((x ^ y) & 1) == 1) c = '.'
+		XORi %0 $x $y
+		ANDi %0 %0 #1
+		NEQi %0 #1 @.f11
+		MOVi $c #'.' 	; c = '.'
+	.f11:	MOVi $buffer:0 $c 	; buffer[0] = c
+		ADRL %1 $buffer *0	; print(buffer)
+		CALL ^print %0 *2	; expects print(int-ptr) -> unknown @ Priyome2.impala:1234:17
+		MOVi $lastI $i 	; lastI = i
+		FORi $x #8 @.l3	; }
+	.e2:	MOVi $c #' ' 	; c = ' '
+		EQUi $lastI $frm @.t12	; if (lastI == frm || lastI == t) c = ')'
+		NEQi $lastI $t @.f13
+	.t12:	MOVi $c #')' 	; c = ')'
+	.f13:	MOVi $buffer:0 $c 	; buffer[0] = c
+		ADRL %1 $buffer *0	; print(buffer)
+		CALL ^print %0 *2	; expects print(int-ptr) -> unknown @ Priyome2.impala:1240:16
+		MOVp %1 &.s__4e3 	; print("| ")
+		CALL ^print %0 *2	; expects print(int-ptr) -> unknown @ Priyome2.impala:1241:14
+		SUBi $buffer:0 #'8' $y	; buffer[0] = '8' - y
+		ADRL %1 $buffer *0	; print(buffer)
+		CALL ^print %0 *2	; expects print(int-ptr) -> unknown @ Priyome2.impala:1243:16
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ Priyome2.impala:1244:12
+		MOVi $lastI #-1 	; lastI = -1
+		FORi $y #8 @.l1	; }
+	.e0:	MOVp %1 &.s__4e1 	; print("  +-----------------+\n")
+		CALL ^print %0 *2	; expects print(int-ptr) -> unknown @ Priyome2.impala:1247:34
+		MOVp %1 &.s_ABCDEF_4e4 	; print("    A B C D E F G H\n\n")
+		CALL ^print %0 *2	; expects print(int-ptr) -> unknown @ Priyome2.impala:1248:34
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+registerMove:	FUNC	; signature func registerMove(int move, int piece, int captured, int xCapture) -> void @ Priyome2.impala:1251:1
+		PARA *1
+	$move:	INPi
+	$piece:	INPi
+	$captured:	INPi
+	$xCapture:	INPi
+	$i:	LOCi
+	$j:	LOCi
+;-----------------------------------------------------------------------------
+		PEEK %0 &historyCount 	; if (global historyCount >= HISTORY_SIZE) 
+		LSSi %0 #HISTORY_SIZE @.f0
+		PEEK %0 &historyCount 	; global historyCount = global historyCount - 1
+		SUBi %0 %0 #1
+		POKE &historyCount %0 
+		MOVi $j #0 	; for (j = 0 to global historyCount) 
+		PEEK %0 &historyCount 
+		GEQi #0 %0 @.f0
+	.l2:	MULi %2 $j #.z.HalfMove	; global history[j] = global history[j + 1]
+		ADDp %1 &history %2
+		ADDi %2 $j #1
+		MULi %4 %2 #.z.HalfMove
+		ADDp %3 &history %4
+		COPY %1 %3 *.z.HalfMove
+		FORi $j %0 @.l2	; }
+	.f0:	PEEK $i &historyCount 	; i = global historyCount
+		MULi %1 $i #.z.HalfMove	; global history[i].move = move
+		ADDp %0 &history %1
+		POKE %0 #.o.HalfMove.move $move
+		MULi %1 $i #.z.HalfMove	; global history[i].piece = piece
+		ADDp %0 &history %1
+		POKE %0 #.o.HalfMove.piece $piece
+		MULi %1 $i #.z.HalfMove	; global history[i].captured = captured
+		ADDp %0 &history %1
+		POKE %0 #.o.HalfMove.captured $captured
+		MULi %1 $i #.z.HalfMove	; global history[i].xCapture = xCapture
+		ADDp %0 &history %1
+		POKE %0 #.o.HalfMove.xCapture $xCapture
+		PEEK %0 &historyCount 	; global historyCount = global historyCount + 1
+		ADDi %0 %0 #1
+		POKE &historyCount %0 
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+takeBackMove:	FUNC	; signature func takeBackMove() -> int @ Priyome2.impala:1268:1
+	$move:	OUTi
+	$i:	LOCi
+	$frm:	LOCi
+	$t:	LOCi
+;-----------------------------------------------------------------------------
+		PEEK %0 &historyCount 	; if (global historyCount > 0) 
+		LEQi %0 #0 @.f0
+		PEEK %0 &historyCount 	; global historyCount = global historyCount - 1
+		SUBi %0 %0 #1
+		POKE &historyCount %0 
+		PEEK $i &historyCount 	; i = global historyCount
+		MULi %1 $i #.z.HalfMove	; move = global history[i].move
+		ADDp %0 &history %1
+		PEEK $move %0 #.o.HalfMove.move
+		MOVi %1 $move 	; frm = moveFrom(move)
+		CALL &moveFrom %0 *2	; expects moveFrom(int) -> int @ Priyome2.impala:1276:23
+		MOVi $frm %0 
+		MOVi %1 $move 	; t = moveTo(move)
+		CALL &moveTo %0 *2	; expects moveTo(int) -> int @ Priyome2.impala:1277:19
+		MOVi $t %0 
+		MOVi %1 $frm 	; undoMove(frm, t, global history[i].piece, global history[i].captured, global history[i].xCapture)
+		MOVi %2 $t 
+		MULi %4 $i #.z.HalfMove
+		ADDp %3 &history %4
+		PEEK %3 %3 #.o.HalfMove.piece
+		MULi %5 $i #.z.HalfMove
+		ADDp %4 &history %5
+		PEEK %4 %4 #.o.HalfMove.captured
+		MULi %6 $i #.z.HalfMove
+		ADDp %5 &history %6
+		PEEK %5 %5 #.o.HalfMove.xCapture
+		CALL &undoMove %0 *6	; expects undoMove(int, int, int, int, int) -> void @ Priyome2.impala:1278:100
+		RETU   	; } else 
+	.f0:	MOVi $move #0 	; move = 0
+	.e1:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+setLevel:	FUNC	; signature func setLevel(int level) -> void @ Priyome2.impala:1284:1
+		PARA *1
+	$level:	INPi
+	$i:	LOCi
+;-----------------------------------------------------------------------------
+		POKE &minEvals #100 	; global minEvals = 100
+		MOVi $i #0 	; for (i = 0 to level) global minEvals = global minEvals * 5
+		GEQi #0 $level @.e0
+	.l1:	PEEK %0 &minEvals 	; global minEvals = global minEvals * 5
+		MULi %0 %0 #5
+		POKE &minEvals %0 
+		FORi $i $level @.l1
+	.e0:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+main:	FUNC	; signature func main() -> void @ Priyome2.impala:1291:1
+		PARA *1
+	$lastFrom:	LOCi
+	$lastTo:	LOCi
+	$lastPiece:	LOCi
+	$isComputersTurn:	LOCi
+	$lastMove:	LOCi
+	$moveResult:	LOCi
+	$action:	LOCp
+.z.main.buffer:	! DEFi #256
+	$buffer:	LOCA *.z.main.buffer
+	$lastCaptured:	LOCi
+	$lastXCapture:	LOCi
+	$p:	LOCp
+	$level:	LOCi
+;-----------------------------------------------------------------------------
+		CALL &initGlobals %0 *1	; expects initGlobals() -> void @ Priyome2.impala:1295:15
+		CALL &restart %0 *1	; expects restart() -> void @ Priyome2.impala:1296:11
+		MOVi %1 #2 	; setLevel(2)
+		CALL &setLevel %0 *2	; expects setLevel(int) -> void @ Priyome2.impala:1297:13
+		MOVi %1 #0 	; printBoard(0, 0)
+		MOVi %2 #0 
+		CALL &printBoard %0 *3	; expects printBoard(int, int) -> void @ Priyome2.impala:1299:18
+		MOVi $isComputersTurn #FALSE 	; isComputersTurn = FALSE
+		MOVi $lastMove #0 	; lastMove = 0
+		MOVi $moveResult #0 	; moveResult = 0
+	.l0:	LSSi $lastMove #0 @.f1	; if (lastMove >= 0) 
+		MOVp $p &.s_Blacks_4e5 	; p = "Black's turn.\n"
+		PEEK %0 &turnColor 	; if (global turnColor == WHITE) p = "White's turn.\n"
+		NEQi %0 #WHITE @.f2
+		MOVp $p &.s_Whites_4e6 	; p = "White's turn.\n"
+	.f2:	MOVp %1 $p 	; print(p)
+		CALL ^print %0 *2	; expects print(int-ptr) -> unknown @ Priyome2.impala:1308:13
+	.f1:	MOVp $action &.s_Lastmo_4e7 	; action = "Last move:"
+		NEQi $isComputersTurn #FALSE @.f3	; if (isComputersTurn == FALSE) 
+		CALL &getUserMove %0 *1	; expects getUserMove() -> int @ Priyome2.impala:1313:29
+		MOVi $lastMove %0 
+		! ADDi <A> #LET_COMPUTER_PLAY #1	; switch (lastMove == NEW_GAME to LET_COMPUTER_PLAY + 1) 
+		! SUBi <A> <A> #NEW_GAME
+		SUBi %0 $lastMove #NEW_GAME
+		SWCH %0 *<A> @.s4
+		! SUBi <A> #LET_COMPUTER_PLAY #NEW_GAME	; case LET_COMPUTER_PLAY
+		! LSSi <A> #0 @.g6
+	.s4#<A>:	NOOP
+	.g6:	MOVi $isComputersTurn #TRUE 	; isComputersTurn = TRUE
+		GOTO @.e5  	; }
+		! SUBi <A> #TAKE_BACK #NEW_GAME	; case TAKE_BACK
+		! LSSi <A> #0 @.g7
+	.s4#<A>:	NOOP
+	.g7:	CALL &takeBackMove %0 *1	; expects takeBackMove() -> int @ Priyome2.impala:1320:32
+		MOVi $lastMove %0 
+		LEQi $lastMove #0 @.f8	; if (lastMove > 0) 
+		MOVi %1 $lastMove 	; lastFrom = moveFrom(lastMove)
+		CALL &moveFrom %0 *2	; expects moveFrom(int) -> int @ Priyome2.impala:1322:37
+		MOVi $lastFrom %0 
+		MOVi %1 $lastMove 	; lastTo = moveTo(lastMove)
+		CALL &moveTo %0 *2	; expects moveTo(int) -> int @ Priyome2.impala:1323:33
+		MOVi $lastTo %0 
+		MOVi $lastMove #0 	; lastMove = 0
+		MOVp $action &.s_Tookba_4e8 	; action = "Took back move:"
+		GOTO @.e5  	; } else 
+	.f8:	MOVp %1 &.s_Nomove_4e9 	; print("No move to take back.\n")
+		CALL ^print %0 *2	; expects print(int-ptr) -> unknown @ Priyome2.impala:1327:40
+		MOVi $lastMove #-1 	; lastMove = -1
+	.e9:	GOTO @.e5  	; }
+		! SUBi <A> #NEW_GAME #NEW_GAME	; case NEW_GAME
+		! LSSi <A> #0 @.g10
+	.s4#<A>:	NOOP
+	.g10:	CALL &restart %0 *1	; expects restart() -> void @ Priyome2.impala:1333:16
+		MOVi $lastMove #0 	; lastMove = 0
+		MOVi $lastFrom #0 	; lastFrom = 0
+		MOVi $lastTo #0 	; lastTo = 0
+		GOTO @.e5  	; }
+	.s4:	LSSi $lastMove #SET_MINIMUM_LEVEL @.f3	; if (lastMove >= SET_MINIMUM_LEVEL && lastMove <= SET_MAXIMUM_LEVEL) 
+		GRTi $lastMove #SET_MAXIMUM_LEVEL @.f3
+		SUBi $level $lastMove #SET_MINIMUM_LEVEL	; level = lastMove - SET_MINIMUM_LEVEL
+		MOVi %1 $level 	; setLevel(level)
+		CALL &setLevel %0 *2	; expects setLevel(int) -> void @ Priyome2.impala:1342:23
+		MOVp %1 &.s_Setcom_4ea 	; print("Set computer level to ")
+		CALL ^print %0 *2	; expects print(int-ptr) -> unknown @ Priyome2.impala:1343:39
+		ADDi %1 $level #1	; printInt(level + 1)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ Priyome2.impala:1344:27
+		MOVp %1 &.s_Nomove_4e9:20 	; print(".\n")
+		CALL ^print %0 *2	; expects print(int-ptr) -> unknown @ Priyome2.impala:1345:20
+		MOVi $lastMove #-1 	; lastMove = -1
+	.e5:	NOOP
+	.f3:	EQUi $isComputersTurn #FALSE @.f13	; if (isComputersTurn != FALSE) 
+		CALL &getComputerMove %0 *1	; expects getComputerMove() -> int @ Priyome2.impala:1352:33
+		MOVi $lastMove %0 
+	.f13:	MOVi $moveResult #0 	; moveResult = 0
+		EQUi $lastMove #CHECKMATE @.t14	; if (lastMove == CHECKMATE || lastMove == STALEMATE) 
+		NEQi $lastMove #STALEMATE @.f15
+	.t14:	MOVi $moveResult $lastMove 	; moveResult = lastMove
+		MOVi $isComputersTurn #FALSE 	; isComputersTurn = FALSE
+		MOVi $lastMove #-1 	; lastMove = -1
+	.f15:	LEQi $lastMove #0 @.f16	; if (lastMove > 0) 
+		MOVi %1 $lastMove 	; lastFrom = moveFrom(lastMove)
+		CALL &moveFrom %0 *2	; expects moveFrom(int) -> int @ Priyome2.impala:1362:34
+		MOVi $lastFrom %0 
+		MOVi %1 $lastMove 	; lastTo = moveTo(lastMove)
+		CALL &moveTo %0 *2	; expects moveTo(int) -> int @ Priyome2.impala:1363:30
+		MOVi $lastTo %0 
+		PEEK $lastPiece &board $lastFrom	; lastPiece = global board[lastFrom]
+		PEEK $lastCaptured &board $lastTo	; lastCaptured = global board[lastTo]
+		PEEK $lastXCapture &xCapture 	; lastXCapture = global xCapture
+		MOVi %1 $lastMove 	; moveResult = executeMove(lastMove)
+		CALL &executeMove %0 *2	; expects executeMove(int) -> int @ Priyome2.impala:1368:39
+		MOVi $moveResult %0 
+		! ADDi <A> #CHECKMATE #1	; switch (moveResult == VALID_MOVE to CHECKMATE + 1) 
+		! SUBi <A> <A> #VALID_MOVE
+		SUBi %0 $moveResult #VALID_MOVE
+		SWCH %0 *<A> @.s17
+		! SUBi <A> #VALID_MOVE #VALID_MOVE	; case VALID_MOVE, CHECKMATE, STALEMATE
+		! LSSi <A> #0 @.g19
+	.s17#<A>:	NOOP
+	.g19:	! SUBi <A> #CHECKMATE #VALID_MOVE
+		! LSSi <A> #0 @.g20
+	.s17#<A>:	NOOP
+	.g20:	! SUBi <A> #STALEMATE #VALID_MOVE
+		! LSSi <A> #0 @.g21
+	.s17#<A>:	NOOP
+	.g21:	MOVi %1 $lastMove 	; registerMove(lastMove, lastPiece, lastCaptured, lastXCapture)
+		MOVi %2 $lastPiece 
+		MOVi %3 $lastCaptured 
+		MOVi %4 $lastXCapture 
+		CALL &registerMove %0 *5	; expects registerMove(int, int, int, int) -> void @ Priyome2.impala:1371:68
+		NEQi $moveResult #VALID_MOVE @.f22	; if (moveResult == VALID_MOVE) 
+		SUBi $isComputersTurn #TRUE $isComputersTurn	; isComputersTurn = TRUE - isComputersTurn
+		GOTO @.e18  	; } else 
+	.f22:	MOVi $isComputersTurn #FALSE 	; isComputersTurn = FALSE
+	.e23:	GOTO @.e18  	; }
+		! SUBi <A> #IN_CHECK #VALID_MOVE	; case IN_CHECK
+		! LSSi <A> #0 @.g24
+	.s17#<A>:	NOOP
+	.g24:	MOVp %1 &.s_Kingin_4eb 	; print("King in check.\n")
+		CALL ^print %0 *2	; expects print(int-ptr) -> unknown @ Priyome2.impala:1380:32
+		MOVi $lastMove #-1 	; lastMove = -1
+		GOTO @.e18  	; }
+	.s17:	NEQi $moveResult #INVALID_MOVE @.f16	; if (moveResult == INVALID_MOVE) 
+		MOVp %1 &.s_Invali_4ec 	; print("Invalid move.\n")
+		CALL ^print %0 *2	; expects print(int-ptr) -> unknown @ Priyome2.impala:1386:32
+		MOVi $lastMove #-1 	; lastMove = -1
+	.e18:	NOOP
+	.f16:	LSSi $lastMove #0 @.f26	; if (lastMove >= 0) 
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ Priyome2.impala:1394:14
+		MOVi %1 $lastFrom 	; printBoard(lastFrom, lastTo)
+		MOVi %2 $lastTo 
+		CALL &printBoard %0 *3	; expects printBoard(int, int) -> void @ Priyome2.impala:1395:33
+		EQUi $lastFrom #0 @.f26	; if (lastFrom != 0 && lastTo != 0) 
+		EQUi $lastTo #0 @.f26
+		MOVp %1 $action 	; print(action)
+		CALL ^print %0 *2	; expects print(int-ptr) -> unknown @ Priyome2.impala:1397:19
+		MOVp %1 &.s_Setcom_4ea:21 	; print(" ")
+		CALL ^print %0 *2	; expects print(int-ptr) -> unknown @ Priyome2.impala:1398:16
+		ANDi %1 $lastPiece #PIECE_MASK	; print(global PIECE_NAMES[lastPiece & PIECE_MASK])
+		PEEK %1 &PIECE_NAMES %1
+		CALL ^print %0 *2	; expects print(int-ptr) -> unknown @ Priyome2.impala:1399:55
+		MOVp %1 &.s_Setcom_4ea:21 	; print(" ")
+		CALL ^print %0 *2	; expects print(int-ptr) -> unknown @ Priyome2.impala:1400:16
+		MODi %0 $lastFrom #STRIDE	; buffer[0] = ('A' + (lastFrom % STRIDE - 1))
+		SUBi %0 %0 #1
+		ADDi $buffer:0 #'A' %0
+		DIVi %0 $lastFrom #STRIDE	; buffer[1] = ('1' + (lastFrom / STRIDE - 2))
+		SUBi %0 %0 #2
+		ADDi $buffer:1 #'1' %0
+		MOVi $buffer:2 #0 	; buffer[2] = 0
+		ADRL %1 $buffer *0	; print(buffer)
+		CALL ^print %0 *2	; expects print(int-ptr) -> unknown @ Priyome2.impala:1404:19
+		MOVp %1 &.s_Setcom_4ea:18 	; print(" to ")
+		CALL ^print %0 *2	; expects print(int-ptr) -> unknown @ Priyome2.impala:1405:19
+		MODi %0 $lastTo #STRIDE	; buffer[0] = ('A' + (lastTo % STRIDE - 1))
+		SUBi %0 %0 #1
+		ADDi $buffer:0 #'A' %0
+		DIVi %0 $lastTo #STRIDE	; buffer[1] = ('1' + (lastTo / STRIDE - 2))
+		SUBi %0 %0 #2
+		ADDi $buffer:1 #'1' %0
+		ADRL %1 $buffer *0	; print(buffer)
+		CALL ^print %0 *2	; expects print(int-ptr) -> unknown @ Priyome2.impala:1408:19
+		MOVp %1 &.s__4ed 	; print(".\n\n")
+		CALL ^print %0 *2	; expects print(int-ptr) -> unknown @ Priyome2.impala:1409:20
+	.f26:	NEQi $moveResult #CHECKMATE @.f29	; if (moveResult == CHECKMATE) 
+		MOVp $p &.s_Checkm_4ee 	; p = "Checkmate! White wins.\n"
+		PEEK %0 &turnColor 	; if (global turnColor == WHITE) p = "Checkmate! Black wins.\n"
+		NEQi %0 #WHITE @.f30
+		MOVp $p &.s_Checkm_4ef 	; p = "Checkmate! Black wins.\n"
+	.f30:	MOVp %1 $p 	; print(p)
+		CALL ^print %0 *2	; expects print(int-ptr) -> unknown @ Priyome2.impala:1416:13
+		MOVi $lastMove #MATE 	; lastMove = MATE
+		GOTO @.e31  	; } else if (moveResult == STALEMATE) 
+	.f29:	NEQi $moveResult #STALEMATE @.f32	; if (moveResult == STALEMATE) 
+		MOVp %1 &.s_Stalem_4f0 	; print("Stalemate!\n")
+		CALL ^print %0 *2	; expects print(int-ptr) -> unknown @ Priyome2.impala:1419:26
+		MOVi $lastMove #MATE 	; lastMove = MATE
+	.f32:	NOOP
+	.e31:	NEQi $lastMove #QUIT @.l0	; } while (lastMove != QUIT)
+		RETU   	; }
+
+.s_pawn_4d2:	CNST *5
+	DATs pawn
+	DATi #0
+.s_rook_4d3:	CNST *5
+	DATs rook
+	DATi #0
+.s_knight_4d4:	CNST *7
+	DATs knight
+	DATi #0
+.s_bishop_4d5:	CNST *7
+	DATs bishop
+	DATi #0
+.s_queen_4d6:	CNST *6
+	DATs queen
+	DATi #0
+.s_king_4d7:	CNST *5
+	DATs king
+	DATi #0
+.s_Thinki_4d8:	CNST *12
+	DATs Thinking...
+	DATi #0
+.s__4d9:	CNST *2
+	DATs >
+	DATi #0
+.s_go_4da:	CNST *3
+	DATs go
+	DATi #0
+.s_back_4db:	CNST *5
+	DATs back
+	DATi #0
+.s_new_4dc:	CNST *4
+	DATs new
+	DATi #0
+.s_level_4dd:	CNST *7
+	DATs level
+	DATi #32 #0
+.s_quit_4de:	CNST *5
+	DATs quit
+	DATi #0
+.s_Enterm_4df:	CNST *198
+	DATs Enter moves like 'd2d4' or:
+	DATi #10
+	DATs 'level 1-9' to set computer level (default is 3).
+	DATi #10
+	DATs 'go' to switch color and let the computer play.
+	DATi #10
+	DATs 'back' to take back a step.
+	DATi #10
+	DATs 'new' to start a new game.
+	DATi #10
+	DATs 'quit' to exit.
+	DATi #10 #0
+.s_ABCDEF_4e0:	CNST *21
+	DATi #32 #32 #32 #32
+	DATs A B C D E F G H
+	DATi #10 #0
+.s__4e1:	CNST *23
+	DATi #32 #32
+	DATs +-----------------+
+	DATi #10 #0
+.s__4e2:	CNST *3
+	DATi #32
+	DATs |
+	DATi #0
+.s__4e3:	CNST *3
+	DATs |
+	DATi #32 #0
+.s_ABCDEF_4e4:	CNST *22
+	DATi #32 #32 #32 #32
+	DATs A B C D E F G H
+	DATi #10 #10 #0
+.s_Blacks_4e5:	CNST *15
+	DATs Black's turn.
+	DATi #10 #0
+.s_Whites_4e6:	CNST *15
+	DATs White's turn.
+	DATi #10 #0
+.s_Lastmo_4e7:	CNST *11
+	DATs Last move:
+	DATi #0
+.s_Tookba_4e8:	CNST *16
+	DATs Took back move:
+	DATi #0
+.s_Nomove_4e9:	CNST *23
+	DATs No move to take back.
+	DATi #10 #0
+.s_Setcom_4ea:	CNST *23
+	DATs Set computer level to
+	DATi #32 #0
+.s_Kingin_4eb:	CNST *16
+	DATs King in check.
+	DATi #10 #0
+.s_Invali_4ec:	CNST *15
+	DATs Invalid move.
+	DATi #10 #0
+.s__4ed:	CNST *4
+	DATs .
+	DATi #10 #10 #0
+.s_Checkm_4ee:	CNST *24
+	DATs Checkmate! White wins.
+	DATi #10 #0
+.s_Checkm_4ef:	CNST *24
+	DATs Checkmate! Black wins.
+	DATi #10 #0
+.s_Stalem_4f0:	CNST *12
+	DATs Stalemate!
+	DATi #10 #0
+	! EQUi #DEBUG #0 @.noAssertStrings
+.a_isVali_4d2:	CNST *29
+	DATs (isValidMove(move) != FALSE)
+	DATi #0
+.a_isVali_4d3:	CNST *42
+	DATs (isValidColor(global turnColor) != FALSE)
+	DATi #0
+.a_0globa_4d4:	CNST *48
+	DATs (0 <= global xCapture && global xCapture < 256)
+	DATi #0
+.a_isOnBo_4d5:	CNST *45
+	DATs (isOnBoard(global xCapture & ~128) != FALSE)
+	DATi #0
+.a_global_4d6:	CNST *97
+	DATs ((global board[global xCapture & ~CASTLING_MASK] & PIECE_AND_MOVED_MASK) == (ROOK | MOVED_MASK))
+	DATi #0
+.a_global_4d7:	CNST *212
+	DATs ((global board[(global xCapture & ~CASTLING_MASK) - 1] & PIECE_AND_MOVED_MASK) == (KING | MOVED_MASK)
+	DATi #10 #9 #9 #9 #9 #9
+	DATs || (global board[(global xCapture & ~CASTLING_MASK) + 1] & PIECE_AND_MOVED_MASK) == (KING | MOVED_MASK))
+	DATi #0
+.a_global_4d8:	CNST *117
+	DATs ((global xCapture >= RANK_3 && global xCapture < RANK_4) || (global xCapture >= RANK_6 && global xCapture < RANK_7))
+	DATi #0
+.a_global_4d9:	CNST *150
+	DATs (global board[global xCapture + STRIDE] == (WHITE | PAWN | MOVED_MASK)
+	DATi #10 #9 #9 #9 #9 #9
+	DATs || global board[global xCapture - STRIDE] == (BLACK | PAWN | MOVED_MASK))
+	DATi #0
+.a_pCOLOR_4da:	CNST *28
+	DATs ((p & COLOR_MASK) == color)
+	DATi #0
+.a_isVali_4db:	CNST *27
+	DATs (isValidPiece(p) != FALSE)
+	DATi #0
+.a_global_4dc:	CNST *52
+	DATs (global INIT_BOARD[i] != OFFBOARD || p == OFFBOARD)
+	DATi #0
+.a_0pp64_4dd:	CNST *19
+	DATs (0 <= p && p < 64)
+	DATi #0
+.a_counts_4de:	CNST *38
+	DATs (countsAgain[BLACK] == counts[BLACK])
+	DATi #0
+.a_counts_4df:	CNST *38
+	DATs (countsAgain[WHITE] == counts[WHITE])
+	DATi #0
+.a_hgloba_4e0:	CNST *24
+	DATs (h == global boardHash)
+	DATi #0
+.a_isOnBo_4e1:	CNST *29
+	DATs (isOnBoard(square) != FALSE)
+	DATi #0
+.a_isVali_4e2:	CNST *31
+	DATs (isValidPiece(piece) != FALSE)
+	DATi #0
+.a_global_4e3:	CNST *32
+	DATs (global board[square] == EMPTY)
+	DATi #0
+.a_pieceE_4e4:	CNST *16
+	DATs (piece > EMPTY)
+	DATi #0
+.a_isOnBo_4e5:	CNST *26
+	DATs (isOnBoard(frm) != FALSE)
+	DATi #0
+.a_isOnBo_4e6:	CNST *24
+	DATs (isOnBoard(t) != FALSE)
+	DATi #0
+.a_isVali_4e7:	CNST *34
+	DATs (isValidPiece(newPiece) != FALSE)
+	DATi #0
+.a_frmt_4e8:	CNST *11
+	DATs (frm != t)
+	DATi #0
+.a_global_4e9:	CNST *27
+	DATs (global board[t] == EMPTY)
+	DATi #0
+.a_isVali_4ea:	CNST *34
+	DATs (isValidPiece(oldPiece) != FALSE)
+	DATi #0
+.a_checkI_4eb:	CNST *28
+	DATs (checkInvariant() != FALSE)
+	DATi #0
+.a_captur_4ec:	CNST *55
+	DATs (captured == EMPTY || isValidPiece(captured) != FALSE)
+	DATi #0
+.a_global_4ed:	CNST *58
+	DATs (global board[t - STRIDE] == (PAWN | BLACK | MOVED_MASK))
+	DATi #0
+.a_global_4ee:	CNST *58
+	DATs (global board[t + STRIDE] == (PAWN | WHITE | MOVED_MASK))
+	DATi #0
+.a_00_4ef:	CNST *9
+	DATs (0 != 0)
+	DATi #0
+.a_toCoun_4f0:	CNST *32
+	DATs (toCount <= MAX_TARGET_SQUARES)
+	DATi #0
+.a_isVali_4f1:	CNST *31
+	DATs (isValidColor(color) != FALSE)
+	DATi #0
+.a_0depth_4f2:	CNST *13
+	DATs (0 <= depth)
+	DATi #0
+.a_firstM_4f3:	CNST *52
+	DATs (firstMove == 0 || isValidMove(firstMove) != FALSE)
+	DATi #0
+.a_captur_4f4:	CNST *28
+	DATs (capturesCount < MAX_MOVES)
+	DATi #0
+.a_movesC_4f5:	CNST *25
+	DATs (movesCount < MAX_MOVES)
+	DATi #0
+.a_isVali_4f6:	CNST *33
+	DATs (isValidMove(bestMove) != FALSE)
+	DATi #0
+.a_global_4f7:	CNST *84
+	DATs (global board[frm] > EMPTY && (global board[frm] & COLOR_MASK) == global turnColor)
+	DATi #0
+.a_mMOVEM_4f8:	CNST *102
+	DATs ((m & MOVE_MASK) == CHECKMATE || (m & MOVE_MASK) == STALEMATE || isValidMove(m & MOVE_MASK) != FALSE)
+	DATi #0
+.noAssertStrings:	!

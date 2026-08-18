@@ -15,3 +15,4 @@ externals/NuXJS/**/xcuserdata/
 
 temp/
 impala/fuzzCampaign.log
+/fuzzlogs

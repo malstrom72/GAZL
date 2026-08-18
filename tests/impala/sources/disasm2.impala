@@ -1,0 +1,168 @@
+/*
+	Prawn OS Command Prompt - ported to Impala 2.
+
+	`disasm.impala` rewritten against `fileList2.impala`'s types, the way `disasm.impala` is written
+	against `fileList.impala`'s. The two are separate GAZL modules the host links, so this file only
+	DECLARES what the other one defines - and that boundary is the point of the port.
+
+	In 1.0 the record layout crossed the boundary as five bodyless `const int FILE_FIELD_*`, with the
+	field TYPES carried in comments (`// pointer`) because a flat array has none. Nothing checked that
+	the two files agreed; they agreed because both were edited by hand.
+
+	In 2.0 the same boundary is one `extern struct File`. `fileList2.impala` DEFINES the layout and
+	emits `.o.File.type` / `.z.File` as `! DEFi`; this file only REFERENCES those symbols and emits no
+	layout of its own. The assembler is what makes them agree, at link, by name - so a field added or
+	reordered in `fileList2.impala` cannot silently mean something else here. That is the whole claim
+	of design/impala/StructLayoutConstants.md, and until this file existed only the HOST side of it was
+	covered (externStruct.impala); nothing showed two Impala modules meeting in the middle.
+
+	Types come across the boundary with it, which is what retires the `(int)` casts: a 1.0 `FILES[...]`
+	had no element type and a name-only extern returned `unknown`, so every read of either had to say
+	what it was. The four `extern function` declarations now carry real signatures instead of trailing
+	comments, and the calls are argument-checked against them.
+
+	The general form of this rewrite - and what it costs, which is nothing - is in
+	docs/impala/WhatsNewInImpala2.md under "What is worth rewriting".
+
+	Not run by the gate: `output`, `input`, `loadText` and `launch` are host natives, so this compiles
+	and link-checks only, exactly as `disasm.impala` does. The cross-module agreement is proved
+	separately, by assembling it together with fileList2.gazl and requiring the mismatch to fail - see
+	the `links two modules through one struct layout` block in impala/jspegCompilerTests.js.
+*/
+
+const int DEBUG
+const int FILE_BUFFER_SIZE = 8192
+const int TERMINAL_COLUMNS = 80
+const int TERMINAL_ROWS = 25
+const int TERMINAL_TAB_SIZE = 4
+
+extern native output
+extern native input
+extern native inputEOF
+extern native launch
+/* Documented signature, so it can be a CHECKED prototype instead of a comment; returns the count
+   loaded, or -1 on error. output/input/launch/sleep stay name-only: nothing here states their
+   shapes, and Impala 2's rule is not to claim one it cannot verify. */
+extern native loadText(int pointer fileName, int offset, int maxCount, int pointer destination)
+		returns int
+extern native sleep
+
+/* -------------------------------------- Defined in fileList2.impala ----------------------------------------------- */
+
+const int FILE_TYPE_COUNT
+const int FILE_TYPE_EXE
+const int FILE_TYPE_SYS
+const int FILE_TYPE_TXT
+const int FILE_TYPE_BIN
+
+extern int pointer array FILE_TYPE_STRINGS[]
+
+extern struct File { int pointer name; int type; int size; int pointer date }
+
+extern int fileCount
+extern File array FILES[]
+
+extern function strcmp(int pointer s0, int pointer s1) returns int
+extern function findFile(int pointer s0) returns int
+extern function lower(int pointer s)
+extern function initFilesIfNecessary()
+
+/* ------------------------------------------------------------------------------------------------------------------ */
+
+const int FALSE = 0
+const int TRUE = 1
+
+function strlen(int pointer s)
+returns int l
+locals	int pointer a
+{
+	a = s;
+	while (*a != 0) a = a + 1;
+	l = a - s;
+}
+
+function strcat(int pointer d, int pointer s)
+returns int pointer r
+locals	int pointer a, int pointer b
+{
+	r = a = d;
+	while (*a != 0) a = a + 1;
+	b = s;
+	while ((*a = *b) != 0) {
+		a = a + 1;
+		b = b + 1;
+	}
+}
+
+function outputLine(int pointer s)
+{
+	output(s);
+	output("\n");
+}
+
+global int array fileBuffer[FILE_BUFFER_SIZE + 1]
+
+function main()
+locals	int array s[256], int type, int offset, int readCount, int file, int pointer p, int pointer b,
+		int pointer e, int row, int col, int c, int i, int array yn[64]
+{
+	initFilesIfNecessary();
+	outputLine("GAZL disassembler v2.1.");
+	output("Disassemble file: ");
+	input(255, s);
+	if (s[0] != 0) {
+		lower(s);
+		if ((file = findFile(s)) < 0) outputLine("File not found");
+		else {
+			if ((type = global FILES[file].type) != FILE_TYPE_EXE
+					&& type != FILE_TYPE_SYS && type != FILE_TYPE_BIN) {
+				outputLine("File is not GAZL format");
+			} else if (strcmp(s, "permut8") == 0) {
+				outputLine("Protected file");
+			} else {
+				p = ".zl";
+				if (type == FILE_TYPE_BIN) p = ".gazl";
+				strcat(s, p);
+				offset = 0;
+				row = 0;
+				col = 0;
+				do {
+					readCount = loadText(s, offset, FILE_BUFFER_SIZE, global fileBuffer);
+					if (readCount < 0) {
+						outputLine("Read error");
+						goto stopIt;
+					} else {
+						p = global fileBuffer;
+						b = p;
+						e = p + readCount;
+						while (p < e) {
+							c = *p;
+							p = p + 1;
+							i = 1;
+							if (c == 9) i = TERMINAL_TAB_SIZE - col % TERMINAL_TAB_SIZE;
+							if (c == 10 || (col = col + i) >= TERMINAL_COLUMNS) {
+								if ((row = row + 1) >= TERMINAL_ROWS) {
+									c = *p;
+									*p = 0;
+									output(b);
+									*p = c;
+									b = p;
+									output("More (y)? ");
+									input(63, yn);
+									if (yn[0] == 'n' || yn[0] == 'N') goto stopIt;
+									row = 1;
+								}
+								col = 0;
+							}
+						}
+						*e = 0;
+						output(b);
+						offset = offset + readCount;
+					}
+				} while (readCount > 0)
+				outputLine("");
+			}
+		}
+	}
+stopIt: ;
+}
