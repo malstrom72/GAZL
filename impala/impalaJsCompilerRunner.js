@@ -254,11 +254,11 @@ function compileWithJsImpala(source, options = {}) {
 	}
 	// The BOOLEAN compiler flags, in ONE list. Copied rather than spread because `options` also carries
 	// runner-only keys (`compilerPath`, `retabulate`, `onWarning`) and keys this function TRANSFORMS
-	// (`warn`, `sourceName`), so an `Object.assign` would hand the compiler nonsense. But the per-flag
-	// `if` chain this replaces is where a flag goes to die: `--collapse-labels` was threaded through the
-	// CLI, arrived here, was not in the chain, and compiled clean with the option silently ignored - the
-	// same failure `impala.node.js`'s FLAGS map exists to prevent one layer up. Add a flag here.
-	for (const flag of [ "rangeChecks", "collapseLabels" ]) {
+	// (`warn`, `sourceName`), so an `Object.assign` would hand the compiler nonsense. A per-flag `if`
+	// chain is where a flag goes to die: one that reached here and was not in the chain compiled clean
+	// with the option silently ignored - the failure `impala.node.js`'s FLAGS map prevents one layer
+	// up. Add a flag to this list.
+	for (const flag of [ "rangeChecks" ]) {
 		if (options[flag]) {
 			compilerOptions[flag] = true;
 		}

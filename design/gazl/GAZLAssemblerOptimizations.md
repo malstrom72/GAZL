@@ -167,28 +167,35 @@ labels, it is the only layer hand-written GAZL passes through, and there is no l
 Impala leaves behind is currently paid forever. Both transforms also satisfy this document's own
 admission criterion: neither changes the number of memory accesses nor the order of side effects.
 
-**Related work on the Impala side. The NOOP half is BUILT BUT OPT-IN; the `GOTO` chains are still yours.**
+**Related work on the Impala side. The NOOP half was built and then REMOVED; the `GOTO` chains are still yours.**
 
 A prototyped `processBranches` restructure (record aliases during the walk, then a forward pass resolving
 every label operand to a fixpoint and dropping the unreferenced ones) cut corpus NOOPs 523 -> 379 but made
 `Priyome.impala` fail to assemble (`Symbol not found: .f5`, cause not isolated) and was rejected.
 
-What shipped instead is smaller and sits at the END of `processBranches`, after every alias and deletion
-that pass makes has settled - so nothing re-points afterwards, which is what sank the prototype. A run of
+What shipped instead was smaller and sat at the END of `processBranches`, after every alias and deletion
+that pass makes has settled - so nothing re-pointed afterwards, which is what sank the prototype. A run of
 `<--` records with nothing emitted between them all names ONE address, and only one LINE can carry a name,
-so each of the others was spent on a `NOOP` that existed for no other reason (`adventCode` had seven in a
-row). The run collapses onto one survivor - a user label in preference to a minted one - and every
-reference is rewritten to it.
+so each of the others is spent on a `NOOP` that exists for no other reason (`adventCode` has seven in a
+row). The run collapsed onto one survivor and every reference was rewritten to it.
 
-**It is `--collapse-labels`, and OFF by default (2026-08-17).** "A user label survives in preference to a
-minted one, so a `goto` target never leaves the listing" holds only while at most ONE label in the run is
-user-written. `calc.impala` has two - `wasFunction: ;` immediately before `repeat: {` - so `repeat`
-vanished from the listing entirely and `goto repeat` emitted as `GOTO @wasFunction`. A `NOOP` costs no
-cycles, so the default now spends one per label and keeps Impala:GAZL as close to 1:1 as it can; the
-collapse is a size win for a `.gazl` that SHIPS and is asked for by name, beside `--dead-strip`.
+**Removed 2026-08-18. Do not rebuild it without new numbers.** It shipped unconditional, became
+`--collapse-labels` once it was found to merge two USER labels - "a user label survives in preference to a
+minted one" holds only while at most ONE label in the run is user-written, and `wasFunction: ;` sitting
+immediately before `repeat: {` in `calc.impala` made `repeat` leave the listing and `goto repeat` emit as
+`GOTO @wasFunction` - and was then deleted outright once the honest measurement was taken:
 
-Measured when it shipped, across `tests/impala/golden` (89 files, 36102 code lines): **NOOPs 516 -> 255**,
-261 lines of text. What remains is not recoverable this way and should not be chased:
+| across all 100 corpus programs | |
+|---|---|
+| lines it removed | 279 |
+| of those, `NOOP`s | 279 - every one, no exceptions |
+| written-down names lost | 0, after the user-label fix |
+| `NOOP` lines carrying a source comment | 0 |
+
+That is **0.65%** of 42649 lines, and what it buys is paid for in the MINTED name saying which construct
+ended there (`.e1`, `.e3`, `.s4`). A `NOOP` costs no cycles - `src/GAZL.cpp` declares the label and breaks
+without emitting an instruction - so Impala keeps the 1:1 listing, and the pass, its flag, that flag's
+threading across five files and its tests are all gone. What the pass could not reach anyway:
 
 | remaining NOOP | count | why it stays |
 |----------------|-------|--------------|

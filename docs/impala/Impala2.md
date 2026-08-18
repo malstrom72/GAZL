@@ -1529,7 +1529,7 @@ foo.impala:12:9: note: use a cast: (int pointer)
   in that architecture produces cascading nonsense. One correct error beats five speculative ones.
 - A structured `--json` output mode can be added later if tooling demands it; the line format is
   the contract. **It does not exist today** - the flag set is what `node impala/impala.node.js`
-  prints with no arguments (today: `--legacy`, `--dead-strip`, `--range-checks`, `--collapse-labels`).
+  prints with no arguments (today: `--legacy`, `--dead-strip` and `--range-checks`).
 
 ### Code registry
 
