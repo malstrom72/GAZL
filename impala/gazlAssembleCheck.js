@@ -20,9 +20,11 @@ function haveGazlCmd() {
 	return fs.existsSync(gazlCmd);
 }
 
-function runGazlCmd(gazlPath, cmdArgs) {
+/* `input` feeds the PROGRAM's stdin, for a fixture that reads: Priyome is an interactive chess engine,
+   so a scripted game is what makes it a runnable oracle rather than a compile-only one. */
+function runGazlCmd(gazlPath, cmdArgs, input) {
 	const result = childProcess.spawnSync(gazlCmd, [gazlPath].concat(cmdArgs),
-		{ encoding: 'latin1', timeout: 30000 });
+		{ encoding: 'latin1', timeout: 30000, input });
 	/* GAZLCmd puts the PROGRAM's output on stdout and its own report (sizes, Status) on stderr. */
 	const report = result.stderr || '';
 	return {

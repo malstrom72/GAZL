@@ -1356,6 +1356,27 @@ console.log("impala.jspeg compiler spills initializer constants only once the sc
 	console.log("impala.jspeg compiler folds away the multiply-by-one in a scaled index");
 }
 
+// The one port that can be checked by RUNNING it. fileList2, disasm2 and calc2 are all compile-only - they
+// need a host - so their evidence is a GAZL diff plus an argument that the instructions match. Priyome is a
+// chess engine whose only externs are print/printInt/printLF/input, every one of which GAZLCmd supplies,
+// and its randomness is an in-source xor-shift. So both versions play the SAME SCRIPTED GAME and the two
+// transcripts are compared byte for byte: a typing mistake a diff might argue away shows up as a different
+// move. The script exercises the struct too - `back` and `new` are what drive the HalfMove history.
+if (haveGazlCmd()) {
+	const goldenDir = path.join(dir, "..", "tests", "impala", "golden");
+	const game = "level 2\nd2d4\ngo\ng1f3\ngo\nback\nnew\nlevel 1\ne2e4\ngo\nquit\n";
+	const play = (name) => runGazlCmd(path.join(goldenDir, name), [ "main" ], game).stdout;
+	const before = play("Priyome.gazl");
+	const after = play("Priyome2.gazl");
+	const lines = (t) => t.split("\n");
+	assert(/Last move/.test(before) && lines(before).length > 100,
+		`the scripted game must actually play - got ${lines(before).length} lines`);
+	assert(before === after,
+		"Priyome2 must play the 1.0 engine's game move for move\n"
+			+ lines(before).filter((l, i) => l !== lines(after)[i]).slice(0, 6).join("\n"));
+	console.log("impala.jspeg compiler ports Priyome without changing a single move it plays");
+}
+
 // Each 1.0/2.0 port pair claims IN ITS HEADER that the ported data table assembles to the same words as
 // the original - fileList2's "the DATA rows assemble to the same words as the 1.0 version's, that
 // equivalence is the point", calc2's "the emitted table is the same words in the same order". Nothing
