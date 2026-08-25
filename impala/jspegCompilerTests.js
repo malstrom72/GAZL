@@ -3551,4 +3551,89 @@ for (const name of prototypeNames) {
 }
 console.log("impala.jspeg compiler treats Object.prototype names as ordinary identifiers");
 
+// --- --gazl2: struct initializers are PLACED with SEEK regions ---------------------------------------
+// The flag's contract: (1) default output is untouched - the golden corpus is that gate, so here only
+// "no SEEK without the flag" is pinned; (2) struct data comes out as one SEEK region per leaf field
+// with TYPED rows; (3) E459 and E454 lift, because every word is placed instead of guessed. The
+// semantic proofs run when GAZLCmd is built: the extern case feeds a host layout in REVERSED field
+// order, and the struct case re-runs with two layout-header labels swapped - both are exactly what
+// positional DATA scrambles and placement must not.
+{
+	const placedSrc = "const int DEBUG = 1\n"
+		+ "struct Inner { float b0; float array state[2] }\n"
+		+ "struct Voice { int note; Inner lo; float gain }\n"
+		+ "extern native printInt\nextern native printFloat\nextern native printLF\n"
+		+ "global Voice voice = { note: 60, lo: { b0: 0.5, state: { 1.5 } }, gain: 0.9 }\n"
+		+ "readonly Voice array bank[2] = { { note: 1, gain: 0.25 }, { note: 2, gain: 0.75 } }\n"
+		+ "function main() {\n"
+		+ "\tprintInt(global voice.note); printLF();\n"
+		+ "\tprintFloat(global voice.lo.state[0]); printLF();\n"
+		+ "\tprintFloat(global voice.lo.state[1]); printLF();\n"
+		+ "\tprintFloat(global voice.gain); printLF();\n"
+		+ "\tprintInt((int) global bank[1].note); printLF();\n"
+		+ "\tprintFloat(global bank[1].gain); printLF();\n"
+		+ "}\n";
+	const placed = compileWithJsImpala(placedSrc, { randomId: 42, gazl2: true });
+	assert(placed.includes("SEEK :.o.Voice.note *1") && placed.includes("SEEK :<A> *.z.Inner.state"),
+		"--gazl2: struct data must be placed with SEEK regions - a scalar carries its free *1 fence, "
+			+ "an array field its extent symbol");
+	assert(placed.includes("DATi #60") && placed.includes("DATf #0.5"),
+		"--gazl2: rows must come out TYPED per leaf field, not as one mixed DATA row");
+	assert(!compileWithJsImpala(placedSrc, { randomId: 42 }).includes("SEEK"),
+		"without --gazl2 nothing may emit SEEK - the corpus byte-gate depends on it");
+
+	const externSrc = "const int DEBUG = 1\n"
+		+ "extern struct Host { int mode; float level }\n"
+		+ "extern native printInt\nextern native printFloat\nextern native printLF\n"
+		+ "global Host cfg = { mode: 3, level: 0.5 }\n"
+		+ "function main() { printInt(global cfg.mode); printLF(); printFloat(global cfg.level); printLF(); }\n";
+	expectCompileOutcome("gazl2", "extern-struct init stays E459 by default", externSrc, "E459");
+	const externOut = compileWithJsImpala(externSrc, { randomId: 42, gazl2: true });
+	assert(externOut.includes("SEEK :.o.Host.mode"), "--gazl2 must lift E459 via host-offset SEEKs");
+
+	const symSrc = "const int DEBUG = 1\nconst int N = 3\n"
+		+ "struct Buf { int array data[N * 1]; int tail }\n"
+		+ "global Buf b = { data: { 7, 8 }, tail: 42 }\n"
+		+ "function main() { }\n";
+	expectCompileOutcome("gazl2", "field behind a symbolic extent stays E454 by default", symSrc, "E454");
+	assert(compileWithJsImpala(symSrc, { randomId: 42, gazl2: true }).includes("SEEK :.o.Buf.tail"),
+		"--gazl2 must lift E454: the field behind the symbolic array gets its own region");
+
+	if (haveGazlCmd()) {
+		const gazlPath = path.join(dir, "..", "tests", "impala", "erroneous", "gazl2Seek.gazl");
+		fs.mkdirSync(path.dirname(gazlPath), { recursive: true });
+		const runOne = (text, cmdArgs) => {
+			fs.writeFileSync(gazlPath, text, IMPALA_ENCODING);
+			const run = runGazlCmd(gazlPath, cmdArgs);
+			assert(run.failure === undefined && run.assembled, `gazl2: ${gazlPath} did not assemble: ${run.line}`);
+			return canonicalizeNewlines(run.stdout);
+		};
+		// `level` at 0 and `mode` at 1 REVERSES declaration order; the values must land right anyway.
+		assert(runOne(externOut, [ "main", ".o.Host.mode", "1", ".o.Host.level", "0", ".z.Host", "2" ])
+				.startsWith("3\n0.5\n"),
+			"gazl2: extern-struct init must place values at the HOST's offsets, not declaration order");
+		const expected = "60\n1.5\n0\n0.9\n2\n0.75\n";   // the 0 is state[1]: a region's zero-filled tail
+		assert(runOne(placed, [ "main" ]).startsWith(expected),
+			"gazl2: placed struct data must read back exactly, zero tails included");
+		// A repack is two header labels trading places (note and gain are both one word). Every line
+		// below the header is untouched, and the program must not notice.
+		const repacked = placed
+			.replace(/^([ \t]*)\.o\.Voice\.note:/m, "$1.o.Voice.__swap__:")
+			.replace(/^([ \t]*)\.o\.Voice\.gain:/m, "$1.o.Voice.note:")
+			.replace(/^([ \t]*)\.o\.Voice\.__swap__:/m, "$1.o.Voice.gain:");
+		assert(repacked !== placed, "gazl2: the repack swap must have found both layout labels");
+		assert(runOne(repacked, [ "main" ]).startsWith(expected),
+			"gazl2: a layout-header repack must re-assemble to the same answers - the whole point of SEEK");
+		// The scalar `*1` fence is what makes a HAND-ADDED surplus row fail at its own line, whether or
+		// not the word it would spill into happens to be initialized.
+		const overrun = placed.replace(/^([ \t]*)(DATi #60)$/m, "$1$2\n$1DATi #99");
+		assert(overrun !== placed, "gazl2: the overrun patch must have found the note row");
+		fs.writeFileSync(gazlPath, overrun, IMPALA_ENCODING);
+		const spill = runGazlCmd(gazlPath, [ "main" ]);
+		assert(!spill.assembled && /Not enough space in data section/.test(spill.report),
+			`gazl2: a surplus row after a scalar's *1 region must be an assembly error, got: ${spill.line}`);
+	}
+	console.log("impala.jspeg compiler places struct initializers with SEEK regions under --gazl2");
+}
+
 console.log("JSPEG regression suite completed successfully");

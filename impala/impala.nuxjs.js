@@ -1,7 +1,7 @@
 /* Command-line Impala compiler for the NuXJS REPL.
 
    Usage:
-     NuXJS impala/impala.nuxjs.js [--legacy] [--dead-strip] [--range-checks] source.impala [output.gazl|-] [randomId] [sourceName] [compiler.js]
+     NuXJS impala/impala.nuxjs.js [--legacy] [--dead-strip] [--range-checks] [--gazl2] source.impala [output.gazl|-] [randomId] [sourceName] [compiler.js]
 
    NuXJS exposes global `arguments` as [script.js, arguments...]. With no output
    path, or output path `-`, this script emits compiled GAZL to stdout.
@@ -18,11 +18,11 @@ var impalaNuxRawArgs = arguments;
    compile the same corpus and are byte-compared against each other, so a flag only one of them accepts
    is a hole in that comparison. Parsed below `fail`, which it needs.
    Every key starts with `--`, so none can collide with an Object.prototype member. */
-var impalaNuxFlags = { "--legacy": false, "--dead-strip": false, "--range-checks": false };
+var impalaNuxFlags = { "--legacy": false, "--dead-strip": false, "--range-checks": false, "--gazl2": false };
 var impalaNuxArgs = [];
 
 function usage() {
-	print("Usage: NuXJS impala/impala.nuxjs.js [--legacy] [--dead-strip] [--range-checks] source.impala [output.gazl|-] [randomId] [sourceName] [compiler.js]");
+	print("Usage: NuXJS impala/impala.nuxjs.js [--legacy] [--dead-strip] [--range-checks] [--gazl2] source.impala [output.gazl|-] [randomId] [sourceName] [compiler.js]");
 }
 
 function fail(message) {
@@ -204,6 +204,9 @@ if (impalaNuxLegacy) {
 }
 if (impalaNuxFlags["--range-checks"]) {
 	impalaNuxCompilerOptions.rangeChecks = true;
+}
+if (impalaNuxFlags["--gazl2"]) {
+	impalaNuxCompilerOptions.gazl2 = true;
 }
 var impalaNuxResult;
 try {
