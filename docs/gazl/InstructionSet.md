@@ -74,6 +74,11 @@ Bitwise AND ints
 - `^native         %temp           *size`
 - `ptr`
 - `ptr             %temp           *size`
+- `tgt`
+- `tgt             %temp           *size`
+
+(The `ptr` forms are GAZL 1: inside a `GAZL #2` region an indirect call takes a `tgt` local or an untyped `%N`
+slot, and a `ptr` callee is an assembly error - see `GAZL`.)
 
 Function call. %temp should specify the "transient" variable for the first parameter (e.g. %0, %1, %2 etc). *size is the
 number of parameters (counting both input and output parameters). In GAZL 1.0 there is no compile-time check on the
@@ -93,13 +98,15 @@ into the order itself. `DIFp` between two function pointers is likewise defined 
 Arithmetic that PRODUCES a function pointer (`ADDp`, `SUBp` offsetting one) yields an unspecified result: the ordinal
 it lands on is a perfectly valid one, so it names a different function rather than failing.
 
-> **GAZL 1 does not enforce that contract, and GAZL 2 should.** All of those assemble today, because `p`
-> covers both data pointers and function pointers. `ADDp` is the one that bites: `&one + 1` is a valid
-> ordinal, so it does not trap - it silently calls a different function. "Memory-safe" is accurate and
-> still understates it. The fix is a distinct `t` (target) type offering no operation whose RESULT is a
-> `t` - a target may be named, copied or loaded, never computed - which makes the undefined operations
-> unrepresentable rather than merely undefined. Ordering, equality and difference are all kept: they
-> consume targets and hand back a bool or an int, so none of them can name a function. See
+> **GAZL 1 does not enforce that contract; GAZL 2 does, inside a `GAZL #2` region.** In GAZL 1 all of
+> those assemble, because `p` covers both data pointers and function pointers - `ADDp` is the one that
+> bites: `&one + 1` is a valid ordinal, so it does not trap, it silently calls a different function.
+> Functions declared inside a `GAZL #2` region (see `GAZL`) have `t` (target) addresses instead: `t`
+> offers no operation whose RESULT is a `t` - a target may be named, copied (`MOVt`) or loaded (`DATt`,
+> a `PEEK` into a `LOCt`), never computed - so the undefined operations are unrepresentable rather than
+> merely undefined. Ordering, equality and difference are all kept (`LSSt`, `EQUt`, `DIFt`): they consume
+> targets and hand back a bool or an int, so none of them can name a function. `CALL` accepts both
+> dialects' functions, which is what keeps concatenated GAZL 1 and GAZL 2 units calling each other. See
 > [`design/gazl/GAZL2FunctionPointers.md`](../../design/gazl/GAZL2FunctionPointers.md).
 
 ## CNST
@@ -134,10 +141,11 @@ Integer constant data items. Every operand on the line must be an int (see `DATf
 
 Pointer constant data items. Every operand on the line must be an address (see `DATf`).
 
-Note `p` covers BOTH data pointers and function pointers, which are different things - a data pointer is a
-memory address, a function pointer is a declaration-order ordinal. So `DATp &func &data` assembles, and
-`ADDp` on a function pointer assembles without trapping. GAZL 2 is expected to split this into a `t`
-(target) type; see [`design/gazl/GAZL2FunctionPointers.md`](../../design/gazl/GAZL2FunctionPointers.md).
+Note `p` covers BOTH data pointers and function pointers in GAZL 1, which are different things - a data
+pointer is a memory address, a function pointer is a declaration-order ordinal. So `DATp &func &data`
+assembles there. Inside a `GAZL #2` region `DATp` takes no function address at all - a GAZL 2 function's
+address is a `t` value (`DATt`), and even a GAZL 1 function's address is refused from `p` positions
+within the region. See `DATt` and [`design/gazl/GAZL2FunctionPointers.md`](../../design/gazl/GAZL2FunctionPointers.md).
 
 ## DATs
 - `string`
@@ -145,6 +153,13 @@ memory address, a function pointer is a declaration-order ordinal. So `DATp &fun
 String constant data item, one word per character. Unlike the four above `DATs` takes NO operands: the
 rest of the line is the literal, spaces and all, with trailing blanks stripped. It appends no terminating
 zero - follow it with `DATi #0` if you need one.
+
+## DATt
+- `&function &function ...`
+
+Call-target constant data items (GAZL 2 and later) - a funcptr table. Every operand must be the address
+of a function declared inside a `GAZL #2` region (or `&NULL`); the assembler re-checks each one, which is
+the check `DATp` could never make because `p` accepts any address.
 
 ## DEFf
 - `#float`
@@ -181,6 +196,16 @@ Difference of two pointers You cannot use SUBp to subtract a pointer from anothe
 offsetting a pointer. Notice that for the first variant with two constant addresses, both addresses need to be declared
 before the instruction. (The other variants accepts forward declarations.) The motivation behind this exception is that
 the difference of two constant addresses becomes another constant, and this may be utilized for local optimizations etc.
+
+## DIFt
+- `int(d)          &function       &function`
+- `int(d)          &function       tgt`
+- `int(d)          tgt             &function`
+- `int(d)          tgt             tgt`
+
+Difference of two call targets (GAZL 2 and later): their ordinal distance, an int. This is the `SUBp`/`DIFp` split
+applied to targets - `t - t -> int` consumes two targets and names none, while `SUBt`/`ADDt`/`FORt` would each
+PRODUCE a target and so do not exist. The two-constant variant needs both functions declared first, as `DIFp` does.
 
 ## DIVf
 - `float(d)        #float          #float`
@@ -229,6 +254,17 @@ Branch on equal ints
 
 Branch on equal pointers
 
+## EQUt
+- `&function       &function       @label`
+- `&function       tgt             @label`
+- `tgt             &function       @label`
+- `tgt             tgt             @label`
+
+Branch on equal call targets (GAZL 2 and later) - "is this the same function?". `NEQt`, `LSSt`, `GRTt`, `LEQt` and
+`GEQt` take the same forms; ordering is a TOTAL, run-stable order (sort a target table, binary-search it), nothing
+more. Both operands must be targets - a target and a data pointer cannot meet in one comparison, which `EQUp`'s
+`ANY_FREE` forms never enforced.
+
 ## FLOf
 - `float(d)        #float`
 - `float(d)        float`
@@ -263,6 +299,36 @@ The assembler attaches two computed constants to `FUNC`: the size of the declare
 pointer) and the highest fixed offset the body reaches (which allocates nothing). Together they form a single entry-time
 stack check, which is why accesses at fixed offsets need no check of their own. See `docs/impala/MemorySafetyModel.md`.
 
+A function declared inside a `GAZL #2` region has a `t` (target) address instead of a `p`-compatible one - see `GAZL`.
+
+## GAZL
+- `#version`
+
+Set the GAZL dialect for what follows (GAZL 2 and later; an engine too old to know the mnemonic rejects it as
+unknown, which is as close to a version diagnostic as it can give). `GAZL #2` opens a GAZL 2 region and `GAZL #1`
+closes it; outside any region the dialect is 1, so every pre-existing file means what it always did. A file must be
+back in dialect 1 at the end (`GAZL 2 region not closed with GAZL #1`), and a declared version above the engine's is
+`File requires a newer GAZL engine`.
+
+Inside a `GAZL #2` region:
+
+- `FUNC` declares functions whose addresses are `t` (target) values, accepted by the `t` instruction family and by
+  `CALL` - but by no `p` position, in this region or any other unit.
+- No `p` position accepts ANY function address, GAZL 1 functions included: within the region, a function is never a
+  data pointer.
+- An indirect `CALL` goes through a `t` local (or an untyped `%N` window slot), never a `p` local: `CALL p0` is an
+  assembly error inside the region, where in GAZL 1 it was legal and guarded only by the run-time `BAD_CALL` check.
+
+The protection travels with the SYMBOL, so it survives the region: a GAZL 2 function's address cannot enter a `p`
+slot anywhere in the program, and the region's own rows cannot smuggle one in through `DATp`/`MOVp`/`POKE`.
+
+**Emitting GAZL for concatenation.** GAZL programs are linked by plain concatenation, and the bracket is what makes
+that safe: emit `GAZL #2` as the first mnemonic line of a unit and `GAZL #1` as its last, so the unit carries its
+dialect with it and hands the stream back to the default when it ends. Bracketed and unbracketed units then
+concatenate in ANY order and mix - GAZL 1 units are never re-interpreted, `CALL`s cross freely in both directions,
+and a truncated unit is caught by the end-of-file check instead of silently re-typing whatever follows. This is
+exactly what Impala's `--gazl2` output does.
+
 ## GEQf
 - `#float          #float          @label`
 - `#float          float           @label`
@@ -286,6 +352,11 @@ Branch on greater or equal int
 - `ptr             ptr             @label`
 
 Branch on greater or equal pointer
+
+## GEQt
+- see `EQUt`
+
+Branch on greater or equal call target (GAZL 2 and later).
 
 ## GETL
 - `var(d)          var             int`
@@ -330,6 +401,11 @@ Branch on greater int
 
 Branch on greater pointer
 
+## GRTt
+- see `EQUt`
+
+Branch on greater call target (GAZL 2 and later).
+
 ## IFDF
 - `&address        @label`
 - `#const          @label`
@@ -355,6 +431,10 @@ Declare a local read-only int parameter
 ## INPp
 
 Declare a local read-only pointer parameter
+
+## INPt
+
+Declare a local read-only call-target parameter (GAZL 2 and later)
 ## IORi
 - `int(d)          #int            #int`
 - `int(d)          #int            int`
@@ -393,6 +473,11 @@ Branch on less or equal int
 
 Branch on less or equal pointer
 
+## LEQt
+- see `EQUt`
+
+Branch on less or equal call target (GAZL 2 and later).
+
 ## LOCA
 - `*size`
 
@@ -410,6 +495,11 @@ Declare a local int variable
 ## LOCp
 
 Declare a local pointer variable
+
+## LOCt
+
+Declare a local call-target variable (GAZL 2 and later). A word `PEEK`ed into it is unchecked, exactly as one
+`PEEK`ed into a `LOCi` is - memory stays typeless; `t` is a contract on named slots and constants.
 
 ## LSSf
 - `#float          #float          @label`
@@ -434,6 +524,11 @@ Branch on less int
 - `ptr             ptr             @label`
 
 Branch on less pointer
+
+## LSSt
+- see `EQUt`
+
+Branch on less call target (GAZL 2 and later).
 
 ## MODi
 - `int(d)          #int            #int`
@@ -466,6 +561,12 @@ Move an int value
 - `ptr(d)          ptr`
 
 Move a pointer value
+
+## MOVt
+- `tgt(d)          &function`
+- `tgt(d)          tgt`
+
+Move a call target (GAZL 2 and later). The constant form takes only a `GAZL #2` function's address or `&NULL`.
 
 ## MULf
 - `float(d)        #float          #float`
@@ -507,6 +608,11 @@ Branch on unequal ints
 
 Branch on unequal pointers
 
+## NEQt
+- see `EQUt`
+
+Branch on unequal call targets (GAZL 2 and later).
+
 ## NOOP
 
 No operation. The NOOP instruction does nothing and will not consume any CPU cycles (it is effectively removed during
@@ -524,6 +630,10 @@ Declare a local int output parameter
 ## OUTp
 
 Declare a local pointer output parameter
+
+## OUTt
+
+Declare a local call-target output parameter (GAZL 2 and later)
 
 ## PARA
 - `*size`

@@ -1,9 +1,19 @@
 # A distinct function-pointer type for GAZL 2 (`t`)
 
-Status: ACCEPTED 2026-08-07 (migration decided: break GAZL 1, see below). Researched against
-`src/GAZL.cpp` and GAZLCmd on 2026-08-02, re-verified 2026-08-07. Nothing here is
-implemented. The conclusion is that GAZL 1 has a real silent-wrong shape that no amount of Impala-side
-checking can close, because Impala has nowhere to encode the distinction.
+Status: IMPLEMENTED 2026-08-25, with the migration REVISED from the hard break decided 2026-08-07 to
+`GAZL #2` REGIONS - see "Migration" below for both the original decision and what replaced it, and
+`docs/gazl/InstructionSet.md` (`GAZL`, `MOVt`, `EQUt`, `DIFt`, `DATt`) for the shipped semantics. The
+mechanism: `GAZL #n` sets the dialect for what follows; inside a `GAZL #2` region, `FUNC` mints a
+`TARGET`-typed address (one conditional - the whole dialect switch) and no ADDRESS-carrying position
+accepts any function constant. The `t` rows accept only targets, so they are gated away from GAZL 1
+code by the type bits alone, with no version check in the operator table. Impala emits the full
+`GAZL #2` ... `GAZL #1` bracket under `--gazl2`, which is what keeps concatenation-linking working in
+every dialect mix. Blast radius of the shipped form: ZERO forced migrations - undeclared files keep
+GAZL 1 meaning forever, and `src/UnitTest.gazl` tests both dialects in one file.
+
+Originally: researched against `src/GAZL.cpp` and GAZLCmd on 2026-08-02, re-verified 2026-08-07. The
+conclusion was that GAZL 1 has a real silent-wrong shape that no amount of Impala-side checking can
+close, because Impala has nowhere to encode the distinction.
 
 ## The problem in one line
 
@@ -210,11 +220,21 @@ looks like the expensive half and is.
   hole - but it means `t` is a declaration contract, not a guarantee about memory contents.
 - **Host boundary.** Whether `INPt`/`OUTt` are needed at all depends on whether a host ever hands a call
   target across.
-## Migration: DECIDED 2026-08-07 - break GAZL 1, no compatibility mode
+## Migration: revised 2026-08-25 - `GAZL #2` regions, superseding the 2026-08-07 hard break
 
-`p` tightens to "data pointer" and stops accepting `FUNC`. A GAZL 2 assembler will NOT assemble a GAZL 1
-file that holds a function pointer in a `p` slot. No format-version directive, no dual dialect - the
-loose path is deleted, not kept behind a flag.
+The 2026-08-07 decision was: break GAZL 1, no compatibility mode, the loose path deleted. What shipped
+instead is region-scoped: `p` tightens inside a `GAZL #2` region and stays GAZL 1 outside one. The hard
+break failed on a constraint the original analysis missed - **GAZL links by plain concatenation**, and
+any file-level dialect (a sticky mode, a single header directive) either re-interprets headerless GAZL 1
+units after a v2 unit or makes assembly depend on cat order. Regions close over their unit
+(`GAZL #1` at the end restores the default), so bracketed and unbracketed units concatenate in any
+order; per-symbol `TARGET` minting carries the protection across the seams (a v2 function's address is
+rejected from `p` slots in EVERY unit, declared or not). Per-function marking alone (a `FUNt` mnemonic,
+or a head pragma) was designed and rejected on the way: it composes equally well but cannot express the
+region-wide strictness that also refuses GAZL 1 function addresses in the region's own `p` rows. The
+measured blast radius below is now historical - under regions it is zero.
+
+The original decision, kept for the record:
 
 **Measured blast radius (2026-08-07, all 133 `.gazl` in the repo):**
 

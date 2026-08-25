@@ -51,10 +51,10 @@ written. PLAN / BACKLOG = not done.
 | [GAZLSymbolicWindows](gazl/GAZLSymbolicWindows.md) | FINDING | GAZL already supports symbolic by-value call windows; Impala's transient allocator is the blocker. Proof: [`symbolicWindows.gazl`](proofs/symbolicWindows.gazl) + its re-packed twin |
 | [FutureOptimizations](FutureOptimizations.md) | CANDIDATES | Compiler optimisation ideas, not committed to |
 | [GAZLAssemblerOptimizations](gazl/GAZLAssemblerOptimizations.md) | DESIGN NOTE | Assembler-side optimisation, starting with identity folding |
-| [GAZL2FunctionPointers](gazl/GAZL2FunctionPointers.md) | PROPOSAL | A distinct function-pointer storage type `t`, because `p` doing double duty is a silent-wrong shape Impala cannot close from its side. Nothing implemented |
+| [GAZL2FunctionPointers](gazl/GAZL2FunctionPointers.md) | SPEC | The `t` call-target type: `p` doing double duty was a silent-wrong shape (`&one + 1` calls a different function). IMPLEMENTED 2026-08-25 inside `GAZL #2` regions; migration revised from hard break to regions, zero forced migrations |
 | [TailCalls](gazl/TailCalls.md) | DESIGN NOTE | Tail-call elimination. Nothing implemented; needs a GAZL instruction *and* Impala syntax, so neither side can do it alone |
 | [GAZL2DataRegions](gazl/GAZL2DataRegions.md) | SPEC | The `SEEK` directive: bounded data regions at symbolic offsets, so initializers survive a repack. IMPLEMENTED END TO END 2026-08-24 - assembler + Impala emission under `--gazl2` (proof: [`seekRegions.gazl`](proofs/seekRegions.gazl)); E454/E459 lift under the flag |
-| [GAZL2Versioning](gazl/GAZL2Versioning.md) | PROPOSAL | `GAZL #2` source declaration + Impala `--gazl 1\|2`; per-product defaults (Permut8 = 1, Synplant 2 / Microtonic 4 = 2) |
+| [GAZL2Versioning](gazl/GAZL2Versioning.md) | SPEC | `GAZL #n` region directive (IMPLEMENTED 2026-08-25: the `GAZL #2`...`GAZL #1` bracket is the concatenation idiom) + Impala `--gazl2`; per-product defaults (Permut8 = GAZL 1, Synplant 2 / Microtonic 4 = GAZL 2) |
 
 The `GAZL2*` docs and TailCalls belong to the **GAZL 2** line, which ships after Impala 2.0 and is
 independent of it - nothing in Impala 2.0 waits on any of them.
