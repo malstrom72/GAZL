@@ -72,7 +72,7 @@ typedef unsigned int Pointer;																							// Pointer must be unsigned 
 typedef float Float;
 typedef Int Status;																										// Run-time status code
 
-const int VERSION = 2;						// 2 adds SCOP / ENDS local scopes and SEEK data regions. Pin an exact version with `! EQUi` (as UnitTest.gazl does - it tests one version); require a minimum with `! GEQi #GAZL_VERSION #2 @label`.
+const int VERSION = 2;						// 2 adds SCOP / ENDS local scopes, SEEK data regions, and `GAZL #2` regions with the `t` call-target type. Pin an exact version with `! EQUi` (as UnitTest.gazl does - it tests one version); require a minimum with `! GEQi #GAZL_VERSION #2 @label`.
 const int WORD_SIZE = 32;
 const Pointer MEMORY_OFFSET = 0x12345678;																				// All memory pointers in GAZL are offsetted by this amount (thus the address of the first memory word is not zero). This makes it easier to detect invalid memory operations (such as writing to a null-pointer).
 const Pointer FUNCTION_OFFSET = 0x56789ABC;																				// All function pointers in GAZL are offsetted by this amount (thus the ordinal of the first function is not zero). This makes it easier to detect an invalid indirect call - through a null pointer, or through a small integer that was never a function pointer at all. A function pointer is an ORDINAL indexing `functionTable`, NOT a code address, which is why this is not an instruction-pointer offset; it was named IP_OFFSET until 2026-08-05.
@@ -128,7 +128,9 @@ enum AssemblerError {
 	, LABEL_ON_FUNCTION = 33
 	, UNBALANCED_LOCAL_SCOPE = 34
 	, OVERLAPPING_DATA_REGIONS = 35
-	, ASSEMBLER_ERROR_COUNT = 36
+	, UNSUPPORTED_GAZL_VERSION = 36
+	, UNCLOSED_GAZL_REGION = 37
+	, ASSEMBLER_ERROR_COUNT = 38
 };
 
 extern const char* ASSEMBLER_ERROR_TEXTS[];
@@ -261,6 +263,7 @@ class Assembler {
 	protected:	Value* sectionEnd;
 	protected:	Int regionStart;					// Current region as section offsets; extent -1 = unbounded, claims only what it writes.
 	protected:	Int regionExtent;
+	protected:	int dialect;						// `GAZL #n` sets it; 1 outside any region, so every existing file keeps its meaning. Must be 1 again at finalize.
 	protected:	std::vector< std::pair<Int, Int> > dataRegions;	// Closed regions' claims, per section. Disjointness = no word initialized twice.
 	protected:	Symbols& globals;
 	protected:	Symbols locals;

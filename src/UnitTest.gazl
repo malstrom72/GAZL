@@ -115,6 +115,7 @@ test:                   FUNC
     p1:                 LOCp
     p2:                 LOCp
     p3:                 LOCp
+    t0:                 LOCt
     lArray:             LOCA *777
 ; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ; SCOP / ENDS: sA and sB are SIBLINGS, so they share offsets; sInner NESTS inside
@@ -163,6 +164,24 @@ test:                   FUNC
  NEQi       i2              #0              @fail            ; the bounded region's unwritten tail is zero
  PEEK       i3              &seek.test:0
  NEQi       i3              #0              @fail            ; so is a word no region touched
+
+;
+; Test the GAZL 2 `t` call-target type. tOne / tTwo are minted inside the GAZL #2 region at the end of
+; this file, so their addresses are targets; this caller needs no region of its own - the discipline
+; rides on the SYMBOLS, which is what lets mixed-dialect units concatenate.
+;
+ MOVt       t0              &tOne
+ CALL       t0              %0              *1
+ NEQi       %0              #1111           @fail            ; called through a target local
+ PEEK       t0              &tTargets:1
+ CALL       t0              %0              *1
+ NEQi       %0              #2222           @fail            ; loaded from a DATt table - memory stays typeless
+ EQUt       t0              &tTwo           @tSame
+ GOTO       @fail
+    tSame:  NEQt t0         &tOne           @tDiffer
+ GOTO       @fail
+    tDiffer: DIFt i0        t0              &tOne
+ NEQi       i0              #1              @fail            ; declaration-order ordinals: tTwo - tOne = 1
 
  PEEK       f0		       &consts.float
  PEEK       i0              &consts.int
@@ -354,9 +373,10 @@ checkZeroLoop: NOOP
 ; operand is merely a hint that might be used to optimize stack frame sizes or for bounds checking etc.
 ;
 ; A function pointer (the value of &function) is an opaque handle: a stable ordinal assigned in function declaration
-; order, not a code address. Only equality (EQUp / NEQp) and calling are defined operations on a function pointer;
-; ordering (LSSp, GEQp etc.) and arithmetic (ADDp, SUBp, DIFp) applied to a function pointer yield an unspecified (but
-; memory-safe) result.
+; order, not a code address. Equality (EQUp / NEQp), ordering (LSSp, GEQp etc.), difference (DIFp) and calling are
+; defined operations on a function pointer; arithmetic that PRODUCES one (ADDp, SUBp) yields an unspecified (but
+; memory-safe) result. GAZL 1 cannot enforce that contract; functions declared inside a GAZL #2 region carry the `t`
+; type, which can (see the region at the end of this file, and docs/gazl/InstructionSet.md under GAZL).
 ;
 ;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 
@@ -2229,3 +2249,32 @@ CallBack:               FUNC
                         RETU
     fail:               CALL ^assertFail
                         RETU
+
+;===============================================================================
+; GAZL 2 region: functions declared between `GAZL #2` and `GAZL #1` have TARGET
+; (`t`) addresses, so `&tOne` can never enter a `p` position, here or in any
+; other unit. Closing with `GAZL #1` is what makes this file safe to
+; CONCATENATE: whatever follows starts back in the GAZL 1 default.
+;===============================================================================
+                        GAZL #2
+
+;-------------------------------------------------------------------------------
+tOne:                   FUNC
+    tRes:               OUTi
+;-------------------------------------------------------------------------------
+                        MOVi tRes #1111
+                        RETU
+
+;-------------------------------------------------------------------------------
+tTwo:                   FUNC
+    tRes2:              OUTi
+;-------------------------------------------------------------------------------
+                        MOVi tRes2 #2222
+                        RETU
+
+;-------------------------------------------------------------------------------
+tTargets:               CNST *2
+;-------------------------------------------------------------------------------
+                        DATt &tOne &tTwo
+
+                        GAZL #1

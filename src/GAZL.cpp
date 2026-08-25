@@ -88,6 +88,8 @@ const char* ASSEMBLER_ERROR_TEXTS[] = {
 	/* , LABEL_ON_FUNCTION							*/	, "Branch target lands on a FUNC"
 	/* , UNBALANCED_LOCAL_SCOPE						*/	, "Unbalanced SCOP / ENDS"
 	/* , OVERLAPPING_DATA_REGIONS					*/	, "Data regions overlap"
+	/* , UNSUPPORTED_GAZL_VERSION					*/	, "File requires a newer GAZL engine"
+	/* , UNCLOSED_GAZL_REGION						*/	, "GAZL 2 region not closed with GAZL #1"
 };
 
 // --- defined integer / FTOI semantics, shared by Processor::run() and calcConstant() so the
@@ -243,7 +245,7 @@ enum Opcode {
 	, NLSF_VVB, NLSF_VCB, NLSF_CVB, NEQF_VVB, NEQF_VCB
 	, GOTO_B__, SWCH_VCC
 
-	, NOOP____, GLOB____, CNST____, DATA____, LOCA____, OUTP____, SCOP____, ENDS____, SEEK____
+	, NOOP____, GLOB____, CNST____, DATA____, LOCA____, OUTP____, SCOP____, ENDS____, SEEK____, GAZL____
 	
 	, MOVE_CC_
 	, ABSI_CC_
@@ -267,8 +269,10 @@ const int VAR_FLOAT_R		= 0x00008 | TRANSIENT;		// Readable float variable.
 const int VAR_FLOAT_W		= 0x00010 | TRANSIENT;		// Writable float variable.
 const int VAR_PTR_R			= 0x00020 | TRANSIENT;		// Readable pointer variable.
 const int VAR_PTR_W			= 0x00040 | TRANSIENT;		// Writable pointer variable.
-const int ANY_VAR_R			= VAR_INT_R | VAR_FLOAT_R | VAR_PTR_R;
-const int ANY_VAR_W			= VAR_INT_W | VAR_FLOAT_W | VAR_PTR_W;
+const int VAR_TGT_R			= 0x100000 | TRANSIENT;		// Readable call-target variable (GAZL 2 `t`).
+const int VAR_TGT_W			= 0x200000 | TRANSIENT;		// Writable call-target variable.
+const int ANY_VAR_R			= VAR_INT_R | VAR_FLOAT_R | VAR_PTR_R | VAR_TGT_R;		// VAR_TGT joins so PEEK/POKE/GETL/SETL carry targets with zero new rows - memory stays typeless, exactly as for i/f/p.
+const int ANY_VAR_W			= VAR_INT_W | VAR_FLOAT_W | VAR_PTR_W | VAR_TGT_W;
 const int ANY_VAR			= ANY_VAR_R | ANY_VAR_W;
 const int CONST_INT_P		= 0x00080;					// Constant positive (or zero) integer.
 const int CONST_INT_N		= 0x00100;					// Constant negative integer.
@@ -285,6 +289,7 @@ const int NATIVE			= 0x10000;
 const int COMPILE_TIME		= 0x20000;
 const int FORWARD			= 0x40000;
 const int UNCHECKED_ADDRESS	= 0x80000;					// Do *not* verify that the offset is < size of the symbol. (Some instructions shouldn't do this, like ADDp for example.)
+const int TARGET			= 0x400000;					// Call-target constant: what `&function` MINTS inside a `GAZL #2` region (FUNC outside one).
 const int FWD_ADDRESS_W		= ADDRESS_W | FORWARD;
 const int FWD_ADDRESS_R		= ADDRESS_R | FORWARD;
 const int FWD_BRANCH		= BRANCH | FORWARD;
@@ -292,19 +297,20 @@ const int FREE_ADDRESS		= ADDRESS | UNCHECKED_ADDRESS;
 const int FWD_FREE			= FREE_ADDRESS | FORWARD;
 const int FWD_FREE_W		= ADDRESS_W | UNCHECKED_ADDRESS | FORWARD;
 const int FWD_FREE_R		= ADDRESS_R | UNCHECKED_ADDRESS | FORWARD;
-// GAZL 2: SPLIT THIS. Unioning FUNC with FREE_ADDRESS makes a function pointer and a data pointer
-// interchangeable everywhere except a DIRECT call, so `p` means both "data pointer" and "any pointer".
-// docs/gazl/InstructionSet.md (CALL) already states that ONLY equality and calling are defined on a function
-// pointer - this union is precisely why the assembler cannot enforce its own documented contract. ADDp on
-// a function pointer assembles and does NOT trap: `&one + 1` is a valid ordinal, so it silently calls a
-// different function. Fix is a fourth storage type, suffix `t` (target), which simply has no
-// ADDt/SUBt/DIFt/LSSt forms. See design/gazl/GAZL2FunctionPointers.md.
+// THE GAZL 2 SPLIT (design/gazl/GAZL2FunctionPointers.md). `ANY_FREE` keeps `FUNC` unchanged: the split
+// happens because inside a `GAZL #2` region a FUNC declaration mints `TARGET` instead of `FUNC`, so its
+// `&function` never matches a `p` position - and `parseOperand` additionally strips `FUNC` from every
+// ADDRESS-carrying position there, so no `p` position takes ANY function constant inside a region. The
+// `t` rows accept only `TGT_*`, which is what gates them away from GAZL 1 code with no version check in
+// this table. `CALL` accepts FUNC | TARGET, so cross-dialect calls always work.
 const int ANY_FREE			= NULL_PTR | FREE_ADDRESS | FUNC;
 const int ANY_FWD_FREE		= ANY_FREE | FORWARD;
+const int TGT_FREE			= NULL_PTR | TARGET;
+const int TGT_FWD_FREE		= TGT_FREE | FORWARD;
 const int ANY_VAR_FREE_W	= ANY_VAR_W | UNCHECKED_ADDRESS;
 const int ANY_VAR_FREE_R	= ANY_VAR_R | UNCHECKED_ADDRESS;
 const int ANY_VAR_FREE		= ANY_VAR | UNCHECKED_ADDRESS;
-const int KONST				= CONST_INT | CONST_FLOAT | ANY_FWD_FREE; // FIX : called KONST because windows defines a CONST macro, which messes up CONST if you force include windows.h
+const int KONST				= CONST_INT | CONST_FLOAT | ANY_FWD_FREE | TARGET; // FIX : called KONST because windows defines a CONST macro, which messes up CONST if you force include windows.h. TARGET keeps DATA truly untyped in both dialects.
 
 const int SWAP_0_AND_1		= 0x01; // Used for commutative operations where operand 0 and operand 1 can be swapped in order to minimize the effective instruction set when operands have different addressing modes.
 const int SWAP_1_AND_2		= 0x02; // Used for commutative operations where operand 1 and operand 2 can be swapped in order to minimize the effective instruction set when operands have different addressing modes.
@@ -343,14 +349,14 @@ static const Operator OPERATORS[] = {
 	, { " ANDi_vcv", ANDI_VVC,	{ VAR_INT_W		, CONST_INT		, VAR_INT_R		}		, SWAP_1_AND_2	, 0				}
 	, { " ANDi_vvc", ANDI_VVC,	{ VAR_INT_W		, VAR_INT_R		, CONST_INT		}		, 0				, 0				}
 	, { " ANDi_vvv", ANDI_VVV,	{ VAR_INT_W		, VAR_INT_R		, VAR_INT_R		}		, 0				, 0				}
-	, { " CALL_c__", CALL_CVC,	{ FUNC | FORWARD, 0				, 0				}		, 0				, 0				}
-	, { " CALL_cvs", CALL_CVC,	{ FUNC | FORWARD, TRANSIENT		, CONST_INT_P	}		, LOCAL_BOUNDS	, 0				}
+	, { " CALL_c__", CALL_CVC,	{ FUNC|TARGET|FORWARD, 0		, 0				}		, 0				, 0				}
+	, { " CALL_cvs", CALL_CVC,	{ FUNC|TARGET|FORWARD, TRANSIENT, CONST_INT_P	}		, LOCAL_BOUNDS	, 0				}
 	, { " CALL_n__", CALL_NVC,	{ NATIVE|FORWARD, 0			, 0				}		, 0				, 0				}
 	, { " CALL_nvs", CALL_NVC,	{ NATIVE|FORWARD, TRANSIENT	, CONST_INT_P	}		, LOCAL_BOUNDS	, 0				}
 	// GAZL 2: these take the generic VAR_PTR_R, so an INDIRECT call cannot demand a function pointer - only
 	// CALL_c__ above (FUNC | FORWARD) discriminates. Retype to `t`. See design/gazl/GAZL2FunctionPointers.md.
-	, { " CALL_v__", CALL_VVC,	{ VAR_PTR_R		, 0				, 0				}		, 0				, 0				}
-	, { " CALL_vvs", CALL_VVC,	{ VAR_PTR_R		, TRANSIENT		, CONST_INT_P	}		, LOCAL_BOUNDS	, 0				}
+	, { " CALL_v__", CALL_VVC,	{ VAR_PTR_R|VAR_TGT_R, 0		, 0				}		, 0				, 0				}
+	, { " CALL_vvs", CALL_VVC,	{ VAR_PTR_R|VAR_TGT_R, TRANSIENT, CONST_INT_P	}		, LOCAL_BOUNDS	, 0				}
 	, { " CNST_s__", CNST____,	{ CONST_INT_P	, 0				, 0				}		, 0				, ADDRESS_R		}
 	, { " COPY_ccs", COPY_CCC,	{ FWD_ADDRESS_W	, FWD_ADDRESS_R	, CONST_INT_P	}		, 0				, 0				}
 	, { " COPY_cvs", COPY_CVC,	{ FWD_ADDRESS_W	, VAR_PTR_R		, CONST_INT_P	}		, 0				, 0				}
@@ -363,10 +369,15 @@ static const Operator OPERATORS[] = {
 	// (`DATp &func &data` assembles). Needs a sibling DATt. See design/gazl/GAZL2FunctionPointers.md.
 	, { " DATp_c__", DATA____,	{ ANY_FWD_FREE	, 0				, 0				}		, 0				, 0				}
 	, { " DATs____", DATA____,	{ 0				, 0				, 0				}		, 0				, 0				}
+	, { " DATt_c__", DATA____,	{ TGT_FWD_FREE	, 0				, 0				}		, 0				, 0				}
 	, { " DIFp_vcc", SUBI_CCC,	{ VAR_INT_W		, FREE_ADDRESS		, FREE_ADDRESS		}		, YIELDS_CONST	, CONST_INT		}
 	, { " DIFp_vcv", SUBI_VCV,	{ VAR_INT_W		, FWD_FREE		, VAR_PTR_R		}		, 0				, 0				}
 	, { " DIFp_vvc", SUBI_VVC,	{ VAR_INT_W		, VAR_PTR_R		, FWD_FREE		}		, 0				, 0				}
 	, { " DIFp_vvv", SUBI_VVV,	{ VAR_INT_W		, VAR_PTR_R		, VAR_PTR_R		}		, 0				, 0				}
+	, { " DIFt_vcc", SUBI_CCC,	{ VAR_INT_W		, TGT_FREE		, TGT_FREE		}		, YIELDS_CONST	, CONST_INT		}
+	, { " DIFt_vcv", SUBI_VCV,	{ VAR_INT_W		, TGT_FWD_FREE	, VAR_TGT_R		}		, 0				, 0				}
+	, { " DIFt_vvc", SUBI_VVC,	{ VAR_INT_W		, VAR_TGT_R		, TGT_FWD_FREE	}		, 0				, 0				}
+	, { " DIFt_vvv", SUBI_VVV,	{ VAR_INT_W		, VAR_TGT_R		, VAR_TGT_R		}		, 0				, 0				}
 	, { " DIVf_vcc", DIVF_CCC,	{ VAR_FLOAT_W	, CONST_FLOAT	, CONST_FLOAT	}		, YIELDS_CONST|CHECK_DIV_BY_0, CONST_FLOAT }
 	, { " DIVf_vcv", DIVF_VCV,	{ VAR_FLOAT_W	, CONST_FLOAT	, VAR_FLOAT_R	}		, 0				, 0				}
 	, { " DIVf_vvc", DIVF_VVC,	{ VAR_FLOAT_W	, VAR_FLOAT_R	, CONST_FLOAT	}		, CHECK_DIV_BY_0, 0				}
@@ -388,6 +399,10 @@ static const Operator OPERATORS[] = {
 	, { " EQUp_cvb", EQUI_VCB,	{ ANY_FWD_FREE	, VAR_PTR_R		, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
 	, { " EQUp_vcb", EQUI_VCB,	{ VAR_PTR_R		, ANY_FWD_FREE	, FWD_BRANCH	}		, 0				, 0				}
 	, { " EQUp_vvb", EQUI_VVB,	{ VAR_PTR_R		, VAR_PTR_R		, FWD_BRANCH	}		, 0				, 0				}
+	, { " EQUt_ccb", EQUI_CCB,	{ TGT_FREE		, TGT_FREE		, FWD_BRANCH	}		, YIELDS_GOTO	, 0				}
+	, { " EQUt_cvb", EQUI_VCB,	{ TGT_FWD_FREE	, VAR_TGT_R		, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
+	, { " EQUt_vcb", EQUI_VCB,	{ VAR_TGT_R		, TGT_FWD_FREE	, FWD_BRANCH	}		, 0				, 0				}
+	, { " EQUt_vvb", EQUI_VVB,	{ VAR_TGT_R		, VAR_TGT_R		, FWD_BRANCH	}		, 0				, 0				}
 	, { " FLOf_vc_", FLOF_CC_,	{ VAR_FLOAT_W	, CONST_FLOAT	, 0				}		, YIELDS_CONST	, CONST_FLOAT	}
 	, { " FLOf_vv_", FLOF_VV_,	{ VAR_FLOAT_W	, VAR_FLOAT_R	, 0				}		, 0				, 0				}
 	, { " FORi_vcb", FORi_VCB,	{ VAR_INT_W		, CONST_INT		, FWD_BRANCH	}		, 0				, 0				}
@@ -395,6 +410,7 @@ static const Operator OPERATORS[] = {
 	, { " FORp_vcb", FORi_VCB,	{ VAR_PTR_W		, FWD_FREE		, FWD_BRANCH	}		, 0				, 0				}
 	, { " FORp_vvb", FORi_VVB,	{ VAR_PTR_W		, VAR_PTR_R		, FWD_BRANCH	}		, 0				, 0				}
 	, { " FUNC____", FUNC_CC_,	{ 0				, 0				, 0				}		, 0				, FUNC			}
+	, { " GAZL_c__", GAZL____,	{ CONST_INT_P	, 0				, 0				}		, 0				, 0				}
 	, { " GEQf_ccb", NLSF_CCB,	{ CONST_FLOAT	, CONST_FLOAT	, FWD_BRANCH	}		, YIELDS_GOTO	, 0				}
 	, { " GEQf_cvb", NLSF_CVB,	{ CONST_FLOAT	, VAR_FLOAT_R	, FWD_BRANCH	}		, 0				, 0				}
 	, { " GEQf_vcb", NLSF_VCB,	{ VAR_FLOAT_R	, CONST_FLOAT	, FWD_BRANCH	}		, 0				, 0				}
@@ -407,6 +423,10 @@ static const Operator OPERATORS[] = {
 	, { " GEQp_cvb", NLSI_CVB,	{ ANY_FWD_FREE	, VAR_PTR_R		, FWD_BRANCH	}		, 0				, 0				}
 	, { " GEQp_vcb", NLSI_VCB,	{ VAR_PTR_R		, ANY_FWD_FREE	, FWD_BRANCH	}		, 0				, 0				}
 	, { " GEQp_vvb", NLSI_VVB,	{ VAR_PTR_R		, VAR_PTR_R		, FWD_BRANCH	}		, 0				, 0				}
+	, { " GEQt_ccb", NLSI_CCB,	{ TGT_FREE		, TGT_FREE		, FWD_BRANCH	}		, YIELDS_GOTO	, 0				}
+	, { " GEQt_cvb", NLSI_CVB,	{ TGT_FWD_FREE	, VAR_TGT_R		, FWD_BRANCH	}		, 0				, 0				}
+	, { " GEQt_vcb", NLSI_VCB,	{ VAR_TGT_R		, TGT_FWD_FREE	, FWD_BRANCH	}		, 0				, 0				}
+	, { " GEQt_vvb", NLSI_VVB,	{ VAR_TGT_R		, VAR_TGT_R		, FWD_BRANCH	}		, 0				, 0				}
 	, { " GETL_vvv", GETL_VVV,	{ ANY_VAR_W		, ANY_VAR_FREE_R, VAR_INT_R		}		, 0				, 0				}
 	, { " GLOB_s__", GLOB____,	{ CONST_INT_P	, 0				, 0				}		, 0				, FREE_ADDRESS	}
 	, { " GOTO_b__", GOTO_B__,	{ FWD_BRANCH	, 0				, 0				}		, 0				, 0				}
@@ -422,9 +442,14 @@ static const Operator OPERATORS[] = {
 	, { " GRTp_cvb", LSSI_VCB,	{ ANY_FWD_FREE	, VAR_PTR_R		, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
 	, { " GRTp_vcb", LSSI_CVB,	{ VAR_PTR_R		, ANY_FWD_FREE	, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
 	, { " GRTp_vvb", LSSI_VVB,	{ VAR_PTR_R		, VAR_PTR_R		, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
+	, { " GRTt_ccb", LSSI_CCB,	{ TGT_FREE		, TGT_FREE		, FWD_BRANCH	}		, SWAP_0_AND_1 | YIELDS_GOTO, 0	}
+	, { " GRTt_cvb", LSSI_VCB,	{ TGT_FWD_FREE	, VAR_TGT_R		, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
+	, { " GRTt_vcb", LSSI_CVB,	{ VAR_TGT_R		, TGT_FWD_FREE	, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
+	, { " GRTt_vvb", LSSI_VVB,	{ VAR_TGT_R		, VAR_TGT_R		, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
 	, { " INPf____", LOCA____,	{ 0				, 0				, 0				}		, 0				, VAR_FLOAT_R & ~TRANSIENT }
 	, { " INPi____", LOCA____,	{ 0				, 0				, 0				}		, 0				, VAR_INT_R & ~TRANSIENT }
 	, { " INPp____", LOCA____,	{ 0				, 0				, 0				}		, 0				, VAR_PTR_R & ~TRANSIENT }
+	, { " INPt____", LOCA____,	{ 0				, 0				, 0				}		, 0				, VAR_TGT_R & ~TRANSIENT }
 	, { " IORi_vcc", IORI_CCC,	{ VAR_INT_W		, CONST_INT		, CONST_INT		}		, YIELDS_CONST	, CONST_INT		}
 	, { " IORi_vcv", IORI_VVC,	{ VAR_INT_W		, CONST_INT		, VAR_INT_R		}		, SWAP_1_AND_2	, 0				}
 	, { " IORi_vvc", IORI_VVC,	{ VAR_INT_W		, VAR_INT_R		, CONST_INT		}		, 0				, 0				}
@@ -441,10 +466,15 @@ static const Operator OPERATORS[] = {
 	, { " LEQp_cvb", NLSI_VCB,	{ ANY_FWD_FREE	, VAR_PTR_R		, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
 	, { " LEQp_vcb", NLSI_CVB,	{ VAR_PTR_R		, ANY_FWD_FREE	, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
 	, { " LEQp_vvb", NLSI_VVB,	{ VAR_PTR_R		, VAR_PTR_R		, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
+	, { " LEQt_ccb", NLSI_CCB,	{ TGT_FREE		, TGT_FREE		, FWD_BRANCH	}		, SWAP_0_AND_1 | YIELDS_GOTO, 0	}
+	, { " LEQt_cvb", NLSI_VCB,	{ TGT_FWD_FREE	, VAR_TGT_R		, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
+	, { " LEQt_vcb", NLSI_CVB,	{ VAR_TGT_R		, TGT_FWD_FREE	, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
+	, { " LEQt_vvb", NLSI_VVB,	{ VAR_TGT_R		, VAR_TGT_R		, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
 	, { " LOCA_s__", LOCA____,	{ CONST_INT_P	, 0				, 0				}		, 0				, ANY_VAR & ~TRANSIENT }
 	, { " LOCf____", LOCA____,	{ 0				, 0				, 0				}		, 0				, (VAR_FLOAT_R | VAR_FLOAT_W) & ~TRANSIENT }
 	, { " LOCi____", LOCA____,	{ 0				, 0				, 0				}		, 0				, (VAR_INT_R | VAR_INT_W) & ~TRANSIENT }
 	, { " LOCp____", LOCA____,	{ 0				, 0				, 0				}		, 0				, (VAR_PTR_R | VAR_PTR_W) & ~TRANSIENT }
+	, { " LOCt____", LOCA____,	{ 0				, 0				, 0				}		, 0				, (VAR_TGT_R | VAR_TGT_W) & ~TRANSIENT }
 	, { " LSSf_ccb", LSSF_CCB,	{ CONST_FLOAT	, CONST_FLOAT	, FWD_BRANCH	}		, YIELDS_GOTO	, 0				}
 	, { " LSSf_cvb", LSSF_CVB,	{ CONST_FLOAT	, VAR_FLOAT_R	, FWD_BRANCH	}		, 0				, 0				}
 	, { " LSSf_vcb", LSSF_VCB,	{ VAR_FLOAT_R	, CONST_FLOAT	, FWD_BRANCH	}		, 0				, 0				}
@@ -457,6 +487,10 @@ static const Operator OPERATORS[] = {
 	, { " LSSp_cvb", LSSI_CVB,	{ ANY_FWD_FREE	, VAR_PTR_R		, FWD_BRANCH	}		, 0				, 0				}
 	, { " LSSp_vcb", LSSI_VCB,	{ VAR_PTR_R		, ANY_FWD_FREE	, FWD_BRANCH	}		, 0				, 0				}
 	, { " LSSp_vvb", LSSI_VVB,	{ VAR_PTR_R		, VAR_PTR_R		, FWD_BRANCH	}		, 0				, 0				}
+	, { " LSSt_ccb", LSSI_CCB,	{ TGT_FREE		, TGT_FREE		, FWD_BRANCH	}		, YIELDS_GOTO	, 0				}
+	, { " LSSt_cvb", LSSI_CVB,	{ TGT_FWD_FREE	, VAR_TGT_R		, FWD_BRANCH	}		, 0				, 0				}
+	, { " LSSt_vcb", LSSI_VCB,	{ VAR_TGT_R		, TGT_FWD_FREE	, FWD_BRANCH	}		, 0				, 0				}
+	, { " LSSt_vvb", LSSI_VVB,	{ VAR_TGT_R		, VAR_TGT_R		, FWD_BRANCH	}		, 0				, 0				}
 	, { " MODi_vcc", MODI_CCC,	{ VAR_INT_W		, CONST_INT		, CONST_INT		}		, YIELDS_CONST|CHECK_DIV_BY_0, CONST_INT }
 	, { " MODi_vcv", MODI_VCV,	{ VAR_INT_W		, CONST_INT		, VAR_INT_R		}		, 0				, 0				}
 	, { " MODi_vvc", MODI_VVC,	{ VAR_INT_W		, VAR_INT_R		, CONST_INT		}		, CHECK_DIV_BY_0, 0				}
@@ -468,6 +502,8 @@ static const Operator OPERATORS[] = {
 	, { " MOVi_vv_", MOVE_VV_,	{ VAR_INT_W		, VAR_INT_R		, 0				}		, 0				, 0				}
 	, { " MOVp_vc_", MOVE_VC_,	{ VAR_PTR_W		, ANY_FWD_FREE	, 0				}		, 0				, 0				}
 	, { " MOVp_vv_", MOVE_VV_,	{ VAR_PTR_W		, VAR_PTR_R		, 0				}		, 0				, 0				}
+	, { " MOVt_vc_", MOVE_VC_,	{ VAR_TGT_W		, TGT_FWD_FREE	, 0				}		, 0				, 0				}
+	, { " MOVt_vv_", MOVE_VV_,	{ VAR_TGT_W		, VAR_TGT_R		, 0				}		, 0				, 0				}
 	, { " MULf_vcc", MULF_CCC,	{ VAR_FLOAT_W	, CONST_FLOAT	, CONST_FLOAT	}		, YIELDS_CONST	, CONST_FLOAT	}
 	, { " MULf_vcv", MULF_VVC,	{ VAR_FLOAT_W	, CONST_FLOAT	, VAR_FLOAT_R	}		, SWAP_1_AND_2	, 0				}
 	, { " MULf_vvc", MULF_VVC,	{ VAR_FLOAT_W	, VAR_FLOAT_R	, CONST_FLOAT	}		, 0				, 0				}
@@ -488,10 +524,15 @@ static const Operator OPERATORS[] = {
 	, { " NEQp_cvb", NEQI_VCB,	{ ANY_FWD_FREE	, VAR_PTR_R		, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
 	, { " NEQp_vcb", NEQI_VCB,	{ VAR_PTR_R		, ANY_FWD_FREE	, FWD_BRANCH	}		, 0				, 0				}
 	, { " NEQp_vvb", NEQI_VVB,	{ VAR_PTR_R		, VAR_PTR_R		, FWD_BRANCH	}		, 0				, 0				}
+	, { " NEQt_ccb", NEQI_CCB,	{ TGT_FREE		, TGT_FREE		, FWD_BRANCH	}		, YIELDS_GOTO	, 0				}
+	, { " NEQt_cvb", NEQI_VCB,	{ TGT_FWD_FREE	, VAR_TGT_R		, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
+	, { " NEQt_vcb", NEQI_VCB,	{ VAR_TGT_R		, TGT_FWD_FREE	, FWD_BRANCH	}		, 0				, 0				}
+	, { " NEQt_vvb", NEQI_VVB,	{ VAR_TGT_R		, VAR_TGT_R		, FWD_BRANCH	}		, 0				, 0				}
 	, { " NOOP____", NOOP____,	{ 0				, 0				, 0				}		, 0				, 0				}
 	, { " OUTf____", LOCA____,	{ 0				, 0				, 0				}		, 0				, (VAR_FLOAT_R | VAR_FLOAT_W) & ~TRANSIENT }
 	, { " OUTi____", LOCA____,	{ 0				, 0				, 0				}		, 0				, (VAR_INT_R | VAR_INT_W) & ~TRANSIENT }
 	, { " OUTp____", LOCA____,	{ 0				, 0				, 0				}		, 0				, (VAR_PTR_R | VAR_PTR_W) & ~TRANSIENT }
+	, { " OUTt____", LOCA____,	{ 0				, 0				, 0				}		, 0				, (VAR_TGT_R | VAR_TGT_W) & ~TRANSIENT }
 	, { " PARA_s__", LOCA____,	{ CONST_INT_P	, 0				, 0				}		, 0				, ANY_VAR & ~TRANSIENT }
 	, { " PEEK_vc_", PEEK_VC_,	{ ANY_VAR_W		, FWD_ADDRESS_R	, 0				}		, 0				, 0				}
 	, { " PEEK_vcv", PEEK_VCV,	{ ANY_VAR_W		, FWD_FREE_R	, VAR_INT_R		}		, 0				, 0				}
@@ -710,7 +751,7 @@ Pointer Symbols::findFunction(const Char* name) const {
 	const Char* nameBegin = name;
 	const Char* nameEnd = name + strlen(name);
 	if (!isValidIdentifier(nameBegin, nameEnd)) return NULL_POINTER;
-	if (!lookup(nameBegin, nameEnd, FUNC, types, value, size)) return NULL_POINTER;
+	if (!lookup(nameBegin, nameEnd, FUNC | TARGET, types, value, size)) return NULL_POINTER;	// the host-boundary CALL: like the CALL rows, it takes either dialect's functions
 	return value.p;
 }
 
@@ -753,7 +794,7 @@ Assembler::Assembler(UInt maxCodeSize, Instruction* codeBase, UInt maxFunctionCo
 		, ip(codeBase), functionStart(0), functionCount(0), localsSize(0), maxLocalsSize(0), localScopeDepth(0)
 		, paramsSize(0), globalsPointer(memoryBase)
 		, constantsPointer(memoryEnd), dataLabelType(0), dataPointer(0), dataEnd(0)
-		, sectionBegin(0), sectionEnd(0), regionStart(0), regionExtent(-1), globals(globals) {
+		, sectionBegin(0), sectionEnd(0), regionStart(0), regionExtent(-1), dialect(1), globals(globals) {
 	for (Int i = 0; i < 128; ++i) compileTimeVars[i].types = 0;
 	Value v;
 	v.i = 0;
@@ -863,7 +904,10 @@ void Assembler::parseOperand(const Char* b, const Char* e, int accepts, Value* v
 					linkWithOffset(globals, b + 1, e, accepts, v);
 					break;
 
-		case '&':	if ((accepts & (ADDRESS | FUNC)) == 0) throw Exception(DID_NOT_EXPECT_ADDRESS, b, e);
+		case '&':	if (dialect >= 2 && (accepts & ADDRESS) != 0) {
+						accepts &= ~FUNC;			// inside a GAZL 2 region no data-pointer position takes ANY function constant, GAZL 1-minted included. CALL's slot carries no ADDRESS bits, so cross-dialect calls stay legal.
+					}
+					if ((accepts & (ADDRESS | FUNC | TARGET)) == 0) throw Exception(DID_NOT_EXPECT_ADDRESS, b, e);
 					linkWithOffset(globals, b + 1, e, accepts, v);
 					break;
 
@@ -971,6 +1015,7 @@ void Assembler::closeDataRegion() {
 
 void Assembler::finalize(UInt& codeSize, UInt& globalsSize, UInt& constsSize, UInt& functionCount) {
 	newUnit(0);
+	if (dialect != 1) throw Exception(UNCLOSED_GAZL_REGION);	// so a truncated GAZL 2 unit cannot pass, and a following concatenated unit always starts in the default
 	threadBranches();
 	closeDataRegion();
 	globals.resolveForwardRefs();
@@ -1091,7 +1136,8 @@ const Char* Assembler::feed(const Char* line) {
 			case 'i':
 			case 'f':
 			case 'p':
-			case 'A':	{																								// DATi, DATf, DATp and DATA
+			case 't':
+			case 'A':	{																								// DATi, DATf, DATp, DATt and DATA
 							if (dataPointer == 0) throw Exception(DATA_SECTION_MISSING);
 							Value v;
 							v.p = (Int)(dataPointer - memoryBase + MEMORY_OFFSET);
@@ -1101,6 +1147,7 @@ const Char* Assembler::feed(const Char* line) {
 								case 'i': accepts = CONST_INT; break;
 								case 'f': accepts = CONST_FLOAT; break;
 								case 'p': accepts = ANY_FWD_FREE; break;
+								case 't': accepts = TGT_FWD_FREE; break;
 							}
 							p = eatSpaceAndComment(e);
 							while (!isEOL(*p)) {
@@ -1226,6 +1273,11 @@ const Char* Assembler::feed(const Char* line) {
 							declare(globals, labelBegin, labelEnd, op->declareTypes, v, size);
 							break;
 
+			case GAZL____:	parseOperand(op0Begin, op0End, op->accepts[0], &v);											// GAZL
+							if (v.i < 1 || v.i > VERSION) throw Exception(UNSUPPORTED_GAZL_VERSION);
+							dialect = (int)(v.i);								// A mode, not a bracket: `GAZL #2` opens a region, `GAZL #1` restores the default - which is how concatenated units compose in any order. finalize() insists the file ends restored.
+							break;
+
 			case SEEK____:	{																							// SEEK
 								if (dataPointer == 0) throw Exception(DATA_SECTION_MISSING);
 								closeDataRegion();
@@ -1247,7 +1299,8 @@ const Char* Assembler::feed(const Char* line) {
 							v.p = (Int)(FUNCTION_OFFSET + functionCount);		// A function pointer is its stable declaration-order ordinal (not a code offset), resolved through `functionTable` at call time.
 							functionTable[functionCount] = (UInt)(ip - codeBase);
 							++functionCount;
-							declare(globals, labelBegin, labelEnd, op->declareTypes, v);
+							declare(globals, labelBegin, labelEnd,
+									(dialect >= 2 ? TARGET : FUNC), v);			// THE dialect switch: a GAZL 2 function's address is a `t`, so it can never enter a `p` position - here or in any other unit.
 							if (functionStart != 0) finalizeFunction();
 							if (ip >= codeEnd) throw Exception(NOT_ENOUGH_CODE_SPACE);
 							ip->opcode = op->opcode;
@@ -1323,7 +1376,11 @@ const Char* Assembler::feed(const Char* line) {
 								if ((op->otherFlags & SWAP_1_AND_2) != 0) std::swap(p1, p2);
 								p0->i = p1->i = p2->i = 0;
 								if (op->opcode == RETU_C__) p0->i = localsSize;											// RETU
-								parseOperand(op0Begin, op0End, op->accepts[0], p0);
+								types = op->accepts[0];
+								if (dialect >= 2 && op->opcode == CALL_VVC) {
+									types &= ~(VAR_PTR_R & ~TRANSIENT);			// inside a GAZL 2 region an indirect call goes through a `t` local (or an untyped %N window slot) - a `p` local is not a callee. The TRANSIENT bit stays: VAR_TGT_R carries it for the %N form.
+								}
+								parseOperand(op0Begin, op0End, types, p0);
 								parseOperand(op1Begin, op1End, op->accepts[1], p1);
 								if (op->opcode == SWCH_VCC) {															// SWCH
 									assert(*op2Begin == '@');
@@ -1770,11 +1827,11 @@ bool unitTest() {
 			assert(op.key[6 + j] != 'b' || (op.accepts[j] & (ANY_VAR | CONST_INT_P | CONST_FLOAT | BRANCH | ADDRESS | FUNC | NATIVE | COMPILE_TIME)) == BRANCH);
 			assert(op.key[6 + j] != 'v' || (op.accepts[j] & ANY_VAR) != 0);
 			assert(op.key[6 + j] != 'v' || (op.accepts[j] & (CONST_INT_P | CONST_FLOAT | BRANCH | ADDRESS | FUNC | NATIVE | COMPILE_TIME)) == 0);
-			assert(op.key[6 + j] != 'c' || (op.accepts[j] & (CONST_INT_P | CONST_FLOAT | ADDRESS | FUNC | NATIVE | COMPILE_TIME)) != 0);
+			assert(op.key[6 + j] != 'c' || (op.accepts[j] & (CONST_INT_P | CONST_FLOAT | ADDRESS | FUNC | TARGET | NATIVE | COMPILE_TIME)) != 0);
 			assert(op.key[6 + j] != 'c' || (op.accepts[j] & (ANY_VAR | BRANCH)) == 0);
 			assert(op.opcode == FTOI_CCC || op.opcode == FTOI_VVC || op.opcode == IFDF_CB_ || op.key[4] != 'I' || (op.accepts[j] & (VAR_FLOAT_W | CONST_FLOAT)) == 0);
 			assert(op.opcode == ITOF_CCC || op.opcode == ITOF_VVC || op.opcode == IFDF_CB_ || op.key[4] != 'F' || (op.accepts[j] & (VAR_INT_W | CONST_INT_P)) == 0);
-			assert(op.accepts[j] == 0 || (op.accepts[j] & (ANY_VAR | CONST_INT_P | CONST_FLOAT | BRANCH | ADDRESS | FUNC | NATIVE | COMPILE_TIME)) != 0);
+			assert(op.accepts[j] == 0 || (op.accepts[j] & (ANY_VAR | CONST_INT_P | CONST_FLOAT | BRANCH | ADDRESS | FUNC | TARGET | NATIVE | COMPILE_TIME)) != 0);
 			assert((op.accepts[j] & ANY_VAR) == 0 || (op.accepts[j] & (CONST_INT_P | CONST_FLOAT | BRANCH | ADDRESS | FUNC | NATIVE | COMPILE_TIME)) == 0);
 			assert((op.accepts[j] & ANY_VAR) == 0 || (op.accepts[j] & FORWARD) == 0);
 			assert(op.accepts[0] != COMPILE_TIME || (((op.accepts[1] & FORWARD) == 0 || op.accepts[1] == 0) && (((op.accepts[2] & FORWARD) == 0) || op.accepts[2] == 0)));
