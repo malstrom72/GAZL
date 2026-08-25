@@ -62,12 +62,30 @@ const PROOFS = [
 		fails: true,
 		expect: ['axis 1 is b[W - 1] but f expects [3]'],
 	},
+	{
+		file: 'design/proofs/seekRegions.gazl',
+		doc: 'design/gazl/GAZL2DataRegions.md',
+		args: ['main'],
+		expect: ['60906', 'globals size: 6'],
+	},
+	{
+		file: 'design/proofs/seekRegionsRepacked.gazl',
+		doc: 'design/gazl/GAZL2DataRegions.md',
+		args: ['main'],
+		/* Same answer from a re-packed layout - gain first, a pad word, note last - via SEEK regions. */
+		expect: ['60906', 'globals size: 7'],
+	},
 ];
 
 /* The re-pack claim is a DIFF, not an output: every line below the layout header is byte-identical, so
    a host re-packing a struct re-assembles rather than recompiles. Asserted here because it is the whole
    point of keeping two nearly identical files, and a careless edit to one would silently break it. */
-const HEADER_LINES = 28;
+const REPACK_PAIRS = [
+	{ a: 'design/proofs/symbolicWindows.gazl', b: 'design/proofs/symbolicWindowsRepacked.gazl',
+			skip: 28, doc: 'design/gazl/GAZLSymbolicWindows.md' },
+	{ a: 'design/proofs/seekRegions.gazl', b: 'design/proofs/seekRegionsRepacked.gazl',
+			skip: 19, doc: 'design/gazl/GAZL2DataRegions.md' },
+];
 
 function tail(file, skip) {
 	return fs.readFileSync(path.join(repoRoot, file), 'utf8')
@@ -107,14 +125,13 @@ if (!gazlCmd) {
 	}
 }
 
-const a = tail('design/proofs/symbolicWindows.gazl', HEADER_LINES);
-const b = tail('design/proofs/symbolicWindowsRepacked.gazl', HEADER_LINES);
-if (a !== b) {
-	fail('symbolicWindows re-pack', 'instructions below the layout header are NOT identical, so the '
-			+ '"re-packing re-assembles, it does not recompile" claim in design/gazl/GAZLSymbolicWindows.md '
-			+ 'no longer holds');
-} else {
-	console.log('  ok   symbolicWindows vs Repacked: every instruction below the header is identical');
+for (const p of REPACK_PAIRS) {
+	if (tail(p.a, p.skip) !== tail(p.b, p.skip)) {
+		fail(`${path.basename(p.a, '.gazl')} re-pack`, 'instructions below the layout header are NOT identical, '
+				+ `so the "re-packing re-assembles, it does not recompile" claim in ${p.doc} no longer holds`);
+	} else {
+		console.log(`  ok   ${path.basename(p.a, '.gazl')} vs Repacked: every line below the header is identical`);
+	}
 }
 
 if (failures > 0) {

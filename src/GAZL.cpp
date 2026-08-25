@@ -87,6 +87,7 @@ const char* ASSEMBLER_ERROR_TEXTS[] = {
 	/* , NOT_ENOUGH_FUNCTION_SPACE					*/	, "Not enough space for function table"
 	/* , LABEL_ON_FUNCTION							*/	, "Branch target lands on a FUNC"
 	/* , UNBALANCED_LOCAL_SCOPE						*/	, "Unbalanced SCOP / ENDS"
+	/* , OVERLAPPING_DATA_REGIONS					*/	, "Data regions overlap"
 };
 
 // --- defined integer / FTOI semantics, shared by Processor::run() and calcConstant() so the
@@ -242,7 +243,7 @@ enum Opcode {
 	, NLSF_VVB, NLSF_VCB, NLSF_CVB, NEQF_VVB, NEQF_VCB
 	, GOTO_B__, SWCH_VCC
 
-	, NOOP____, GLOB____, CNST____, DATA____, LOCA____, OUTP____, SCOP____, ENDS____
+	, NOOP____, GLOB____, CNST____, DATA____, LOCA____, OUTP____, SCOP____, ENDS____, SEEK____
 	
 	, MOVE_CC_
 	, ABSI_CC_
@@ -509,6 +510,8 @@ static const Operator OPERATORS[] = {
 	, { " POKE_vvv", POKE_VVV,	{ VAR_PTR_R		, VAR_INT_R		, ANY_VAR_R		}		, 0				, 0				}
 	, { " RETU____", RETU_C__,	{ 0				, 0				, 0				}		, 0				, 0				}
 	, { " SCOP____", SCOP____,	{ 0				, 0				, 0				}		, 0				, 0				}
+	, { " SEEK_o__", SEEK____,	{ CONST_INT_P	, 0				, 0				}		, 0				, 0				}
+	, { " SEEK_os_", SEEK____,	{ CONST_INT_P	, CONST_INT_P	, 0				}		, 0				, 0				}
 	, { " SETL_vvc", SETL_VVC,	{ ANY_VAR_FREE_W, VAR_INT_R		, KONST			}		, 0				, 0				}
 	, { " SETL_vvv", SETL_VVV,	{ ANY_VAR_FREE_W, VAR_INT_R		, ANY_VAR_R		}		, 0				, 0				}
 	, { " SHLi_vcc", SHLI_CCC,	{ VAR_INT_W		, CONST_INT		, CONST_INT_P	}		, YIELDS_CONST	, CONST_INT		}
@@ -749,7 +752,8 @@ Assembler::Assembler(UInt maxCodeSize, Instruction* codeBase, UInt maxFunctionCo
 		, functionTable(functionTable), memoryBase(memoryBase), memoryEnd(memoryBase + maxMemorySize)
 		, ip(codeBase), functionStart(0), functionCount(0), localsSize(0), maxLocalsSize(0), localScopeDepth(0)
 		, paramsSize(0), globalsPointer(memoryBase)
-		, constantsPointer(memoryEnd), dataLabelType(0), dataPointer(0), dataEnd(0), globals(globals) {
+		, constantsPointer(memoryEnd), dataLabelType(0), dataPointer(0), dataEnd(0)
+		, sectionBegin(0), sectionEnd(0), regionStart(0), regionExtent(-1), globals(globals) {
 	for (Int i = 0; i < 128; ++i) compileTimeVars[i].types = 0;
 	Value v;
 	v.i = 0;
@@ -792,6 +796,7 @@ Char Assembler::parseOperandType(const Char* b, const Char* e) {
 		case '@':	return 'b';
 		case '^':	return 'n';
 		case '*':	return 's';
+		case ':':	return 'o';
 		case '%':	return 'v';
 		default:	return 'v';
 	}
@@ -844,6 +849,7 @@ void Assembler::parseOperand(const Char* b, const Char* e, int accepts, Value* v
 	switch (b < e ? *b : 0) {
 		case 0:		if (accepts != 0) throw Exception(MISSING_OPERAND); break;
 		case '*':
+		case ':':
 		case '#':	++b; /* continue */
 		case '<':	parseConstant(b, e, accepts, v); break;
 		case '@':	locals.link(b + 1, e, v, accepts, -(Int)(ip - codeBase)); break;		
@@ -949,10 +955,24 @@ void Assembler::threadBranches() {
 	}
 }
 
+/* A region's claim is only known when it CLOSES - an unbounded one claims exactly the words it wrote -
+   so every overlap check happens here, against the claims of the same section's earlier regions. Within
+   a region filling is append-only against `dataEnd`, so disjoint claims mean no word is initialized
+   twice. A section without SEEK is one implicit region and never reaches the loop with a neighbour. */
+void Assembler::closeDataRegion() {
+	if (dataPointer == 0) return;
+	const Int b = regionStart;
+	const Int e = (regionExtent < 0 ? (Int)(dataPointer - sectionBegin) : regionStart + regionExtent);
+	if (e == b) return;
+	for (std::vector< std::pair<Int, Int> >::const_iterator it = dataRegions.begin(); it != dataRegions.end(); ++it)
+		if (b < it->second && it->first < e) throw Exception(OVERLAPPING_DATA_REGIONS, dataLabel);
+	dataRegions.push_back(std::make_pair(b, e));
+}
+
 void Assembler::finalize(UInt& codeSize, UInt& globalsSize, UInt& constsSize, UInt& functionCount) {
 	newUnit(0);
 	threadBranches();
-	if (dataPointer != 0) memset(dataPointer, 0, (dataEnd - dataPointer) * sizeof (*dataPointer));
+	closeDataRegion();
 	globals.resolveForwardRefs();
 	codeSize = (UInt)(ip - codeBase);
 	globalsSize = (UInt)(globalsPointer - memoryBase);
@@ -1183,10 +1203,9 @@ const Char* Assembler::feed(const Char* line) {
 			case CNST____:	v.i = 1;
 							parseOperand(op0Begin, op0End, op->accepts[0], &v);
 							size = v.i;
+							closeDataRegion();									// The previous section's last region gets its overlap check while `dataLabel` still names it.
 							dataLabel = std::string(labelBegin, labelEnd);
 							dataLabelType = op->declareTypes;
-							if (dataPointer != 0)
-								memset(dataPointer, 0, (dataEnd - dataPointer) * sizeof (*dataPointer));
 							if (constantsPointer - globalsPointer < size) throw Exception(NOT_ENOUGH_MEMORY_SPACE);
 							if (op->opcode == GLOB____) {
 								dataPointer = globalsPointer;
@@ -1197,9 +1216,32 @@ const Char* Assembler::feed(const Char* line) {
 							}
 							assert(globalsPointer <= constantsPointer);
 							dataEnd = dataPointer + size;
+							sectionBegin = dataPointer;
+							sectionEnd = dataEnd;
+							memset(dataPointer, 0, size * sizeof (*dataPointer));	// The whole section up front (not the tail at close): a SEEK can leave the cursor below words already written.
+							dataRegions.clear();
+							regionStart = 0;
+							regionExtent = -1;									// The implicit region: offset 0, claims what it writes, fenced by the section end - GAZL 1 verbatim.
 							v.p = (Int)(dataPointer - memoryBase + MEMORY_OFFSET);
 							declare(globals, labelBegin, labelEnd, op->declareTypes, v, size);
 							break;
+
+			case SEEK____:	{																							// SEEK
+								if (dataPointer == 0) throw Exception(DATA_SECTION_MISSING);
+								closeDataRegion();
+								parseOperand(op0Begin, op0End, op->accepts[0], &v);
+								regionStart = v.i;
+								regionExtent = -1;
+								if (op1Begin != op1End) {
+									parseOperand(op1Begin, op1End, op->accepts[1], &v);
+									regionExtent = v.i;
+								}
+								if (regionStart + (regionExtent < 0 ? 0 : regionExtent) > (Int)(sectionEnd - sectionBegin))
+									throw Exception(OFFSET_OUT_OF_BOUNDS, dataLabel);
+								dataPointer = sectionBegin + regionStart;
+								dataEnd = (regionExtent < 0 ? sectionEnd : dataPointer + regionExtent);
+								break;
+							}
 					
 			case FUNC_CC_:	if (functionCount >= maxFunctionCount) throw Exception(NOT_ENOUGH_FUNCTION_SPACE);			// FUNC
 							v.p = (Int)(FUNCTION_OFFSET + functionCount);		// A function pointer is its stable declaration-order ordinal (not a code offset), resolved through `functionTable` at call time.
@@ -1722,7 +1764,8 @@ bool unitTest() {
 		assert(i == 0 || strcmp(op.key, OPERATORS[i - 1].key) > 0);
 		// std::cout << op.key << std::endl;
 		for (int j = 0; j < 3; ++j) {
-			assert(strchr("_bcnsv", op.key[6 + j]) != 0);
+			assert(strchr("_bcnosv", op.key[6 + j]) != 0);
+			assert(op.key[6 + j] != 'o' || ((op.accepts[j] & CONST_INT_P) != 0 && (op.accepts[j] & (ANY_VAR | BRANCH)) == 0));
 			assert(op.key[6 + j] != '_' || op.accepts[j] == 0);
 			assert(op.key[6 + j] != 'b' || (op.accepts[j] & (ANY_VAR | CONST_INT_P | CONST_FLOAT | BRANCH | ADDRESS | FUNC | NATIVE | COMPILE_TIME)) == BRANCH);
 			assert(op.key[6 + j] != 'v' || (op.accepts[j] & ANY_VAR) != 0);

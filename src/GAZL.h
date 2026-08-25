@@ -72,7 +72,7 @@ typedef unsigned int Pointer;																							// Pointer must be unsigned 
 typedef float Float;
 typedef Int Status;																										// Run-time status code
 
-const int VERSION = 2;						// 2 adds SCOP / ENDS local scopes. Pin an exact version with `! EQUi` (as UnitTest.gazl does - it tests one version); require a minimum with `! GEQi #GAZL_VERSION #2 @label`.
+const int VERSION = 2;						// 2 adds SCOP / ENDS local scopes and SEEK data regions. Pin an exact version with `! EQUi` (as UnitTest.gazl does - it tests one version); require a minimum with `! GEQi #GAZL_VERSION #2 @label`.
 const int WORD_SIZE = 32;
 const Pointer MEMORY_OFFSET = 0x12345678;																				// All memory pointers in GAZL are offsetted by this amount (thus the address of the first memory word is not zero). This makes it easier to detect invalid memory operations (such as writing to a null-pointer).
 const Pointer FUNCTION_OFFSET = 0x56789ABC;																				// All function pointers in GAZL are offsetted by this amount (thus the ordinal of the first function is not zero). This makes it easier to detect an invalid indirect call - through a null pointer, or through a small integer that was never a function pointer at all. A function pointer is an ORDINAL indexing `functionTable`, NOT a code address, which is why this is not an instruction-pointer offset; it was named IP_OFFSET until 2026-08-05.
@@ -127,7 +127,8 @@ enum AssemblerError {
 	, NOT_ENOUGH_FUNCTION_SPACE = 32
 	, LABEL_ON_FUNCTION = 33
 	, UNBALANCED_LOCAL_SCOPE = 34
-	, ASSEMBLER_ERROR_COUNT = 35
+	, OVERLAPPING_DATA_REGIONS = 35
+	, ASSEMBLER_ERROR_COUNT = 36
 };
 
 extern const char* ASSEMBLER_ERROR_TEXTS[];
@@ -234,6 +235,7 @@ class Assembler {
 						, const Char* op2End);
 	protected:	void finalizeFunction();
 	protected:	void threadBranches();		// Collapse GOTO chains and turn a GOTO onto a RETU into the RETU. In place: no address moves.
+	protected:	void closeDataRegion();		// Record the closing SEEK region's claim and check it against the section's earlier regions.
 	protected:	Instruction* const codeBase;
 	protected:	Instruction* const codeEnd;
 	protected:	const UInt maxFunctionCount;
@@ -254,7 +256,12 @@ class Assembler {
 	protected:	std::string dataLabel; // Only for error display.
 	protected:	int dataLabelType;
 	protected:	Value* dataPointer;
-	protected:	Value* dataEnd;
+	protected:	Value* dataEnd;						// Fence of the current SEEK region; `sectionEnd` for the implicit / unbounded one.
+	protected:	Value* sectionBegin;				// The current data section's own range; SEEK offsets are relative to `sectionBegin`.
+	protected:	Value* sectionEnd;
+	protected:	Int regionStart;					// Current region as section offsets; extent -1 = unbounded, claims only what it writes.
+	protected:	Int regionExtent;
+	protected:	std::vector< std::pair<Int, Int> > dataRegions;	// Closed regions' claims, per section. Disjointness = no word initialized twice.
 	protected:	Symbols& globals;
 	protected:	Symbols locals;
 	protected:	CompileTimeVar compileTimeVars[128];

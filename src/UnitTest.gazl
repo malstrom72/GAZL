@@ -86,6 +86,21 @@ global.warming:         GLOB *2
     global.pointer:     DATp &NULL
 
 ;-------------------------------------------------------------------------------
+; SEEK regions (GAZL 2): symbolic offsets, out-of-order placement, and the
+; zero-filled words a bounded region claims but never writes.
+OFF_HI:                 ! DEFi #5
+OFF_LO:                 ! DEFi #1
+EXT_LO:                 ! DEFi #3
+seek.test:              GLOB *8
+;-------------------------------------------------------------------------------
+                        SEEK :OFF_HI                         ; out of order on purpose: 5 first, 1 below it later
+                        DATi #500
+                        DATf #600.5
+                        SEEK :OFF_LO *EXT_LO                 ; bounded: claims words 1-3, writes two, the tail zero-fills
+                        DATi #100
+                        DATi #200
+
+;-------------------------------------------------------------------------------
 test:                   FUNC
 ;-------------------------------------------------------------------------------
     f0:                 LOCf
@@ -131,6 +146,23 @@ test:                   FUNC
  MOVi       sB2             #555
  NEQi       sInner          #555            @fail            ; sB2 overlays sInner likewise
  NEQi       i0              #111            @fail            ; anything declared before the first SCOP is untouched
+
+;
+; Test SEEK data regions (GAZL 2).
+;
+ PEEK       i0              &seek.test:OFF_HI
+ NEQi       i0              #500            @fail            ; landed at the symbolic offset
+ ! ADDi     <A>             #OFF_HI         #1
+ PEEK       f0              &seek.test:<A>
+ NEQf       f0              #600.5          @fail            ; rows after a SEEK fill sequentially
+ PEEK       i0              &seek.test:OFF_LO
+ NEQi       i0              #100            @fail            ; a later SEEK may sit BELOW an earlier one
+ PEEK       i1              &seek.test:2
+ NEQi       i1              #200            @fail
+ PEEK       i2              &seek.test:3
+ NEQi       i2              #0              @fail            ; the bounded region's unwritten tail is zero
+ PEEK       i3              &seek.test:0
+ NEQi       i3              #0              @fail            ; so is a word no region touched
 
  PEEK       f0		       &consts.float
  PEEK       i0              &consts.int

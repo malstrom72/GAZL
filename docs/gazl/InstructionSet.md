@@ -590,6 +590,36 @@ Code that wants to run on either engine can guard its use with `! GEQi #GAZL_VER
 conditional region is not parsed for mnemonics - the scoped variant is ignored entirely on a GAZL 1 engine. (Use
 `! EQUi` instead when you deliberately mean one exact version, as `src/UnitTest.gazl` does.)
 
+## SEEK
+- `:offset`
+- `:offset *extent`
+
+Set the data cursor to an assemble-time `:offset` within the current data section and open a bounded region there
+(GAZL 2 and later). The `DAT*` rows that follow fill the region sequentially, exactly as they fill a section. Both
+operands take any assemble-time constant - `.o.` / `.z.` symbols and `<X>` variables included - so data lands at
+offsets a host-supplied layout decides, without the emitter knowing the numbers.
+
+With `*extent` the region claims `offset .. offset + extent` whole: filling past the extent is an error, and claimed
+words that are never written stay zero. Without `*extent` the region claims exactly the words it writes and is fenced
+by the section end. Unwritten words are zero either way, and regions may be opened in any offset order. Prefer
+stating the extent even where it seems redundant - Impala emits `*1` on scalar fields - because it turns a
+miscounted row into an error at that row rather than a silent write into whatever the layout puts next.
+
+    voice:  GLOB *.z.Voice
+            SEEK :.o.Voice.note
+            DATi #60
+            SEEK :.o.Voice.state *.z.Voice.state
+            DATf #1.0 #2.0                       ; 2 of 4 words written - the tail stays zero
+            SEEK :.o.Voice.gain
+            DATf #0.5
+
+A section containing no `SEEK` is a single implicit region at offset 0 - GAZL 1 semantics, unchanged. An offset or
+extent reaching past the section is `Offset out of bounds` at the `SEEK` row; two regions of one section overlapping
+is `Data regions overlap`, checked when a region closes (at the next `SEEK`, the next section, or the end of
+assembly). The `! GEQi #GAZL_VERSION #2` guard idiom above applies to `SEEK` equally. The runnable proof that placed
+data survives a layout re-pack is `design/proofs/seekRegions.gazl` and its twin; the design rationale is
+`design/gazl/GAZL2DataRegions.md`.
+
 ## SETL
 - `var(d)          int             #const`
 - `var(d)          int             var`
