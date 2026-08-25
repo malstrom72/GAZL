@@ -32,7 +32,7 @@ build if they drift from their grammar.
 |---|---|
 | `impala.node.js` | Node CLI. `compile` / `run` subcommands; run it with no arguments for the flag list. What you use during development. |
 | `impala.nuxjs.js` | The same compiler driven from the NuXJS ES5 runtime, positional args only. This is the production driver; `build.sh` stages it into `output/`. |
-| `playground.html` | Standalone browser playground, no server and no build. Open it from this directory. |
+| `playground.html` | Standalone browser playground, no server and no build. Open it from this directory. The run pane executes the emitted GAZL on `gazlVm.js` — the real VM (`src/GAZL.cpp`) compiled to wasm by `tools/buildGazlWasm.sh`; checked in like `impalaCompiler.js`, rebuild only when `src/GAZL.cpp` changes. |
 | `updateJSPEG.js` | Regenerates the two `*Compiler.js` files, or `--check`-verifies them. |
 
 **Shared libraries.**
