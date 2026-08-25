@@ -3664,6 +3664,28 @@ console.log("impala.jspeg compiler treats Object.prototype names as ordinary ide
 	assert(compileWithJsImpala(diffSrc, { randomId: 42, gazl2: true }).includes("DIFt")
 			&& compileWithJsImpala(diffSrc, { randomId: 42 }).includes("DIFp"),
 		"funcptr difference must render DIFt under --gazl2 and stay DIFp by default");
+	// The remaining funcptr surfaces in one fixture: a struct FIELD (SEEK + DATt through the marker
+	// path), a LOCAL funcptr array (GETL with a t destination), a funcptr PARAMETER (INPt), and the
+	// comparisons (EQUt / NEQt).
+	const kitchenSrc = "const int DEBUG = 1\n"
+		+ "functype UnaryFn(int a) returns int\n"
+		+ "struct Handler { int id; UnaryFn fn }\n"
+		+ "function twice(int a) returns int r { r = a * 2; }\n"
+		+ "function thrice(int a) returns int r { r = a * 3; }\n"
+		+ "readonly Handler H = { id: 7, fn: thrice }\n"
+		+ "extern native printInt\nextern native printLF\n"
+		+ "function apply(UnaryFn f, int x) returns int r { r = f(x); }\n"
+		+ "function main()\nlocals UnaryFn array ops[2], UnaryFn g, int i\n{\n"
+		+ "\tops[0] = twice; ops[1] = thrice;\n\ti = 0;\n"
+		+ "\tprintInt(ops[i](10)); printLF();\n"
+		+ "\tg = (UnaryFn) global H.fn;\n\tprintInt(g(10)); printLF();\n"
+		+ "\tif (g == thrice) { printInt(1); printLF(); }\n"
+		+ "\tif (g != twice) { printInt(2); printLF(); }\n"
+		+ "\tprintInt(apply(twice, 21)); printLF();\n}\n";
+	const kitchen = compileWithJsImpala(kitchenSrc, { randomId: 42, gazl2: true });
+	for (const want of [ "SEEK :.o.Handler.fn *1", "DATt", "INPt", "EQUt", "NEQt" ]) {
+		assert(kitchen.includes(want), `gazl2 t: kitchen fixture must emit ${want}`);
+	}
 	const pOut = compileWithJsImpala(fpSrc, { randomId: 42 });
 	assert(!/^[ \t]*GAZL /m.test(pOut) && pOut.includes("DATp &add") && !pOut.includes("DATt"),
 		"default output must keep funcptrs on p with no GAZL directive");
@@ -3679,6 +3701,8 @@ console.log("impala.jspeg compiler treats Object.prototype names as ordinary ide
 		};
 		assert(runText(tOut, "t output").startsWith("42\n5\n"),
 			"gazl2 t: dispatch through t locals and a DATt table must run");
+		assert(runText(kitchen, "kitchen fixture").startsWith("20\n30\n1\n2\n42\n"),
+			"gazl2 t: struct funcptr field, local funcptr array, INPt param and comparisons must run");
 		const v1Unit = "v1f:\tFUNC\n\tPARA *1\n\tRETU\n";
 		assert(runText(tOut + v1Unit, "v2+v1 concat").startsWith("42\n5\n"),
 			"gazl2 t: a GAZL 1 unit concatenated AFTER a bracketed unit must assemble and run");
