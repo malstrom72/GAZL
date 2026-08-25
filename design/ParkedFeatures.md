@@ -420,9 +420,11 @@ a region of `*size` words at `*offset`, ZERO unless written - subsumes both and 
 3. **Total accounting.** A struct is a region of `.z.Name` words, so every placement is checked against the
    real size instead of each field independently landing somewhere.
 
-Cost: the assembler must hold interval state across the data section, where `DATA` is append-only today -
-the same cost the written-word set would have charged. The wishlist entry on the `GAZL2` branch carries
-this form; this section is the compiler-side half of the same item.
+Cost: the assembler must hold interval state across the data section, where `DATA` is append-only today.
+**BOTH HALVES ARE IMPLEMENTED (2026-08-24)**: the `SEEK` directive in the assembler and Impala emission
+under `--gazl2` - see [`GAZL2DataRegions.md`](gazl/GAZL2DataRegions.md). `E459` and `E454` lift under the
+flag; WITHOUT it (the GAZL 1 default) everything in this section still stands, which is why the section
+stays.
 
 **One part did NOT need GAZL 2 and is DONE as of 2026-08-01**: the value-count check behind `E454`.
 Impala cannot compare a literal count against a symbolic extent, but it EMITS the comparison instead, for

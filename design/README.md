@@ -53,9 +53,11 @@ written. PLAN / BACKLOG = not done.
 | [GAZLAssemblerOptimizations](gazl/GAZLAssemblerOptimizations.md) | DESIGN NOTE | Assembler-side optimisation, starting with identity folding |
 | [GAZL2FunctionPointers](gazl/GAZL2FunctionPointers.md) | PROPOSAL | A distinct function-pointer storage type `t`, because `p` doing double duty is a silent-wrong shape Impala cannot close from its side. Nothing implemented |
 | [TailCalls](gazl/TailCalls.md) | DESIGN NOTE | Tail-call elimination. Nothing implemented; needs a GAZL instruction *and* Impala syntax, so neither side can do it alone |
+| [GAZL2DataRegions](gazl/GAZL2DataRegions.md) | SPEC | The `SEEK` directive: bounded data regions at symbolic offsets, so initializers survive a repack. IMPLEMENTED END TO END 2026-08-24 - assembler + Impala emission under `--gazl2` (proof: [`seekRegions.gazl`](proofs/seekRegions.gazl)); E454/E459 lift under the flag |
+| [GAZL2Versioning](gazl/GAZL2Versioning.md) | PROPOSAL | `GAZL #2` source declaration + Impala `--gazl 1\|2`; per-product defaults (Permut8 = 1, Synplant 2 / Microtonic 4 = 2) |
 
-The last two belong to the **GAZL 2** line, which ships after Impala 2.0 and is independent of it -
-nothing in Impala 2.0 waits on either.
+The `GAZL2*` docs and TailCalls belong to the **GAZL 2** line, which ships after Impala 2.0 and is
+independent of it - nothing in Impala 2.0 waits on any of them.
 
 ## The JSPEG toolchain
 
