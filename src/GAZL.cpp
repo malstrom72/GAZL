@@ -27,6 +27,7 @@
 #include <math.h>
 #include <string.h>
 #include <stdlib.h>
+#include <algorithm>
 #include <string>
 #include <iostream>
 
@@ -318,6 +319,7 @@ const int YIELDS_CONST		= 0x04; // Result of instruction is a constant (e.g. all
 const int YIELDS_GOTO		= 0x08; // Instruction can be resolved to either a GOTO or a NOOP (e.g. comparison of two constants).
 const int LOCAL_BOUNDS		= 0x10;	// Operand 1 is a variable (local or transient), operand 2 is a size. Make sure frame bounds >= &variable + size.
 const int CHECK_DIV_BY_0	= 0x20; // Operand 1 is a constant used in a division or modulo operation, must check for division by zero. Can only be used if operand 2 is either a CONST_FLOAT or CONST_INT
+const int BRANCH_IS_TABLE	= 0x40; // The BRANCH operand is a jump-table BASE in memory, not a relative displacement - threadBranches must not rewrite it (SWCH).
 
 struct Operator {
 	char key[10];
@@ -579,7 +581,7 @@ static const Operator OPERATORS[] = {
 	, { " SUBp_vcv", SUBI_VCV,	{ VAR_PTR_W		, FWD_FREE		, VAR_INT_R		}		, 0				, 0				}
 	, { " SUBp_vvc", SUBI_VVC,	{ VAR_PTR_W		, VAR_PTR_R		, CONST_INT		}		, 0				, 0				}
 	, { " SUBp_vvv", SUBI_VVV,	{ VAR_PTR_W		, VAR_PTR_R		, VAR_INT_R		}		, 0				, 0				}
-	, { " SWCH_vsb", SWCH_VCC,	{ VAR_INT_R		, CONST_INT_P	, FWD_BRANCH	}		, 0				, 0				}
+	, { " SWCH_vsb", SWCH_VCC,	{ VAR_INT_R		, CONST_INT_P	, FWD_BRANCH	}		, BRANCH_IS_TABLE, 0			}
 	, { " TEMP_s__", GLOB____,	{ CONST_INT_P	, 0				, 0				}		, 0				, FREE_ADDRESS | TEMPORARY }
 	, { " XORi_vcc", XORI_CCC,	{ VAR_INT_W		, CONST_INT		, CONST_INT		}		, YIELDS_CONST	, CONST_INT		}
 	, { " XORi_vcv", XORI_VVC,	{ VAR_INT_W		, CONST_INT		, VAR_INT_R		}		, SWAP_1_AND_2	, 0				}
@@ -941,37 +943,6 @@ void Assembler::finalizeFunction() {
 	locals.clear();
 }
 
-/* Which operand of an instruction is a RELATIVE branch displacement, or -1 for none. Derived from the
-   same OPERATORS table the assembler parses with, so a future branching opcode is covered by declaring
-   its operand `BRANCH` and doing nothing else. All 35 branching opcodes carry it in one consistent slot.
-   SWCH is deliberately excluded: its third operand looks like the others to the table but is a jump
-   TABLE base in memory (`ip += mb[C2.p + index].i`), not a displacement, so threading it would rewrite
-   a data pointer. The assemble-time directives (`! GOTO`, `! IFDF`, `! IFND`) need no exclusion - they
-   are consumed while assembling and never reach the code array, which is precisely why this pass is
-   safe here and was not inside the compiler. */
-static const int OPCODE_SPAN = DEFI____ - FIRST_OPCODE_VALUE + 1;
-
-static int branchSlotOf(Int opcode) {
-	static int slots[OPCODE_SPAN];
-	static bool built = false;
-	if (!built) {
-		for (int i = 0; i < OPCODE_SPAN; ++i) {
-			slots[i] = -1;
-		}
-		for (int i = 0; i < OPERATOR_COUNT; ++i) {
-			if (OPERATORS[i].opcode == SWCH_VCC) continue;
-			for (int k = 0; k < 3; ++k) {
-				if ((OPERATORS[i].accepts[k] & BRANCH) != 0) {
-					slots[OPERATORS[i].opcode - FIRST_OPCODE_VALUE] = k;
-				}
-			}
-		}
-		built = true;
-	}
-	const Int index = opcode - FIRST_OPCODE_VALUE;
-	return (index >= 0 && index < OPCODE_SPAN) ? slots[index] : -1;
-}
-
 /* Branch threading and return duplication (design/gazl/GAZLAssemblerOptimizations.md items 4 and 5), run once
    every symbol is resolved. Both are IN-PLACE rewrites of an opcode or a displacement, so nothing moves,
    no address shifts and nothing needs re-patching - which is what makes them cheap, and what makes the
@@ -981,8 +952,24 @@ static int branchSlotOf(Int opcode) {
    hop is paid on every execution - measured 1.97x for a 3-hop chain against an instruction ratio of
    exactly 2, so nothing short-circuits it at run time. */
 void Assembler::threadBranches() {
+	/* Which operand of an opcode is a RELATIVE branch displacement, or -1 for none. Derived from the same
+	   OPERATORS table the assembler parses with, so a future branching opcode is covered by declaring its
+	   operand `BRANCH` and doing nothing else; `BRANCH_IS_TABLE` (SWCH: a jump-table BASE in memory, not a
+	   displacement) is the one exception, and it rides the table too. The assemble-time directives
+	   (`! GOTO`, `! IFDF`, `! IFND`) need no exclusion - they never reach the code array. */
+	const int OPCODE_SPAN = DEFI____ - FIRST_OPCODE_VALUE + 1;
+	int slots[OPCODE_SPAN];
+	for (int i = 0; i < OPCODE_SPAN; ++i) slots[i] = -1;
+	for (int i = 0; i < OPERATOR_COUNT; ++i) {
+		if ((OPERATORS[i].otherFlags & BRANCH_IS_TABLE) != 0) continue;
+		for (int k = 0; k < 3; ++k) {
+			if ((OPERATORS[i].accepts[k] & BRANCH) != 0) {
+				slots[OPERATORS[i].opcode - FIRST_OPCODE_VALUE] = k;
+			}
+		}
+	}
 	for (Instruction* p = codeBase; p < ip; ++p) {
-		const int slot = branchSlotOf(p->opcode);
+		const int slot = slots[p->opcode - FIRST_OPCODE_VALUE];
 		if (slot < 0) continue;
 		Value* const disp = (slot == 0 ? &p->p0 : (slot == 1 ? &p->p1 : &p->p2));
 		Instruction* target = p + disp->i;
@@ -1008,9 +995,12 @@ void Assembler::closeDataRegion() {
 	const Int b = regionStart;
 	const Int e = (regionExtent < 0 ? (Int)(dataPointer - sectionBegin) : regionStart + regionExtent);
 	if (e == b) return;
-	for (std::vector< std::pair<Int, Int> >::const_iterator it = dataRegions.begin(); it != dataRegions.end(); ++it)
-		if (b < it->second && it->first < e) throw Exception(OVERLAPPING_DATA_REGIONS, dataLabel);
-	dataRegions.push_back(std::make_pair(b, e));
+	const std::pair<Int, Int> claim(b, e);				// kept sorted by start, so overlap is a neighbour test, not a scan (--gazl2 mints a region per leaf field)
+	const std::vector< std::pair<Int, Int> >::iterator it
+			= std::lower_bound(dataRegions.begin(), dataRegions.end(), claim);
+	if ((it != dataRegions.end() && it->first < e) || (it != dataRegions.begin() && (it - 1)->second > b))
+		throw Exception(OVERLAPPING_DATA_REGIONS, dataLabel);
+	dataRegions.insert(it, claim);
 }
 
 void Assembler::finalize(UInt& codeSize, UInt& globalsSize, UInt& constsSize, UInt& functionCount) {

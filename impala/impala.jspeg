@@ -774,12 +774,8 @@
     };
 
     function emitStandaloneSignatureComment(comment) {
-        if (!comment) {
-            return;
-        }
-
-        if (typeof output === 'function') {
-            emitLine('; ' + comment);
+        if (comment) {
+            emitLine('; ' + comment);                         /* emitLine itself no-ops without an output */
         }
     }
 
@@ -1178,6 +1174,13 @@
         return -1;
     }
 
+    /* The `<X>` a COMPOUND operand ends with (`*<A>`, `#<D>`, `&g:<D>`, `%<A>`), or null. The one
+       spelling of that grammar - returnBack and expandInline's operand mapper both read it. */
+    $$parser.trailingScratch = function (op) {
+        return (op.length > 3 && op.charAt(op.length - 1) === '>' && op.charAt(op.length - 3) === '<'
+                ? op.substr(op.length - 3) : null);
+    };
+
     $$parser.returnBack = function (op) {
         if (op == null) {
             return;
@@ -1189,8 +1192,9 @@
            `%<A>` (a symbolically indexed transient). This must be tested BEFORE the bare-token case:
            `%<A>` starts with '%' but is not a slot number, and pushing it into the transient stock
            both loses the scratch and poisons the pool with a token no allocator can hand out. */
-        if (op.length > 3 && op.charAt(op.length - 1) === '>' && op.charAt(op.length - 3) === '<') {
-            $$parser.returnBack(op.substr(op.length - 3));
+        var trailing = $$parser.trailingScratch(op);
+        if (trailing !== null) {
+            $$parser.returnBack(trailing);
         }
         /* a bare transient / compile-time scratch */
         else if (c === '%' || c === '<') {
@@ -1966,14 +1970,12 @@
        A POSITIVE list on purpose: an operator nobody classified defaults to opaque, so a write form
        added later fails safe instead of silently making substitution unsound. */
     map($$parser.INLINE_PURE,
-        '=',1, ':=',1, '=itof',1, '=ftoi',1, '=abs',1, '=floor',1,
         '=[]',1, '=[]$',1, '=*',1, ':=*',1, '=&',1, '[]$=',1,
-        '|',1, '&',1, '^',1, '<<',1, '>>>',1, '>>',1,
-        '+',1, '-',1, '*',1, '/',1, '%',1, 'd',1, 'dt',1,
-        '<=',1, '<',1, '>=',1, '>',1, '!=',1, '==',1,
-        '!<=',1, '!<',1, '!>=',1, '!>',1, '!!=',1, '!==',1,
-        '-->',1, '-->#',1, '...',1, '<--',1
+        'd',1, 'dt',1, '-->',1, '-->#',1, '...',1, '<--',1
     );
+    /* ...plus every INLINE_IMM_OK operator (seeded below its own definition): computing into a named
+       destination is what makes an operator both immediate-friendly and pure, so one list serves both
+       and the two cannot drift. */
 
     /* Which operand positions accept an immediate (`#const`), plus a leading `d` when position 0 is the
        DESTINATION. A positive list like INLINE_PURE: an operator missing here forces the argument to be
@@ -1992,6 +1994,11 @@
         '<',    '01',  '<=',     '01', '>',     '01', '>=',   '01', '==', '01', '!=', '01',
         '!<',   '01',  '!<=',    '01', '!>',    '01', '!>=',  '01', '!==','01', '!!=','01'
     );
+    (function () {                                            /* the INLINE_PURE seeding promised above */
+        for (var k in $$parser.INLINE_IMM_OK) {
+            if (Object.prototype.hasOwnProperty.call($$parser.INLINE_IMM_OK, k)) $$parser.INLINE_PURE[k] = 1;
+        }
+    })();
 
     /* How many immediate sources an operator CALCULATES into position 0, or undefined if it calculates
        nothing - which is exactly the operators with no `d`. One derivation serves both the constant fold
@@ -2177,9 +2184,7 @@
                    `.x.` constant the callee's declaration named once, a struct's is `*.z.Struct`. Both
                    are SYMBOLS the assembler resolves, so nothing has to be re-derived here - which is
                    the point, since a fold lives in a scratch this head has no claim on. */
-                emitLine(_tab + lname + ':\t'
-                        + replace(lv.kind, '?', $$parser.TYPE_SUFFIXES[lv.type] || '')
-                        + (lv.size !== undefined ? ' ' + lv.size : ''));
+                emitLine(_tab + lname + ':\t' + $$parser.declRow(lv.kind, lv.type, lv.size));
                 subst[lv.name] = lname;
             }
             emitLine(_tab + '\tENDS');
@@ -2195,6 +2200,16 @@
         var symOffsets = {};
 
         var constMap = {}, foldScratch = [];     /* callee values that turned out to be compile-time */
+        if (info.immOK === undefined) info.immOK = {};   /* takesImmediate scans the whole body, and the body
+                                                            never changes after capture - so the per-name answer
+                                                            is durable across every expansion of this callee */
+        function tempImmOK(name) {
+            var s = '' + name;
+            if (!Object.prototype.hasOwnProperty.call(info.immOK, s)) {
+                info.immOK[s] = takesImmediate(info.body, name, true);
+            }
+            return info.immOK[s];
+        }
         function constFold(op) {                 /* read a value the fold above already resolved */
             return (op !== undefined && Object.prototype.hasOwnProperty.call(constMap, '' + op)
                     ? constMap['' + op] : op);
@@ -2239,9 +2254,9 @@
                 }
                 return symOffsets[s];
             }
-            if (s.length > 3 && s.charAt(s.length - 1) === '>'  /* `*<A>`, `#<D>`, `&g:<D>` */
-                    && s.charAt(s.length - 3) === '<') {
-                return s.substr(0, s.length - 3) + mapScratch(s.substr(s.length - 3));
+            var ts = $$parser.trailingScratch(s);               /* `*<A>`, `#<D>`, `&g:<D>` */
+            if (ts !== null) {
+                return s.substr(0, s.length - 3) + mapScratch(ts);
             }
             return s;
         }
@@ -2266,7 +2281,7 @@
             if (info.straightLine && !b.inlineFold && isConstOperand(s1) && fw !== undefined
                     && (fw === 1 ? s2 === undefined : isConstOperand(s2))
                     && ('' + d0).charAt(0) === '%' && ('' + d0) !== '%' + base
-                    && takesImmediate(info.body, b.operands[0], true)) {
+                    && tempImmOK(b.operands[0])) {
                 if (b.operator === '=' || b.operator === ':=') {
                     constMap['' + d0] = s1;            /* a move of a constant is pure propagation */
                 } else {
@@ -2709,6 +2724,14 @@
         return '.z.' + (owner !== undefined ? owner + '.' : '') + name;
     };
 
+    /* The mnemonic-plus-value tail of a declaration row (`DATi #60`, `LOCA *.z.V`) - declare() renders
+       it for every ordinary declaration and expandInline for the SCOP-scoped locals it pastes, so the
+       one format lives here and cannot diverge between them. */
+    $$parser.declRow = function (kind, type, value) {
+        return replace(kind, '?', $$parser.TYPE_SUFFIXES[type] || '')
+                + (value !== undefined ? ' ' + value : '');
+    };
+
     /* The symbol naming one FIELD's offset inside its struct - the third of the three naming schemes,
        alongside `.z.` (size) and `.d.` (axis). It was the only one built inline, in two places: the
        layout block that DEFINES it and the field access that REFERENCES it. One helper so a change to
@@ -3027,8 +3050,7 @@
                             extent: '1',                      /* a scalar is one word under ANY layout, so the fence is
                                                                  free - and it makes a hand-added surplus row die at its
                                                                  own line instead of landing in an uninitialized neighbour */
-                            type: (f.type === 'i' || f.type === 'f' || f.type === 'p' || f.type === 't'
-                                    ? f.type : undefined) }); /* 't' renders DATt: seeks exist only under --gazl2 */
+                            type: $$parser.typedRowType(f.type) });
                 }
                 $$parser.pushInitScalar(out, item, f.type, f.elem, f.name, sourceCode, sourceOffset);
             }
@@ -3293,15 +3315,18 @@
        a funcptr element head is a TYPE NAME it would not recognise - so the funcptr and pointer-element
        questions belong to `checkInitTarget`, which reads the same descriptor whole. Derived, not stored:
        one `initTarget` cannot disagree with itself, where three parallel slots could. */
+    /* The coarse type a TYPED data row may state, from a bare type code: i/f/p, plus t under --gazl2
+       (on GAZL 1 funcptr rows stay the untyped DATA - byte-identical - because DATt does not exist
+       there). The ONE spelling of "which types get typed rows", shared by every marker and row site. */
+    $$parser.typedRowType = function (t) {
+        return (t === 'i' || t === 'f' || t === 'p' || (t === 't' && $$parser.gazl2) ? t : undefined);
+    };
+
     $$parser.coarseType = function (desc) {
         if (desc === undefined) {
             return undefined;                                 /* untyped: a struct's row spans mixed field types */
         }
-        var t = $$parser.descTypeElem(desc).type;
-        return (t === 'i' || t === 'f' || t === 'p'
-                || (t === 't' && $$parser.gazl2) ? t : undefined);   /* funcptr rows stay the untyped DATA on
-                                                                        GAZL 1 (byte-identical) and become DATt
-                                                                        under --gazl2, where the row exists */
+        return $$parser.typedRowType($$parser.descTypeElem(desc).type);
     };
 
     $$parser.initCoarseType = function () {
@@ -4599,9 +4624,7 @@ var _sn = $$parser.strideStruct(field.elem);
                 var line = '';
                 if (scope === 'locals') line += (typeof TAB !== 'undefined' ? TAB : '\t');
                 if (name != null)       line += name + ':';
-                line += '\t' +
-                        replace(kind, '?', $$parser.TYPE_SUFFIXES[type] || '');
-                if (value !== undefined) line += ' ' + value;
+                line += '\t' + $$parser.declRow(kind, type, value);
                 if (comment)             line += '\t; ' + comment;
 
                 emitLine( line );
@@ -5461,18 +5484,14 @@ inp:ArgsDecl ')'_
                                                                          $$parser.processBranches();
                                                                          /* The body (and every inline expansion in it) is now known, so the head is
                                                                             final: replay it, then let flushMetaCode write the body straight out. */
-                                                                         var _head = $$parser.headSink;
+                                                                         var _head = $$parser.headSink;   /* always an array here: FuncDecl opened the sink unconditionally */
                                                                          $$parser.headSink = null;
-                                                                         if (_head !== null) {
-                                                                             for (var _h = 0; _h < _head.length; ++_h) emitLine(_head[_h]);
-                                                                         }
-                                                                         if (!$$parser.inlineMode) {
-                                                                             emitLine(';-----------------------------------------------------------------------------');
-                                                                         }
+                                                                         for (var _h = 0; _h < _head.length; ++_h) emitLine(_head[_h]);
                                                                          if ($$parser.inlineMode) {                       /* no out-of-line copy: keep the body, emit nothing */
                                                                              $$parser.captureInlineBody($id, $$s, $$i);
                                                                              $$parser.metacode.length = 0;
                                                                          } else {
+                                                                             emitLine(';-----------------------------------------------------------------------------');
                                                                              $$parser.flushMetaCode('\t');   /* the RETU went in above the pass */
                                                                          }
                                                                          $$parser.emittedGuards = {};   /* per function: labels are too */

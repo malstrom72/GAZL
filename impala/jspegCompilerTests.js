@@ -3551,6 +3551,16 @@ for (const name of prototypeNames) {
 }
 console.log("impala.jspeg compiler treats Object.prototype names as ordinary identifiers");
 
+// Write GAZL text to `gazlPath`, run it through GAZLCmd, require it to assemble, return its stdout.
+// The one run protocol for both --gazl2 blocks below.
+function runGazlText(gazlPath, text, cmdArgs, label) {
+	fs.mkdirSync(path.dirname(gazlPath), { recursive: true });
+	fs.writeFileSync(gazlPath, text, IMPALA_ENCODING);
+	const run = runGazlCmd(gazlPath, cmdArgs);
+	assert(run.failure === undefined && run.assembled, `${label} did not assemble: ${run.line}`);
+	return canonicalizeNewlines(run.stdout);
+}
+
 // --- --gazl2: struct initializers are PLACED with SEEK regions ---------------------------------------
 // The flag's contract: (1) default output is untouched - the golden corpus is that gate, so here only
 // "no SEEK without the flag" is pinned; (2) struct data comes out as one SEEK region per leaf field
@@ -3601,13 +3611,7 @@ console.log("impala.jspeg compiler treats Object.prototype names as ordinary ide
 
 	if (haveGazlCmd()) {
 		const gazlPath = path.join(dir, "..", "tests", "impala", "erroneous", "gazl2Seek.gazl");
-		fs.mkdirSync(path.dirname(gazlPath), { recursive: true });
-		const runOne = (text, cmdArgs) => {
-			fs.writeFileSync(gazlPath, text, IMPALA_ENCODING);
-			const run = runGazlCmd(gazlPath, cmdArgs);
-			assert(run.failure === undefined && run.assembled, `gazl2: ${gazlPath} did not assemble: ${run.line}`);
-			return canonicalizeNewlines(run.stdout);
-		};
+		const runOne = (text, cmdArgs) => runGazlText(gazlPath, text, cmdArgs, "gazl2 seek");
 		// `level` at 0 and `mode` at 1 REVERSES declaration order; the values must land right anyway.
 		assert(runOne(externOut, [ "main", ".o.Host.mode", "1", ".o.Host.level", "0", ".z.Host", "2" ])
 				.startsWith("3\n0.5\n"),
@@ -3692,13 +3696,7 @@ console.log("impala.jspeg compiler treats Object.prototype names as ordinary ide
 
 	if (haveGazlCmd()) {
 		const gazlPath = path.join(dir, "..", "tests", "impala", "erroneous", "gazl2T.gazl");
-		fs.mkdirSync(path.dirname(gazlPath), { recursive: true });
-		const runText = (text, label) => {
-			fs.writeFileSync(gazlPath, text, IMPALA_ENCODING);
-			const run = runGazlCmd(gazlPath, [ "main" ]);
-			assert(run.failure === undefined && run.assembled, `gazl2 t: ${label} did not assemble: ${run.line}`);
-			return canonicalizeNewlines(run.stdout);
-		};
+		const runText = (text, label) => runGazlText(gazlPath, text, [ "main" ], "gazl2 t: " + label);
 		assert(runText(tOut, "t output").startsWith("42\n5\n"),
 			"gazl2 t: dispatch through t locals and a DATt table must run");
 		assert(runText(kitchen, "kitchen fixture").startsWith("20\n30\n1\n2\n42\n"),
