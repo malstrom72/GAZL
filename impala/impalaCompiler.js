@@ -251,8 +251,10 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
        GAZL 1 offers only `p` for both, so a funcptr array and a pointer array emit identical `DATp` rows.
        When GAZL 2 lands the `t` (target) type this becomes `'t','t'` and Impala needs nothing else; the
        type is already tracked. See design/gazl/GAZL2FunctionPointers.md. */
-    map(TYPE_SUFFIXES,  'void','', 'i','i','f','f','p','p','t','p','U','',
-                                 'N','',   'A','A','?','E', 'V','');
+    map(TYPE_SUFFIXES,  'void','', 'i','i','f','f','p','p','t',(gazl2 ? 't' : 'p'),'U','',
+                                 'N','',   'A','A','?','E', 'V','');    /* --gazl2 is where the funcptr type
+                                 stops collapsing: every LOC?/MOV?/EQU?/DAT? site renders `t` through this
+                                 one entry, and the GAZL 2 assembler enforces what Impala always knew */
     map(VERBOSE_TYPES,  'i','int','f','float','p','pointer','t','funcptr',
                                  'U','function','N','native','A','array','S','struct','?','untyped',
                                  'V','void');
@@ -3038,7 +3040,8 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
                             extent: '1',                      /* a scalar is one word under ANY layout, so the fence is
                                                                  free - and it makes a hand-added surplus row die at its
                                                                  own line instead of landing in an uninitialized neighbour */
-                            type: (f.type === 'i' || f.type === 'f' || f.type === 'p' ? f.type : undefined) });
+                            type: (f.type === 'i' || f.type === 'f' || f.type === 'p' || f.type === 't'
+                                    ? f.type : undefined) }); /* 't' renders DATt: seeks exist only under --gazl2 */
                 }
                 pushInitScalar(out, item, f.type, f.elem, f.name, sourceCode, sourceOffset);
             }
@@ -3308,7 +3311,10 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
             return undefined;                                 /* untyped: a struct's row spans mixed field types */
         }
         var t = descTypeElem(desc).type;
-        return (t === 'i' || t === 'f' || t === 'p' ? t : undefined);
+        return (t === 'i' || t === 'f' || t === 'p'
+                || (t === 't' && gazl2) ? t : undefined);   /* funcptr rows stay the untyped DATA on
+                                                                        GAZL 1 (byte-identical) and become DATt
+                                                                        under --gazl2, where the row exists */
     };
 
     initCoarseType = function () {
@@ -5119,6 +5125,11 @@ var _sn = strideStruct(field.elem);
         emitLine('; Compiled with Impala version ' +
                IMPALA_VERSION + LF);
         emitLine('; signatures version=1');
+        if (gazl2) {
+            emitLine('\tGAZL #2');                            /* opens the GAZL 2 region; end closes it
+                                                                 with `GAZL #1`, which is what makes the output
+                                                                 safe to link by plain concatenation */
+        }
     };
 
     end = function () {
@@ -5138,6 +5149,12 @@ var _sn = strideStruct(field.elem);
             });
 
             emitLine('.noAssertStrings:\t!');
+        }
+
+        if (gazl2) {
+            emitLine('\tGAZL #1');                            /* close the region opened by the banner - a
+                                                                 concatenated unit after this starts in the
+                                                                 GAZL 1 default, whatever dialect it is */
         }
     };
 };function root($){return (function(){var _b=_i;return _($)&&(function(){ start(); ; return true})()&&((function(){while((function(){var _b=_i;return (function(){ declOffset = _i; declSource = _s; ; return true})()&&(function(){var _b=_i;return ImportDecl($)||(_im=(_i>_im?_i:_im),_i=_b,false)||ExportDecl($)||(_im=(_i>_im?_i:_im),_i=_b,false)||FuncDecl($)||(_im=(_i>_im?_i:_im),_i=_b,false)||StructDecl($)||(_im=(_i>_im?_i:_im),_i=_b,false)||FuncTypeDecl($)||(_im=(_i>_im?_i:_im),_i=_b,false)||ExternDecl($)||(_im=(_i>_im?_i:_im),_i=_b,false)||ConstDecl($)||(_im=(_i>_im?_i:_im),_i=_b,false)||GlobalDecl($)||(_im=(_i>_im?_i:_im),_i=_b,false)||(_s[_i]===";")&&(++_i,true)&&_($)||(_im=(_i>_im?_i:_im),_i=_b,false)})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(function(){var _l=_i,_x=(!!_s[_i])&&(++_i,true);_i=_l;return !_x})()&&(function(){ end(); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};

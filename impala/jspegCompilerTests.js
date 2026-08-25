@@ -3636,4 +3636,87 @@ console.log("impala.jspeg compiler treats Object.prototype names as ordinary ide
 	console.log("impala.jspeg compiler places struct initializers with SEEK regions under --gazl2");
 }
 
+// --- GAZL #2 regions and the `t` call-target type ----------------------------------------------------
+// Under --gazl2 the output is BRACKETED (`GAZL #2` after the banner, `GAZL #1` at the end), functions
+// mint target-typed addresses inside it, and every funcptr site renders `t` instead of `p`. The bracket
+// is what keeps concatenation-linking working in every dialect mix, so that is tested literally: cat the
+// units together and run. The raw-text negatives pin the assembler-side contract this rests on.
+{
+	const fpSrc = "const int DEBUG = 1\n"
+		+ "functype BinOp(int a, int b) returns int\n"
+		+ "function add(int a, int b) returns int r { r = a + b; }\n"
+		+ "function mul(int a, int b) returns int r { r = a * b; }\n"
+		+ "readonly BinOp array OPS[2] = { add, mul }\n"
+		+ "global BinOp gop = add\n"
+		+ "extern native printInt\nextern native printLF\n"
+		+ "function main()\nlocals BinOp f\n{\n"
+		+ "\tf = (BinOp) global OPS[1];\n\tprintInt(f(6, 7)); printLF();\n"
+		+ "\tf = (BinOp) global gop;\n\tprintInt(f(2, 3)); printLF();\n}\n";
+	const tOut = compileWithJsImpala(fpSrc, { randomId: 42, gazl2: true });
+	assert(/^[ \t]*GAZL #2$/m.test(tOut) && canonicalizeTrimEnd(tOut).endsWith("GAZL #1"),
+		"--gazl2 output must open with GAZL #2 and close with GAZL #1 - the concatenation bracket");
+	assert(tOut.includes("DATt &add") && tOut.includes("LOCt"),
+		"--gazl2 must emit the t type for funcptrs (DATt rows, LOCt locals)");
+	const pOut = compileWithJsImpala(fpSrc, { randomId: 42 });
+	assert(!/^[ \t]*GAZL /m.test(pOut) && pOut.includes("DATp &add") && !pOut.includes("DATt"),
+		"default output must keep funcptrs on p with no GAZL directive");
+
+	if (haveGazlCmd()) {
+		const gazlPath = path.join(dir, "..", "tests", "impala", "erroneous", "gazl2T.gazl");
+		fs.mkdirSync(path.dirname(gazlPath), { recursive: true });
+		const runText = (text, label) => {
+			fs.writeFileSync(gazlPath, text, IMPALA_ENCODING);
+			const run = runGazlCmd(gazlPath, [ "main" ]);
+			assert(run.failure === undefined && run.assembled, `gazl2 t: ${label} did not assemble: ${run.line}`);
+			return canonicalizeNewlines(run.stdout);
+		};
+		assert(runText(tOut, "t output").startsWith("42\n5\n"),
+			"gazl2 t: dispatch through t locals and a DATt table must run");
+		const v1Unit = "v1f:\tFUNC\n\tPARA *1\n\tRETU\n";
+		assert(runText(tOut + v1Unit, "v2+v1 concat").startsWith("42\n5\n"),
+			"gazl2 t: a GAZL 1 unit concatenated AFTER a bracketed unit must assemble and run");
+		assert(runText(v1Unit + tOut, "v1+v2 concat").startsWith("42\n5\n"),
+			"gazl2 t: a GAZL 1 unit concatenated BEFORE a bracketed unit must assemble and run");
+
+		const rejects = (text, want, label) => {
+			fs.writeFileSync(gazlPath, text, IMPALA_ENCODING);
+			const run = runGazlCmd(gazlPath, [ NO_ENTRY_POINT ]);
+			assert(!run.assembled && run.report.includes(want),
+				`gazl2 t: ${label} must reject with "${want}", got: ${run.line}`);
+		};
+		rejects("GAZL #2\nf:\tFUNC\n\tRETU\nmain:\tFUNC\np0:\tLOCp\n\tPARA *1\n\tMOVp p0 &f\n\tRETU\nGAZL #1\n",
+			"Incompatible types", "a t function's address in a p slot");
+		rejects("f:\tFUNC\n\tRETU\nGAZL #2\ng:\tGLOB *1\n\tDATp &f\nmain:\tFUNC\n\tPARA *1\n\tRETU\nGAZL #1\n",
+			"Incompatible types", "DATp of ANY function inside a region, GAZL 1-minted included");
+		rejects("f:\tFUNC\n\tRETU\nmain:\tFUNC\nt0:\tLOCt\n\tPARA *1\n\tMOVt t0 &f\n\tRETU\n",
+			"Incompatible types", "a GAZL 1 function's address in a t slot - the gate the region provides");
+		rejects("GAZL #2\nmain:\tFUNC\n\tPARA *1\n\tRETU\n",
+			"not closed", "a region left open at end of file");
+		rejects("GAZL #2\nf:\tFUNC\n\tRETU\nmain:\tFUNC\np0:\tLOCp\n\tPARA *1\n\tPEEK p0 &g\n\tCALL p0 %0 *1\n\tRETU\ng:\tGLOB *1\nGAZL #1\n",
+			"Incompatible types", "an indirect call through a p LOCAL inside a region - use LOCt");
+
+		// Dead-strip composes with both dialects. Two stripper bugs were found here: `DATt` was not a
+		// data row (the row was swallowed into the preceding FUNC and stripped with it), and the anon
+		// `GLOB *1` a scalar global rides was FUNC-body filler rather than a boundary (strip that
+		// function and the global kept its row but lost its section). `unused` sits directly before the
+		// scalar global to pin the second shape.
+		const { deadStrip } = require("./impalaImportClosure");
+		const expSrc = "const int DEBUG = 1\n"
+			+ "functype BinOp(int a, int b) returns int\n"
+			+ "function add(int a, int b) returns int r { r = a + b; }\n"
+			+ "function unused(int a) returns int r { r = a; }\n"
+			+ "global BinOp gop = add\n"
+			+ "extern native printInt\nextern native printLF\n"
+			+ "export function main()\nlocals BinOp f\n{\n"
+			+ "\tf = (BinOp) global gop;\n\tprintInt(f(4, 5)); printLF();\n}\n";
+		for (const gazl2 of [ false, true ]) {
+			const stripped = deadStrip(compileWithJsImpala(expSrc, { randomId: 42, gazl2 }));
+			assert(!stripped.includes("unused:"), `dead-strip must drop unused (gazl2: ${gazl2})`);
+			assert(runText(stripped, `dead-stripped funcptr global (gazl2: ${gazl2})`).startsWith("9\n"),
+				`gazl2 t: dead-stripped funcptr global must keep its section and run (gazl2: ${gazl2})`);
+		}
+	}
+	console.log("impala.jspeg compiler emits the t call-target type inside a GAZL #2 region under --gazl2");
+}
+
 console.log("JSPEG regression suite completed successfully");
