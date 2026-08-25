@@ -22,7 +22,7 @@ static const int CODE_MEMORY_SIZE = 128 * 1024;
 static const int FUNCTION_TABLE_SIZE = CODE_MEMORY_SIZE;
 static const int CALL_STACK_SIZE = 2048;
 static const size_t OUT_LIMIT = 1 << 20;
-static const Int CYCLE_BUDGET = 100000000;
+static const Int CYCLE_BUDGET = 10000000;	// runs on the UI thread per keystroke - this caps a runaway program's freeze at ~0.1s
 
 static const Status OUTPUT_LIMIT = 1;	// custom run-time status: outText reached OUT_LIMIT
 

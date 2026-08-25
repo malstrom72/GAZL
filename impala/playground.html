@@ -145,9 +145,9 @@
 
 	// Run the emitted GAZL on the real VM (gazlVm.js = src/GAZL.cpp via Emscripten, same natives as
 	// GAZLCmd). Fills the run pane and returns a status suffix. `input` reads an empty line in here.
-	var warnHtml = "";   // compile warnings render in the run pane (the GAZL pane is an editor now)
-
-	function runProgram(gazl) {
+	// warnHtml: compile warnings render in the run pane above the output (the GAZL pane is an editor
+	// now); a hand-edited run passes "" - the warnings belong to an Impala compile, not to the edit.
+	function runProgram(gazl, warnHtml) {
 		if (!runvmEl.checked) { runEl.innerHTML = ""; return ""; }
 		if (typeof Module === "undefined" || !Module.ccall) {
 			runEl.innerHTML = '<span class="dim">gazlVm.js missing - build it with tools/buildGazlWasm.sh</span>';
@@ -165,9 +165,10 @@
 		runPaneEl.hidden = !runvmEl.checked;   // compile() runs on every toggle, so the pane tracks the checkbox
 		var user = srcEl.value;
 		var source = PRELUDE + user;
-		// Map an offset in the compiled text back into the user's text. Clamped: an error inside the
-		// prelude itself (it compiles clean, so only a conflicting redeclaration gets near) lands on 1:1.
-		function at(offset) { return Math.max(0, (isFinite(offset) ? offset : 0) - PRELUDE.length); }
+		// Map an offset in the compiled text back into the user's text. A prelude-internal offset goes
+		// negative (the prelude compiles clean, so only a conflicting redeclaration gets near) and a
+		// missing one NaN; lineCol clamps both onto 1:1.
+		function at(offset) { return offset - PRELUDE.length; }
 		var seed = parseInt(seedEl.value, seedEl.value.indexOf("0x") === 0 ? 16 : 10);
 		if (!isFinite(seed)) seed = 0x4d2;
 
@@ -197,7 +198,6 @@
 				var spos = "input.impala:" + sc.lc.line + ":" + sc.lc.col;
 				outEl.className = "diag";
 				outEl.value = spos + ": error[E001]: syntax error\n" + sc.text + "\n" + sc.pointer;
-				warnHtml = "";
 				runEl.innerHTML = "";
 				statusEl.className = "bad";
 				statusEl.textContent = "✗ error";
@@ -206,11 +206,11 @@
 			var body = lines.map(retabEl.checked ? retabulate : function (l) { return l; }).join("\n");
 			outEl.className = "";
 			outEl.value = body;
-			warnHtml = warnings.length ? '<span class="note">' + esc(warnings.join("\n\n")) + "</span>\n\n" : "";
+			var warnHtml = warnings.length ? '<span class="note">' + esc(warnings.join("\n\n")) + "</span>\n\n" : "";
 			statusEl.className = "ok";
 			statusEl.textContent = "✓ " + lines.length + " lines"
 				+ (warnings.length ? "  ·  " + warnings.length + " warning" + (warnings.length > 1 ? "s" : "") : "")
-				+ runProgram(body + "\n");
+				+ runProgram(body + "\n", warnHtml);
 		} catch (err) {
 			var out;
 			if (err && isFinite(err.impalaOffset)) {
@@ -224,7 +224,6 @@
 			}
 			outEl.className = "diag";
 			outEl.value = out;
-			warnHtml = "";
 			runEl.innerHTML = "";
 			statusEl.className = "bad";
 			statusEl.textContent = "✗ error";
@@ -270,7 +269,7 @@
 		clearTimeout(runTimer);
 		runTimer = setTimeout(function () {
 			statusEl.className = "ok";
-			statusEl.textContent = "✎ GAZL edited" + runProgram(outEl.value + "\n");
+			statusEl.textContent = "✎ GAZL edited" + runProgram(outEl.value + "\n", "");
 		}, 120);
 	});
 	// A checkbox fires BOTH `input` and `change` on one click, so binding it to both compiled twice per
