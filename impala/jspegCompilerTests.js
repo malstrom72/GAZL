@@ -3657,6 +3657,13 @@ console.log("impala.jspeg compiler treats Object.prototype names as ordinary ide
 		"--gazl2 output must open with GAZL #2 and close with GAZL #1 - the concatenation bracket");
 	assert(tOut.includes("DATt &add") && tOut.includes("LOCt"),
 		"--gazl2 must emit the t type for funcptrs (DATt rows, LOCt locals)");
+	// Funcptr difference is the one DIF site TYPE_SUFFIXES cannot reach (DIF has no `?` - int minus is
+	// SUBi), so it needs its own meta-op. A `DIFp $diff $t $t` in --gazl2 output does not assemble.
+	const diffSrc = "const int DEBUG = 1\nfunctype F(int a)\nfunction f(int a) { }\n"
+		+ "function main()\nlocals F g, int d\n{\n\tg = f;\n\td = g - g;\n}\n";
+	assert(compileWithJsImpala(diffSrc, { randomId: 42, gazl2: true }).includes("DIFt")
+			&& compileWithJsImpala(diffSrc, { randomId: 42 }).includes("DIFp"),
+		"funcptr difference must render DIFt under --gazl2 and stay DIFp by default");
 	const pOut = compileWithJsImpala(fpSrc, { randomId: 42 });
 	assert(!/^[ \t]*GAZL /m.test(pOut) && pOut.includes("DATp &add") && !pOut.includes("DATt"),
 		"default output must keep funcptrs on p with no GAZL directive");

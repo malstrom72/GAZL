@@ -210,7 +210,7 @@
         '=*','PEEK', ':=*','PEEK', '*=','POKE', '=&','ADRL', 'copy','COPY',
         '-->','GOTO', '-->#','SWCH',  '...','FOR?',  '()','CALL', '--^','RETU', 'FAIL','FAIL',
         '|','IOR?', '&','AND?', '^','XOR?', '<<','SHL?', '>>>','SHRu', '>>','SHR?',
-        '+','ADD?', '-','SUB?', '*','MUL?', '/','DIV?', '%','MOD?', 'd','DIFp',
+        '+','ADD?', '-','SUB?', '*','MUL?', '/','DIV?', '%','MOD?', 'd','DIFp', 'dt','DIFt',
         '<=','LEQ?', '<','LSS?', '>=','GEQ?', '>','GRT?', '!=','NEQ?', '==','EQU?',
         '!<=','GRT?','!<','GEQ?','!>=','LSS?','!>','LEQ?','!!=','EQU?','!==','NEQ?'
     );
@@ -1969,7 +1969,7 @@
         '=',1, ':=',1, '=itof',1, '=ftoi',1, '=abs',1, '=floor',1,
         '=[]',1, '=[]$',1, '=*',1, ':=*',1, '=&',1, '[]$=',1,
         '|',1, '&',1, '^',1, '<<',1, '>>>',1, '>>',1,
-        '+',1, '-',1, '*',1, '/',1, '%',1, 'd',1,
+        '+',1, '-',1, '*',1, '/',1, '%',1, 'd',1, 'dt',1,
         '<=',1, '<',1, '>=',1, '>',1, '!=',1, '==',1,
         '!<=',1, '!<',1, '!>=',1, '!>',1, '!!=',1, '!==',1,
         '-->',1, '-->#',1, '...',1, '<--',1
@@ -4064,7 +4064,9 @@ var _sn = $$parser.strideStruct(field.elem);
             var diff = (operator === '-' && (rightx.type === 'p' || rightx.type === 't'));
             if (diff) {
                 var funcDiff = (rightx.type === 't');             /* ordinals, not addresses: no stride, nothing to match */
-                operator = 'd';
+                operator = (funcDiff && $$parser.gazl2 ? 'dt' : 'd');   /* a t local is no DIFp operand - the one DIF
+                                                                           site TYPE_SUFFIXES cannot reach, DIF having
+                                                                           no `?` (int minus is SUBi) */
                 /* The difference counts ELEMENTS (DIFp, then DIVi by the stride), so it only means
                    anything when both pointers walk the same element type - `ip - fp` would divide a
                    float-strided span by the int size. Same rule as assignment (E201); comparison is
