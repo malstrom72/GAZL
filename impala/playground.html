@@ -3,8 +3,10 @@
 	Impala → GAZL live playground. A single static file: it loads the JSPEG-generated
 	Impala compiler (impalaCompiler.js) directly in the browser — no server, no build —
 	and recompiles on every keystroke. The run pane executes the emitted GAZL on the
-	real VM (gazlVm.js, built from src/GAZL.cpp by tools/buildGazlWasm.sh). Open it
-	from the `impala/` directory so the relative <script>s below resolve.
+	real VM (gazlVm.js, built from src/GAZL.cpp by tools/buildGazlWasm.sh); the GAZL
+	pane is itself editable, and hand edits run directly until the next recompile
+	overwrites them. Open it from the `impala/` directory so the relative <script>s
+	below resolve.
 -->
 <html lang="en">
 <head>
@@ -34,7 +36,7 @@
 		font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px; line-height: 1.5;
 		border: 0; outline: none; overflow: auto; white-space: pre; tab-size: 4; }
 	textarea { resize: none; }
-	pre.diag { color: var(--err); }
+	.diag { color: var(--err); }
 	.note { color: var(--accent); }
 	.err { color: var(--err); }
 	.dim { color: var(--dim); }
@@ -59,7 +61,7 @@
 	</section>
 	<section class="pane">
 		<div class="cap">output.gazl</div>
-		<pre id="out"></pre>
+		<textarea id="out" spellcheck="false" autocomplete="off"></textarea>
 	</section>
 	<section class="pane" id="runPane">
 		<div class="cap">run</div>
@@ -124,10 +126,27 @@
 		rangesEl = document.getElementById("ranges"),
 		runvmEl = document.getElementById("runvm");
 
+	// The typed prototypes of the natives the run pane can print with (the printing subset of
+	// natives.impala - sqrt/log/atan2 stay explicit, and `input` cannot really read in a browser).
+	// Always prepended before compiling; every diagnostic offset is shifted back so carets keep
+	// pointing into the user's text. Redeclaring one is harmless unless the signatures disagree,
+	// and that error points at the user's own line.
+	var PRELUDE = [
+		"extern native abort()",
+		"extern native assertFail(pointer message)",
+		"extern native printInt(int value)",
+		"extern native printFloat(float value)",
+		"extern native print(pointer text)",
+		"extern native printLF()",
+		""
+	].join("\n");
+
 	function esc(s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;"); }
 
 	// Run the emitted GAZL on the real VM (gazlVm.js = src/GAZL.cpp via Emscripten, same natives as
 	// GAZLCmd). Fills the run pane and returns a status suffix. `input` reads an empty line in here.
+	var warnHtml = "";   // compile warnings render in the run pane (the GAZL pane is an editor now)
+
 	function runProgram(gazl) {
 		if (!runvmEl.checked) { runEl.innerHTML = ""; return ""; }
 		if (typeof Module === "undefined" || !Module.ccall) {
@@ -137,14 +156,18 @@
 		var code = Module.ccall("gazlRun", "number", ["string", "string"], [gazl, "main"]);
 		var out = Module.ccall("gazlOut", "string", [], []);
 		var err = Module.ccall("gazlErr", "string", [], []);
-		runEl.innerHTML = esc(out)
+		runEl.innerHTML = warnHtml + esc(out)
 			+ (err ? (out && out[out.length - 1] !== "\n" ? "\n" : "") + '<span class="err">' + esc(err) + "</span>" : "");
 		return code === 0 ? "  ·  ran" : "  ·  run ✗";
 	}
 
 	function compile() {
 		runPaneEl.hidden = !runvmEl.checked;   // compile() runs on every toggle, so the pane tracks the checkbox
-		var source = srcEl.value;
+		var user = srcEl.value;
+		var source = PRELUDE + user;
+		// Map an offset in the compiled text back into the user's text. Clamped: an error inside the
+		// prelude itself (it compiles clean, so only a conflicting redeclaration gets near) lands on 1:1.
+		function at(offset) { return Math.max(0, (isFinite(offset) ? offset : 0) - PRELUDE.length); }
 		var seed = parseInt(seedEl.value, seedEl.value.indexOf("0x") === 0 ? 16 : 10);
 		if (!isFinite(seed)) seed = 0x4d2;
 
@@ -157,7 +180,7 @@
 			legacy: legacyEl.checked,
 			rangeChecks: rangesEl.checked,   // the emitted guards are `DEBUG`-gated, so they need `const int DEBUG`
 			warn: function (message, offset, code, hint) {
-				var c = caretLine(source, offset);
+				var c = caretLine(user, at(offset));
 				var pos = "input.impala:" + c.lc.line + ":" + c.lc.col;
 				warnings.push(pos + ": warning" + (code ? "[" + code + "]" : "") + ": " + message
 					+ "\n" + c.text + "\n" + c.pointer
@@ -170,11 +193,11 @@
 			// impalaCompiler REPORTS a parse failure by return value, not by throwing: [ok, , index].
 			// A semantic error throws (handled below); a syntax error just stops - surface it here.
 			if (!result || !result[0] || result[2] !== source.length) {
-				var si = (result && isFinite(result[2])) ? result[2] : 0;
-				var sc = caretLine(source, si);
+				var sc = caretLine(user, at(result && result[2]));
 				var spos = "input.impala:" + sc.lc.line + ":" + sc.lc.col;
 				outEl.className = "diag";
-				outEl.textContent = spos + ": error[E001]: syntax error\n" + sc.text + "\n" + sc.pointer;
+				outEl.value = spos + ": error[E001]: syntax error\n" + sc.text + "\n" + sc.pointer;
+				warnHtml = "";
 				runEl.innerHTML = "";
 				statusEl.className = "bad";
 				statusEl.textContent = "✗ error";
@@ -182,15 +205,16 @@
 			}
 			var body = lines.map(retabEl.checked ? retabulate : function (l) { return l; }).join("\n");
 			outEl.className = "";
-			outEl.innerHTML = (warnings.length ? '<span class="note">' + esc(warnings.join("\n\n")) + "</span>\n\n" : "") + esc(body);
+			outEl.value = body;
+			warnHtml = warnings.length ? '<span class="note">' + esc(warnings.join("\n\n")) + "</span>\n\n" : "";
 			statusEl.className = "ok";
 			statusEl.textContent = "✓ " + lines.length + " lines"
 				+ (warnings.length ? "  ·  " + warnings.length + " warning" + (warnings.length > 1 ? "s" : "") : "")
-				+ runProgram(lines.join("\n") + "\n");
+				+ runProgram(body + "\n");
 		} catch (err) {
 			var out;
 			if (err && isFinite(err.impalaOffset)) {
-				var c = caretLine(source, err.impalaOffset);
+				var c = caretLine(user, at(err.impalaOffset));
 				var pos = "input.impala:" + c.lc.line + ":" + c.lc.col;
 				out = pos + ": error" + (err.impalaCode ? "[" + err.impalaCode + "]" : "") + ": "
 					+ (err.impalaMessage || "compile error") + "\n" + c.text + "\n" + c.pointer
@@ -199,22 +223,25 @@
 				out = (err && err.message) ? err.message : String(err);
 			}
 			outEl.className = "diag";
-			outEl.textContent = out;
+			outEl.value = out;
+			warnHtml = "";
 			runEl.innerHTML = "";
 			statusEl.className = "bad";
 			statusEl.textContent = "✗ error";
 		}
 	}
 
-	// Tab inserts a tab character (indent) instead of moving focus out of the editor.
-	srcEl.addEventListener("keydown", function (e) {
-		if (e.key !== "Tab" || e.ctrlKey || e.altKey || e.metaKey) return;
-		e.preventDefault();
-		var start = srcEl.selectionStart, end = srcEl.selectionEnd, v = srcEl.value;
-		srcEl.value = v.slice(0, start) + "\t" + v.slice(end);
-		srcEl.selectionStart = srcEl.selectionEnd = start + 1;
-		persist();
-		schedule();
+	// Tab inserts a tab character (indent) instead of moving focus out of the editor - in both
+	// editors; GAZL columns ARE tabs. Dispatching `input` funnels into each editor's own handler.
+	[srcEl, outEl].forEach(function (el) {
+		el.addEventListener("keydown", function (e) {
+			if (e.key !== "Tab" || e.ctrlKey || e.altKey || e.metaKey) return;
+			e.preventDefault();
+			var start = el.selectionStart, end = el.selectionEnd, v = el.value;
+			el.value = v.slice(0, start) + "\t" + v.slice(end);
+			el.selectionStart = el.selectionEnd = start + 1;
+			el.dispatchEvent(new Event("input"));
+		});
 	});
 
 	var STORAGE_KEY = "impala.playground.src";
@@ -233,6 +260,19 @@
 	var timer = null;
 	function schedule() { clearTimeout(timer); timer = setTimeout(compile, 120); }
 	srcEl.addEventListener("input", function () { persist(); schedule(); });
+
+	// Hand-editing the GAZL pane runs it directly - for hacking GAZL without an Impala source.
+	// The next Impala keystroke recompiles and overwrites the pane; edits here are deliberately
+	// transient and are not persisted. Editing a red diagnostic just treats it as GAZL.
+	var runTimer = null;
+	outEl.addEventListener("input", function () {
+		outEl.className = "";
+		clearTimeout(runTimer);
+		runTimer = setTimeout(function () {
+			statusEl.className = "ok";
+			statusEl.textContent = "✎ GAZL edited" + runProgram(outEl.value + "\n");
+		}, 120);
+	});
 	// A checkbox fires BOTH `input` and `change` on one click, so binding it to both compiled twice per
 	// tick. The seed is a text field and needs `input` to feel live; the toggles only need `change`.
 	seedEl.addEventListener("input", compile);
@@ -241,12 +281,11 @@
 	});
 
 	var DEMO = [
-		"// Impala 2 — edit me; GAZL updates live.",
+		"// Impala 2 — edit me; GAZL updates live and runs. The GAZL pane is editable too.",
+		"// printInt/printFloat/print/printLF/assertFail/abort are pre-declared.",
 		"struct Biquad { float b0; float z1 }",
 		"struct Voice  { int note; Biquad lo; float gain }",
 		"",
-		"extern native printFloat",
-		"extern native printLF",
 		"global array pool[8]",
 		"",
 		"function tick(Voice pointer v, float in)",
