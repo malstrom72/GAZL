@@ -1015,6 +1015,36 @@ void Assembler::finalize(UInt& codeSize, UInt& globalsSize, UInt& constsSize, UI
 	functionCount = this->functionCount;
 }
 
+/* Dry assembly. Assembles into internally-owned scratch that starts small and doubles on the three
+   arena overflows, so the caller neither sizes nor owns a guess and the answer is exact by
+   construction - it IS a real assembly, just thrown away. The cost is a transient allocation and at
+   most log2(final size) restarts; every other outcome, program errors included, is exactly feed()'s.
+   Each attempt works on a COPY of the seed symbols, so the caller's table never learns the program's
+   names and a retry never sees a half-defined one. */
+void Assembler::measure(const Char* source, const Symbols& globals, UInt& codeSize, UInt& globalsSize
+		, UInt& constsSize, UInt& functionCount) {
+	UInt codeMax = 256, memoryMax = 256, functionMax = 64;
+	for (;;) {
+		std::vector<Instruction> code(codeMax);
+		std::vector<UInt> functions(functionMax);
+		std::vector<Value> memory(memoryMax);
+		Symbols scratch(globals);
+		Assembler assem(codeMax, &code[0], functionMax, &functions[0], memoryMax, &memory[0], scratch);
+		assem.newUnit(0);
+		try {
+			for (const Char* p = source; *p != 0; ) p = assem.feed(p);
+			assem.finalize(codeSize, globalsSize, constsSize, functionCount);
+			return;
+		}
+		catch (const Exception& x) {
+			if (x.error == NOT_ENOUGH_CODE_SPACE) codeMax *= 2;
+			else if (x.error == NOT_ENOUGH_MEMORY_SPACE) memoryMax *= 2;
+			else if (x.error == NOT_ENOUGH_FUNCTION_SPACE) functionMax *= 2;
+			else throw;
+		}
+	}
+}
+
 void Assembler::newUnit(const Char* unitName) { // FIX : use unitName (or not?)
 	(void)unitName;
 	if (!skipUntilLabel.empty()) throw Exception(MISSING_COMPILE_TIME_LABEL, skipUntilLabel);
@@ -1882,6 +1912,24 @@ bool unitTest() {
 					assert(0);
 				}
 			}
+		}
+
+		{	/* measure() must agree with the real assembly above exactly - and the deliberately tiny
+			   starting arenas mean this very test exercises its retry-and-double path. */
+			Symbols seed;
+			seed.registerNative("assertFail", 0);
+			seed.registerNative("testMul", 1);
+			seed.registerNative("testCallback", 2);
+			UInt mCody, mGlobals, mConsts, mFunctions;
+			try {
+				Assembler::measure(UNITTEST, seed, mCody, mGlobals, mConsts, mFunctions);
+			}
+			catch (const Exception& e) {
+				(void)e;
+				assert(0);
+			}
+			assert(mCody == codySize && mGlobals == globalsSize && mConsts == constsSize
+					&& mFunctions == functionCount);
 		}
 			
 		TestCallbackData callbackData;
