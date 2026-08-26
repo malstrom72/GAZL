@@ -265,7 +265,9 @@ class Assembler {
 	public:		const Char* feed(const Char* line); 														// Assemble a single line and return pointer to the next.
 	public:		void finalize(UInt& codeSize, UInt& functionCount, UInt& globalsSize, UInt& constsSize); 	// Finish assembly and report memory usage. `functionCount` is the number of entries filled in `functionTable`.
 	public:		void finalize(AssembledProgram& program); 													// Finish assembly and fill `program` (the buffers this Assembler was given + the computed sizes) in one step.
-	
+	public:		static void measure(const Char* source, const Symbols& globals, UInt& codeSize, UInt& globalsSize
+						, UInt& constsSize, UInt& functionCount); 											// Dry assembly: report what a real assembly of `source` (whole NUL-terminated text) will need, without the caller sizing or owning any buffer. Seed `globals` exactly as for a real assembly (natives, host defines); it is copied, never touched. Program errors throw exactly as feed() does.
+
 	protected:	struct CompileTimeVar {
 					int types;
 					Value value;
