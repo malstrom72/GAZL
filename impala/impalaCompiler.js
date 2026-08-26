@@ -4134,8 +4134,17 @@ var _sn = strideStruct(field.elem);
                         'E308', 'the element count is `((pointer)q - (pointer)p) / sizeof('
                                 + stride + ')`');
             }
+            /* GAZL 1 WORKAROUND. `DIFp` SHOULD accept a function-pointer constant - difference is a
+               defined operation on funcptrs (ordinal distance), and `EQUp`/`LSSp` constants always
+               took them - but by error its constant forms never did, and the GAZL 1 engines deployed
+               in the field freeze that mistake forever. The VARIABLE forms do take funcptrs, so a
+               function NAME in a difference is materialised into a transient first: dropping `&` from
+               makeRValue's reusable classes is exactly that. Keyed on `operator === 'd'` so a future
+               dialect with corrected constant forms (GAZL 2's `DIFt`) escapes the workaround. */
+            var rvClasses = (operator === 'd' && funcDiff ? '#<$%' : undefined);
             makeMeta(leftx, operator, tp, null,
-                              makeRValue(leftx), makeRValue(rightx));
+                              makeRValue(leftx, rvClasses),
+                              makeRValue(rightx, rvClasses));
         }
 
         leftx.readonly = lro;                                     /* survives the makeMeta calls above */
