@@ -897,7 +897,8 @@ void Assembler::finalize(UInt& codeSize, UInt& globalsSize, UInt& constsSize, UI
 /* Dry assembly. Assembles into internally-owned scratch that starts small and doubles on the three
    arena overflows, so the caller neither sizes nor owns a guess and the answer is exact by
    construction - it IS a real assembly, just thrown away. The cost is a transient allocation and at
-   most log2(final size) restarts; every other outcome, program errors included, is exactly feed()'s.
+   most log2 of the largest final arena in restarts; every other outcome, program errors included, is
+   exactly feed()'s.
    Each attempt works on a COPY of the seed symbols, so the caller's table never learns the program's
    names and a retry never sees a half-defined one. */
 void Assembler::measure(const Char* source, const Symbols& globals, UInt& codeSize, UInt& globalsSize
@@ -916,10 +917,11 @@ void Assembler::measure(const Char* source, const Symbols& globals, UInt& codeSi
 			return;
 		}
 		catch (const Exception& x) {
-			if (x.error == NOT_ENOUGH_CODE_SPACE) codeMax *= 2;
-			else if (x.error == NOT_ENOUGH_MEMORY_SPACE) memoryMax *= 2;
-			else if (x.error == NOT_ENOUGH_FUNCTION_SPACE) functionMax *= 2;
-			else throw;
+			if (x.error != NOT_ENOUGH_CODE_SPACE && x.error != NOT_ENOUGH_MEMORY_SPACE
+					&& x.error != NOT_ENOUGH_FUNCTION_SPACE) throw;
+			codeMax *= 2;								// ALL three, whichever tripped: every retry re-assembles the whole
+			memoryMax *= 2;								// source, so the retry count should be the MAX of the three logs,
+			functionMax *= 2;							// not their sum - transient over-allocation costs nothing here.
 		}
 	}
 }
@@ -1654,6 +1656,10 @@ int testCallback(Processor* p) {
 	return 0;
 }
 
+/* ONE list of the unit-test natives: measure()'s self-check compares two assemblies that must have been
+   seeded identically, so the seeding cannot be allowed to drift between sites. */
+static void seedTestNatives(Symbols& g) { g.registerNative("assertFail", 0); g.registerNative("testMul", 1); g.registerNative("testCallback", 2); }
+
 bool unitTest() {
 	assert(sizeof (Int) == sizeof (Pointer));
 	assert(sizeof (UInt) == sizeof (Int));
@@ -1711,9 +1717,7 @@ bool unitTest() {
 		std::fill_n(&memory[0], MEMORY_SIZE + CATCH_ZONE_SIZE, v);
 		
 		Symbols globals;
-		globals.registerNative("assertFail", 0);
-		globals.registerNative("testMul", 1);
-		globals.registerNative("testCallback", 2);
+		seedTestNatives(globals);
 
 		UInt codySize = 0;
 		UInt globalsSize = 0;
@@ -1738,9 +1742,7 @@ bool unitTest() {
 		{	/* measure() must agree with the real assembly above exactly - and the deliberately tiny
 			   starting arenas mean this very test exercises its retry-and-double path. */
 			Symbols seed;
-			seed.registerNative("assertFail", 0);
-			seed.registerNative("testMul", 1);
-			seed.registerNative("testCallback", 2);
+			seedTestNatives(seed);
 			UInt mCody, mGlobals, mConsts, mFunctions;
 			try {
 				Assembler::measure(UNITTEST, seed, mCody, mGlobals, mConsts, mFunctions);
@@ -1795,9 +1797,7 @@ bool unitTest() {
 			std::vector<UInt> functionTable2(MAX_FUNCTION_COUNT);
 			std::vector<CallStackEntry> callStack2(CALL_STACK_SIZE);
 			Symbols globals2;
-			globals2.registerNative("assertFail", 0);
-			globals2.registerNative("testMul", 1);
-			globals2.registerNative("testCallback", 2);
+			seedTestNatives(globals2);
 
 			UInt codySize2 = 0;
 			UInt globalsSize2 = 0;
