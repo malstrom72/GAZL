@@ -11,8 +11,10 @@ set -e -o pipefail -u
 cd "$(dirname "$0")"/..
 
 # The checked-in compiler must match the grammar it is generated from, or the playground goes stale
-# (impala/playground.html loads impala/impalaCompiler.js directly).
+# (impala/playground.html loads impala/impalaCompiler.js directly). Its hand-copied native prelude
+# must match natives.impala for the same reason.
 node impala/updateJSPEG.js --check
+node tools/checkPlaygroundPrelude.js
 
 # The hand-written .gazl proofs under docs/ still prove what their docs claim. Cheap, and it is the only
 # thing that runs them - docSamples covers the .impala samples, nothing covered these.
