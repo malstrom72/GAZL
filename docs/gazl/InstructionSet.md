@@ -177,6 +177,12 @@ offsetting a pointer. Notice that for the first variant with two constant addres
 before the instruction. (The other variants accepts forward declarations.) The motivation behind this exception is that
 the difference of two constant addresses becomes another constant, and this may be utilized for local optimizations etc.
 
+Function-pointer difference SHOULD be accepted here too - it is a defined operation on funcptrs (their ordinal
+distance; `EQUp`/`LSSp` constants always took them) - but by error the constant forms never did, and the GAZL 1
+engines deployed in the field freeze that mistake. Impala therefore works around it: a function NAME in a difference
+is materialised into a variable first, and only the variable forms of `DIFp` are emitted. GAZL 2's `DIFt` has the
+corrected constant forms.
+
 ## DIVf
 - `float(d)        #float          #float`
 - `float(d)        #float          float`

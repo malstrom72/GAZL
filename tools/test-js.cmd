@@ -12,8 +12,11 @@ REM
 REM These degrade rather than fail when output\GAZLCmd is absent: runJspegTests, jspegCompilerTests and
 
 REM The checked-in compiler must match the grammar it is generated from, or the playground goes stale
-REM (impala\playground.html loads impala\impalaCompiler.js directly).
+REM (impala\playground.html loads impala\impalaCompiler.js directly). Its hand-copied native prelude
+REM must match natives.impala for the same reason.
 node impala\updateJSPEG.js --check
+IF ERRORLEVEL 1 EXIT /B 1
+node tools\checkPlaygroundPrelude.js
 IF ERRORLEVEL 1 EXIT /B 1
 
 REM The hand-written .gazl proofs under docs\ still prove what their docs claim.
