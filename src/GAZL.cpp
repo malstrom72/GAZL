@@ -956,7 +956,12 @@ void Assembler::measure(const Char* source, const Symbols& globals, UInt& codeSi
 		assem.newUnit(0);
 		try {
 			for (const Char* p = source; *p != 0; ) p = assem.feed(p);
-			assem.finalize(codeSize, functionCount, globalsSize, constsSize);	// this branch's finalize order
+			AssembledProgram prog;						// the named-field finalize: immune to this branch's different
+			assem.finalize(prog);						// positional order (prog's scratch pointers die with the loop)
+			codeSize = prog.codeSize;
+			globalsSize = prog.globalsSize;
+			constsSize = prog.constsSize;
+			functionCount = prog.functionCount;
 			return;
 		}
 		catch (const Exception& x) {
