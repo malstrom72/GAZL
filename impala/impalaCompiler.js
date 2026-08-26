@@ -3982,7 +3982,7 @@ var _sn = strideStruct(field.elem);
                defined operation on funcptrs (ordinal distance), and `EQUp`/`LSSp` constants always
                took them - but by error its constant forms never did, and the GAZL 1 engines deployed
                in the field freeze that mistake forever. The VARIABLE forms do take funcptrs, so a
-               function NAME in a difference is materialised into a transient first: dropping `&` from
+               function NAME in a difference is materialised into a transient first: dropping `&` and `^` from
                makeRValue's reusable classes is exactly that. Keyed on `operator === 'd'` so a future
                dialect with corrected constant forms (GAZL 2's `DIFt`) escapes the workaround. */
             var rvClasses = (operator === 'd' && funcDiff ? '#<$%' : undefined);
