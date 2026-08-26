@@ -3489,4 +3489,28 @@ for (const name of prototypeNames) {
 }
 console.log("impala.jspeg compiler treats Object.prototype names as ordinary identifiers");
 
+// GAZL 1 WORKAROUND (impala.jspeg, pointer-difference 'd'): DIFp's constant forms never took a function
+// address - an error frozen by the engines deployed in the field - so a function NAME in a difference
+// must be materialised into a transient, and only the VARIABLE forms of DIFp ever emitted.
+{
+	const src = "const int DEBUG = 1\nfunctype F(int a)\n"
+		+ "function f1(int a) { }\nfunction f2(int a) { }\n"
+		+ "extern native printInt\nextern native printLF\n"
+		+ "function main()\nlocals F g, int d\n{\n"
+		+ "\tg = f1;\n\td = f2 - g;\n\tprintInt(d); printLF();\n"
+		+ "\td = f2 - f1;\n\tprintInt(d); printLF();\n}\n";
+	const out = compileWithJsImpala(src, { randomId: 42 });
+	assert(/\bDIFp\b/.test(out) && !/DIFp[^\n]*&/.test(out),
+		"a funcptr difference must emit variable-form DIFp only - its constant forms do not exist on deployed GAZL 1 engines");
+	if (haveGazlCmd()) {
+		const gazlPath = path.join(dir, "..", "tests", "impala", "erroneous", "funcptrDiff.gazl");
+		fs.mkdirSync(path.dirname(gazlPath), { recursive: true });
+		fs.writeFileSync(gazlPath, out, IMPALA_ENCODING);
+		const run = runGazlCmd(gazlPath, [ "main" ]);
+		assert(run.failure === undefined && run.assembled && canonicalizeNewlines(run.stdout).startsWith("1\n1\n"),
+			`a funcptr difference must assemble and run on the GAZL 1 assembler, got: ${run.line}`);
+	}
+	console.log("impala.jspeg compiler materialises funcptr constants in a difference (DIFp variable forms only)");
+}
+
 console.log("JSPEG regression suite completed successfully");
