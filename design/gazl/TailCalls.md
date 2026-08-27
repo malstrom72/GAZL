@@ -74,10 +74,20 @@ assembly the way `RETU` carries `localsSize` - that is how the runtime finds the
 sits at the TOP of the locals and named locals resolve at negative offsets.
 
 **The legality rule is static and cheap.** `*m` must not exceed the function's own incoming window (its
-`INP*`/`OUT*`/`PARA` words, tracked per function as `windowSize`): the copy must stay inside the frame it
-reuses, so a wider window is an assembly error (`TAIL window exceeds the function's own parameter
-window`). Self-recursion satisfies it by construction (`m == n`). The copy is overlap-safe for the same
-reason: `m <= window <= frame size` puts the destination wholly below the source.
+`INP*`/`OUT*`/`PARA` words, tracked per function as `windowSize`): a wider window is an assembly error
+(`TAIL window exceeds the function's own parameter window`). Self-recursion satisfies it by construction
+(`m == n`), and the source reads (`%0..m-1`) are folded into `paramsSize` so the frame check reserves
+them even when nothing else references those slots.
+
+What the rule actually protects is the COPY, not a calling contract: the destination is `base[0..m)`,
+so the true bound is `m <= L` (frame size) - that keeps the write in-frame and, since the source starts
+at `dsp = base + L`, overlap-free. `m <= window` is a tightening of that inherited from this note's
+original `m <= n` rule, and it is NOT load-bearing: the callee's `FUNC` re-checks its own frame from the
+base, and the original caller reads `base + 0` however wide the window was. When the cross-function
+surface lands and a callee needs a window WIDER than the caller's own, the check should relax to
+`m <= L` and the compiler simply pads the frame (a dead `LOCA`) until it fits - no fourth operand
+needed. (A source operand `%w` would achieve the same via `w >= m - L`, but callee + w + m + the baked
+frame size is four values in a three-slot cell, which is exactly why the window is fixed at `%0`.)
 
 **Additive, not region-gated.** Like `SCOP`/`SEEK`, `TAIL` is a new mnemonic: dialect-1 text may use it
 on a GAZL 2 engine, and an older engine rejects it as an unknown mnemonic - which is the whole version
