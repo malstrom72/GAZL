@@ -91,7 +91,6 @@ const char* ASSEMBLER_ERROR_TEXTS[] = {
 	/* , OVERLAPPING_DATA_REGIONS					*/	, "Data regions overlap"
 	/* , UNSUPPORTED_GAZL_VERSION					*/	, "File requires a newer GAZL engine"
 	/* , UNCLOSED_GAZL_REGION						*/	, "GAZL 2 region not closed with GAZL #1"
-	/* , TAIL_EXCEEDS_WINDOW						*/	, "TAIL window exceeds the function's own parameter window"
 };
 
 // --- defined integer / FTOI semantics, shared by Processor::run() and calcConstant() so the
@@ -321,7 +320,6 @@ const int YIELDS_GOTO		= 0x08; // Instruction can be resolved to either a GOTO o
 const int LOCAL_BOUNDS		= 0x10;	// Operand 1 is a variable (local or transient), operand 2 is a size. Make sure frame bounds >= &variable + size.
 const int CHECK_DIV_BY_0	= 0x20; // Operand 1 is a constant used in a division or modulo operation, must check for division by zero. Can only be used if operand 2 is either a CONST_FLOAT or CONST_INT
 const int BRANCH_IS_TABLE	= 0x40; // The BRANCH operand is a jump-table BASE in memory, not a relative displacement - threadBranches must not rewrite it (SWCH).
-const int WINDOW_DECL		= 0x80; // Declaration row is part of the function's incoming call window (INP / OUT / PARA) - the region a TAIL may rewrite.
 
 struct Operator {
 	char key[10];
@@ -450,10 +448,10 @@ static const Operator OPERATORS[] = {
 	, { " GRTt_cvb", LSSI_VCB,	{ TGT_FWD_FREE	, VAR_TGT_R		, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
 	, { " GRTt_vcb", LSSI_CVB,	{ VAR_TGT_R		, TGT_FWD_FREE	, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
 	, { " GRTt_vvb", LSSI_VVB,	{ VAR_TGT_R		, VAR_TGT_R		, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
-	, { " INPf____", LOCA____,	{ 0				, 0				, 0				}		, WINDOW_DECL	, VAR_FLOAT_R & ~TRANSIENT }
-	, { " INPi____", LOCA____,	{ 0				, 0				, 0				}		, WINDOW_DECL	, VAR_INT_R & ~TRANSIENT }
-	, { " INPp____", LOCA____,	{ 0				, 0				, 0				}		, WINDOW_DECL	, VAR_PTR_R & ~TRANSIENT }
-	, { " INPt____", LOCA____,	{ 0				, 0				, 0				}		, WINDOW_DECL	, VAR_TGT_R & ~TRANSIENT }
+	, { " INPf____", LOCA____,	{ 0				, 0				, 0				}		, 0				, VAR_FLOAT_R & ~TRANSIENT }
+	, { " INPi____", LOCA____,	{ 0				, 0				, 0				}		, 0				, VAR_INT_R & ~TRANSIENT }
+	, { " INPp____", LOCA____,	{ 0				, 0				, 0				}		, 0				, VAR_PTR_R & ~TRANSIENT }
+	, { " INPt____", LOCA____,	{ 0				, 0				, 0				}		, 0				, VAR_TGT_R & ~TRANSIENT }
 	, { " IORi_vcc", IORI_CCC,	{ VAR_INT_W		, CONST_INT		, CONST_INT		}		, YIELDS_CONST	, CONST_INT		}
 	, { " IORi_vcv", IORI_VVC,	{ VAR_INT_W		, CONST_INT		, VAR_INT_R		}		, SWAP_1_AND_2	, 0				}
 	, { " IORi_vvc", IORI_VVC,	{ VAR_INT_W		, VAR_INT_R		, CONST_INT		}		, 0				, 0				}
@@ -533,11 +531,11 @@ static const Operator OPERATORS[] = {
 	, { " NEQt_vcb", NEQI_VCB,	{ VAR_TGT_R		, TGT_FWD_FREE	, FWD_BRANCH	}		, 0				, 0				}
 	, { " NEQt_vvb", NEQI_VVB,	{ VAR_TGT_R		, VAR_TGT_R		, FWD_BRANCH	}		, 0				, 0				}
 	, { " NOOP____", NOOP____,	{ 0				, 0				, 0				}		, 0				, 0				}
-	, { " OUTf____", LOCA____,	{ 0				, 0				, 0				}		, WINDOW_DECL	, (VAR_FLOAT_R | VAR_FLOAT_W) & ~TRANSIENT }
-	, { " OUTi____", LOCA____,	{ 0				, 0				, 0				}		, WINDOW_DECL	, (VAR_INT_R | VAR_INT_W) & ~TRANSIENT }
-	, { " OUTp____", LOCA____,	{ 0				, 0				, 0				}		, WINDOW_DECL	, (VAR_PTR_R | VAR_PTR_W) & ~TRANSIENT }
-	, { " OUTt____", LOCA____,	{ 0				, 0				, 0				}		, WINDOW_DECL	, (VAR_TGT_R | VAR_TGT_W) & ~TRANSIENT }
-	, { " PARA_s__", LOCA____,	{ CONST_INT_P	, 0				, 0				}		, WINDOW_DECL	, ANY_VAR & ~TRANSIENT }
+	, { " OUTf____", LOCA____,	{ 0				, 0				, 0				}		, 0				, (VAR_FLOAT_R | VAR_FLOAT_W) & ~TRANSIENT }
+	, { " OUTi____", LOCA____,	{ 0				, 0				, 0				}		, 0				, (VAR_INT_R | VAR_INT_W) & ~TRANSIENT }
+	, { " OUTp____", LOCA____,	{ 0				, 0				, 0				}		, 0				, (VAR_PTR_R | VAR_PTR_W) & ~TRANSIENT }
+	, { " OUTt____", LOCA____,	{ 0				, 0				, 0				}		, 0				, (VAR_TGT_R | VAR_TGT_W) & ~TRANSIENT }
+	, { " PARA_s__", LOCA____,	{ CONST_INT_P	, 0				, 0				}		, 0				, ANY_VAR & ~TRANSIENT }
 	, { " PEEK_vc_", PEEK_VC_,	{ ANY_VAR_W		, FWD_ADDRESS_R	, 0				}		, 0				, 0				}
 	, { " PEEK_vcv", PEEK_VCV,	{ ANY_VAR_W		, FWD_FREE_R	, VAR_INT_R		}		, 0				, 0				}
 	, { " PEEK_vv_", PEEK_VCV,	{ ANY_VAR_W		, VAR_PTR_R		, 0				}		, SWAP_1_AND_2	, 0				}
@@ -798,7 +796,7 @@ Assembler::Assembler(UInt maxCodeSize, Instruction* codeBase, UInt maxFunctionCo
 		: codeBase(codeBase), codeEnd(codeBase + maxCodeSize), maxFunctionCount(maxFunctionCount)
 		, functionTable(functionTable), memoryBase(memoryBase), memoryEnd(memoryBase + maxMemorySize)
 		, ip(codeBase), functionStart(0), functionCount(0), localsSize(0), maxLocalsSize(0), localScopeDepth(0)
-		, paramsSize(0), windowSize(0), globalsPointer(memoryBase)
+		, paramsSize(0), globalsPointer(memoryBase)
 		, constantsPointer(memoryEnd), dataLabelType(0), dataPointer(0), dataEnd(0)
 		, sectionBegin(0), sectionEnd(0), regionStart(0), regionExtent(-1), dialect(1), globals(globals) {
 	for (Int i = 0; i < 128; ++i) compileTimeVars[i].types = 0;
@@ -943,7 +941,7 @@ void Assembler::finalizeFunction() {
 	functionStart->p0.i = maxLocalsSize;
 	functionStart->p1.i = paramsSize;
 	functionStart = 0;
-	localsSize = maxLocalsSize = paramsSize = windowSize = 0;
+	localsSize = maxLocalsSize = paramsSize = 0;
 	locals.resolveForwardRefs();
 	locals.clear();
 }
@@ -1342,7 +1340,6 @@ const Char* Assembler::feed(const Char* line) {
 							declare(locals, labelBegin, labelEnd, op->declareTypes, v, size);
 							localsSize += size;
 							if (localsSize > maxLocalsSize) maxLocalsSize = localsSize;
-							if ((op->otherFlags & WINDOW_DECL) != 0) windowSize = localsSize;	// INP / OUT / PARA: the incoming call window, which is what bounds a TAIL
 							break;
 
 			/*
@@ -1410,7 +1407,6 @@ const Char* Assembler::feed(const Char* line) {
 								parseOperand(op0Begin, op0End, types, p0);
 								parseOperand(op1Begin, op1End, op->accepts[1], p1);
 								if (op->opcode == TAIL_CC_ || op->opcode == TAIL_VC_) {									// TAIL
-									if ((UInt)(p1->i) > windowSize) throw Exception(TAIL_EXCEEDS_WINDOW);
 									p2->i = maxLocalsSize;	// the runtime rewinds dsp to the frame base before the window copy; like RETU, the size rides the instruction
 									paramsSize = maximum(paramsSize, (UInt)(p1->i));	// the copy READS %0..m-1, so the frame check must reserve them even if nothing else references those slots
 								}
@@ -1544,7 +1540,7 @@ Int Processor::run() {
 							if (ui >= functionCount) { err = BAD_CALL; goto ret; }
 			tail:			{																// slide the %0 window onto the frame base, no return push: the callee's RETU returns to OUR caller
 								Value* base = dsp - (UInt)(C2.i);							// C2 = this function's own frame size, baked at assembly
-								for (Int i = 0; i < C1.i; ++i) base[i] = dsp[i];			// C1 <= own window <= frame size, so dst + C1 <= src: no overlap
+								for (Int i = 0; i < C1.i; ++i) base[i] = dsp[i];			// dst <= src, ascending: memmove-direction safe at ANY size, and the frame check reserved both ends (paramsSize covers %0..C1-1)
 								dsp = base;
 							}
 							ui = functionTable[ui];

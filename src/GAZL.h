@@ -130,8 +130,7 @@ enum AssemblerError {
 	, OVERLAPPING_DATA_REGIONS = 35
 	, UNSUPPORTED_GAZL_VERSION = 36
 	, UNCLOSED_GAZL_REGION = 37
-	, TAIL_EXCEEDS_WINDOW = 38
-	, ASSEMBLER_ERROR_COUNT = 39
+	, ASSEMBLER_ERROR_COUNT = 38
 };
 
 extern const char* ASSEMBLER_ERROR_TEXTS[];
@@ -255,7 +254,6 @@ class Assembler {
 	protected:	enum { MAX_LOCAL_SCOPE_DEPTH = 32 };
 	protected:	UInt localScopeStack[MAX_LOCAL_SCOPE_DEPTH];
 	protected:	UInt paramsSize;
-	protected:	UInt windowSize;					// Words declared by INP / OUT / PARA rows: the incoming call window, the most a TAIL may pass on.
 	protected:	Value* globalsPointer;
 	protected:	Value* constantsPointer;
 	protected:	std::string dataLabel; // Only for error display.

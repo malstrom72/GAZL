@@ -817,10 +817,10 @@ to this function's original caller, with its outputs in the slots that caller al
 `TAIL` runs in constant stack at any depth, where the same recursion through `CALL` trips the entry-time frame
 check.
 
-`*size` must not exceed the function's own incoming window (its `INP*` / `OUT*` / `PARA` words) - the copy must
-stay inside the frame it reuses, so a wider window is an assembly error. The target's own `FUNC` re-checks its
-frame on entry, exactly as after a `CALL`. Natives cannot be tail-called. Impala's `tail` statement compiles to
-this instruction.
+`*size` may be any size, wider than the function's own window included: the slide copies downward in ascending
+order, so overlapping regions are harmless, and the window's words are folded into the function's frame check the
+way a `CALL` window's are. The target's own `FUNC` re-checks its frame on entry, exactly as after a `CALL`.
+Natives cannot be tail-called. Impala's `tail` statement compiles to this instruction.
 
 ## TEMP
 - `*size`

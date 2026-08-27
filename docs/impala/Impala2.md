@@ -1354,9 +1354,8 @@ Rules and lowering:
 - `--gazl2` only (`E466`): it compiles to the GAZL 2 `TAIL` instruction, which exists only on GAZL 2
   engines (an older engine rejects the mnemonic as unknown).
 - The target must be the ENCLOSING function (`E467`): the instruction is general, but checking the
-  window and return contracts across two functions is future compiler work (see
-  `design/gazl/TailCalls.md`). When that lands, the same source keeps working and E467 simply
-  disappears.
+  return contract across two functions is future compiler work (see `design/gazl/TailCalls.md`). When
+  that lands, the same source keeps working and E467 simply disappears.
 - Not in an `inline function` (`E468`): an inline body runs in its caller's frame, so there is nothing
   of its own to reuse.
 - The argument list is checked like any call's (E405/E406/E202...), and the arguments marshal into the
@@ -1649,7 +1648,7 @@ foo.impala:12:9: note: use a cast: (int pointer)
 | E461 | a constant array index out of bounds: any DEREFERENCE past the end, or ANY use of a negative one (see [Array bounds](#array-bounds)) |
 | E462 | an array extent is negative - a struct field with one runs the layout backwards and aliases its neighbours |
 | E466 | `tail` requires `--gazl2` (the `TAIL` instruction it compiles to exists only on GAZL 2 engines) |
-| E467 | `tail` can only target the enclosing function in Impala 2.0 (self-recursion; the cross-function contract checks are future work) |
+| E467 | `tail` can only target the enclosing function in Impala 2.0 (self-recursion; the cross-function return-contract check is future work) |
 | E468 | `tail` cannot be used in an `inline function` (an inline body runs in its caller's frame) |
 
 E418, E424 and E425 are **not allocated to anything that fires**. They were reserved for extern-struct

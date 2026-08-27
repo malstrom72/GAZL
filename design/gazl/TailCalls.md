@@ -73,21 +73,19 @@ that caller already reads. The third operand slot carries the current function's
 assembly the way `RETU` carries `localsSize` - that is how the runtime finds the frame base, since `dsp`
 sits at the TOP of the locals and named locals resolve at negative offsets.
 
-**The legality rule is static and cheap.** `*m` must not exceed the function's own incoming window (its
-`INP*`/`OUT*`/`PARA` words, tracked per function as `windowSize`): a wider window is an assembly error
-(`TAIL window exceeds the function's own parameter window`). Self-recursion satisfies it by construction
-(`m == n`), and the source reads (`%0..m-1`) are folded into `paramsSize` so the frame check reserves
-them even when nothing else references those slots.
-
-What the rule actually protects is the COPY, not a calling contract: the destination is `base[0..m)`,
-so the true bound is `m <= L` (frame size) - that keeps the write in-frame and, since the source starts
-at `dsp = base + L`, overlap-free. `m <= window` is a tightening of that inherited from this note's
-original `m <= n` rule, and it is NOT load-bearing: the callee's `FUNC` re-checks its own frame from the
-base, and the original caller reads `base + 0` however wide the window was. When the cross-function
-surface lands and a callee needs a window WIDER than the caller's own, the check should relax to
-`m <= L` and the compiler simply pads the frame (a dead `LOCA`) until it fits - no fourth operand
-needed. (A source operand `%w` would achieve the same via `w >= m - L`, but callee + w + m + the baked
-frame size is four values in a three-slot cell, which is exactly why the window is fixed at `%0`.)
+**There is no window-size rule - this note's original `m <= n` restriction is DEAD.** The slide is
+`base[i] = dsp[i]` ascending with `base = dsp - L <= dsp`: the memmove-safe direction, so overlap is
+harmless at any `m`, and both ends sit inside frame-checked memory because the assembler folds `m` into
+`paramsSize` exactly the way `LOCAL_BOUNDS` folds a `CALL` window. `m > L` just spills the write into
+scratch the function is abandoning (cells the copy already consumed), and a window wider than the
+target's own locals is already legal with `CALL` today - the target's `FUNC` re-checks its frame from
+the base either way, and the original caller reads `base + 0` however wide the window was. So a
+tail call to a BIGGER-arity target needs nothing: no `%w` source operand (which would not fit anyway -
+callee + w + m + the baked frame size is four values in a three-slot cell), no frame padding, no check.
+An `m <= window` check was in fact implemented first, along with two successively weaker justifications
+(the calling contract, then copy overlap-safety); both dissolved under examination and the check was
+removed the same day, per "no diagnostic for a safe shape". The one load-bearing piece is the
+`paramsSize` fold.
 
 **Additive, not region-gated.** Like `SCOP`/`SEEK`, `TAIL` is a new mnemonic: dialect-1 text may use it
 on a GAZL 2 engine, and an older engine rejects it as an unknown mnemonic - which is the whole version
@@ -163,8 +161,8 @@ one opcode says outright. So `INP*` stays read-only everywhere, and `TAIL` is an
 - **Signature metadata**: a `tail` site emits the same `; expects f(...) -> T` row a call does, so any
   signature-row consumer keeps checking it across units.
 - **Mutual recursion**: the INSTRUCTION covers it already; Impala's surface does not yet (E467). The
-  missing piece is compiler-side: checking the window and return contracts across two functions (and
-  through funcptrs, where `TAIL_vs_` waits). State machines written as mutually tail-calling handlers
-  are the main thing that unlocks.
+  missing piece is compiler-side: checking the RETURN contract across two functions - the target's
+  `RETU` fulfils this function's promise to its caller - and the funcptr form (`TAIL_vs_`). State
+  machines written as mutually tail-calling handlers are the main thing that unlocks.
 - **Debugging**: a tail call replaces the frame, so it does not appear in a stack trace. Standard for the
   technique, and another reason it should be visible in the source.

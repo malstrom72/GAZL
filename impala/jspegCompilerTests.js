@@ -3838,12 +3838,14 @@ function runGazlText(gazlPath, text, cmdArgs, label) {
 		const raw = runGazlCmd(gazlPath, [ "main" ]);
 		assert(raw.assembled && raw.report.includes("Status: 0"),
 			`tail: raw dialect-1 TAIL must assemble and run 100k deep in one frame, got: ${raw.line}`);
-		// The static legality rule: the window a TAIL passes on cannot exceed the function's own
-		// incoming window (INP/OUT/PARA words) - the copy must stay inside the frame it reuses.
-		fs.writeFileSync(gazlPath, "main:\tFUNC\nr0:\tOUTi\n\tTAIL &main *5\n", IMPALA_ENCODING);
-		const wide = runGazlCmd(gazlPath, [ NO_ENTRY_POINT ]);
-		assert(!wide.assembled && wide.report.includes("parameter window"),
-			`tail: a TAIL window wider than the function's own must be an assembly error, got: ${wide.line}`);
+		// There is NO window-size rule: the slide copies downward in ascending order (memmove-safe at
+		// any size) and the window words are folded into the frame check, so a window WIDER than the
+		// function's own is fine - here a 1-window function tail-passes a 3-word window.
+		const wideLoop = "sum:\tFUNC\ns0:\tOUTi\na0:\tINPi\nb0:\tINPi\n\tADDi s0 a0 b0\n\tRETU\n"
+			+ "go:\tFUNC\ng0:\tOUTi\n\tMOVi %1 #40\n\tMOVi %2 #2\n\tTAIL &sum *3\n"
+			+ "main:\tFUNC\n\tPARA *1\n\tCALL &go %0 *1\n\tEQUi %0 #42 @ok\n\tCALL ^assertFail\nok:\tRETU\n";
+		assert(runGazlText(gazlPath, wideLoop, [ "main" ], "tail: wider-than-own window") === "",
+			"tail: a TAIL window wider than the function's own must assemble and run");
 	}
 	console.log("impala.jspeg compiler compiles tail self-recursion to the TAIL instruction under --gazl2");
 }
