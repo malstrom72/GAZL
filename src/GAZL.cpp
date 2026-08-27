@@ -986,10 +986,10 @@ void Assembler::threadBranches() {
 	}
 }
 
-/* A region's claim is only known when it CLOSES - an unbounded one claims exactly the words it wrote -
-   so every overlap check happens here, against the claims of the same section's earlier regions. Within
-   a region filling is append-only against `dataEnd`, so disjoint claims mean no word is initialized
-   twice. A section without SEEK is one implicit region and never reaches the loop with a neighbour. */
+// A region's claim is only known when it CLOSES - an unbounded one claims exactly the words it wrote -
+// so every overlap check happens here, against the claims of the same section's earlier regions. Within
+// a region filling is append-only against `dataEnd`, so disjoint claims mean no word is initialized
+// twice. A section without SEEK is one implicit region and never reaches the loop with a neighbour.
 void Assembler::closeDataRegion() {
 	if (dataPointer == 0) return;
 	const Int b = regionStart;
