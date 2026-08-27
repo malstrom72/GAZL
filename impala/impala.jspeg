@@ -171,7 +171,7 @@
     var $$parser.INLINE_PURE    = {};                          /// operators whose write destination the compiler can NAME
     var $$parser.inlineCounter  = 0;                           /// per-expansion suffix, keeps inlined labels unique
     var $$parser.headSink       = null;                        /// while a function body is parsed, its head lines buffer here (see emitLine)
-    var $$parser.tailFn         = undefined;                   /// name of the out-of-line function being parsed - the only target `tail` accepts
+    var $$parser.tailFn         = undefined;                   /// name of the function being parsed - the only target `tail` accepts
     var $$parser.inlineAddrAt   = {};                          /// inline fn name -> where it was last used as a VALUE, for E435's caret
     var $$parser.CASTS_TO_TYPES = {};
     var $$parser.ZEROES = {};
@@ -5480,7 +5480,7 @@ inp:ArgsDecl ')'_
                 )?                                                    { /* The head/body separator is emitted at the REPLAY below, not here: an inline
                                                                            expansion appends its SCOP block to the head while the body is being parsed,
                                                                            so anything written here would end up above those declarations. */
-                                                                         $$parser.tailFn = ($$parser.inlineMode ? undefined : $id);
+                                                                         $$parser.tailFn = $id;   /* in an inline body E468 throws before this is read */
                                                                      }
                 Block                                                 {
                                                                          /* wrap-up body */

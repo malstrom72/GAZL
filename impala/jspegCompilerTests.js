@@ -214,10 +214,10 @@ function assert(condition, message) {
 // Compile `source` and require it to fail with `expectError` in the message, or to succeed when
 // `expectError` is null. Every "this construct must be rejected" table goes through here, so the
 // convention (and the diagnostic on an unmet expectation) lives in one place.
-function expectCompileOutcome(group, label, source, expectError) {
+function expectCompileOutcome(group, label, source, expectError, gazl2) {
 	let observed = null;
 	try {
-		compileWithJsImpala(source + "\n", { randomId: 42 });
+		compileWithJsImpala(source + "\n", { randomId: 42, gazl2: gazl2 === true });
 	} catch (err) {
 		observed = err && err.message ? err.message : String(err);
 	}
@@ -3791,22 +3791,15 @@ function runGazlText(gazlPath, text, cmdArgs, label) {
 	assert(/SUBi %1 \$n #1/.test(out) && /ADDi %2 \$acc #1/.test(out),
 		"tail must marshal the new arguments into the %0 call window TAIL consumes");
 
-	const tailFails = (label, source, want, gazl2) => {
-		let observed = null;
-		try { compileWithJsImpala(source, { randomId: 42, gazl2 }); }
-		catch (err) { observed = err && err.message ? err.message : String(err); }
-		assert(observed !== null && observed.includes(want),
-			`tail: ${label} must raise "${want}"${observed === null ? "" : ", got:\n" + observed}`);
-	};
-	tailFails("outside --gazl2", countSrc, "E466", false);
-	tailFails("a non-self target",
+	expectCompileOutcome("tail", "outside --gazl2", countSrc, "E466");
+	expectCompileOutcome("tail", "a non-self target",
 		"function other(int n) returns int r { r = n; }\n"
 			+ "function count(int n) returns int r\n{\n\ttail other(n);\n}\nfunction main() { }\n",
 		"E467", true);
-	tailFails("an inline body",
+	expectCompileOutcome("tail", "an inline body",
 		"inline function twice(int x) returns int r\n{\n\ttail twice(x);\n}\nfunction main() { }\n",
 		"E468", true);
-	tailFails("a wrong argument count",
+	expectCompileOutcome("tail", "a wrong argument count",
 		"function count(int n, int acc) returns int r\n{\n\tif (n == 0) { r = acc; return; }\n"
 			+ "\ttail count(n - 1);\n}\nfunction main() { }\n",
 		"E405", true);

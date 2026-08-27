@@ -117,7 +117,6 @@ Rules, each a real diagnostic rather than a silent decline to optimize:
 |---|---|
 | Must be in tail position (nothing may follow it on that path) | otherwise it is not a tail call |
 | Callee's return type must match this function's exactly | its `RETU` returns to *our* caller |
-| Callee's window must fit our `PARA` | the static `m <= n` rule above |
 | Not allowed in an `inline function` | an inline body is spliced into its caller, so the frame it would reuse is the wrong one - same reasoning that makes `E435` and the `return` design reject inline bodies |
 
 Alternative spellings considered: Rust reserves `become` for precisely this, and `goto f(...)` reads well

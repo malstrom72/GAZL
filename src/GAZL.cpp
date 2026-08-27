@@ -1539,9 +1539,11 @@ Int Processor::run() {
 			case TAIL_VC_:	ui = V0.p - FUNCTION_OFFSET;
 							if (ui >= functionCount) { err = BAD_CALL; goto ret; }
 			tail:			{																// slide the %0 window onto the frame base, no return push: the callee's RETU returns to OUR caller
-								Value* base = dsp - (UInt)(C2.i);							// C2 = this function's own frame size, baked at assembly
-								for (Int i = 0; i < C1.i; ++i) base[i] = dsp[i];			// dst <= src, ascending: memmove-direction safe at ANY size, and the frame check reserved both ends (paramsSize covers %0..C1-1)
-								dsp = base;
+								const Value* sp = dsp;
+								const Value* ep = sp + C1.i;
+								Value* dp = dsp - (UInt)(C2.i);								// C2 = this function's own frame size, baked at assembly
+								dsp = dp;
+								while (sp < ep) *dp++ = *sp++;								// dst <= src, ascending: memmove-direction safe at ANY size, and the frame check reserved both ends (paramsSize covers %0..C1-1)
 							}
 							ui = functionTable[ui];
 							assert((codeBase + ui)->opcode == FUNC_CC_);
