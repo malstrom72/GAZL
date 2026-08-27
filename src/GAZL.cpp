@@ -894,13 +894,12 @@ void Assembler::finalize(UInt& codeSize, UInt& globalsSize, UInt& constsSize, UI
 	functionCount = this->functionCount;
 }
 
-/* Dry assembly. Assembles into internally-owned scratch that starts small and doubles on the three
-   arena overflows, so the caller neither sizes nor owns a guess and the answer is exact by
-   construction - it IS a real assembly, just thrown away. The cost is a transient allocation and at
-   most log2 of the largest final arena in restarts; every other outcome, program errors included, is
-   exactly feed()'s.
-   Each attempt works on a COPY of the seed symbols, so the caller's table never learns the program's
-   names and a retry never sees a half-defined one. */
+// Dry assembly. Assembles into internally-owned scratch that starts small and doubles on the three
+// arena overflows, so the caller neither sizes nor owns a guess and the answer is exact by
+// construction - it IS a real assembly, just thrown away. The cost is a transient allocation and at
+// most log2 of the largest final arena in restarts; every other outcome, program errors included, is
+// exactly feed()'s. Each attempt works on a COPY of the seed symbols, so the caller's table never
+// learns the program's names and a retry never sees a half-defined one.
 void Assembler::measure(const Char* source, const Symbols& globals, UInt& codeSize, UInt& globalsSize
 		, UInt& constsSize, UInt& functionCount) {
 	UInt codeMax = 256, memoryMax = 256, functionMax = 64;
@@ -1656,8 +1655,8 @@ int testCallback(Processor* p) {
 	return 0;
 }
 
-/* ONE list of the unit-test natives: measure()'s self-check compares two assemblies that must have been
-   seeded identically, so the seeding cannot be allowed to drift between sites. */
+// ONE list of the unit-test natives: measure()'s self-check compares two assemblies that must have been
+// seeded identically, so the seeding cannot be allowed to drift between sites.
 static void seedTestNatives(Symbols& g) { g.registerNative("assertFail", 0); g.registerNative("testMul", 1); g.registerNative("testCallback", 2); }
 
 bool unitTest() {
@@ -1739,8 +1738,9 @@ bool unitTest() {
 			}
 		}
 
-		{	/* measure() must agree with the real assembly above exactly - and the deliberately tiny
-			   starting arenas mean this very test exercises its retry-and-double path. */
+		// measure() must agree with the real assembly above exactly - and the deliberately tiny
+		// starting arenas mean this very test exercises its retry-and-double path.
+		{
 			Symbols seed;
 			seedTestNatives(seed);
 			UInt mCody, mGlobals, mConsts, mFunctions;
