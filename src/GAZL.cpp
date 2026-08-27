@@ -91,6 +91,7 @@ const char* ASSEMBLER_ERROR_TEXTS[] = {
 	/* , OVERLAPPING_DATA_REGIONS					*/	, "Data regions overlap"
 	/* , UNSUPPORTED_GAZL_VERSION					*/	, "File requires a newer GAZL engine"
 	/* , UNCLOSED_GAZL_REGION						*/	, "GAZL 2 region not closed with GAZL #1"
+	/* , TAIL_EXCEEDS_WINDOW						*/	, "TAIL window exceeds the function's own parameter window"
 };
 
 // --- defined integer / FTOI semantics, shared by Processor::run() and calcConstant() so the
@@ -224,7 +225,7 @@ const Char* GAZL_WORD_SIZE_STRING = STR("GAZL_WORD_SIZE");
 const Char* GAZL_MEMORY_SIZE_STRING = STR("GAZL_MEMORY_SIZE");
 
 enum Opcode {
-	FUNC_CC_ = FIRST_OPCODE_VALUE, CALL_VVC, CALL_CVC, CALL_NVC, RETU_C__
+	FUNC_CC_ = FIRST_OPCODE_VALUE, CALL_VVC, CALL_CVC, CALL_NVC, RETU_C__, TAIL_CC_, TAIL_VC_
 	, MOVE_VV_, MOVE_VC_
 	, PEEK_VC_, POKE_CV_, POKE_CC_
 	, PEEK_VVV, PEEK_VCV, POKE_VVV, POKE_CVV, POKE_VVC, POKE_CVC
@@ -320,6 +321,7 @@ const int YIELDS_GOTO		= 0x08; // Instruction can be resolved to either a GOTO o
 const int LOCAL_BOUNDS		= 0x10;	// Operand 1 is a variable (local or transient), operand 2 is a size. Make sure frame bounds >= &variable + size.
 const int CHECK_DIV_BY_0	= 0x20; // Operand 1 is a constant used in a division or modulo operation, must check for division by zero. Can only be used if operand 2 is either a CONST_FLOAT or CONST_INT
 const int BRANCH_IS_TABLE	= 0x40; // The BRANCH operand is a jump-table BASE in memory, not a relative displacement - threadBranches must not rewrite it (SWCH).
+const int WINDOW_DECL		= 0x80; // Declaration row is part of the function's incoming call window (INP / OUT / PARA) - the region a TAIL may rewrite.
 
 struct Operator {
 	char key[10];
@@ -448,10 +450,10 @@ static const Operator OPERATORS[] = {
 	, { " GRTt_cvb", LSSI_VCB,	{ TGT_FWD_FREE	, VAR_TGT_R		, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
 	, { " GRTt_vcb", LSSI_CVB,	{ VAR_TGT_R		, TGT_FWD_FREE	, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
 	, { " GRTt_vvb", LSSI_VVB,	{ VAR_TGT_R		, VAR_TGT_R		, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
-	, { " INPf____", LOCA____,	{ 0				, 0				, 0				}		, 0				, VAR_FLOAT_R & ~TRANSIENT }
-	, { " INPi____", LOCA____,	{ 0				, 0				, 0				}		, 0				, VAR_INT_R & ~TRANSIENT }
-	, { " INPp____", LOCA____,	{ 0				, 0				, 0				}		, 0				, VAR_PTR_R & ~TRANSIENT }
-	, { " INPt____", LOCA____,	{ 0				, 0				, 0				}		, 0				, VAR_TGT_R & ~TRANSIENT }
+	, { " INPf____", LOCA____,	{ 0				, 0				, 0				}		, WINDOW_DECL	, VAR_FLOAT_R & ~TRANSIENT }
+	, { " INPi____", LOCA____,	{ 0				, 0				, 0				}		, WINDOW_DECL	, VAR_INT_R & ~TRANSIENT }
+	, { " INPp____", LOCA____,	{ 0				, 0				, 0				}		, WINDOW_DECL	, VAR_PTR_R & ~TRANSIENT }
+	, { " INPt____", LOCA____,	{ 0				, 0				, 0				}		, WINDOW_DECL	, VAR_TGT_R & ~TRANSIENT }
 	, { " IORi_vcc", IORI_CCC,	{ VAR_INT_W		, CONST_INT		, CONST_INT		}		, YIELDS_CONST	, CONST_INT		}
 	, { " IORi_vcv", IORI_VVC,	{ VAR_INT_W		, CONST_INT		, VAR_INT_R		}		, SWAP_1_AND_2	, 0				}
 	, { " IORi_vvc", IORI_VVC,	{ VAR_INT_W		, VAR_INT_R		, CONST_INT		}		, 0				, 0				}
@@ -531,11 +533,11 @@ static const Operator OPERATORS[] = {
 	, { " NEQt_vcb", NEQI_VCB,	{ VAR_TGT_R		, TGT_FWD_FREE	, FWD_BRANCH	}		, 0				, 0				}
 	, { " NEQt_vvb", NEQI_VVB,	{ VAR_TGT_R		, VAR_TGT_R		, FWD_BRANCH	}		, 0				, 0				}
 	, { " NOOP____", NOOP____,	{ 0				, 0				, 0				}		, 0				, 0				}
-	, { " OUTf____", LOCA____,	{ 0				, 0				, 0				}		, 0				, (VAR_FLOAT_R | VAR_FLOAT_W) & ~TRANSIENT }
-	, { " OUTi____", LOCA____,	{ 0				, 0				, 0				}		, 0				, (VAR_INT_R | VAR_INT_W) & ~TRANSIENT }
-	, { " OUTp____", LOCA____,	{ 0				, 0				, 0				}		, 0				, (VAR_PTR_R | VAR_PTR_W) & ~TRANSIENT }
-	, { " OUTt____", LOCA____,	{ 0				, 0				, 0				}		, 0				, (VAR_TGT_R | VAR_TGT_W) & ~TRANSIENT }
-	, { " PARA_s__", LOCA____,	{ CONST_INT_P	, 0				, 0				}		, 0				, ANY_VAR & ~TRANSIENT }
+	, { " OUTf____", LOCA____,	{ 0				, 0				, 0				}		, WINDOW_DECL	, (VAR_FLOAT_R | VAR_FLOAT_W) & ~TRANSIENT }
+	, { " OUTi____", LOCA____,	{ 0				, 0				, 0				}		, WINDOW_DECL	, (VAR_INT_R | VAR_INT_W) & ~TRANSIENT }
+	, { " OUTp____", LOCA____,	{ 0				, 0				, 0				}		, WINDOW_DECL	, (VAR_PTR_R | VAR_PTR_W) & ~TRANSIENT }
+	, { " OUTt____", LOCA____,	{ 0				, 0				, 0				}		, WINDOW_DECL	, (VAR_TGT_R | VAR_TGT_W) & ~TRANSIENT }
+	, { " PARA_s__", LOCA____,	{ CONST_INT_P	, 0				, 0				}		, WINDOW_DECL	, ANY_VAR & ~TRANSIENT }
 	, { " PEEK_vc_", PEEK_VC_,	{ ANY_VAR_W		, FWD_ADDRESS_R	, 0				}		, 0				, 0				}
 	, { " PEEK_vcv", PEEK_VCV,	{ ANY_VAR_W		, FWD_FREE_R	, VAR_INT_R		}		, 0				, 0				}
 	, { " PEEK_vv_", PEEK_VCV,	{ ANY_VAR_W		, VAR_PTR_R		, 0				}		, SWAP_1_AND_2	, 0				}
@@ -582,6 +584,8 @@ static const Operator OPERATORS[] = {
 	, { " SUBp_vvc", SUBI_VVC,	{ VAR_PTR_W		, VAR_PTR_R		, CONST_INT		}		, 0				, 0				}
 	, { " SUBp_vvv", SUBI_VVV,	{ VAR_PTR_W		, VAR_PTR_R		, VAR_INT_R		}		, 0				, 0				}
 	, { " SWCH_vsb", SWCH_VCC,	{ VAR_INT_R		, CONST_INT_P	, FWD_BRANCH	}		, BRANCH_IS_TABLE, 0			}
+	, { " TAIL_cs_", TAIL_CC_,	{ FUNC|TARGET|FORWARD, CONST_INT_P, 0			}		, 0				, 0				}
+	, { " TAIL_vs_", TAIL_VC_,	{ VAR_PTR_R|VAR_TGT_R, CONST_INT_P, 0			}		, 0				, 0				}
 	, { " TEMP_s__", GLOB____,	{ CONST_INT_P	, 0				, 0				}		, 0				, FREE_ADDRESS | TEMPORARY }
 	, { " XORi_vcc", XORI_CCC,	{ VAR_INT_W		, CONST_INT		, CONST_INT		}		, YIELDS_CONST	, CONST_INT		}
 	, { " XORi_vcv", XORI_VVC,	{ VAR_INT_W		, CONST_INT		, VAR_INT_R		}		, SWAP_1_AND_2	, 0				}
@@ -794,7 +798,7 @@ Assembler::Assembler(UInt maxCodeSize, Instruction* codeBase, UInt maxFunctionCo
 		: codeBase(codeBase), codeEnd(codeBase + maxCodeSize), maxFunctionCount(maxFunctionCount)
 		, functionTable(functionTable), memoryBase(memoryBase), memoryEnd(memoryBase + maxMemorySize)
 		, ip(codeBase), functionStart(0), functionCount(0), localsSize(0), maxLocalsSize(0), localScopeDepth(0)
-		, paramsSize(0), globalsPointer(memoryBase)
+		, paramsSize(0), windowSize(0), globalsPointer(memoryBase)
 		, constantsPointer(memoryEnd), dataLabelType(0), dataPointer(0), dataEnd(0)
 		, sectionBegin(0), sectionEnd(0), regionStart(0), regionExtent(-1), dialect(1), globals(globals) {
 	for (Int i = 0; i < 128; ++i) compileTimeVars[i].types = 0;
@@ -923,7 +927,8 @@ void Assembler::parseOperand(const Char* b, const Char* e, int accepts, Value* v
 void Assembler::finalizeFunction() {
 	assert(functionStart != 0);
 	assert(functionStart->opcode == FUNC_CC_);
-	if (ip == codeBase || (ip[-1].opcode != RETU_C__ && ip[-1].opcode != GOTO_B__))
+	if (ip == codeBase || (ip[-1].opcode != RETU_C__ && ip[-1].opcode != GOTO_B__
+			&& ip[-1].opcode != TAIL_CC_ && ip[-1].opcode != TAIL_VC_))
 		throw Exception(MISSING_RETURN_INSTRUCTION);
 	/*
 		A jump or switch may never reach a `FUNC` (`FUNC` is `CALL`-only). Branch targets resolve to local `BRANCH`
@@ -938,7 +943,7 @@ void Assembler::finalizeFunction() {
 	functionStart->p0.i = maxLocalsSize;
 	functionStart->p1.i = paramsSize;
 	functionStart = 0;
-	localsSize = maxLocalsSize = paramsSize = 0;
+	localsSize = maxLocalsSize = paramsSize = windowSize = 0;
 	locals.resolveForwardRefs();
 	locals.clear();
 }
@@ -1334,11 +1339,10 @@ const Char* Assembler::feed(const Char* line) {
 							parseOperand(op0Begin, op0End, op->accepts[0], &v);
 							size = v.i;
 							v.i = localsSize;
-							types = op->declareTypes;
-							if (dialect >= 2) types |= (types & (ANY_VAR_R & ~TRANSIENT)) << 1;	// GAZL 2: INP* is writable too (Impala's tail recursion rewrites the parameters in place; every W bit is its R bit << 1)
-							declare(locals, labelBegin, labelEnd, types, v, size);
+							declare(locals, labelBegin, labelEnd, op->declareTypes, v, size);
 							localsSize += size;
 							if (localsSize > maxLocalsSize) maxLocalsSize = localsSize;
+							if ((op->otherFlags & WINDOW_DECL) != 0) windowSize = localsSize;	// INP / OUT / PARA: the incoming call window, which is what bounds a TAIL
 							break;
 
 			/*
@@ -1400,11 +1404,15 @@ const Char* Assembler::feed(const Char* line) {
 								p0->i = p1->i = p2->i = 0;
 								if (op->opcode == RETU_C__) p0->i = localsSize;											// RETU
 								types = op->accepts[0];
-								if (dialect >= 2 && op->opcode == CALL_VVC) {
+								if (dialect >= 2 && (op->opcode == CALL_VVC || op->opcode == TAIL_VC_)) {
 									types &= ~(VAR_PTR_R & ~TRANSIENT);			// inside a GAZL 2 region an indirect call goes through a `t` local (or an untyped %N window slot) - a `p` local is not a callee. The TRANSIENT bit stays: VAR_TGT_R carries it for the %N form.
 								}
 								parseOperand(op0Begin, op0End, types, p0);
 								parseOperand(op1Begin, op1End, op->accepts[1], p1);
+								if (op->opcode == TAIL_CC_ || op->opcode == TAIL_VC_) {									// TAIL
+									if ((UInt)(p1->i) > windowSize) throw Exception(TAIL_EXCEEDS_WINDOW);
+									p2->i = maxLocalsSize;	// the runtime rewinds dsp to the frame base before the window copy; like RETU, the size rides the instruction
+								}
 								if (op->opcode == SWCH_VCC) {															// SWCH
 									assert(*op2Begin == '@');
 									assert(op->accepts[2] == FWD_BRANCH);
@@ -1528,6 +1536,20 @@ Int Processor::run() {
 							dsp = ipsp->dsp;
 							if (dsp == 0) { dsp = (--ipsp)->dsp; assert(ipsp->ip == ip); err = OK; goto ret; }
 							break;
+			case TAIL_CC_:	ui = C0.p - FUNCTION_OFFSET;						// ui = function ordinal (constant, validated at assembly)
+							assert(ui < functionCount);
+							goto tail;
+			case TAIL_VC_:	ui = V0.p - FUNCTION_OFFSET;
+							if (ui >= functionCount) { err = BAD_CALL; goto ret; }
+			tail:			{																// slide the %0 window onto the frame base, no return push: the callee's RETU returns to OUR caller
+								Value* base = dsp - (UInt)(C2.i);							// C2 = this function's own frame size, baked at assembly
+								for (Int i = 0; i < C1.i; ++i) base[i] = dsp[i];			// C1 <= own window <= frame size, so dst + C1 <= src: no overlap
+								dsp = base;
+							}
+							ui = functionTable[ui];
+							assert((codeBase + ui)->opcode == FUNC_CC_);
+							ip = codeBase + ui;												// the callee's FUNC re-stacks its locals and re-checks, from OUR base
+							continue;
 			case MOVE_VV_:	V0 = V1; break;
 			case MOVE_VC_:	V0 = C1; break;
 			case PEEK_VC_:	V0 = mb[C1.p]; break; // FIX : remove memory_offset from constant indexes and move back mb -> memoryBase +/- 0

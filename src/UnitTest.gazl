@@ -184,7 +184,7 @@ test:                   FUNC
  NEQi       i0              #1              @fail            ; declaration-order ordinals: tTwo - tOne = 1
  MOVi       %1              #5
  CALL       &tLoop          %0              *2
- NEQi       %0              #3333           @fail            ; tLoop rewrote its own INPi and looped - GAZL 2 params are writable
+ NEQi       %0              #3333           @fail            ; tLoop TAILed itself 5 times in ONE frame - the callee's RETU came straight back here
 
  PEEK       f0		       &consts.float
  PEEK       i0              &consts.int
@@ -2276,15 +2276,15 @@ tTwo:                   FUNC
                         RETU
 
 ;-------------------------------------------------------------------------------
-tLoop:                  FUNC                            ; inside a region INP* is writable: rewrite the params, GOTO the top - the shape Impala's tail recursion emits
+tLoop:                  FUNC                            ; self tail call: TAIL slides the %0 window onto the frame base and re-enters - constant stack at any depth
     tRes3:              OUTi
     tN:                 INPi
 ;-------------------------------------------------------------------------------
-    tTop:               NEQi tN #0 @tMore
+                        NEQi tN #0 @tMore
                         MOVi tRes3 #3333
                         RETU
-    tMore:              SUBi tN tN #1
-                        GOTO @tTop
+    tMore:              SUBi %1 tN #1
+                        TAIL &tLoop *2
 
 ;-------------------------------------------------------------------------------
 tTargets:               CNST *2

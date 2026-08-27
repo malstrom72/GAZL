@@ -201,9 +201,10 @@ traps with `status -6`.
 
 It is explicit on purpose: silent tail-call elimination decides whether byte-identical source works at
 all, which is the opposite of a predictable cost model. And it is deliberately narrow in 2.0: the target
-must be the enclosing function (`E467` - mutual recursion needs a GAZL instruction that does not exist
-yet), it needs `--gazl2` (`E466` - the parameter rewrite only assembles inside a `GAZL #2` region), and
-an `inline function` cannot use it (`E468`). `tail` itself stays a legal name for anything else.
+must be the enclosing function (`E467` - the GAZL `TAIL` instruction is general, but cross-function
+contract checking is future compiler work), it needs `--gazl2` (`E466` - the instruction exists only on
+GAZL 2 engines), and an `inline function` cannot use it (`E468`). `tail` itself stays a legal name for
+anything else.
 
 ## Not available
 

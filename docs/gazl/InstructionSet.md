@@ -324,9 +324,6 @@ Inside a `GAZL #2` region:
   data pointer.
 - An indirect `CALL` goes through a `t` local (or an untyped `%N` window slot), never a `p` local: `CALL p0` is an
   assembly error inside the region, where in GAZL 1 it was legal and guarded only by the run-time `BAD_CALL` check.
-- `INP*` parameters are writable (in GAZL 1 they are read-only). This is what a self-recursive tail call compiles
-  to: rewrite the parameters from freshly marshalled values, `GOTO` the top of the body, reuse the frame - see
-  `INPi` and design/gazl/TailCalls.md.
 
 The protection travels with the SYMBOL, so it survives the region: a GAZL 2 function's address cannot enter a `p`
 slot anywhere in the program, and the region's own rows cannot smuggle one in through `DATp`/`MOVp`/`POKE`.
@@ -431,21 +428,19 @@ Branch to `@label` if the compile-time symbol or address is not defined
 
 ## INPf
 
-Declare a local float parameter (read-only in GAZL 1; see `INPi`)
+Declare a local read-only float parameter
 
 ## INPi
 
-Declare a local int parameter. Read-only in GAZL 1; inside a `GAZL #2` region every `INP*` parameter is writable,
-which is what lets a self-recursive tail call rewrite its parameters in place and `GOTO` back to the top of the
-body instead of growing the stack with `CALL` (Impala's `tail` statement compiles to exactly that).
+Declare a local read-only int parameter
 
 ## INPp
 
-Declare a local pointer parameter (read-only in GAZL 1; see `INPi`)
+Declare a local read-only pointer parameter
 
 ## INPt
 
-Declare a local call-target parameter (GAZL 2 and later, so always writable; see `INPi`)
+Declare a local read-only call-target parameter (GAZL 2 and later)
 ## IORi
 - `int(d)          #int            #int`
 - `int(d)          #int            int`
@@ -809,6 +804,23 @@ any constant literal or compile-time variable. E.g. `@myLabel#'B'` and `@myLabel
 out of range (< 0 or >= `*size`) or a case label is not defined, the default case label (`@label`) is used. This label
 is the only one that must be declared. The greater the `*size` the more memory will be required for the jump table, so
 avoid huge switch ranges.
+
+## TAIL
+- `&function       *size`
+- `tgt             *size`
+
+Tail call (GAZL 2 and later; an additive mnemonic, so it is legal in any dialect on an engine that knows it, and an
+older engine rejects it as an unknown mnemonic). Like `CALL`, but the argument window is always `%0` .. `%size - 1`,
+and NO return address is pushed: the engine slides the window down onto the current function's own frame base,
+rewinds to it, and re-enters the target - so the frame is REUSED and the target's eventual `RETU` returns directly
+to this function's original caller, with its outputs in the slots that caller already reads. Recursion through
+`TAIL` runs in constant stack at any depth, where the same recursion through `CALL` trips the entry-time frame
+check.
+
+`*size` must not exceed the function's own incoming window (its `INP*` / `OUT*` / `PARA` words) - the copy must
+stay inside the frame it reuses, so a wider window is an assembly error. The target's own `FUNC` re-checks its
+frame on entry, exactly as after a `CALL`. Natives cannot be tail-called. Impala's `tail` statement compiles to
+this instruction.
 
 ## TEMP
 - `*size`

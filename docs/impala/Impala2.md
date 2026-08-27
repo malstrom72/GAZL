@@ -1351,24 +1351,25 @@ function count(int n, int acc) returns int r
 
 Rules and lowering:
 
-- `--gazl2` only (`E466`): the lowering rewrites the `INP*` parameter slots, which only a `GAZL #2`
-  region assembles - GAZL 1 parameters are read-only, frozen by the engines in the field.
-- The target must be the ENCLOSING function (`E467`): the general cross-function form needs a GAZL
-  `TAIL` instruction that does not exist yet (see `design/gazl/TailCalls.md`). When it lands, the same
-  source keeps working and E467 simply disappears.
+- `--gazl2` only (`E466`): it compiles to the GAZL 2 `TAIL` instruction, which exists only on GAZL 2
+  engines (an older engine rejects the mnemonic as unknown).
+- The target must be the ENCLOSING function (`E467`): the instruction is general, but checking the
+  window and return contracts across two functions is future compiler work (see
+  `design/gazl/TailCalls.md`). When that lands, the same source keeps working and E467 simply
+  disappears.
 - Not in an `inline function` (`E468`): an inline body runs in its caller's frame, so there is nothing
   of its own to reuse.
 - The argument list is checked like any call's (E405/E406/E202...), and the arguments marshal into the
-  ordinary call window BEFORE any parameter is rewritten, so `tail f(b, a)` never reads an
-  already-overwritten value.
+  ordinary call window exactly as for a `CALL`, so `tail f(b, a)` never reads an already-overwritten
+  value.
 - `tail` transfers control, so "tail position" holds by construction: code after it on a path is
   unreachable, exactly as after `return;`. The return value is whatever the recursion's base case
   leaves in the named return variable.
 - `tail` is contextual, not reserved: `tail` remains a legal function or variable name.
 
-Lowering: every function body opens with a `.tail` entry label (emitted only when used - tail-free
-output is byte-identical), and the tail site emits one `MOV?` per parameter from the window plus
-`GOTO @.tail`.
+Lowering: the marshal is a call's, and the call row is `TAIL &f *m` - the engine slides the `%0` window
+onto the frame base and re-enters, pushing no return address, so the base case's `RETU` returns straight
+to the original caller.
 
 ---
 
@@ -1647,8 +1648,8 @@ foo.impala:12:9: note: use a cast: (int pointer)
 | E460 | more initializer values than the array holds (they used to be dropped silently) |
 | E461 | a constant array index out of bounds: any DEREFERENCE past the end, or ANY use of a negative one (see [Array bounds](#array-bounds)) |
 | E462 | an array extent is negative - a struct field with one runs the layout backwards and aliases its neighbours |
-| E466 | `tail` requires `--gazl2` (the parameter rewrite it compiles to only assembles inside a `GAZL #2` region) |
-| E467 | `tail` can only target the enclosing function in Impala 2.0 (self-recursion; the general form needs the GAZL `TAIL` instruction) |
+| E466 | `tail` requires `--gazl2` (the `TAIL` instruction it compiles to exists only on GAZL 2 engines) |
+| E467 | `tail` can only target the enclosing function in Impala 2.0 (self-recursion; the cross-function contract checks are future work) |
 | E468 | `tail` cannot be used in an `inline function` (an inline body runs in its caller's frame) |
 
 E418, E424 and E425 are **not allocated to anything that fires**. They were reserved for extern-struct

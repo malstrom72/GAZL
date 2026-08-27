@@ -171,7 +171,7 @@
     var $$parser.INLINE_PURE    = {};                          /// operators whose write destination the compiler can NAME
     var $$parser.inlineCounter  = 0;                           /// per-expansion suffix, keeps inlined labels unique
     var $$parser.headSink       = null;                        /// while a function body is parsed, its head lines buffer here (see emitLine)
-    var $$parser.tailCtx        = undefined;                   /// { name, label, rec, used } of the function being parsed - `tail` needs its entry label
+    var $$parser.tailFn         = undefined;                   /// name of the out-of-line function being parsed - the only target `tail` accepts
     var $$parser.inlineAddrAt   = {};                          /// inline fn name -> where it was last used as a VALUE, for E435's caret
     var $$parser.CASTS_TO_TYPES = {};
     var $$parser.ZEROES = {};
@@ -209,7 +209,7 @@
         '=itof','iTOf', '=ftoi','fTOi', '=abs','ABS?', '=floor','FLOf',
         '=[]','PEEK',  '[]=','POKE',   '=[]$','GETL',  '[]$=','SETL',
         '=*','PEEK', ':=*','PEEK', '*=','POKE', '=&','ADRL', 'copy','COPY',
-        '-->','GOTO', '-->#','SWCH',  '...','FOR?',  '()','CALL', '--^','RETU', 'FAIL','FAIL',
+        '-->','GOTO', '-->#','SWCH',  '...','FOR?',  '()','CALL', 'tail()','TAIL', '--^','RETU', 'FAIL','FAIL',
         '|','IOR?', '&','AND?', '^','XOR?', '<<','SHL?', '>>>','SHRu', '>>','SHR?',
         '+','ADD?', '-','SUB?', '*','MUL?', '/','DIV?', '%','MOD?', 'd','DIFp', 'dt','DIFt',
         '<=','LEQ?', '<','LSS?', '>=','GEQ?', '>','GRT?', '!=','NEQ?', '==','EQU?',
@@ -5480,18 +5480,7 @@ inp:ArgsDecl ')'_
                 )?                                                    { /* The head/body separator is emitted at the REPLAY below, not here: an inline
                                                                            expansion appends its SCOP block to the head while the body is being parsed,
                                                                            so anything written here would end up above those declarations. */
-                                                                         /* Every out-of-line body opens with a `tail` entry label, nulled at the close
-                                                                            when no tail statement referenced it, so a tail-free function emits
-                                                                            byte-identical code. A FIXED name, not newLabel(): a counter spent here
-                                                                            would renumber every later label in the function - and `.`-labels are the
-                                                                            compiler's own namespace, so nothing else can mint `@.tail`. */
-                                                                         $$parser.tailCtx = undefined;
-                                                                         if (!$$parser.inlineMode) {
-                                                                             $$parser.emit('<--', undefined, '@.tail', undefined, undefined);
-                                                                             $$parser.tailCtx = { name: $id, label: '@.tail',
-                                                                                     rec: $$parser.metacode[$$parser.metacode.length - 1],
-                                                                                     used: false };
-                                                                         }
+                                                                         $$parser.tailFn = ($$parser.inlineMode ? undefined : $id);
                                                                      }
                 Block                                                 {
                                                                          /* wrap-up body */
@@ -5504,10 +5493,6 @@ inp:ArgsDecl ')'_
                                                                              $$parser.emit('--^', undefined, undefined, undefined, undefined);
                                                                          }
                                                                          $$parser.checkReturnAssigned($$parser.symbols.functions[$id]);
-                                                                         if ($$parser.tailCtx !== undefined) {
-                                                                             if (!$$parser.tailCtx.used) $$parser.tailCtx.rec.operator = null;
-                                                                             $$parser.tailCtx = undefined;
-                                                                         }
                                                                          $$parser.processBranches();
                                                                          /* The body (and every inline expansion in it) is now known, so the head is
                                                                             final: replay it, then let flushMetaCode write the body straight out. */
@@ -6545,22 +6530,15 @@ FuncCall    <-  '('_                               { if (!$$parser.dry) {
                                                           the address of a function that emits no symbol. */
                                                        var inlineInfo = (entry ? entry.inline : undefined);
                                                        if (callee.tailCall === true) {
-                                                           /* `tail f(...)`: the arguments were marshalled exactly as for a CALL, but no
-                                                              frame is pushed - the parameters are rewritten from the window (INP* is
-                                                              writable inside a GAZL #2 region, which E466 guaranteed) and control
-                                                              re-enters at the body's entry label: self-recursion as a loop. The window
-                                                              and the parameter slots sit at opposite ends of the frame, so every new
-                                                              value is computed before any old one is overwritten. */
+                                                           /* `tail f(...)`: the arguments were marshalled exactly as for a CALL, but
+                                                              TAIL pushes no frame - the engine slides the window onto the frame base
+                                                              and re-enters, and the callee's RETU returns to OUR caller. TAIL's window
+                                                              is %0 by definition, which a statement-position call gets for free: no
+                                                              transient outlives a statement, so the pool hands out its bottom. */
                                                            callee.tailCall = undefined;
-                                                           assert(signature !== null && signature.params.length === $$.words,
-                                                                   'tail marshals one word per parameter');
-                                                           for (var _tk = 0; _tk < signature.params.length; ++_tk) {
-                                                               $$parser.emit('=', signature.params[_tk].type,
-                                                                       '$' + signature.params[_tk].name,
-                                                                       '%' + ($$.base + $$.retSlots + _tk), undefined);
-                                                           }
-                                                           $$parser.emit('-->', undefined, $$parser.tailCtx.label, undefined, undefined);
-                                                           $$parser.tailCtx.used = true;
+                                                           assert($$.base === 0, 'a tail statement marshals at the bottom of the transient pool');
+                                                           $$parser.emit('tail()', undefined, '&' + calleeName,
+                                                                   '*' + ($$.words + $$.retSlots), undefined);
                                                        } else if (inlineInfo !== undefined) {
                                                            $$parser.expandInline(inlineInfo, $$.base, $$.retSlots, $$.words, $$.mark);
                                                        } else {
@@ -6743,10 +6721,10 @@ Return      <-  RETURN _
                 )
 
 
-# `tail f(...);` - the explicit tail call (design/gazl/TailCalls.md), self-recursive increment only:
+# `tail f(...);` - the explicit tail call (design/gazl/TailCalls.md), self-recursion only in 2.0:
 # the arguments are marshalled exactly like a call's, then FuncCall's close (see `tailCall` there)
-# rewrites the parameters from the window and jumps to the body's entry label - the frame is reused, so
-# recursion depth costs nothing. Explicit by design: silent tail-call elimination would make a program's
+# emits the GAZL 2 TAIL instruction instead of a CALL - the engine reuses the frame, so recursion
+# depth costs nothing. Explicit by design: silent tail-call elimination would make a program's
 # working depend on an optimization firing. The `(` test keeps `tail` contextual - until the argument
 # list is certain this is two identifiers, which nothing else parses, so a `tail` variable stays legal.
 Tail        <-  TAIL _ { $tailAt = $$i; } id:Identifier
@@ -6758,12 +6736,12 @@ Tail        <-  TAIL _ { $tailAt = $$i; } id:Identifier
                                                         }
                                                         if (!$$parser.gazl2) {
                                                             $$parser.fail('tail requires --gazl2', $$s, $tailAt, 'E466',
-                                                                    'the parameter rewrite it compiles to only assembles inside a GAZL #2 region');
+                                                                    'the TAIL instruction it compiles to exists only on GAZL 2 engines');
                                                         }
-                                                        if ($id !== $$parser.tailCtx.name) {
+                                                        if ($id !== $$parser.tailFn) {
                                                             $$parser.fail('tail can only target the enclosing function in Impala 2.0 ('
-                                                                    + $id + ' is not ' + $$parser.tailCtx.name + ')', $$s, $tailAt, 'E467',
-                                                                    'a general tail call needs a GAZL TAIL instruction, which GAZL 2 does not have - call it, or restructure into self-recursion');
+                                                                    + $id + ' is not ' + $$parser.tailFn + ')', $$s, $tailAt, 'E467',
+                                                                    'the window and return contracts of a cross-function tail are not checked yet - call it, or restructure into self-recursion');
                                                         }
                                                         $$parser.lookup($$, $id, false, $$s, $tailAt);
                                                         metaSlot($$).tailCall = true;
