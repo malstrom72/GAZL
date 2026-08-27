@@ -171,6 +171,7 @@
     var $$parser.INLINE_PURE    = {};                          /// operators whose write destination the compiler can NAME
     var $$parser.inlineCounter  = 0;                           /// per-expansion suffix, keeps inlined labels unique
     var $$parser.headSink       = null;                        /// while a function body is parsed, its head lines buffer here (see emitLine)
+    var $$parser.tailCtx        = undefined;                   /// { name, label, rec, used } of the function being parsed - `tail` needs its entry label
     var $$parser.inlineAddrAt   = {};                          /// inline fn name -> where it was last used as a VALUE, for E435's caret
     var $$parser.CASTS_TO_TYPES = {};
     var $$parser.ZEROES = {};
@@ -5478,7 +5479,20 @@ inp:ArgsDecl ')'_
                                                                      }
                 )?                                                    { /* The head/body separator is emitted at the REPLAY below, not here: an inline
                                                                            expansion appends its SCOP block to the head while the body is being parsed,
-                                                                           so anything written here would end up above those declarations. */ }
+                                                                           so anything written here would end up above those declarations. */
+                                                                         /* Every out-of-line body opens with a `tail` entry label, nulled at the close
+                                                                            when no tail statement referenced it, so a tail-free function emits
+                                                                            byte-identical code. A FIXED name, not newLabel(): a counter spent here
+                                                                            would renumber every later label in the function - and `.`-labels are the
+                                                                            compiler's own namespace, so nothing else can mint `@.tail`. */
+                                                                         $$parser.tailCtx = undefined;
+                                                                         if (!$$parser.inlineMode) {
+                                                                             $$parser.emit('<--', undefined, '@.tail', undefined, undefined);
+                                                                             $$parser.tailCtx = { name: $id, label: '@.tail',
+                                                                                     rec: $$parser.metacode[$$parser.metacode.length - 1],
+                                                                                     used: false };
+                                                                         }
+                                                                     }
                 Block                                                 {
                                                                          /* wrap-up body */
                                                                          /* The closing RETU goes in BEFORE the pass, so the pass can
@@ -5490,6 +5504,10 @@ inp:ArgsDecl ')'_
                                                                              $$parser.emit('--^', undefined, undefined, undefined, undefined);
                                                                          }
                                                                          $$parser.checkReturnAssigned($$parser.symbols.functions[$id]);
+                                                                         if ($$parser.tailCtx !== undefined) {
+                                                                             if (!$$parser.tailCtx.used) $$parser.tailCtx.rec.operator = null;
+                                                                             $$parser.tailCtx = undefined;
+                                                                         }
                                                                          $$parser.processBranches();
                                                                          /* The body (and every inline expansion in it) is now known, so the head is
                                                                             final: replay it, then let flushMetaCode write the body straight out. */
@@ -6225,6 +6243,7 @@ Statement   <-                                                        {
                 /   Switch
                 /   While
                 /   Destructure
+                /   Tail
                 /   Expr ';' _                                        {
                                                                          $$parser.releaseMeta($$);
                                                                      }
@@ -6525,7 +6544,24 @@ FuncCall    <-  '('_                               { if (!$$parser.dry) {
                                                           use fell through to a normal CALL - which then took
                                                           the address of a function that emits no symbol. */
                                                        var inlineInfo = (entry ? entry.inline : undefined);
-                                                       if (inlineInfo !== undefined) {
+                                                       if (callee.tailCall === true) {
+                                                           /* `tail f(...)`: the arguments were marshalled exactly as for a CALL, but no
+                                                              frame is pushed - the parameters are rewritten from the window (INP* is
+                                                              writable inside a GAZL #2 region, which E466 guaranteed) and control
+                                                              re-enters at the body's entry label: self-recursion as a loop. The window
+                                                              and the parameter slots sit at opposite ends of the frame, so every new
+                                                              value is computed before any old one is overwritten. */
+                                                           callee.tailCall = undefined;
+                                                           assert(signature !== null && signature.params.length === $$.words,
+                                                                   'tail marshals one word per parameter');
+                                                           for (var _tk = 0; _tk < signature.params.length; ++_tk) {
+                                                               $$parser.emit('=', signature.params[_tk].type,
+                                                                       '$' + signature.params[_tk].name,
+                                                                       '%' + ($$.base + $$.retSlots + _tk), undefined);
+                                                           }
+                                                           $$parser.emit('-->', undefined, $$parser.tailCtx.label, undefined, undefined);
+                                                           $$parser.tailCtx.used = true;
+                                                       } else if (inlineInfo !== undefined) {
                                                            $$parser.expandInline(inlineInfo, $$.base, $$.retSlots, $$.words, $$.mark);
                                                        } else {
                                                            var func = $$parser.makeRValue(callee, '&^$%');
@@ -6705,6 +6741,36 @@ Return      <-  RETURN _
                                                             'a `returns T r` function returns whatever `r` holds; write `r = expr;` then `return;`');
                                                     }
                 )
+
+
+# `tail f(...);` - the explicit tail call (design/gazl/TailCalls.md), self-recursive increment only:
+# the arguments are marshalled exactly like a call's, then FuncCall's close (see `tailCall` there)
+# rewrites the parameters from the window and jumps to the body's entry label - the frame is reused, so
+# recursion depth costs nothing. Explicit by design: silent tail-call elimination would make a program's
+# working depend on an optimization firing. The `(` test keeps `tail` contextual - until the argument
+# list is certain this is two identifiers, which nothing else parses, so a `tail` variable stays legal.
+Tail        <-  TAIL _ { $tailAt = $$i; } id:Identifier
+                                                    {
+                                                        if ($$s.charAt($$i) !== '(') return false;   /* pure lookahead: nothing to undo */
+                                                        if ($$parser.inlineMode) {
+                                                            $$parser.fail('tail cannot be used in an inline function', $$s, $tailAt, 'E468',
+                                                                    'an inline body expands into its caller and runs in that frame, so there is no frame of its own to reuse');
+                                                        }
+                                                        if (!$$parser.gazl2) {
+                                                            $$parser.fail('tail requires --gazl2', $$s, $tailAt, 'E466',
+                                                                    'the parameter rewrite it compiles to only assembles inside a GAZL #2 region');
+                                                        }
+                                                        if ($id !== $$parser.tailCtx.name) {
+                                                            $$parser.fail('tail can only target the enclosing function in Impala 2.0 ('
+                                                                    + $id + ' is not ' + $$parser.tailCtx.name + ')', $$s, $tailAt, 'E467',
+                                                                    'a general tail call needs a GAZL TAIL instruction, which GAZL 2 does not have - call it, or restructure into self-recursion');
+                                                        }
+                                                        $$parser.lookup($$, $id, false, $$s, $tailAt);
+                                                        metaSlot($$).tailCall = true;
+                                                    }
+                FuncCall ';'_                       {
+                                                        $$parser.releaseMeta($$);
+                                                    }
 
 
 # `break`/`continue` are reserved but unsupported - there is no valid lowering, so the statement form is a
@@ -7180,6 +7246,7 @@ POINTER     <-  'pointer' !SYMBOL_CHAR      READONLY    <-  'readonly' !SYMBOL_C
 RETURN      <-  'return' !SYMBOL_CHAR       RETURNS     <-  'returns' !SYMBOL_CHAR
 SWITCH      <-  'switch' !SYMBOL_CHAR
 SIZEOF      <-  'sizeof' !SYMBOL_CHAR       STRUCT      <-  'struct' !SYMBOL_CHAR
+TAIL        <-  'tail' !SYMBOL_CHAR
 TEMPORARY   <-  'temporary' !SYMBOL_CHAR    TO          <-  'to' !SYMBOL_CHAR
 WHILE       <-  'while' !SYMBOL_CHAR
 

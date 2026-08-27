@@ -3772,4 +3772,76 @@ function runGazlText(gazlPath, text, cmdArgs, label) {
 	console.log("impala.jspeg compiler materialises funcptr constants in a difference (DIFp variable forms only)");
 }
 
+// --- `tail` - the explicit self-recursive tail call under --gazl2 ------------------------------------
+// design/gazl/TailCalls.md, first increment: the arguments marshal exactly like a call's, then the
+// parameters are rewritten from the window and control re-enters at the body's `.tail` entry label -
+// the frame is reused, so recursion depth costs nothing. The parameter rewrite writes INP* locals,
+// which only a GAZL #2 region assembles (the engine half of this feature), hence E466 outside --gazl2.
+// The entry label is emitted for every body and nulled when unused, so tail-free output stays
+// byte-identical - the golden corpus above is that gate.
+{
+	const countSrc = "const int DEBUG = 1\n"
+		+ "extern native printInt\nextern native printLF\n"
+		+ "function count(int n, int acc) returns int r\n{\n"
+		+ "\tif (n == 0) { r = acc; return; }\n"
+		+ "\ttail count(n - 1, acc + 1);\n}\n"
+		+ "function main()\n{\n\tprintInt(count(100000, 0)); printLF();\n}\n";
+	const out = compileWithJsImpala(countSrc, { randomId: 42, gazl2: true });
+	assert(out.includes(".tail:") && out.includes("GOTO @.tail")
+			&& out.indexOf("CALL &count") === out.lastIndexOf("CALL &count"),   /* main's call is the only one */
+		"tail must rewrite the parameters and GOTO the entry label instead of emitting a CALL");
+	assert(/MOVi \$n %\d/.test(out) && /MOVi \$acc %\d/.test(out),
+		"tail must marshal into the window first, then rewrite each parameter from it");
+
+	const tailFails = (label, source, want, gazl2) => {
+		let observed = null;
+		try { compileWithJsImpala(source, { randomId: 42, gazl2 }); }
+		catch (err) { observed = err && err.message ? err.message : String(err); }
+		assert(observed !== null && observed.includes(want),
+			`tail: ${label} must raise "${want}"${observed === null ? "" : ", got:\n" + observed}`);
+	};
+	tailFails("outside --gazl2", countSrc, "E466", false);
+	tailFails("a non-self target",
+		"function other(int n) returns int r { r = n; }\n"
+			+ "function count(int n) returns int r\n{\n\ttail other(n);\n}\nfunction main() { }\n",
+		"E467", true);
+	tailFails("an inline body",
+		"inline function twice(int x) returns int r\n{\n\ttail twice(x);\n}\nfunction main() { }\n",
+		"E468", true);
+	tailFails("a wrong argument count",
+		"function count(int n, int acc) returns int r\n{\n\tif (n == 0) { r = acc; return; }\n"
+			+ "\ttail count(n - 1);\n}\nfunction main() { }\n",
+		"E405", true);
+
+	// `tail` is CONTEXTUAL: until `name(` follows it is two identifiers, which nothing else parses,
+	// so a function (or variable) named tail keeps compiling in both dialects.
+	const ctxSrc = "function tail(int x) returns int r { r = x * 2; }\n"
+		+ "function main()\nlocals int tailSum\n{\n\ttailSum = tail(21);\n}\n";
+	compileWithJsImpala(ctxSrc, { randomId: 42 });
+	compileWithJsImpala(ctxSrc, { randomId: 42, gazl2: true });
+
+	if (haveGazlCmd()) {
+		const gazlPath = path.join(dir, "..", "tests", "impala", "erroneous", "gazl2Tail.gazl");
+		const runText = (text, label) => runGazlText(gazlPath, text, [ "main" ], "tail: " + label);
+		// 100k deep is the depth TailCalls.md opens with: a CALL per step traps the frame check,
+		// a reused frame just loops.
+		assert(runText(out, "count(100000, 0)").startsWith("100000\n"),
+			"tail: 100k self-recursions must complete in one frame");
+		fs.writeFileSync(gazlPath, out.replace("GOTO @.tail", "CALL &count %0 *3\t; regress to a real call"),
+			IMPALA_ENCODING);
+		assert(runGazlCmd(gazlPath, [ "main" ]).report.includes("status -6"),
+			"tail: the same recursion through CALL must trap the frame check - the gap the feature closes");
+		// The assembler-side contract: INP* takes a write inside a GAZL #2 region, and only there -
+		// GAZL 1 acceptance is frozen by the engines deployed in the field.
+		assert(runGazlText(gazlPath, "GAZL #2\nmain:\tFUNC\nn0:\tINPi\n\tPARA *1\n\tMOVi n0 #0\n\tRETU\nGAZL #1\n",
+				[ "main" ], "tail: in-region INP write") === "",
+			"tail: an INP write must assemble inside a GAZL #2 region");
+		fs.writeFileSync(gazlPath, "main:\tFUNC\nn0:\tINPi\n\tPARA *1\n\tMOVi n0 #0\n\tRETU\n", IMPALA_ENCODING);
+		const v1 = runGazlCmd(gazlPath, [ NO_ENTRY_POINT ]);
+		assert(!v1.assembled && v1.report.includes("Incompatible types"),
+			`tail: an INP write outside a region must stay an assembly error, got: ${v1.line}`);
+	}
+	console.log("impala.jspeg compiler compiles tail self-recursion to a parameter rewrite under --gazl2");
+}
+
 console.log("JSPEG regression suite completed successfully");
