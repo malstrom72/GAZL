@@ -1412,6 +1412,7 @@ const Char* Assembler::feed(const Char* line) {
 								if (op->opcode == TAIL_CC_ || op->opcode == TAIL_VC_) {									// TAIL
 									if ((UInt)(p1->i) > windowSize) throw Exception(TAIL_EXCEEDS_WINDOW);
 									p2->i = maxLocalsSize;	// the runtime rewinds dsp to the frame base before the window copy; like RETU, the size rides the instruction
+									paramsSize = maximum(paramsSize, (UInt)(p1->i));	// the copy READS %0..m-1, so the frame check must reserve them even if nothing else references those slots
 								}
 								if (op->opcode == SWCH_VCC) {															// SWCH
 									assert(*op2Begin == '@');
