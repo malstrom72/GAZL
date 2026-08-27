@@ -182,6 +182,9 @@ test:                   FUNC
  GOTO       @fail
     tDiffer: DIFt i0        t0              &tOne
  NEQi       i0              #1              @fail            ; declaration-order ordinals: tTwo - tOne = 1
+ MOVi       %1              #5
+ CALL       &tLoop          %0              *2
+ NEQi       %0              #3333           @fail            ; tLoop rewrote its own INPi and looped - GAZL 2 params are writable
 
  PEEK       f0		       &consts.float
  PEEK       i0              &consts.int
@@ -2271,6 +2274,17 @@ tTwo:                   FUNC
 ;-------------------------------------------------------------------------------
                         MOVi tRes2 #2222
                         RETU
+
+;-------------------------------------------------------------------------------
+tLoop:                  FUNC                            ; inside a region INP* is writable: rewrite the params, GOTO the top - the shape Impala's tail recursion emits
+    tRes3:              OUTi
+    tN:                 INPi
+;-------------------------------------------------------------------------------
+    tTop:               NEQi tN #0 @tMore
+                        MOVi tRes3 #3333
+                        RETU
+    tMore:              SUBi tN tN #1
+                        GOTO @tTop
 
 ;-------------------------------------------------------------------------------
 tTargets:               CNST *2

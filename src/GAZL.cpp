@@ -1334,7 +1334,9 @@ const Char* Assembler::feed(const Char* line) {
 							parseOperand(op0Begin, op0End, op->accepts[0], &v);
 							size = v.i;
 							v.i = localsSize;
-							declare(locals, labelBegin, labelEnd, op->declareTypes, v, size);
+							types = op->declareTypes;
+							if (dialect >= 2) types |= (types & (ANY_VAR_R & ~TRANSIENT)) << 1;	// GAZL 2: INP* is writable too (Impala's tail recursion rewrites the parameters in place; every W bit is its R bit << 1)
+							declare(locals, labelBegin, labelEnd, types, v, size);
 							localsSize += size;
 							if (localsSize > maxLocalsSize) maxLocalsSize = localsSize;
 							break;
