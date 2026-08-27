@@ -1,7 +1,16 @@
 # Tail calls (design note)
 
-Status: DESIGN NOTE. Nothing here is implemented. Needs a GAZL instruction *and* Impala syntax, so it is
-sized for its own branch and cannot be done from either side alone.
+Status: the SELF-RECURSION increment is IMPLEMENTED (2026-08-27, GAZL2 branch). `tail f(...);` is a
+terminal statement under `--gazl2`: the arguments marshal exactly like a call's, the parameters are
+rewritten from the window and control re-enters at the body's `.tail` entry label - no new instruction.
+The enabler on the engine side is that `INP*` parameters are writable inside a `GAZL #2` region (W bit
+minted at declaration; GAZL 1 acceptance is untouched). Diagnostics: E466 (`tail` needs `--gazl2`),
+E467 (target must be the enclosing function), E468 (not in an `inline function`), plus the ordinary
+call checks (E405/E406). Because `tail` is a statement that transfers control, "tail position" holds by
+construction - anything after it on a path is simply unreachable, exactly as after `return`.
+
+The general cross-function `TAIL` instruction below remains a DESIGN NOTE: it needs a GAZL opcode *and*
+Impala syntax, so it is sized for its own branch and cannot be done from either side alone.
 
 Related: [`GAZLAssemblerOptimizations.md`](GAZLAssemblerOptimizations.md) covers peepholes that need no
 ISA change; this is the one that does.
@@ -24,8 +33,8 @@ done: ;
 
 `count(100, 0)` returns 5050. `count(100000, 0)` traps - `Exception: run returned status -6`, the
 entry-time frame check in `FUNC` doing its job. It fails cleanly rather than corrupting, but it fails.
-
-There is no `tail call` or `tail recursion` handling anywhere in `src/`, the docs, or the grammar.
+(This is now the self-recursion case `tail` closes; the CROSS-function version of the same trap is what
+remains open below.)
 
 
 ## Why the assembler cannot do it alone
@@ -118,7 +127,7 @@ this" into a diagnostic the programmer can act on. Same argument as `inline`: op
 cost is stated rather than inferred.
 
 
-## A cheaper first increment: self-recursion only
+## A cheaper first increment: self-recursion only (IMPLEMENTED)
 
 **Self**-tail-recursion needs no ISA change at all. If a function tail-calls itself, the rewrite is
 entirely function-local: copy the new argument values into the existing parameter slots, then `GOTO` the
@@ -126,18 +135,27 @@ function's own entry label - a plain `GOTO_b__`, which already exists.
 
 The one hazard is ordering: in `tail count(n - 1, acc + n)`, `acc + n` must be evaluated before `n` is
 overwritten. The existing argument-marshalling window already materializes arguments before the call, so
-copying back from it is natural.
+copying back from it is natural - and the window (`%N`, above `dsp`) and the parameter slots (bottom of
+the locals, below `dsp`) sit at opposite ends of the frame, so every new value is computed before any old
+one is overwritten, with no per-argument ordering analysis.
 
-This is worth doing first if `TAIL` looks too big: it covers the accumulator idiom, which is the case that
-actually overflows today, and under the explicit `tail` keyword it is a pure implementation detail - the
-same source keeps working unchanged when the general instruction lands.
+As landed: every out-of-line body opens with a fixed `.tail` entry label (nulled when no `tail` statement
+references it, so tail-free output is byte-identical - the golden corpus is that gate), and the FuncCall
+close emits `MOV? $param %slot` per parameter plus `GOTO @.tail` instead of a `CALL`. The parameter
+writes are why this is `--gazl2`-only: `INP*` is read-only in GAZL 1, and the engines deployed in the
+field freeze that, so GAZL 2 regions mint the W bit instead.
+
+It covers the accumulator idiom, which is the case that actually overflows today, and under the explicit
+`tail` keyword it is a pure implementation detail - the same source keeps working unchanged when the
+general instruction lands (the E467 diagnostic simply disappears).
 
 
 ## Interactions
 
-- **`--dead-strip`**: a `tail` site is an ordinary reference edge; reachability is unaffected.
-- **Signature metadata**: a `tail` site should emit the same `; expects f(...) -> T` row a call does, so
-  `gazl-validate` keeps checking it across units.
+- **`--dead-strip`**: a `tail` site is an ordinary reference edge; reachability is unaffected (and a
+  self-edge changes no closure anyway).
+- **Signature metadata**: a `tail` site emits the same `; expects f(...) -> T` row a call does, so any
+  signature-row consumer keeps checking it across units.
 - **Mutual recursion**: the general `TAIL` form covers it; the self-recursion increment does not. State
   machines written as mutually tail-calling handlers are the main thing that unlocks.
 - **Debugging**: a tail call replaces the frame, so it does not appear in a stack trace. Standard for the

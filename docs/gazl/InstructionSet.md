@@ -324,6 +324,9 @@ Inside a `GAZL #2` region:
   data pointer.
 - An indirect `CALL` goes through a `t` local (or an untyped `%N` window slot), never a `p` local: `CALL p0` is an
   assembly error inside the region, where in GAZL 1 it was legal and guarded only by the run-time `BAD_CALL` check.
+- `INP*` parameters are writable (in GAZL 1 they are read-only). This is what a self-recursive tail call compiles
+  to: rewrite the parameters from freshly marshalled values, `GOTO` the top of the body, reuse the frame - see
+  `INPi` and design/gazl/TailCalls.md.
 
 The protection travels with the SYMBOL, so it survives the region: a GAZL 2 function's address cannot enter a `p`
 slot anywhere in the program, and the region's own rows cannot smuggle one in through `DATp`/`MOVp`/`POKE`.
@@ -428,19 +431,21 @@ Branch to `@label` if the compile-time symbol or address is not defined
 
 ## INPf
 
-Declare a local read-only float parameter
+Declare a local float parameter (read-only in GAZL 1; see `INPi`)
 
 ## INPi
 
-Declare a local read-only int parameter
+Declare a local int parameter. Read-only in GAZL 1; inside a `GAZL #2` region every `INP*` parameter is writable,
+which is what lets a self-recursive tail call rewrite its parameters in place and `GOTO` back to the top of the
+body instead of growing the stack with `CALL` (Impala's `tail` statement compiles to exactly that).
 
 ## INPp
 
-Declare a local read-only pointer parameter
+Declare a local pointer parameter (read-only in GAZL 1; see `INPi`)
 
 ## INPt
 
-Declare a local read-only call-target parameter (GAZL 2 and later)
+Declare a local call-target parameter (GAZL 2 and later, so always writable; see `INPi`)
 ## IORi
 - `int(d)          #int            #int`
 - `int(d)          #int            int`

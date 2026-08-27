@@ -182,6 +182,29 @@ Typed arrays also emit typed data rows (`DATi`, `DATf`) where 1.0 emitted untype
 check the assembler already had and 1.0 never reached, so initializer data gets a second, independent
 verification for free.
 
+## `tail` - self-recursion in constant stack (`--gazl2` only)
+
+A tail-recursive accumulator no longer has to grow the stack until the frame check traps it:
+
+```impala
+function count(int n, int acc) returns int r
+{
+	if (n == 0) { r = acc; return; }
+	tail count(n - 1, acc + 1);
+}
+```
+
+`tail f(...);` is a terminal statement, like `return;`, that re-enters the current function with new
+arguments in the SAME frame - the arguments marshal like any call's, the parameters are rewritten, and
+control jumps back to the top of the body. `count(100000, 0)` runs where the plain recursive spelling
+traps with `status -6`.
+
+It is explicit on purpose: silent tail-call elimination decides whether byte-identical source works at
+all, which is the opposite of a predictable cost model. And it is deliberately narrow in 2.0: the target
+must be the enclosing function (`E467` - mutual recursion needs a GAZL instruction that does not exist
+yet), it needs `--gazl2` (`E466` - the parameter rewrite only assembles inside a `GAZL #2` region), and
+an `inline function` cannot use it (`E468`). `tail` itself stays a legal name for anything else.
+
 ## Not available
 
 Reserved so they can be refused clearly, not because they are coming soon in 2.0:
