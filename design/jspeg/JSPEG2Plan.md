@@ -173,6 +173,39 @@ holder. Options (to weigh before M3):
 Recommendation leans (1): it matches how impala.jspeg already threads cross-rule state and keeps `$$` a pure
 value everywhere. The choice gates M3; the other ~119 sites remain the mechanical migration the plan assumed.
 
+### DECISION (2026-08-28): return-and-merge (option 2) for the hard core
+
+`Argument` *returns* its contribution instead of mutating a shared record; `FuncCall` folds the list. No shared
+mutable state — `$$` is a pure value everywhere, the strongest end-state. Concrete shape:
+
+- **`Argument`** returns a record `{ meta: $a, type, elem, opnd, structWords }` (structWords = 1 for a scalar,
+  `structWords(struct)` for a by-value struct) and does **not** place the value or touch a shared `$$`. The
+  `E406`/index-use checks it does today stay in `Argument` (they are per-arg and need no window offset).
+- **`FuncCall`** collects the returned records into a local array (the `(Argument (','_ Argument)*)?` loop tags
+  each and pushes), then **after the loop folds once**: `words = 0; for each arg { winSlot = base + retSlots +
+  words; place(arg) /* makeArgValue or copyStructArg at winSlot */; words += arg.structWords; }`, then runs the
+  existing count/type/signature checks against the collected list and closes the call. `$$` for `FuncCall` stays
+  the inherited callee meta; the accumulation lives in locals.
+
+**The load-bearing risk is emission ORDER.** Today placement (`makeArgValue`/`copyStructArg`, which *emit*)
+happens *during* the argument loop; return-and-merge moves it into the post-loop fold. The fold must emit in the
+same left-to-right arg order so the generated `.gazl` is **byte-identical** — the corpus parity gate is the
+proof. Two things to verify when it lands: (a) the by-value-struct `svals` LAST-door check at close still sees
+the same list, and (b) the scratch-pool ownership of each `$a` survives being held in the array until the fold
+(see the `<X>` scratch-ownership note in memory) — i.e. the args' meta slots must not be released until placement.
+
+`Argument`+`FuncCall` are the confirmed inherited-accumulators. The four declaration rules (`TypeDeclr`,
+`ExternDecl`, `VarDecl`, `ArrayDecl`) get the M3 triage: a tagged-only, self-contained record just gains a
+`$$ = {}` init (mechanical); any that accumulate across an untagged call get the same return-and-merge treatment.
+
+## Status after M1 (2026-08-28)
+
+M1 is effectively complete: protocol decided **and** validated (hand-parser + real generator, `jspegTest` 9/9),
+value-returning generator prototyped in `jspeg2.jspeg`, the migration boundary found and the go/no-go answered
+(not uniform; hard core identified), and the hard-core strategy chosen (return-and-merge). Remaining before M3
+proper: triage the four declaration rules, then start M3 with `Argument`/`FuncCall` under the byte-identical
+parity gate.
+
 ## Relationship to the other jspeg work
 
 - **[`RefactorPlan.md`](RefactorPlan.md) (return-style helpers) becomes moot for its stated goal.** That plan
