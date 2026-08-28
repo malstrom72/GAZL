@@ -162,7 +162,7 @@ Capture		<-	v:Variable EQUALS			{ if ($$.vs) { var _t = ($v === '$._' ? '_v' : $
 # ----------------------------------------------------------------------------------------------------------------------
 
 Tagged		<-	v:Variable COLON			{ $t.vi = $$.vi; $t.vs = $$.vs; if ($v !== '$._') { $t.tag = $v; ($t.vr = $$.vr)[$v] = '={}' } else $t.tag = '$' }
-					t:Suffix				{ if ($$.vs && $v === '$._') { $$.vr['_v'] = ''; $$ = '(' + $t + ')&&(_v=$._,true)' } else { var _cn = ('' + $t).match(/^([A-Za-z_][A-Za-z0-9_]*)\(/); if (_cn && _vsRules[_cn[1]] && $v !== '$._') $$.vr[$v + '~v'] = true; $$ = $t } }
+					t:Suffix				{ if ($$.vs && $v === '$._') { $$.vr['_v'] = ''; $$ = '(' + $t + ')&&(_v=$._,true)' } else { var _cc = ('' + $t).match(/[A-Za-z_][A-Za-z0-9_]*\(/g); var _iv = false; if (_cc) { for (var _ci = 0; _ci < _cc.length; ++_ci) { if (_vsRules[_cc[_ci].slice(0, -1)]) { _iv = true; break; } } } if (_iv && $v !== '$._') $$.vr[$v + '~v'] = true; $$ = $t } }
 				/ Suffix
 				
 # ----------------------------------------------------------------------------------------------------------------------

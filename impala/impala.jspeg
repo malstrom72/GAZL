@@ -5028,7 +5028,8 @@ ExternDecl  <-  EXTERN _                                              { $$.scope
                 #  turns it on, fails ArrayDecl, and would otherwise leave it set for the next ordinary
                 #  declaration - which would then be told the host owns it.
                 /                                                     { $$parser.externArray = false; }
-                    VarDecl
+                    d:VarDecl                                         { $$.type = $d.type; $$.name = $d.name; $$.elem = $d.elem;
+                                                                        $$.struct = $d.struct; $$.words = $d.words; $$.at = $d.at; }
                 )                                                     {
                                                                         if ($$.structFwd) {
                                                                             $$parser.cancelStructRedeclaration($sname);
@@ -5494,7 +5495,7 @@ TypeBase    <-  t:BASE_TYPE _                                         { $$ = $$p
                                                                          else $$parser.fail('Unknown type ' + $id, $$s, $$i, 'E413');
                                                                      }
 
-VarDecl     <-  base:TypeBase                                        { $desc = $base; }
+VarDecl     <=  base:TypeBase                                        { $$ = {}; $desc = $base; }
                 ( POINTER _                                           { $desc = $$parser.pointerDesc($desc); }
                 )*
                 { $nameStart = $$i; }
@@ -5521,7 +5522,7 @@ VarDecl     <-  base:TypeBase                                        { $desc = $
                                                                                                     SHAPED array would inherit its axes */
                                                                      }
 
-ArrayDecl   <-                                                        { $desc = undefined; $extent = undefined; $dims = undefined; }
+ArrayDecl   <=                                                        { $$ = {}; $desc = undefined; $extent = undefined; $dims = undefined; }
                 ( base:TypeBase                                      { $desc = $base; }
                   ( POINTER _                                         { $desc = $$parser.pointerDesc($desc); }
                   )*
