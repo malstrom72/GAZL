@@ -76,18 +76,18 @@ Use the `Assembler` class to parse assembly source and the `Processor` class to 
 Symbols globals;
 for (int i = 0; i < nativeCount; ++i) globals.registerNative(NATIVE_NAMES[i], i);
 
-UInt codeSize, globalsSize, constsSize, functionCount = 0;
+ProgramSizes sizes = { 0, 0, 0, 0 };
 {
     Assembler assem(CODE_MEMORY_SIZE, code, FUNCTION_TABLE_SIZE, functionTable,
             DATA_MEMORY_SIZE, memory, globals);
     assem.newUnit("file.gazl");
     std::string line;
     while (getline(gazlStream, line)) assem.feed(line.c_str());
-    assem.finalize(codeSize, globalsSize, constsSize, functionCount);
+    assem.finalize(sizes);
 }
 
-Processor pmachine(codeSize, code, functionCount, functionTable, DATA_MEMORY_SIZE, memory,
-        globalsSize, constsSize, CALL_STACK_SIZE, callStack, NATIVE_TABLE, 0);
+Processor pmachine(sizes.codeSize, code, sizes.functionCount, functionTable, DATA_MEMORY_SIZE, memory,
+        sizes.globalsSize, sizes.constsSize, CALL_STACK_SIZE, callStack, NATIVE_TABLE, 0);
 Pointer mainFunction = globals.findFunction("main");
 Status status = pmachine.enterCall(mainFunction);
 pmachine.resetTimeOut(0x7FFFFFFF);
