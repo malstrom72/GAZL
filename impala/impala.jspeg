@@ -6571,9 +6571,9 @@ Variable    <-                                      { $global = false; }
 ########################
 
 Identifier      <-  !KEYWORD $$=([A-Za-z_$] SYMBOL_CHAR*) _
-FloatLiteral    <-  $$=([-+]? DIGIT+ "." DIGIT+ (("E" / "e") ([-+]? DIGIT+))?) _
-IntegerLiteral  <-  $$=([-+]? ("0x" HEX+ / "'" (!"'" ASCII)* "'" / DIGIT+)) _
-StringLiteral   <-  $$=( '"' ( !["\\\0-\37\200-\377] . / "\\" ( [\"\\bfnrt] / 'u' HEX HEX HEX HEX ) )* '"' ) _
+FloatLiteral    <=  $$=([-+]? DIGIT+ "." DIGIT+ (("E" / "e") ([-+]? DIGIT+))?) _
+IntegerLiteral  <=  $$=([-+]? ("0x" HEX+ / "'" (!"'" ASCII)* "'" / DIGIT+)) _
+StringLiteral   <=  $$=( '"' ( !["\\\0-\37\200-\377] . / "\\" ( [\"\\bfnrt] / 'u' HEX HEX HEX HEX ) )* '"' ) _
 
 KEYWORD     <-  ABS / ARRAY / ASSERT / CASE / CONST / COPY / DEFAULT / DO / ELSE / EXPORT / EXTERN / FLOAT / FLOOR / FOR / FROM
                 / FTOI / FUNCPTR / FUNCTYPE / FUNCTION / GLOBAL / GOTO / IF / IMPORT / INLINE / INT / ITOF / LOCALS / LOOP / NATIVE / NULL / NULLFUNC
@@ -6604,16 +6604,16 @@ SIZEOF      <-  'sizeof' !SYMBOL_CHAR       STRUCT      <-  'struct' !SYMBOL_CHA
 TEMPORARY   <-  'temporary' !SYMBOL_CHAR    TO          <-  'to' !SYMBOL_CHAR
 WHILE       <-  'while' !SYMBOL_CHAR
 
-BITWISE_OP  <-  $$=( '<<' / '>>>' / '>>' / '|' !'|' / '&' !'&' / '^' )
-ADDSUB_OP   <-  $$=( '+' / '-' )
-MULDIV_OP   <-  $$=( '*' / '/' !'/' / '%' )
+BITWISE_OP  <=  $$=( '<<' / '>>>' / '>>' / '|' !'|' / '&' !'&' / '^' )
+ADDSUB_OP   <=  $$=( '+' / '-' )
+MULDIV_OP   <=  $$=( '*' / '/' !'/' / '%' )
 COMP_OP     <-  $$=( '<=' / '>=' / '!=' / '==' / '<' / '>' )
 BASE_TYPE   <-  INT                               { $._ = 'int'; }
             /  FLOAT                              { $._ = 'float'; }
             /  FUNCPTR                            { $._ = 'funcptr'; }
             /  POINTER                            { $._ = 'pointer'; }
-BUILT_IN    <-  $$=( 'abs' / 'floor' / 'itof' / 'ftoi' )
-PREFIX_OP   <-  $$=( '-' !("'" / DIGIT / '-')   # `--x` is not a decrement; reject the unspaced pair, accept `- -x`
+BUILT_IN    <=  $$=( 'abs' / 'floor' / 'itof' / 'ftoi' )
+PREFIX_OP   <=  $$=( '-' !("'" / DIGIT / '-')   # `--x` is not a decrement; reject the unspaced pair, accept `- -x`
                    / '~'
                    / '&'
                    / '*'
