@@ -934,11 +934,19 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 
 			/*
 				bulk copy p2 words from src (p1) to dst (p0) via rep movsd. Each pointer is a const memory address or a slot
-				holding a GAZL pointer; resolve to a byte address (memoryBase + wordIndex*4). Unchecked, as in the slice.
+				holding a GAZL pointer; resolve to a byte address (memoryBase + wordIndex*4). Range-checked to ACCESS_VIOLATION like the interpreter and the arm64 backend - an
+				unchecked skip here would be a JIT-only divergence, the worst bug class (SliceBoundsDesign.md section 3).
 			*/
 			case OP_COPY_VVC: case OP_COPY_VCC: case OP_COPY_CVC: case OP_COPY_CCC: {
 				const bool destConst = (op == OP_COPY_CVC || op == OP_COPY_CCC);
 				const bool srcConst = (op == OP_COPY_VCC || op == OP_COPY_CCC);
+				Label copyTrap = emitter.newLabel(), copyCont = emitter.newLabel();										// range check BEFORE the win64 push, so a trap needs no stack unwind
+				if (destConst) { emitter.movImm(RAX, static_cast<uint32_t>(in.p0.p - MEMORY_OFFSET)); }
+				else { emitter.load(RAX, DSP, in.p0.i * 4); emitter.subImm(RAX, MEMORY_OFFSET); }
+				emitter.addImm(RAX, static_cast<uint32_t>(in.p2.i)); emitter.load(SCRATCH_B, CONTEXT, offsets.rwmemsize); emitter.cmp(RAX, SCRATCH_B); emitter.jcc(CC_A, copyTrap);	// destIdx+count > rwMemorySize
+				if (srcConst) { emitter.movImm(RAX, static_cast<uint32_t>(in.p1.p - MEMORY_OFFSET)); }
+				else { emitter.load(RAX, DSP, in.p1.i * 4); emitter.subImm(RAX, MEMORY_OFFSET); }
+				emitter.addImm(RAX, static_cast<uint32_t>(in.p2.i)); emitter.load(SCRATCH_B, CONTEXT, offsets.memsize); emitter.cmp(RAX, SCRATCH_B); emitter.jcc(CC_A, copyTrap);		// srcIdx+count > memorySize
 			#if defined(_WIN32)
 				emitter.push(RSI); emitter.push(RDI);																	// Win64: rsi/rdi are callee-saved; rep movsd clobbers them
 			#endif
@@ -951,6 +959,9 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 			#if defined(_WIN32)
 				emitter.pop(RDI); emitter.pop(RSI);
 			#endif
+				emitter.jmp(copyCont);
+				emitter.bind(copyTrap); emitter.movImm(RAX, static_cast<uint32_t>(ACCESS_VIOLATION)); emitter.jmp(epilogue);
+				emitter.bind(copyCont);
 				break;
 			}
 

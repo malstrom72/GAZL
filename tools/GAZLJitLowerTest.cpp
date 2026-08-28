@@ -475,6 +475,14 @@ static const char* const K_BANKCOPY =		// verber8 bank idiom: COPY globals->fram
 	" COPY &gbank $p *4\n"															// globals <- frame bank
 	" PEEK $x &gbank:1\n ADDi $x $x $a\n POKE &gOut $x\n RETU\n";					// gOut = gbank[1] + a = (30+gIn+5) + (gIn+5)
 
+static const char* const K_COPYOOB =		// COPY through a frame pointer walked out of range -> ACCESS_VIOLATION; the X64
+	"gIn: GLOB *1\n DATi #0\n" "gOut: GLOB *1\n DATi #0\n"							// rep-movsd bounds check must trap exactly where the interpreter does
+	"gsrc: GLOB *4\n DATi #10\n DATi #20\n DATi #30\n DATi #40\n"
+	"main: FUNC\n PARA *1\n$n: LOCi\n$bank: LOCA *4\n$p: LOCp\n$q: LOCp\n$x: LOCi\n"
+	" PEEK $n &gIn\n ADRL $p $bank *0\n ADDp $p $p $n\n"								// p = &bank + n words (large n leaves writable memory)
+	" COPY $p &gsrc *4\n"															// dst = bank+n: in range for small n, ACCESS_VIOLATION once n+4 exceeds rwMemorySize
+	" ADRL $q $bank *0\n PEEK $x $q\n POKE &gOut $x\n RETU\n";						// gOut = bank[0] (only reached on the in-range paths)
+
 static const char* const K_PTRVAR =			// 3-arg PEEK_VVV/POKE_VVV (variable base+index) through an ADRL pointer aimed at a
 	"gIn: GLOB *1\n DATi #0\n" "gOut: GLOB *1\n DATi #0\n"							// DIRTY scalar: base is MYFRAME, so the flush must NOT be skipped (realm-stamp teeth)
 	"main: FUNC\n PARA *1\n$v: LOCi\n$p: LOCp\n$z: LOCi\n$x: LOCi\n"
@@ -791,6 +799,7 @@ int main() {
 	runKernel("pointer      [ADRL + PEEK/POKE_VVV]", K_POINTER, indices, sizeof(indices) / sizeof(*indices));
 	runKernel("stack access [GETL/SETL + trap]", K_STACK, indices, sizeof(indices) / sizeof(*indices));
 	runKernel("block copy   [COPY]", K_COPY, signed_, sizeof(signed_) / sizeof(*signed_));
+	runKernel("copy oob     [COPY -> ACCESS_VIOLATION]", K_COPYOOB, indices, sizeof(indices) / sizeof(*indices));
 	runKernel("far slots    [big frame, register-offset]", K_FARSLOT, floats, sizeof(floats) / sizeof(*floats));
 	runKernel("recursion    [IP_STACK_OVERFLOW]", K_RECURSE, depths, sizeof(depths) / sizeof(*depths));
 	runKernel("big frame    [DATA_STACK_OVERFLOW]", K_BIGFRAME, one, sizeof(one) / sizeof(*one));
