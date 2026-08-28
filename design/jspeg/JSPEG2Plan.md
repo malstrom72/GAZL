@@ -96,14 +96,43 @@ sets `_val` but does **not** clobber the parent's `$$` local), operator preceden
 division. So the `_val`-register model computes correctly end to end; what remains for M1 is making the
 *generator* emit this shape (not whether the shape is right).
 
-This is the working decision; the next implementation step is to prototype the `_val`-register emission in the
-generator and prove byte-identical output. **Generator-surgery hazard noted:** the action rewriter processes `$`
-even inside emitted string literals (that is why the current generated `Definition` carries a stray `var $` from
-its `'($){'` literal), so emitting a literal `$$`/`_val=$$` from the generator's own actions needs care —
-concatenation tricks or a rewriter tweak. The bootstrap wrinkle to settle there: regenerating `jspegCompiler.js`
-with the new emission self-hosts the *self-grammar*, so its downward-context uses must be handled (migrate them
-to the `$` context param, or keep the generator's own actions holder-style behind a mode) — a concern isolated
-to the generator, not to `impala.jspeg`.
+This is the working decision.
+
+## M1 emission prototype — WORKS, and it found the migration's real boundary (2026-08-28)
+
+The value-returning *generator* is prototyped in [`impala/jspeg2.jspeg`](../../impala/jspeg2.jspeg) (a copy of
+`jspeg.jspeg` with ~7 emission actions rewritten). Driven meta-circularly — current `compileJSPEG` compiles
+`jspeg2.jspeg` into a new-emission generator, which compiles `jspegTest.jspeg` — it produces exactly the target
+shape (param-less rules, `var _v` value locals, eager `($x=_val,true)` captures, a conditional
+`&&(_val=_v,true)` suffix, **no holders, no `._`**) and **passes all 9 arithmetic cases**. The generator surgery
+is real, not hand-waved. Two hazards from the M1 note were handled cleanly:
+
+- **The string-literal `$` hazard** (the rewriter processes `$` even inside emitted string literals — it is why
+  the old `Definition` carries a stray `var $` from its `'($){'` literal): dodged by naming the value local `_v`
+  (no `$`) and going **param-less** in the prototype (rule refs emit `ID()`, no `$` literal anywhere).
+- The generator's own actions stay holder-style (interpreted by the current compiler); only the emitted strings
+  changed — so the bootstrap is clean.
+
+**The boundary it found — the shared-downward-container idiom does NOT survive.** `tagCaptureTest.jspeg` builds a
+map with `root <- _ {$$={}} pair …` where the untagged `pair` does `$$[$key]=$value` **expecting `$$` to be
+root's map** (holder model: `pair` shares root's holder). Under value-returning, generated `pair()` gets its own
+`var _v` and writes `_v[$key]` on an *uninitialized* local — it crashes, and even if it didn't it would fill the
+wrong object. So a rule that mutates an **inherited** `$$` container via an untagged call is not mechanically
+migratable; such grammars must be rewritten (sub-rule *returns* a value, parent merges) or use an explicit
+accumulator (a `$$parser` global). This is exactly the kind of thing M3's "tag rebinding / container audit" must
+catch, now with a concrete failure signature to grep for.
+
+**Does `impala.jspeg` (the real target) use that idiom? — inconclusive, audit required.** Counts: 20 `$$ =`
+initializations vs 75 `$$.field`/`+=` writes. That ratio fits *either* "init once, write many fields locally"
+(safe) *or* some rules writing an inherited `$$` (unsafe). The dominant patterns — per-rule `makeMeta` records
+and `$$parser.*` globals for accumulation (`emit`, `metacode`, `symbols`) — lean strongly toward local records +
+global accumulation (safe), but this must be **proven per-rule in M3** before the migration is declared
+mechanical. The go/no-go for the whole refactor rests here: if impala.jspeg avoids the inherited-container idiom,
+the migration is uniform; if a few rules use it, they get the return-and-merge rewrite.
+
+**Generator self-hosting** remains its own step (regenerating `jspegCompiler.js` with the new emission requires
+the self-grammar's downward-`vi/tag/vr` context to move onto the `$` param) — isolated to the generator, not to
+`impala.jspeg`.
 
 ## Relationship to the other jspeg work
 
