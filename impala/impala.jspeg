@@ -4952,7 +4952,7 @@ inp:ArgsDecl ')'_
 
                                                                          output('');
                                                                      }
-ExternDecl  <-  EXTERN _                                              { $$.scope = 'globals'; $$.structFwd = false;
+ExternDecl  <=  EXTERN _                                              { $$ = {}; $$.scope = 'globals'; $$.structFwd = false;
                                                                         $at = $$i;   /* the declaration itself - end-of-rule positions have skipped past it */
                                                                         $$parser.pendingProto = undefined; }
                 (
