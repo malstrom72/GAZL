@@ -4714,7 +4714,7 @@ FuncTypeDecl <- FUNCTYPE _ { $nmAt = $$i; } id:Identifier            { $ftname =
                 )?                                                   { $$parser.endFuncType($ftname); }
 
 # A type with optional variable name (funcptr-type params & returns allow types-only).
-TypeDeclr   <-  base:TypeBase                                        { $desc = $base; }
+TypeDeclr   <=  base:TypeBase                                        { $$ = {}; $desc = $base; }
                 ( POINTER _                                          { $desc = $$parser.pointerDesc($desc); }
                 )*
                 ( id:Identifier                                      { $$.name = $id; }
