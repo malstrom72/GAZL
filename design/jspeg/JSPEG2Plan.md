@@ -570,3 +570,52 @@ Only after that does `jspeg.jspeg` migrate (blocker 2 above is gone), and only t
 `.vs` threading and the `_vsRules` prescan be deleted. Bar unchanged: byte-identical `.gazl` + parity +
 fuzz. **Not yet implemented** — the bootstrap (a self-hosting generator whose emitted preamble and
 hardening must change together) makes this a focused push, not a tail-end edit.
+
+## M4 LANDED (2026-08-28): the holder is gone — param-less rules + a `_val` register, byte-identical
+
+`impala.jspeg`'s generated parser now has **zero holders, zero `._`, and 110 param-less rules**, with the
+value travelling through a single `_val` register. Corpus 0/101 byte-identical, NuXJS parity, dead-strip
+and fuzz 3000 all green. This is the "drop the `$` container" end-state for the real grammar.
+
+**What it took, beyond the design already recorded above:**
+
+1. **Seed the register at a tagged capture** — `(_val=$x, Sub() && ($x=_val, …))` with `$x` a
+   pre-allocated slot. Reconciles impala's fill-in-place helpers with a register model.
+2. **Restore `_val` after a capture** (`,_val=_v`). A capture hands the register to the callee; without
+   putting the rule's own value back, a *following untagged* child inherits the capture's value. This is
+   what broke `ConstDecl` (`makeConstant` saw an unfilled slot).
+3. **Restore `_val` when a capture FAILS** — the subtle one. `((_val=$x,(Sub()))&&(…)||(_val=_v,false))`.
+   PEG backtracking does not unwind the register: `PrePost`'s `op:PREFIX_OP` seeds `_val`, fails on `0`,
+   and the `Value` alternative then filled the *wrong* slot (E407 "Expected constant int").
+4. **Seed `_val` from the root context slot** (`var _val=_o._`). A bare `var _val` starts `undefined`, so
+   the first `lookup`/`makeMeta` filled a throwaway and `assign` hit its missing-meta guard.
+5. `_v` is now declared in **every** value rule (it seeds and restores the register), so it can no longer
+   double as the "assigns `$$`" flag — that moved to a separate `~a` key, preserving the passthrough rule.
+6. Grammar edit (the one exception to "no `impala.jspeg` changes"): the three explicit `$label._` derefs
+   drop their `._`, since a capture now holds the value itself.
+
+Hardening (`updateJSPEG.js`) moved with it: capture vars harden to a bare meta slot
+(`createParserContext()._`), the root init is param-less with `_val=_o._`, and `KEYWORD`/`SYMBOL_CHAR`
+are param-less.
+
+## What is left: deleting holder mode needs the self-grammar's *downward* channel rethought
+
+Flipping `jspeg.jspeg`'s own 40 rules still fails — but no longer from stale aliases (that is fixed).
+It now fails on exactly the **downward context channel** the M1 findings called the self-grammar's hard
+case: `Sequence` pre-fills `$p.vi/.tag/.vr` and then captures the value into the *same* var
+(`p:(Prefix / Action)`). In holder mode `$p` was a persistent box — parent wrote `$p.vi`, child's value
+landed in `$p._`, and the context survived every loop iteration. With a register, `$p = _val` **overwrites
+the box with the value**, so iteration 2 hands `Prefix` a string and `Capture` dies on `_v.vr[...]`.
+
+The fix is not more generator plumbing — it is that this context should not be threaded through holders
+at all:
+
+- `vr` (the vars map) is per-`Definition` and rules never nest, so it can simply be a generator **global**
+  (`Definition` sets it; everyone reads it). That deletes the threading outright.
+- `tag` is only read by `Primary` to emit a holder argument — **dead once holder mode goes**.
+- `vi` appears to be write-only propagation (verify), and `vs` exists solely to select the mode — both
+  disappear with dual-mode.
+
+So the last step is one combined change: **replace `vr` threading with a global, delete the `<-` path,
+`.vs`, `_vsRules`/`~v` and the `tag`/`vi` threading, and flip `jspeg.jspeg` in the same commit** — the
+current dual-mode compiler builds that new generator, which is then value-only. Bar unchanged.
