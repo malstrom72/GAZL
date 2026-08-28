@@ -5384,7 +5384,7 @@ GlobalDecl  <-  (   GLOBAL                                            { $section
 #  Initialiser list for arrays                                  
 # ------------------------------------------------------------------
 # Nested brace tree of compile-time constants, for struct initializers.
-Braced      <-  '{' _                                                { $$ = []; $$.n = 0; }
+Braced      <=  '{' _                                                { $$ = []; $$.n = 0; }
                 ( i:BracedEntry                                      { $$[$$.n++] = $i; }
                   ( ',' _ i:BracedEntry                              { $$[$$.n++] = $i; }
                   )*
@@ -5394,17 +5394,17 @@ Braced      <-  '{' _                                                { $$ = []; 
 # index. One rule for both - which form is legal is decided by the consumer that knows which it is
 # (fieldEntries for a struct, indexedEntry for an array slot). The action sits AFTER the ':' so a
 # bare `ident` expression does not leave $fname set when the group backtracks.
-BracedEntry <-                                                       { $fname = undefined; $fat = $$i; }
+BracedEntry <=                                                       { $fname = undefined; $fat = $$i; }
                 ( id:Identifier ':' _                                { $fname = $id; }
                 )?
-                e:BracedItem                                         { var _v = $e;   /* bare `$e` is the VALUE; `$e.field`
+                e:BracedItem                                         { var _e = $e;   /* bare `$e` is the VALUE; `$e.field`
                                                                                        would set a CONTEXT property, and
                                                                                        `Braced` stores only the value */
-                                                                       _v.field = $fname;
-                                                                       _v.at = $fat;
-                                                                       $$ = _v; }
+                                                                       _e.field = $fname;
+                                                                       _e.at = $fat;
+                                                                       $$ = _e; }
 
-BracedItem  <-  b:Braced                                             { $$ = { braced: $b }; }
+BracedItem  <=  b:Braced                                             { $$ = { braced: $b }; }
                 / x:Expr                                             {
                                                                         var m = metaSlot($x);
                                                                         var op = $$parser.makeRValue(m, '#<&');
@@ -5414,7 +5414,7 @@ BracedItem  <-  b:Braced                                             { $$ = { br
                                                                                type: m.type, elem: m.elem };
                                                                     }
 
-InitList    <-  '{' _                                                 { $d = ' '; $type = undefined; $n = 0; }
+InitList    <=  '{' _                                                 { $d = ' '; $type = undefined; $n = 0; }
                 # Decline a `field:` entry so the ordered choice falls through to `Braced`, which owns the
                 # named form. Without this, `Expr` evaluates the name first and dies as E403 instead.
                 ( !(Identifier ':')                                  { $entryAt = $$i; }   # `Expr` eats the trailing
@@ -5465,7 +5465,7 @@ InitList    <-  '{' _                                                 { $d = ' '
 # ------------------------------------------------------------------
 #  Parameter & local-variable helper lists                      
 # ------------------------------------------------------------------
-ArgsDecl    <-                                                        {
+ArgsDecl    <=                                                        {
                                                                          $$ = [];
                                                                          $$.n = 0;
                                                                      }
@@ -5474,7 +5474,7 @@ ArgsDecl    <-                                                        {
                    )*
                  )?
 
-LocalsDecl  <-                                                        {
+LocalsDecl  <=                                                        {
                                                                          $$ = [];
                                                                          $$.n = 0;
                                                                      }
