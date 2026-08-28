@@ -134,6 +134,45 @@ the migration is uniform; if a few rules use it, they get the return-and-merge r
 the self-grammar's downward-`vi/tag/vr` context to move onto the `$` param) — isolated to the generator, not to
 `impala.jspeg`.
 
+## Go/no-go audit result (2026-08-28): NOT uniform — the postfix-chain/accumulator cluster is the real work
+
+The audit (`auditContainer.js`: per-rule, flag any rule that mutates `$$` as a container without a direct init)
+found **6 of 93 rules** using the pattern: `TypeDeclr`, `ExternDecl`, `VarDecl`, `ArrayDecl`, `FuncCall`,
+`Argument`. Inspecting the two load-bearing ones settles the question — **the answer is that `impala.jspeg` DOES
+use the inherited-container idiom**, in its call machinery:
+
+- **`FuncCall`** receives `$$` = the *callee's* meta record (built earlier in the postfix chain, the documented
+  "`$` shared by uncaptured sub-rules" pattern) and adds `.count/.retSlots/.words/.base/.types/.elems/…` to it.
+  It never inits `$$` because `$$` is inherited — so the JSPEGFuture claim "FuncCall migrates by initializing
+  `$$ = {}`" is **wrong**: that would destroy the inherited callee record.
+- **`Argument`** (referenced untagged ×4 inside `FuncCall`) accumulates into that shared `$$`: `++$$.count`,
+  `$$.types.push(meta.type)`, `$$.words += w`. This is exactly the tagCaptureTest crash pattern — an untagged
+  child mutating the parent's container.
+
+So dropping the `$` container is **not** a mechanical migration of 125 sites. There is a **hard core**: the
+postfix-chain expression builder plus the call/declaration accumulators (the 6 rules above, at least
+`FuncCall`+`Argument` confirmed as inherited-accumulators; the declaration rules — some referenced tagged, e.g.
+`v:VarDecl`, `out:TypeDeclr` — need per-rule triage into "self-container, add init = easy" vs
+"inherited-accumulator = rewrite"). These rules keep a *mutable record threaded across sibling rules*, which the
+per-rule-`_v` model does not provide.
+
+**This is the real design decision the refactor turns on** — how to carry that threaded record without the
+holder. Options (to weigh before M3):
+
+1. **Explicit accumulator off `$$`.** Move the call/decl record onto `$$parser` state (a small stack of
+   in-progress records), the way impala.jspeg already accumulates emitted code via `$$parser.emit`/`metacode`.
+   The postfix chain pushes/reads the current record; `$$` stays a plain value. Most in keeping with the
+   codebase's existing "state lives on `$$parser`" style; the tradeoff is a manual push/pop discipline.
+2. **Return-and-merge.** `Argument` *returns* its `{type, elem, words, …}` contribution; `FuncCall` folds the
+   list. Purely functional, no shared state, but a larger rewrite of the argument loop and the close-of-call
+   checks that currently read the accumulated fields.
+3. **A context object threaded down the chain** (the `$` param this plan already reserves for the self-grammar's
+   scope) — carry the in-progress record on `$` for exactly these rules. Smallest diff to the existing actions,
+   but reintroduces a downward container for one cluster (a scoped, honest version of what we're removing).
+
+Recommendation leans (1): it matches how impala.jspeg already threads cross-rule state and keeps `$$` a pure
+value everywhere. The choice gates M3; the other ~119 sites remain the mechanical migration the plan assumed.
+
 ## Relationship to the other jspeg work
 
 - **[`RefactorPlan.md`](RefactorPlan.md) (return-style helpers) becomes moot for its stated goal.** That plan
