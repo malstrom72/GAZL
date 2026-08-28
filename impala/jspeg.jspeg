@@ -28,8 +28,8 @@ root		<-								{
 				( Spacing b=PikaBlock		{ $fn += $b.replace(/\x24\x24parser\./g, '') + ';' }
 				)? Spacing g:Grammar		{
 												$fn += $g;
-												$fn += "var _i=0,_im=0,_o={_:void 0},_b=root(_o);\n";
-												$fn += "return [_b,_o._,(_b?_i:_im)];\n})\n";
+												$fn += (_vsRules['root'] ? "var _i=0,_im=0,_val,_o={_:void 0},_b=root();\n" : "var _i=0,_im=0,_o={_:void 0},_b=root(_o);\n");
+												$fn += (_vsRules['root'] ? "return [_b,_val,(_b?_i:_im)];\n})\n" : "return [_b,_o._,(_b?_i:_im)];\n})\n");
 												$$ = $fn;
 											}
 
@@ -49,7 +49,7 @@ Grammar		<-								{ $$ = '' }
 
 # ----------------------------------------------------------------------------------------------------------------------
 
-Definition	<-	id:Identifier arrow:LEFTARROW		{ $$.tag = '$'; $$.vi = 0; $$.vr = $vars = {}; $$.vs = ($arrow == '=') }
+Definition	<-	id:Identifier arrow:LEFTARROW		{ $$.tag = '$'; $$.vi = 0; $$.vr = $vars = {}; $$.vs = ($arrow == '='); if ($$.vs) $vars['_v'] = ''; }
 					Expression				{
 								var _v = '';
 								var _p = '';
@@ -60,12 +60,12 @@ Definition	<-	id:Identifier arrow:LEFTARROW		{ $$.tag = '$'; $$.vi = 0; $$.vr = 
 												_p += _k + $vars[_k] + ';';
 											}
 										} else {
-											_v += (_v !== '' ? ',' : '') + (_k === '_v' ? '_v=$._' : _k + $vars[_k]);
+											_v += (_v !== '' ? ',' : '') + (_k === '_v' ? '_v=_val' : _k + $vars[_k]);
 										}
 									}
 								}
-								$$ = 'function ' + $id + '($){' + (_v === '' ? '' : ('var ' + _v + ';')) + _p
-                                                                                                        + 'return ' + ($$.vs && hasOwn($vars, '_v') ? '(' + $$ + ')&&($._=_v,true)' : $$) + '}'
+								$$ = 'function ' + $id + '(' + ($$.vs ? '' : '$') + '){' + (_v === '' ? '' : ('var ' + _v + ';')) + _p
+                                                                                                        + 'return ' + ($$.vs && hasOwn($vars, '_v~a') ? '(' + $$ + ')&&(_val=_v,true)' : $$) + '}'
                                                                                         }
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -107,13 +107,13 @@ Action          <-      b=PikaBlock Spacing                     {
                                                                                                     } else if ($b.slice(0, 3) === '\x24\x24.') {
                                                                                                       var next = $b[3] || '';
                                                                                                       var keepDot = /[A-Za-z0-9_$]/.test(next);
-                                                                                                      if ($$.vs) { s += '_v'; $$.vr['_v'] = ''; } else { s += '$'; }
+                                                                                                      if ($$.vs) { s += '_v'; $$.vr['_v'] = ''; $$.vr['_v~a'] = true; } else { s += '$'; }
                                                                                                       if (keepDot) {
                                                                                                         s += '.';
                                                                                                       }
                                                                                                       $b = $b.slice(3);
                                                                                                     } else if ($b.slice(0, 2) === '\x24\x24') {
-                                                                                                      if ($$.vs) { s += '_v'; $$.vr['_v'] = ''; } else { s += '$._'; }
+                                                                                                      if ($$.vs) { s += '_v'; $$.vr['_v'] = ''; $$.vr['_v~a'] = true; } else { s += '$._'; }
                                                                                                       $b = $b.slice(2);
                                                                                                     } else {
                                                                                                       var m = $b.slice(1).match(/^[A-Za-z_]+/);
@@ -123,7 +123,7 @@ Action          <-      b=PikaBlock Spacing                     {
                                                                                                       $b = $b.slice(e);
                                                                                                       if (!hasOwn($$.vr, id)) {
                                                                                                         $$.vr[id] = '';
-                                                                                                      } else if (($b.slice(0, 2) !== '._') && (hasOwn($$.vr, id + '~v') || ($$.vr[id] !== '' && $b[0] !== '.'))) {
+                                                                                                      } else if (!$$.vs && ($b.slice(0, 2) !== '._') && (hasOwn($$.vr, id + '~v') || ($$.vr[id] !== '' && $b[0] !== '.'))) {
                                                                                                         s += '._';
                                                                                                       }
                                                                                                     }
@@ -155,14 +155,14 @@ Prefix		<-								{ $c.vi = $$.vi; $c.tag = $$.tag; $c.vr = $$.vr; $c.vs = $$.vs
 # ----------------------------------------------------------------------------------------------------------------------
 
 
-Capture		<-	v:Variable EQUALS			{ if ($$.vs) { var _t = ($v === '$._' ? '_v' : $v); $$.vr[_t] = '' } else if ($v !== '$._') $$.vr[$v] = ''; }
+Capture		<-	v:Variable EQUALS			{ if ($$.vs) { var _t = ($v === '$._' ? '_v' : $v); $$.vr[_t] = ''; if (_t === '_v') $$.vr['_v~a'] = true; } else if ($v !== '$._') $$.vr[$v] = ''; }
 						Tagged				{ var _t = ($$.vs && $v === '$._' ? '_v' : $v); $$ = '(function(){var _m=_i;return ' + $$ + '&&(' + _t + '=_s.slice(_m,_i),true)})()' }
 				/ Tagged
 
 # ----------------------------------------------------------------------------------------------------------------------
 
 Tagged		<-	v:Variable COLON			{ $t.vi = $$.vi; $t.vs = $$.vs; if ($v !== '$._') { $t.tag = $v; ($t.vr = $$.vr)[$v] = '={}' } else $t.tag = '$' }
-					t:Suffix				{ if ($$.vs && $v === '$._') { $$.vr['_v'] = ''; $$ = '(' + $t + ')&&(_v=$._,true)' } else { var _cc = ('' + $t).match(/[A-Za-z_][A-Za-z0-9_]*\(/g); var _iv = false; if (_cc) { for (var _ci = 0; _ci < _cc.length; ++_ci) { if (_vsRules[_cc[_ci].slice(0, -1)]) { _iv = true; break; } } } if (_iv && $v !== '$._') $$.vr[$v + '~v'] = true; $$ = $t } }
+					t:Suffix				{ if ($$.vs && $v === '$._') { $$.vr['_v'] = ''; $$.vr['_v~a'] = true; $$ = '(_val=_v,(' + $t + ')&&(_v=_val,true))' } else if ($$.vs) { $$ = '((_val=' + $v + ',(' + $t + '))&&(' + $v + '=_val,_val=_v,true)||(_val=_v,false))' } else { var _cc = ('' + $t).match(/[A-Za-z_][A-Za-z0-9_]*\(/g); var _iv = false; if (_cc) { for (var _ci = 0; _ci < _cc.length; ++_ci) { if (_vsRules[_cc[_ci].slice(0, -1)]) { _iv = true; break; } } } if (_iv && $v !== '$._') $$.vr[$v + '~v'] = true; $$ = $t } }
 				/ Suffix
 				
 # ----------------------------------------------------------------------------------------------------------------------
@@ -174,7 +174,7 @@ Suffix		<-	Primary ( QUESTION			{ $$ = '(' + $$ + ',true)' }
 
 # ----------------------------------------------------------------------------------------------------------------------
 
-Primary		<-	Identifier !LEFTARROW		{ $$ += '(' + $$.tag + ')' }
+Primary		<-	Identifier !LEFTARROW		{ $$ += '(' + ($$.vs ? '' : $$.tag) + ')' }
 				/ Literal					{
 												var l = ($$._).length;
 												if (l == 0) $$ = 'true';

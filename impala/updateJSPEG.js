@@ -102,17 +102,17 @@ function applyImpalaHardening(source, grammar) {
 		"\t}\n\n";
 	patched = patched.replace(metaSlotRegex, metaSlotReplacement);
 
-	patched = patched.replace(/\$[A-Za-z0-9_]*=\{\}/g, (match) => match.replace("={}", "=createParserContext()"));
+	patched = patched.replace(/\$[A-Za-z0-9_]*=\{\}/g, (match) => match.replace("={}", "=createParserContext()._"));
 
-	const keywordFunctionRegex = /function KEYWORD\(\$\)\{[^\n]*\n/;
+	const keywordFunctionRegex = /function KEYWORD\(\)\{[^\n]*\n/;
 	const keywordFunctionReplacement =
-		"function KEYWORD($){var _b=_i,_words=KEYWORD_WORDS,_word,_end,_x;" +
+		"function KEYWORD(){var _b=_i,_words=KEYWORD_WORDS,_word,_end,_x;" +
 		"for(var _k=0;_k<_words.length;++_k){" +
 		"_word=_words[_k];" +
 		"if(_s.substr(_i,_word.length)===_word){" +
 		"_i+=_word.length;" +
 		"_end=_i;" +
-		"_x=SYMBOL_CHAR($);" +
+		"_x=SYMBOL_CHAR();" +
 		"_i=_end;" +
 		"if(!_x)return true;" +
 		"_i=_b;" +
@@ -175,8 +175,8 @@ function applyImpalaHardening(source, grammar) {
 		? patched.replace(assignRegex, (match) => (match.includes("JSPEG meta missing") ? match : `${match}${assignGuard}`))
 		: patched;
 
-	const rootInitPattern = "var _i=0,_im=0,_o={_:void 0},_b=root(_o);";
-	const hardenedRootInit = "var _i=0,_im=0,_o=createParserContext();\n_o.options=_hostOptions;\nvar _b=root(_o);";
+	const rootInitPattern = "var _i=0,_im=0,_val,_o={_:void 0},_b=root();";
+	const hardenedRootInit = "var _i=0,_im=0,_o=createParserContext();\n_o.options=_hostOptions;\nvar _val=_o._,_b=root();";
 	if (!patched.includes(hardenedRootInit)) {
 		patched = patched.replace(rootInitPattern, hardenedRootInit);
 	}

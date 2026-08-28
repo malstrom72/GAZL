@@ -5632,14 +5632,14 @@ Statement   <=                                                        {
                     { $lblStart = $$i; }
                     label:Identifier ':' _                            {
                                                                             $$parser.emitMeta({ operator:'<--', type:undefined,
-                                                                                                operands:[ '@' + $label._, undefined, undefined ] });
+                                                                                                operands:[ '@' + $label, undefined, undefined ] });
                                                                             /* carry the source position so processBranches can
                                                                                name the `.impala` line if this label is a duplicate */
                                                                             var lbl = $$parser.metacode[$$parser.metacode.length - 1];
                                                                             lbl.labelSource = $$s;
                                                                             lbl.labelOffset = $$i;
                                                                             /* the 1.x `goto break;` early-exit idiom is the --legacy case */
-                                                                            $$parser.checkReservedName($label._, 'label', $$s, $lblStart);
+                                                                            $$parser.checkReservedName($label, 'label', $$s, $lblStart);
                                                                         }
                 )*
                 (   ';' _
@@ -6106,7 +6106,7 @@ Block       <=  '{'_ Statement* '}'_
 Goto        <=  GOTO _                              { $gotoStart = $$i; }  # before `';'_` swallows the trailing
                                                                            # newline, which put E445 on the next line
                 label:Identifier ';'_               {
-                                                        $$parser.emit('-->', undefined, '@' + $label._, undefined, undefined);
+                                                        $$parser.emit('-->', undefined, '@' + $label, undefined, undefined);
                                                         /* carry the source position so processBranches can name the
                                                            `.impala` line if this label is never defined (E445) */
                                                         var g = $$parser.metacode[$$parser.metacode.length - 1];
