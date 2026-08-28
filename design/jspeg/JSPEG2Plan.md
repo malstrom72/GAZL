@@ -89,8 +89,18 @@ clobbering hazard the holder model does not: in a passthrough rule like `group <
 The generator must therefore track a per-rule "assigns `$$`" flag (a small addition alongside the existing
 `vars` tracking) and emit the trailing `&& (_val = $$, true)` conditionally.
 
+**Protocol empirically validated (2026-08-28).** [`valueReturningProto.js`](valueReturningProto.js) is a
+hand-generated value-returning parser for `jspegTest.jspeg` (built by applying the emission rules above by hand)
+that passes all 9 arithmetic cases — passthrough (`root`, `group`), the accumulator loops (a tagged sub-call
+sets `_val` but does **not** clobber the parent's `$$` local), operator precedence, parens, whitespace, and
+division. So the `_val`-register model computes correctly end to end; what remains for M1 is making the
+*generator* emit this shape (not whether the shape is right).
+
 This is the working decision; the next implementation step is to prototype the `_val`-register emission in the
-generator and prove byte-identical output. The bootstrap wrinkle to settle there: regenerating `jspegCompiler.js`
+generator and prove byte-identical output. **Generator-surgery hazard noted:** the action rewriter processes `$`
+even inside emitted string literals (that is why the current generated `Definition` carries a stray `var $` from
+its `'($){'` literal), so emitting a literal `$$`/`_val=$$` from the generator's own actions needs care —
+concatenation tricks or a rewriter tweak. The bootstrap wrinkle to settle there: regenerating `jspegCompiler.js`
 with the new emission self-hosts the *self-grammar*, so its downward-context uses must be handled (migrate them
 to the `$` context param, or keep the generator's own actions holder-style behind a mode) — a concern isolated
 to the generator, not to `impala.jspeg`.
