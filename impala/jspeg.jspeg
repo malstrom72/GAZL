@@ -60,7 +60,7 @@ Definition	<-	id:Identifier arrow:LEFTARROW		{ $$.tag = '$'; $$.vi = 0; $$.vr = 
 												_p += _k + $vars[_k] + ';';
 											}
 										} else {
-											_v += (_v !== '' ? ',' : '') + _k + $vars[_k];
+											_v += (_v !== '' ? ',' : '') + (_k === '_v' ? '_v=$._' : _k + $vars[_k]);
 										}
 									}
 								}

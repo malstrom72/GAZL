@@ -5662,14 +5662,12 @@ Statement   <-                                                        {
                                                                      }
                 )
 
-Expr        <=  l:Bitwise                           { $$ = $l }
-                ('='_ r:Expr                       { if (!$$parser.dry)
+Expr        <=  Bitwise ('='_ r:Expr               { if (!$$parser.dry)
                                                        $$parser.assign($$, $$, $r, $$s, $$i); }
                 )?
 
 Bitwise     <=                                     { $first = undefined; }
-                l:AddSub                           { $$ = $l }
-                (op:BITWISE_OP _ r:AddSub          { if (!$$parser.dry) {
+                AddSub (op:BITWISE_OP _ r:AddSub   { if (!$$parser.dry) {
                                                        if ($first === undefined) $first = $op;
                                                        else if ($first !== $op)
                                                            $$parser.mixedBitwise($first, $op, $$s, $$i);
@@ -5678,13 +5676,11 @@ Bitwise     <=                                     { $first = undefined; }
                 )*                                 { if (!$$parser.dry)
                                                        $$parser.stampBitwise($$, $first !== undefined); }
 
-AddSub      <=  l:MulDiv                            { $$ = $l }
-                (op:ADDSUB_OP _ r:MulDiv           { if (!$$parser.dry)
+AddSub      <=  MulDiv (op:ADDSUB_OP _ r:MulDiv    { if (!$$parser.dry)
                                                        $$parser.binaryOp($op, $$, $r, $$s, $$i); }
                 )*
 
-MulDiv      <=  l:PrePost                           { $$ = $l }
-                (op:MULDIV_OP _ r:PrePost          { if (!$$parser.dry)
+MulDiv      <=  PrePost (op:MULDIV_OP _ r:PrePost  { if (!$$parser.dry)
                                                        $$parser.mulDivOp($op, $$, $r, $$s, $$i); }
                 )*
 
@@ -5714,7 +5710,7 @@ PrePost     <=  (op:PREFIX_OP _
                                                           $ccast = 'pointer';
                                                       }
                                                     }
-                ) p:PrePost                         { $$ = $p; if (!$$parser.dry) {
+                ) PrePost                           { if (!$$parser.dry) {
                                                        if ($ccast) {          /* a named/pointer cast; a bare BASE_TYPE cast has no $ccast */
                                                            if ($ccast === 'funcptr') {
                                                                $$parser.checkFuncTypeCast($$, $$parser.descTail($cdesc), $$s, $$i);
@@ -5725,7 +5721,7 @@ PrePost     <=  (op:PREFIX_OP _
                                                            $$parser.unaryOp($op, $$, $$s, $$i);
                                                        }
                                                      } }
-                / Value (FuncCall / Subscript / FieldAccess)*   { $$ = $._ }
+                / Value (FuncCall / Subscript / FieldAccess)*
 
 # ONE subscript. `a[i]` strides by the declared element size, whatever that is - one word for a scalar
 # element, `.z.Struct` for a struct one - and the stride folds at GAZL assembly time whenever the index is
@@ -5742,7 +5738,7 @@ PrePost     <=  (op:PREFIX_OP _
 # `a[y * .d....0 + x]` and reduces to the single linear index every path below already takes. Each index is
 # r-valued as it is parsed, while its meta is still fresh - the discipline call arguments use. One index
 # takes exactly the path it took before this rule learned to count, so a 1-D subscript is byte-identical.
-Subscript   <-  '['_                               { $idxAt = $$i; $subExtra = []; $subAt = []; }
+Subscript   <=  '['_                               { $idxAt = $$i; $subExtra = []; $subAt = []; }
                 s:Expr
                 ( ','_ { $axisAt = $$i; }
                   x:Expr                           { if (!$$parser.dry) {
@@ -5772,7 +5768,7 @@ Subscript   <-  '['_                               { $idxAt = $$i; $subExtra = [
                                                        }
                                                      } }
 
-FieldAccess <-  '->'_ f:Identifier                 { if (!$$parser.dry)
+FieldAccess <=  '->'_ f:Identifier                 { if (!$$parser.dry)
                                                        $$parser.fieldAccess($$, $f, true, $$s, $$i); }
                 / '.'_ f:Identifier                { if (!$$parser.dry)
                                                        $$parser.fieldAccess($$, $f, false, $$s, $$i); }
@@ -6031,11 +6027,11 @@ Argument    <-  { $argAt = $$i;   /* the argument itself; end-of-rule has skippe
                                                        }
                                                     } }
 
-Group       <-  '('_ Expr ')'_                      { if (!$$parser.dry)
+Group       <=  '('_ Expr ')'_                      { if (!$$parser.dry)
                                                         $$parser.stampBitwise($$, false); }
 
 
-BoolGroup   <-  '('_                                { $label = undefined; }
+BoolGroup   <=  '('_                                { $label = undefined; }
                 And ('||'_                          { 
                                                         if ($label === undefined) { 
                                                             $label = $$parser.newLabel('t'); 
@@ -6049,7 +6045,7 @@ BoolGroup   <-  '('_                                { $label = undefined; }
                                                     }
 
 
-And         <-                                      { $label = undefined; }
+And         <=                                      { $label = undefined; }
                 Comp ('&&'_                         { 
                                                         if ($label === undefined) { 
                                                             $label = $$parser.newLabel('f'); 
@@ -6063,7 +6059,7 @@ And         <-                                      { $label = undefined; }
                                                     }
 
 
-Comp        <-  '!'_                                {
+Comp        <=  '!'_                                {
                                                         /* `!` sits BELOW comparison, so `!x == 2` means `!(x == 2)` -
                                                            the opposite of the C reading. Require its operand to be
                                                            parenthesised (or another `!`); reuse the strict-expression
@@ -6516,7 +6512,7 @@ While       <=  WHILE _                             {
 # ---------------------------------------------------------------------------
 #   atomic values
 # ---------------------------------------------------------------------------
-Value       <-  Group
+Value       <=  Group
                 / SIZEOF _ '('_ base:TypeBase        { if (!$$parser.dry) {
                                                         var head = $$parser.strideStruct($base);
                                                         if (head !== undefined) {            /* struct size -> symbolic .z.Name */
@@ -6560,7 +6556,7 @@ Value       <-  Group
 # ---------------------------------------------------------------------------
 #   identifiers, optionally prefixed with “global”
 # ---------------------------------------------------------------------------
-Variable    <-                                      { $global = false; }
+Variable    <=                                      { $global = false; }
                 (GLOBAL _                           { $global = true; }
                 )?
                                                     { $idStart = $$i; }   # `Identifier` eats trailing space, so
