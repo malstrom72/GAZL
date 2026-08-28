@@ -156,8 +156,7 @@ int gazlRun(const char* source, const char* entry) {
 		for (size_t i = 0; i < sizeof (NATIVE_TABLE) / sizeof (*NATIVE_TABLE); ++i)
 			globals.registerNative(NATIVE_NAMES[i], i);
 
-		UInt codeSize, globalsSize, constsSize;
-		UInt functionCount = 0;
+		ProgramSizes sizes = { 0, 0, 0, 0 };
 		{
 			Assembler assem(CODE_MEMORY_SIZE, code, FUNCTION_TABLE_SIZE, functionTable, DATA_MEMORY_SIZE, memory, globals);
 			assem.newUnit("output.gazl");
@@ -170,7 +169,7 @@ int gazlRun(const char* source, const char* entry) {
 					assem.feed(line.c_str());
 				}
 				lineNumber = 0;	// past the last feed: an error below is link-time, with no line to point at
-				assem.finalize(codeSize, globalsSize, constsSize, functionCount);
+				assem.finalize(sizes);
 			} catch (const Exception& x) {
 				std::ostringstream s;
 				if (lineNumber > 0) s << "output.gazl:" << lineNumber << ": error: " << x.what() << '\n' << line;
@@ -180,8 +179,8 @@ int gazlRun(const char* source, const char* entry) {
 			}
 		}
 
-		Processor vm(codeSize, code, functionCount, functionTable, DATA_MEMORY_SIZE, memory, globalsSize
-				, constsSize, CALL_STACK_SIZE, callStack, NATIVE_TABLE, 0);
+		Processor vm(sizes.codeSize, code, sizes.functionCount, functionTable, DATA_MEMORY_SIZE, memory
+				, sizes.globalsSize, sizes.constsSize, CALL_STACK_SIZE, callStack, NATIVE_TABLE, 0);
 		Pointer entryFunction = globals.findFunction(entry);
 		if (entryFunction == 0) {
 			errText = std::string("could not locate function: ") + entry;
