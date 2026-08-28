@@ -253,6 +253,16 @@ struct AssembledProgram {
 };
 
 /*
+	The four sizes an assembly computes: what a program actually used (from `finalize`) or will need (from `measure`).
+*/
+struct ProgramSizes {
+	UInt codeSize;
+	UInt functionCount;
+	UInt globalsSize;
+	UInt constsSize;
+};
+
+/*
 	Parses GAZL source code and emits executable data.
 
 	Maintains symbol tables and compile-time variables while converting assembly text to a binary representation.
@@ -263,10 +273,10 @@ class Assembler {
 						, UInt maxMemorySize, Value* memoryBase, Symbols& globals); 						// Create an assembler for the provided buffers. `functionTable` maps each function's ordinal to its code offset (see `finalize`).
 	public:		void newUnit(const Char* unitName); 														// Begin assembling a new source unit.
 	public:		const Char* feed(const Char* line); 														// Assemble a single line and return pointer to the next.
-	public:		void finalize(UInt& codeSize, UInt& functionCount, UInt& globalsSize, UInt& constsSize); 	// Finish assembly and report memory usage. `functionCount` is the number of entries filled in `functionTable`.
+	public:		void finalize(ProgramSizes& sizes); 														// Finish assembly and report memory usage. `sizes.functionCount` is the number of entries filled in `functionTable`.
+	public:		void finalize(UInt& codeSize, UInt& globalsSize, UInt& constsSize, UInt& functionCount); 	// Positional form of `finalize`; prefer the `ProgramSizes` overload.
 	public:		void finalize(AssembledProgram& program); 													// Finish assembly and fill `program` (the buffers this Assembler was given + the computed sizes) in one step.
-	public:		static void measure(const Char* source, const Symbols& globals, UInt& codeSize, UInt& globalsSize
-						, UInt& constsSize, UInt& functionCount); 											// Dry assembly: report what a real assembly of `source` (whole NUL-terminated text) will need, without the caller sizing or owning any buffer. Seed `globals` exactly as for a real assembly (natives, host defines); it is copied, never touched. Program errors throw exactly as feed() does.
+	public:		static ProgramSizes measure(const Char* source, const Symbols& globals); 					// Dry assembly: report what a real assembly of `source` (whole NUL-terminated text) will need, without the caller sizing or owning any buffer. Seed `globals` exactly as for a real assembly (natives, host defines); it is copied, never touched. Program errors throw exactly as feed() does.
 
 	protected:	struct CompileTimeVar {
 					int types;

@@ -358,7 +358,9 @@ static bool assemble(const char* source, Symbols& globals) {
 			if (nl == std::string::npos) { break; }
 			pos = nl + 1;
 		}
-		assem.finalize(codeSize, fc, gs, cs);
+		ProgramSizes sizes;
+		assem.finalize(sizes);
+		codeSize = sizes.codeSize; fc = sizes.functionCount; gs = sizes.globalsSize; cs = sizes.constsSize;
 	} catch (const Exception& e) {
 		std::printf("  ASSEMBLE FAILED: %s (%s)\n", ASSEMBLER_ERROR_TEXTS[e.error], e.detail.c_str());
 		return false;

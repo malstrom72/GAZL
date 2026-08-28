@@ -919,18 +919,32 @@ void Assembler::finalizeFunction() {
 	locals.clear();
 }
 
-void Assembler::finalize(UInt& codeSize, UInt& functionCount, UInt& globalsSize, UInt& constsSize) {
+void Assembler::finalize(ProgramSizes& sizes) {
 	newUnit(0);
 	if (dataPointer != 0) memset(dataPointer, 0, (dataEnd - dataPointer) * sizeof (*dataPointer));
 	globals.resolveForwardRefs();
-	codeSize = (UInt)(ip - codeBase);
-	functionCount = this->functionCount;
-	globalsSize = (UInt)(globalsPointer - memoryBase);
-	constsSize = (UInt)(memoryEnd - constantsPointer);
+	sizes.codeSize = (UInt)(ip - codeBase);
+	sizes.functionCount = this->functionCount;
+	sizes.globalsSize = (UInt)(globalsPointer - memoryBase);
+	sizes.constsSize = (UInt)(memoryEnd - constantsPointer);
+}
+
+void Assembler::finalize(UInt& codeSize, UInt& globalsSize, UInt& constsSize, UInt& functionCount) {
+	ProgramSizes sizes;
+	finalize(sizes);
+	codeSize = sizes.codeSize;
+	globalsSize = sizes.globalsSize;
+	constsSize = sizes.constsSize;
+	functionCount = sizes.functionCount;
 }
 
 void Assembler::finalize(AssembledProgram& program) {												// fill the whole descriptor in one step
-	finalize(program.codeSize, program.functionCount, program.globalsSize, program.constsSize);	// the computed sizes
+	ProgramSizes sizes;
+	finalize(sizes);																				// the computed sizes
+	program.codeSize = sizes.codeSize;
+	program.functionCount = sizes.functionCount;
+	program.globalsSize = sizes.globalsSize;
+	program.constsSize = sizes.constsSize;
 	program.code = codeBase;																		// the buffers this Assembler was given
 	program.functionTable = functionTable;
 	program.memory = memoryBase;
@@ -946,8 +960,7 @@ void Assembler::finalize(AssembledProgram& program) {												// fill the who
 
 	In the future, we may replace this with a true dry-run that does not require any memory allocations.
 */
-void Assembler::measure(const Char* source, const Symbols& globals, UInt& codeSize, UInt& globalsSize
-		, UInt& constsSize, UInt& functionCount) {
+ProgramSizes Assembler::measure(const Char* source, const Symbols& globals) {
 	UInt codeMax = 256, memoryMax = 256, functionMax = 64;
 	while (true) {
 		std::vector<Instruction> code(codeMax);
@@ -958,13 +971,9 @@ void Assembler::measure(const Char* source, const Symbols& globals, UInt& codeSi
 		assem.newUnit(0);
 		try {
 			for (const Char* p = source; *p != 0; ) p = assem.feed(p);
-			AssembledProgram prog;						// the named-field finalize: immune to this branch's different
-			assem.finalize(prog);						// positional order (prog's scratch pointers die with the loop)
-			codeSize = prog.codeSize;
-			globalsSize = prog.globalsSize;
-			constsSize = prog.constsSize;
-			functionCount = prog.functionCount;
-			return;
+			ProgramSizes sizes;
+			assem.finalize(sizes);
+			return sizes;
 		}
 		catch (const Exception& x) {
 			if (x.error != NOT_ENOUGH_CODE_SPACE && x.error != NOT_ENOUGH_MEMORY_SPACE
@@ -1864,10 +1873,7 @@ bool unitTest() {
 		Symbols globals;
 		seedTestNatives(globals);
 
-		UInt codySize = 0;
-		UInt globalsSize = 0;
-		UInt constsSize;
-		UInt functionCount = 0;
+		ProgramSizes sizes = { 0, 0, 0, 0 };
 		{
 			Assembler assem(MAX_CODE_SIZE, cody, MAX_FUNCTION_COUNT, functionTable, MEMORY_SIZE, memory, globals);
 			assem.newUnit("UnitTest");
@@ -1875,7 +1881,7 @@ bool unitTest() {
 			while (*cp != 0) {
 				try {
 					cp = assem.feed(cp);
-					if (*cp == 0) assem.finalize(codySize, functionCount, globalsSize, constsSize);
+					if (*cp == 0) assem.finalize(sizes);
 				}
 				catch (const Exception& e) {
 					(void)e;
@@ -1889,16 +1895,16 @@ bool unitTest() {
 		{
 			Symbols seed;
 			seedTestNatives(seed);
-			UInt mCody, mGlobals, mConsts, mFunctions;
+			ProgramSizes measured = { 0, 0, 0, 0 };
 			try {
-				Assembler::measure(UNITTEST, seed, mCody, mGlobals, mConsts, mFunctions);
+				measured = Assembler::measure(UNITTEST, seed);
 			}
 			catch (const Exception& e) {
 				(void)e;
 				assert(0);
 			}
-			assert(mCody == codySize && mGlobals == globalsSize && mConsts == constsSize
-					&& mFunctions == functionCount);
+			assert(measured.codeSize == sizes.codeSize && measured.globalsSize == sizes.globalsSize
+					&& measured.constsSize == sizes.constsSize && measured.functionCount == sizes.functionCount);
 		}
 			
 		TestCallbackData callbackData;
@@ -1911,8 +1917,8 @@ bool unitTest() {
 
 		std::vector<unsigned char> memoryBlob;
 		{
-			Processor pmachine(codySize, cody, functionCount, functionTable, MEMORY_SIZE, memory, globalsSize, constsSize
-					, CALL_STACK_SIZE, callStack, nativeTable, &callbackData);
+			Processor pmachine(sizes.codeSize, cody, sizes.functionCount, functionTable, MEMORY_SIZE, memory
+					, sizes.globalsSize, sizes.constsSize, CALL_STACK_SIZE, callStack, nativeTable, &callbackData);
 			Pointer funcy = globals.findFunction("test");
 			assert(funcy != 0);
 			Status status = pmachine.enterCall(funcy);
@@ -1945,10 +1951,7 @@ bool unitTest() {
 			Symbols globals2;
 			seedTestNatives(globals2);
 
-			UInt codySize2 = 0;
-			UInt globalsSize2 = 0;
-			UInt constsSize2 = 0;
-			UInt functionCount2 = 0;
+			ProgramSizes sizes2 = { 0, 0, 0, 0 };
 			{
 				Assembler assem(MAX_CODE_SIZE, &cody2[0], MAX_FUNCTION_COUNT, &functionTable2[0], MEMORY_SIZE, &memory2[0]
 						, globals2);
@@ -1956,12 +1959,12 @@ bool unitTest() {
 				const Char* cp = UNITTEST;
 				while (*cp != 0) {
 					cp = assem.feed(cp);
-					if (*cp == 0) assem.finalize(codySize2, functionCount2, globalsSize2, constsSize2);
+					if (*cp == 0) assem.finalize(sizes2);
 				}
 			}
 
-			Processor pmachine2(codySize2, &cody2[0], functionCount2, &functionTable2[0], MEMORY_SIZE, &memory2[0]
-					, globalsSize2, constsSize2, CALL_STACK_SIZE, &callStack2[0], nativeTable, &callbackData);
+			Processor pmachine2(sizes2.codeSize, &cody2[0], sizes2.functionCount, &functionTable2[0], MEMORY_SIZE, &memory2[0]
+					, sizes2.globalsSize, sizes2.constsSize, CALL_STACK_SIZE, &callStack2[0], nativeTable, &callbackData);
 			MemoryLoad loaded = thawMemory(pmachine2, globals2, memoryBlob.empty() ? 0 : &memoryBlob[0], (UInt)memoryBlob.size());
 			assert(loaded == MEMORY_OK);
 

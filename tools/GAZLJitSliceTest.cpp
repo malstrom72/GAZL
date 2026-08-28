@@ -160,7 +160,10 @@ static bool assembleKernel(Symbols& globals, Pointer& gInPtr, Pointer& gOutPtr) 
 			}
 			pos = nl + 1;
 		}
-		assem.finalize(codeSize, functionCount, globalsSize, constsSize);
+		ProgramSizes sizes;
+		assem.finalize(sizes);
+		codeSize = sizes.codeSize; functionCount = sizes.functionCount;
+		globalsSize = sizes.globalsSize; constsSize = sizes.constsSize;
 	} catch (const Exception& e) {
 		std::printf("  ASSEMBLE FAILED: %s (%s)\n", ASSEMBLER_ERROR_TEXTS[e.error], e.detail.c_str());
 		return false;
