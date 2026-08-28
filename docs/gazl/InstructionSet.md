@@ -729,6 +729,13 @@ miscounted row into an error at that row rather than a silent write into whateve
             SEEK :.o.Voice.gain
             DATf #0.5
 
+A `SEEK` row may carry a label: it names the region's start address, exactly as a label on a `DAT*` row names that
+row's address - but without requiring any fill, so a named cursor into zero-filled space costs nothing. With `*extent`
+the extent becomes the symbol's size (as a section's size does for its `GLOB`/`CNST` label); without it the size is 1.
+
+    ring:   GLOB *.z.Ring
+    head:   SEEK :.o.Ring.head *1            ; named, zero-initialized - no DAT row needed
+
 A section containing no `SEEK` is a single implicit region at offset 0 - GAZL 1 semantics, unchanged. An offset or
 extent reaching past the section is `Offset out of bounds` at the `SEEK` row; two regions of one section overlapping
 is `Data regions overlap`, checked when a region closes (at the next `SEEK`, the next section, or the end of

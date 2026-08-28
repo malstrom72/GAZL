@@ -96,9 +96,10 @@ seek.test:              GLOB *8
                         SEEK :OFF_HI                         ; out of order on purpose: 5 first, 1 below it later
                         DATi #500
                         DATf #600.5
-                        SEEK :OFF_LO *EXT_LO                 ; bounded: claims words 1-3, writes two, the tail zero-fills
+seek.lo:                SEEK :OFF_LO *EXT_LO                 ; bounded: claims words 1-3, writes two, the tail zero-fills; the label names the cursor and the extent becomes its size
                         DATi #100
                         DATi #200
+seek.mark:              SEEK :7                              ; label only: a named cursor with no DAT rows at all
 
 ;-------------------------------------------------------------------------------
 test:                   FUNC
@@ -164,6 +165,11 @@ test:                   FUNC
  NEQi       i2              #0              @fail            ; the bounded region's unwritten tail is zero
  PEEK       i3              &seek.test:0
  NEQi       i3              #0              @fail            ; so is a word no region touched
+ PEEK       i0              &seek.lo:1
+ NEQi       i0              #200            @fail            ; a SEEK label is the region's address, offsettable like any data label
+ POKE       &seek.mark      #700
+ PEEK       i1              &seek.test:7
+ NEQi       i1              #700            @fail            ; a label-only SEEK names a cursor with no DAT behind it
 
 ;
 ; Test the GAZL 2 `t` call-target type. tOne / tTwo are minted inside the GAZL #2 region at the end of

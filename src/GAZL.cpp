@@ -1316,6 +1316,8 @@ const Char* Assembler::feed(const Char* line) {
 									throw Exception(OFFSET_OUT_OF_BOUNDS, dataLabel);
 								dataPointer = sectionBegin + regionStart;
 								dataEnd = (regionExtent < 0 ? sectionEnd : dataPointer + regionExtent);
+								v.p = (Int)(dataPointer - memoryBase + MEMORY_OFFSET);	// a label names the cursor without requiring a fill; a bounded region's extent rides along as the symbol's size
+								declare(globals, labelBegin, labelEnd, dataLabelType, v, (regionExtent < 0 ? 1 : (UInt)(regionExtent)));
 								break;
 							}
 					
