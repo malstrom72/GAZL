@@ -59,7 +59,7 @@ Definition	<-	id:Identifier arrow:LEFTARROW		{ $$.tag = '$'; $$.vi = 0; $$.vr = 
 									}
 								}
 								$$ = 'function ' + $id + '($){' + (_v === '' ? '' : ('var ' + _v + ';')) + _p
-                                                                                                        + 'return ' + $$ + '}'
+                                                                                                        + 'return ' + ($$.vs && hasOwn($vars, '_v') ? '(' + $$ + ')&&($._=_v,true)' : $$) + '}'
                                                                                         }
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -101,13 +101,13 @@ Action          <-      b=PikaBlock Spacing                     {
                                                                                                     } else if ($b.slice(0, 3) === '\x24\x24.') {
                                                                                                       var next = $b[3] || '';
                                                                                                       var keepDot = /[A-Za-z0-9_$]/.test(next);
-                                                                                                      s += '$';
+                                                                                                      if ($$.vs) { s += '_v'; $$.vr['_v'] = ''; } else { s += '$'; }
                                                                                                       if (keepDot) {
                                                                                                         s += '.';
                                                                                                       }
                                                                                                       $b = $b.slice(3);
                                                                                                     } else if ($b.slice(0, 2) === '\x24\x24') {
-                                                                                                      s += '$._';
+                                                                                                      if ($$.vs) { s += '_v'; $$.vr['_v'] = ''; } else { s += '$._'; }
                                                                                                       $b = $b.slice(2);
                                                                                                     } else {
                                                                                                       var m = $b.slice(1).match(/^[A-Za-z_]+/);
@@ -117,7 +117,7 @@ Action          <-      b=PikaBlock Spacing                     {
                                                                                                       $b = $b.slice(e);
                                                                                                       if (!hasOwn($$.vr, id)) {
                                                                                                         $$.vr[id] = '';
-                                                                                                      } else if ($$.vr[id] !== '' && $b[0] !== '.') {
+                                                                                                      } else if (!$$.vs && $$.vr[id] !== '' && $b[0] !== '.') {
                                                                                                         s += '._';
                                                                                                       }
                                                                                                     }
@@ -149,14 +149,14 @@ Prefix		<-								{ $c.vi = $$.vi; $c.tag = $$.tag; $c.vr = $$.vr; $c.vs = $$.vs
 # ----------------------------------------------------------------------------------------------------------------------
 
 
-Capture		<-	v:Variable EQUALS			{ if ($v !== '$._') $$.vr[$v] = ''; }
-						Tagged				{ $$ = '(function(){var _m=_i;return ' + $$ + '&&(' + $v + '=_s.slice(_m,_i),true)})()' }
+Capture		<-	v:Variable EQUALS			{ if ($$.vs) { var _t = ($v === '$._' ? '_v' : $v); $$.vr[_t] = '' } else if ($v !== '$._') $$.vr[$v] = ''; }
+						Tagged				{ var _t = ($$.vs && $v === '$._' ? '_v' : $v); $$ = '(function(){var _m=_i;return ' + $$ + '&&(' + _t + '=_s.slice(_m,_i),true)})()' }
 				/ Tagged
 
 # ----------------------------------------------------------------------------------------------------------------------
 
-Tagged		<-	v:Variable COLON			{ $t.vi = $$.vi; $t.vs = $$.vs; if ($v !== '$._') { $t.tag = $v; ($t.vr = $$.vr)[$v] = '={}' } else $t.tag = '$' }
-					t:Suffix				{ $$ = $t }
+Tagged		<-	v:Variable COLON			{ $t.vi = $$.vi; $t.vs = $$.vs; if ($$.vs) { $t.tag = '$'; $t.vr = $$.vr } else if ($v !== '$._') { $t.tag = $v; ($t.vr = $$.vr)[$v] = '={}' } else $t.tag = '$' }
+					t:Suffix				{ if ($$.vs) { var _t = ($v === '$._' ? '_v' : $v); $$.vr[_t] = ''; $$ = '(' + $t + ')&&(' + _t + '=$._,true)' } else $$ = $t }
 				/ Suffix
 				
 # ----------------------------------------------------------------------------------------------------------------------
