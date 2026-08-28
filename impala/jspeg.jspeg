@@ -43,7 +43,7 @@ Grammar		<-								{ $$ = '' }
 
 # ----------------------------------------------------------------------------------------------------------------------
 
-Definition	<-	id:Identifier LEFTARROW		{ $$.tag = '$'; $$.vi = 0; $$.vr = $vars = {} }
+Definition	<-	id:Identifier arrow:LEFTARROW		{ $$.tag = '$'; $$.vi = 0; $$.vr = $vars = {}; $$.vs = ($arrow == '=') }
 					Expression				{
 								var _v = '';
 								var _p = '';
@@ -64,14 +64,14 @@ Definition	<-	id:Identifier LEFTARROW		{ $$.tag = '$'; $$.vi = 0; $$.vr = $vars 
 
 # ----------------------------------------------------------------------------------------------------------------------
 
-Expression	<-								{ $s.vi = $$.vi + 1; $s.tag = $$.tag; $s.vr = $$.vr; $$ = '' }
+Expression	<-								{ $s.vi = $$.vi + 1; $s.tag = $$.tag; $s.vr = $$.vr; $s.vs = $$.vs; $$ = '' }
 				s:Sequence					{ $$ = $s }
 				( SLASH s:Sequence			{ $$ += '||' + $s }
 				)*							{ $$ = '(function(){var _b=_i;return ' + $$ + '})()' }
 
 # ----------------------------------------------------------------------------------------------------------------------
 
-Sequence	<-								{ $p.vi = $$.vi; $p.tag = $$.tag; $p.vr = $$.vr; $$ = '' }
+Sequence	<-								{ $p.vi = $$.vi; $p.tag = $$.tag; $p.vr = $$.vr; $p.vs = $$.vs; $$ = '' }
 				( p:(Prefix / Action)		{ $$ += ($$ !== '' ? '&&' : '') + $p }
 				)*							{ $$ += ($$ === '' ? 'true' : '||(_im=(_i>_im?_i:_im),_i=_b,false)') }
 
@@ -141,7 +141,7 @@ Action          <-      b=PikaBlock Spacing                     {
 												
 # ----------------------------------------------------------------------------------------------------------------------
 
-Prefix		<-								{ $c.vi = $$.vi; $c.tag = $$.tag; $c.vr = $$.vr }
+Prefix		<-								{ $c.vi = $$.vi; $c.tag = $$.tag; $c.vr = $$.vr; $c.vs = $$.vs }
 				AND c:Capture				{ $$ = '(function(){var _l=_i' + ',_x=' + $c + ';_i=_l;return _x})()' }
 				/ NOT c:Capture				{ $$ = '(function(){var _l=_i' + ',_x=' + $c + ';_i=_l;return !_x})()' }
 				/ Capture
@@ -155,7 +155,7 @@ Capture		<-	v:Variable EQUALS			{ if ($v !== '$._') $$.vr[$v] = ''; }
 
 # ----------------------------------------------------------------------------------------------------------------------
 
-Tagged		<-	v:Variable COLON			{ $t.vi = $$.vi; if ($v !== '$._') { $t.tag = $v; ($t.vr = $$.vr)[$v] = '={}' } else $t.tag = '$' }
+Tagged		<-	v:Variable COLON			{ $t.vi = $$.vi; $t.vs = $$.vs; if ($v !== '$._') { $t.tag = $v; ($t.vr = $$.vr)[$v] = '={}' } else $t.tag = '$' }
 					t:Suffix				{ $$ = $t }
 				/ Suffix
 				
@@ -295,7 +295,7 @@ PikaComment	<-	'/*' (!'*/' .)* '*/'
 
 # ----------------------------------------------------------------------------------------------------------------------
 
-LEFTARROW	<-	'<-' Spacing
+LEFTARROW	<-	'<-' Spacing { $$ = '' } / '<=' Spacing { $$ = '=' }
 SLASH		<-	'/' Spacing
 AND			<-	'&' Spacing
 NOT			<-	'!' Spacing
