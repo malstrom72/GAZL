@@ -989,10 +989,12 @@ void Assembler::threadBranches() {
 	}
 }
 
-// A region's claim is only known when it CLOSES - an unbounded one claims exactly the words it wrote -
-// so every overlap check happens here, against the claims of the same section's earlier regions. Within
-// a region filling is append-only against `dataEnd`, so disjoint claims mean no word is initialized
-// twice. A section without SEEK is one implicit region and never reaches the loop with a neighbour.
+/*
+	A region's claim is only known when it CLOSES - an unbounded one claims exactly the words it wrote - so every
+	overlap check happens here, against the claims of the same section's earlier regions. Within a region filling
+	is append-only against `dataEnd`, so disjoint claims mean no word is initialized twice. A section without SEEK
+	is one implicit region and never reaches the loop with a neighbour.
+*/
 void Assembler::closeDataRegion() {
 	if (dataPointer == 0) return;
 	const Int b = regionStart;
@@ -1018,16 +1020,19 @@ void Assembler::finalize(UInt& codeSize, UInt& globalsSize, UInt& constsSize, UI
 	functionCount = this->functionCount;
 }
 
-// Dry assembly. Assembles into internally-owned scratch that starts small and doubles on the three
-// arena overflows, so the caller neither sizes nor owns a guess and the answer is exact by
-// construction - it IS a real assembly, just thrown away. The cost is a transient allocation and at
-// most log2 of the largest final arena in restarts; every other outcome, program errors included, is
-// exactly feed()'s. Each attempt works on a COPY of the seed symbols, so the caller's table never
-// learns the program's names and a retry never sees a half-defined one.
+/*
+	Dry assembly. Assembles into internally-owned scratch that starts small and doubles on the three arena overflows,
+	so the caller neither sizes nor owns a guess and the answer is exact by construction - it IS a real assembly,
+	just thrown away. The cost is a transient allocation and at	most log2 of the largest final arena in restarts;
+	every other outcome, program errors included, is exactly feed()'s. Each attempt works on a COPY of the seed symbols,
+	so the caller's table never learns the program's names and a retry never sees a half-defined one.
+
+	In the future, we may replace this with a true dry-run that does not require any memory allocations.
+*/
 void Assembler::measure(const Char* source, const Symbols& globals, UInt& codeSize, UInt& globalsSize
 		, UInt& constsSize, UInt& functionCount) {
 	UInt codeMax = 256, memoryMax = 256, functionMax = 64;
-	for (;;) {
+	while (true) {
 		std::vector<Instruction> code(codeMax);
 		std::vector<UInt> functions(functionMax);
 		std::vector<Value> memory(memoryMax);
@@ -1614,7 +1619,7 @@ Int Processor::run() {
 			case COPY_VCC:	ui = V0.i - MEMORY_OFFSET; ui2 = C1.i - MEMORY_OFFSET; goto copy;
 			case COPY_CVC:	ui = C0.i - MEMORY_OFFSET; ui2 = V1.i - MEMORY_OFFSET; goto copy;
 			case COPY_CCC:	ui = C0.i - MEMORY_OFFSET; ui2 = C1.i - MEMORY_OFFSET; goto copy;
-			copy:			if (ui + C2.i <= rwMemorySize && ui2 + C2.i <= memorySize) {	// <= : copying C2 words up to index ui+C2-1 is in bounds when ui+C2 reaches the size exactly, matching PEEK/POKE
+			copy:			if (ui + C2.i <= rwMemorySize && ui2 + C2.i <= memorySize) {
 								// std::copy(&mb[ui2 + MEMORY_OFFSET], &mb[ui2 + MEMORY_OFFSET] + C2.i, &mb[ui + MEMORY_OFFSET]);
 								// memcpy(&mb[ui + MEMORY_OFFSET], &mb[ui2 + MEMORY_OFFSET], sizeof (Value) * C2.i);
 								const Value* sp = &mb[ui2 + MEMORY_OFFSET];
