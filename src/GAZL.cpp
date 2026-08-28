@@ -937,16 +937,19 @@ void Assembler::finalize(AssembledProgram& program) {												// fill the who
 	program.memorySize = (UInt)(memoryEnd - memoryBase);
 }
 
-// Dry assembly. Assembles into internally-owned scratch that starts small and doubles on the three
-// arena overflows, so the caller neither sizes nor owns a guess and the answer is exact by
-// construction - it IS a real assembly, just thrown away. The cost is a transient allocation and at
-// most log2 of the largest final arena in restarts; every other outcome, program errors included, is
-// exactly feed()'s. Each attempt works on a COPY of the seed symbols, so the caller's table never
-// learns the program's names and a retry never sees a half-defined one.
+/*
+	Dry assembly. Assembles into internally-owned scratch that starts small and doubles on the three arena overflows,
+	so the caller neither sizes nor owns a guess and the answer is exact by construction - it IS a real assembly,
+	just thrown away. The cost is a transient allocation and at	most log2 of the largest final arena in restarts;
+	every other outcome, program errors included, is exactly feed()'s. Each attempt works on a COPY of the seed symbols,
+	so the caller's table never learns the program's names and a retry never sees a half-defined one.
+
+	In the future, we may replace this with a true dry-run that does not require any memory allocations.
+*/
 void Assembler::measure(const Char* source, const Symbols& globals, UInt& codeSize, UInt& globalsSize
 		, UInt& constsSize, UInt& functionCount) {
 	UInt codeMax = 256, memoryMax = 256, functionMax = 64;
-	for (;;) {
+	while (true) {
 		std::vector<Instruction> code(codeMax);
 		std::vector<UInt> functions(functionMax);
 		std::vector<Value> memory(memoryMax);
