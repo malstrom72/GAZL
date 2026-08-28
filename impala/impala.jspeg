@@ -4665,17 +4665,17 @@ root        <-  _                                                     { $$parser
 # `import "path"` names a unit for the builder's link closure. The compiler itself treats it
 # as a no-op - `impala build` resolves the closure, concatenates the sources, and compiles the
 # whole program at once, so the import directives are already satisfied by that point.
-ImportDecl  <-  IMPORT _ path:StringLiteral _
+ImportDecl  <=  IMPORT _ path:StringLiteral _
 
 # An `export` prefix marks a definition host-visible (Step 5). It rides the `; signature`
 # metadata as a role prefix and is only load-bearing under the builder's `--dead-strip`.
-ExportDecl  <-  EXPORT _                                              { $$parser.exportNext = true; }
+ExportDecl  <=  EXPORT _                                              { $$parser.exportNext = true; }
                 (FuncDecl / GlobalDecl / ConstDecl)                   { $$parser.exportNext = false; }
 
 # ------------------------------------------------------------------
 #  struct definition
 # ------------------------------------------------------------------
-StructDecl  <-  STRUCT _ { $nmAt = $$i; } id:Identifier              { $sname = $id; $$parser.beginStruct($id, $$s, $nmAt); }
+StructDecl  <=  STRUCT _ { $nmAt = $$i; } id:Identifier              { $sname = $id; $$parser.beginStruct($id, $$s, $nmAt); }
                 '{' _
                 ( f:(ArrayDecl / VarDecl)                            {
                                                                          $$parser.addStructField($sname,
@@ -4697,7 +4697,7 @@ StructDecl  <-  STRUCT _ { $nmAt = $$i; } id:Identifier              { $sname = 
 #    functype Name(params) [returns t1, t2, ...]
 #  Emits nothing - it only registers a signature usable as a base type.
 # ------------------------------------------------------------------
-FuncTypeDecl <- FUNCTYPE _ { $nmAt = $$i; } id:Identifier            { $ftname = $id; $$parser.beginFuncType($id, $$s, $nmAt); }
+FuncTypeDecl <= FUNCTYPE _ { $nmAt = $$i; } id:Identifier            { $ftname = $id; $$parser.beginFuncType($id, $$s, $nmAt); }
                 '(' _
                 ( p:TypeDeclr                                        { $$parser.addFuncTypeParam($ftname, $p.type, $p.elem, $p.struct, $p.words, $p.name, $$s, $$i); }
                   ( ',' _ p:TypeDeclr                                { $$parser.addFuncTypeParam($ftname, $p.type, $p.elem, $p.struct, $p.words, $p.name, $$s, $$i); }
@@ -4732,7 +4732,7 @@ TypeDeclr   <=  base:TypeBase                                        { $$ = {}; 
 # ------------------------------------------------------------------
 #  function declaration
 # ------------------------------------------------------------------
-FuncDecl    <-                                                        { $inl = false; }
+FuncDecl    <=                                                        { $inl = false; }
                 ( INLINE                                              { $inl = true; $inlAt = $$i; }
                   _
                 )?
@@ -5146,7 +5146,7 @@ ExternDecl  <=  EXTERN _                                              { $$ = {};
                                                                         }
                                                                     }
 
-ConstDecl   <-  CONST _ base:TypeBase                                 {
+ConstDecl   <=  CONST _ base:TypeBase                                 {
                                                                          /* Same type grammar as every other declarator (TypeBase, not
                                                                             bare BASE_TYPE), so a const can name a struct pointer or a
                                                                             named functype - a const is an assembler-level address/scalar
@@ -5221,7 +5221,7 @@ ConstDecl   <-  CONST _ base:TypeBase                                 {
                                                                          }
                  )                                                     { $$parser.noForward = $nf; }
 
-GlobalDecl  <-  (   GLOBAL                                            { $section = 'GLOB'; }
+GlobalDecl  <=  (   GLOBAL                                            { $section = 'GLOB'; }
                  /  READONLY                                          { $section = 'CNST'; }
                  /  TEMPORARY                                         { $section = 'TEMP'; }
                  ) _
