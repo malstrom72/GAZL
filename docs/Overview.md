@@ -73,17 +73,18 @@ The virtual machine and assembler are implemented in standard C++ in a single he
 Use the `Assembler` class to parse assembly source and the `Processor` class to execute code. An example is found in `tools/GAZLCmd.cpp`:
 
 ```cpp
-Assembler assem(100000, codeMemory, 100000, dataMemory, globals);
+Assembler assem(100000, codeMemory, 1000, functionTable, 100000, dataMemory, globals);
 assem.newUnit("file.gazl");
 const char* cp = source.c_str();
 while (*cp != 0) {
     cp = assem.feed(cp);
-    if (*cp == 0) assem.finalize(codeSize, rwSize, constSize);
 }
+ProgramSizes sizes;
+assem.finalize(sizes);
 
-Processor vm(codeSize, codeMemory, memorySize, dataMemory,
-             rwSize + 30000, rwSize, 30000,
-             ipStackSize, callStack, nativeFuncs);
+Processor vm(sizes.codeSize, codeMemory, sizes.functionCount, functionTable,
+             memorySize, dataMemory, sizes.globalsSize, sizes.constsSize,
+             ipStackSize, callStack, nativeFuncs, 0);
 vm.enterCall(globals.findFunction("main"));
 Status result = vm.run();
 ```
