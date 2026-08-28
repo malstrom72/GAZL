@@ -13,10 +13,10 @@ const root = __dirname;
 // word simply never matches, so it parses as an identifier and the failure surfaces far from the cause.
 // Order does not matter - the loop retries on a SYMBOL_CHAR mismatch, so `for` cannot shadow `from`.
 function keywordWordsFrom(grammar) {
-	const rule = grammar.match(/^KEYWORD[ \t]*<-([\s\S]*?)\n[ \t\r]*\n/m);
+	const rule = grammar.match(/^KEYWORD[ \t]*<[-=]([\s\S]*?)\n[ \t\r]*\n/m);
 	if (!rule) throw new Error("KEYWORD rule not found in impala.jspeg");
 	return (rule[1].match(/[A-Z][A-Z0-9_]*/g) || []).map((name) => {
-		const literal = grammar.match(new RegExp("\\b" + name + "\\s*<-\\s*'([^']*)'"));
+		const literal = grammar.match(new RegExp("\\b" + name + "\\s*<[-=]\\s*'([^']*)'"));
 		if (!literal) throw new Error(`KEYWORD alternative ${name} has no literal in impala.jspeg`);
 		return literal[1];
 	});

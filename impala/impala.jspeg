@@ -4657,7 +4657,7 @@ var _sn = $$parser.strideStruct(field.elem);
 # position has run past its trailing whitespace and comments onto the NEXT declaration - so an
 # origin taken there names the wrong line. Each declaration records where it STARTED instead;
 # every emit site reports `$$parser.declOffset`, error sites keep using the precise `$$i`.
-root        <-  _                                                     { $$parser.start(); }
+root        <=  _                                                     { $$parser.start(); }
                 ( { $$parser.declOffset = $$i; $$parser.declSource = $$s; }
                   (ImportDecl / ExportDecl / FuncDecl / StructDecl / FuncTypeDecl / ExternDecl / ConstDecl
                   / GlobalDecl / ';'_) )* !.                          { $$parser.end(); }
@@ -6575,34 +6575,34 @@ FloatLiteral    <=  $$=([-+]? DIGIT+ "." DIGIT+ (("E" / "e") ([-+]? DIGIT+))?) _
 IntegerLiteral  <=  $$=([-+]? ("0x" HEX+ / "'" (!"'" ASCII)* "'" / DIGIT+)) _
 StringLiteral   <=  $$=( '"' ( !["\\\0-\37\200-\377] . / "\\" ( [\"\\bfnrt] / 'u' HEX HEX HEX HEX ) )* '"' ) _
 
-KEYWORD     <-  ABS / ARRAY / ASSERT / CASE / CONST / COPY / DEFAULT / DO / ELSE / EXPORT / EXTERN / FLOAT / FLOOR / FOR / FROM
+KEYWORD     <=  ABS / ARRAY / ASSERT / CASE / CONST / COPY / DEFAULT / DO / ELSE / EXPORT / EXTERN / FLOAT / FLOOR / FOR / FROM
                 / FTOI / FUNCPTR / FUNCTYPE / FUNCTION / GLOBAL / GOTO / IF / IMPORT / INLINE / INT / ITOF / LOCALS / LOOP / NATIVE / NULL / NULLFUNC
                 / POINTER / READONLY / RETURNS / SIZEOF / STRUCT / SWITCH / TEMPORARY / TO / WHILE
 
-ABS         <-  'abs' !SYMBOL_CHAR          ARRAY       <-  'array' !SYMBOL_CHAR
-ASSERT      <-  'assert' !SYMBOL_CHAR       CASE        <-  'case' !SYMBOL_CHAR
-CONST       <-  'const' !SYMBOL_CHAR        COPY        <-  'copy' !SYMBOL_CHAR
-DEFAULT     <-  'default' !SYMBOL_CHAR
-DO          <-  'do' !SYMBOL_CHAR           ELSE        <-  'else' !SYMBOL_CHAR
-EXPORT      <-  'export' !SYMBOL_CHAR       IMPORT      <-  'import' !SYMBOL_CHAR
-EXTERN      <-  'extern' !SYMBOL_CHAR       FLOAT       <-  'float' !SYMBOL_CHAR
-INLINE      <-  'inline' !SYMBOL_CHAR
-FLOOR       <-  'floor' !SYMBOL_CHAR        FOR         <-  'for' !SYMBOL_CHAR
-FROM        <-  'from' !SYMBOL_CHAR
-FTOI        <-  'ftoi' !SYMBOL_CHAR         FUNCPTR     <-  'funcptr' !SYMBOL_CHAR
-FUNCTYPE    <-  'functype' !SYMBOL_CHAR
-FUNCTION    <-  'function' !SYMBOL_CHAR     GLOBAL      <-  'global' !SYMBOL_CHAR
-GOTO        <-  'goto' !SYMBOL_CHAR         IF          <-  'if' !SYMBOL_CHAR
-INT         <-  'int' !SYMBOL_CHAR          ITOF        <-  'itof' !SYMBOL_CHAR
-LOCALS      <-  'locals' !SYMBOL_CHAR       LOOP        <-  'loop' !SYMBOL_CHAR
-NATIVE      <-  'native' !SYMBOL_CHAR       NULL        <-  'null' !SYMBOL_CHAR
-NULLFUNC    <-  'nullfunc' !SYMBOL_CHAR
-POINTER     <-  'pointer' !SYMBOL_CHAR      READONLY    <-  'readonly' !SYMBOL_CHAR
-RETURN      <-  'return' !SYMBOL_CHAR       RETURNS     <-  'returns' !SYMBOL_CHAR
-SWITCH      <-  'switch' !SYMBOL_CHAR
-SIZEOF      <-  'sizeof' !SYMBOL_CHAR       STRUCT      <-  'struct' !SYMBOL_CHAR
-TEMPORARY   <-  'temporary' !SYMBOL_CHAR    TO          <-  'to' !SYMBOL_CHAR
-WHILE       <-  'while' !SYMBOL_CHAR
+ABS         <=  'abs' !SYMBOL_CHAR          ARRAY       <=  'array' !SYMBOL_CHAR
+ASSERT      <=  'assert' !SYMBOL_CHAR       CASE        <=  'case' !SYMBOL_CHAR
+CONST       <=  'const' !SYMBOL_CHAR        COPY        <=  'copy' !SYMBOL_CHAR
+DEFAULT     <=  'default' !SYMBOL_CHAR
+DO          <=  'do' !SYMBOL_CHAR           ELSE        <=  'else' !SYMBOL_CHAR
+EXPORT      <=  'export' !SYMBOL_CHAR       IMPORT      <=  'import' !SYMBOL_CHAR
+EXTERN      <=  'extern' !SYMBOL_CHAR       FLOAT       <=  'float' !SYMBOL_CHAR
+INLINE      <=  'inline' !SYMBOL_CHAR
+FLOOR       <=  'floor' !SYMBOL_CHAR        FOR         <=  'for' !SYMBOL_CHAR
+FROM        <=  'from' !SYMBOL_CHAR
+FTOI        <=  'ftoi' !SYMBOL_CHAR         FUNCPTR     <=  'funcptr' !SYMBOL_CHAR
+FUNCTYPE    <=  'functype' !SYMBOL_CHAR
+FUNCTION    <=  'function' !SYMBOL_CHAR     GLOBAL      <=  'global' !SYMBOL_CHAR
+GOTO        <=  'goto' !SYMBOL_CHAR         IF          <=  'if' !SYMBOL_CHAR
+INT         <=  'int' !SYMBOL_CHAR          ITOF        <=  'itof' !SYMBOL_CHAR
+LOCALS      <=  'locals' !SYMBOL_CHAR       LOOP        <=  'loop' !SYMBOL_CHAR
+NATIVE      <=  'native' !SYMBOL_CHAR       NULL        <=  'null' !SYMBOL_CHAR
+NULLFUNC    <=  'nullfunc' !SYMBOL_CHAR
+POINTER     <=  'pointer' !SYMBOL_CHAR      READONLY    <=  'readonly' !SYMBOL_CHAR
+RETURN      <=  'return' !SYMBOL_CHAR       RETURNS     <=  'returns' !SYMBOL_CHAR
+SWITCH      <=  'switch' !SYMBOL_CHAR
+SIZEOF      <=  'sizeof' !SYMBOL_CHAR       STRUCT      <=  'struct' !SYMBOL_CHAR
+TEMPORARY   <=  'temporary' !SYMBOL_CHAR    TO          <=  'to' !SYMBOL_CHAR
+WHILE       <=  'while' !SYMBOL_CHAR
 
 BITWISE_OP  <=  $$=( '<<' / '>>>' / '>>' / '|' !'|' / '&' !'&' / '^' )
 ADDSUB_OP   <=  $$=( '+' / '-' )
@@ -6619,9 +6619,9 @@ PREFIX_OP   <=  $$=( '-' !("'" / DIGIT / '-')   # `--x` is not a decrement; reje
                    / '*'
                    / BUILT_IN !SYMBOL_CHAR
                  )
-SYMBOL_CHAR <-  [A-Za-z_$0-9]
-HEX         <-  [0-9A-Fa-f]
-DIGIT       <-  [0-9]
-ASCII       <-  ![\0-\37\200-\377] .
-_           <-  ([ \t\r\n]+ / COMMENT)*
-COMMENT     <-  '/*' (!'*/' .)* '*/' / "//" (![\r\n] .)*
+SYMBOL_CHAR <=  [A-Za-z_$0-9]
+HEX         <=  [0-9A-Fa-f]
+DIGIT       <=  [0-9]
+ASCII       <=  ![\0-\37\200-\377] .
+_           <=  ([ \t\r\n]+ / COMMENT)*
+COMMENT     <=  '/*' (!'*/' .)* '*/' / "//" (![\r\n] .)*
