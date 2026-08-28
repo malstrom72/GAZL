@@ -12,6 +12,12 @@
         function $$parser.hasOwn(obj, key) {
                 return Object.prototype.hasOwnProperty.call(obj, key);
         }
+
+        // Pre-pass for JSPEG 2 dual-mode: collect the names of value-style rules (`Name <=`) so a capture of one
+        // can be given the `._` access it needs even from a holder-style caller. Empty until a rule is marked `<=`.
+        var _vsRules = {};
+        var _vsRe = /(?:^|[\r\n])[ \t]*([A-Za-z_][A-Za-z0-9_]*)[ \t]*<=/g;
+        for (var _vsM = _vsRe.exec(_s); _vsM; _vsM = _vsRe.exec(_s)) { _vsRules[_vsM[1]] = true; }
 }
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -48,7 +54,7 @@ Definition	<-	id:Identifier arrow:LEFTARROW		{ $$.tag = '$'; $$.vi = 0; $$.vr = 
 								var _v = '';
 								var _p = '';
 								for (var _k in $vars) {
-									if (hasOwn($vars, _k)) {
+									if (hasOwn($vars, _k) && _k.indexOf('~') === -1) {
 										if (_k.indexOf('.') !== -1) {
 											if ($vars[_k] !== '') {
 												_p += _k + $vars[_k] + ';';
@@ -117,7 +123,7 @@ Action          <-      b=PikaBlock Spacing                     {
                                                                                                       $b = $b.slice(e);
                                                                                                       if (!hasOwn($$.vr, id)) {
                                                                                                         $$.vr[id] = '';
-                                                                                                      } else if (!$$.vs && $$.vr[id] !== '' && $b[0] !== '.') {
+                                                                                                      } else if (hasOwn($$.vr, id + '~v') || ($$.vr[id] !== '' && $b[0] !== '.')) {
                                                                                                         s += '._';
                                                                                                       }
                                                                                                     }
@@ -155,8 +161,8 @@ Capture		<-	v:Variable EQUALS			{ if ($$.vs) { var _t = ($v === '$._' ? '_v' : $
 
 # ----------------------------------------------------------------------------------------------------------------------
 
-Tagged		<-	v:Variable COLON			{ $t.vi = $$.vi; $t.vs = $$.vs; if ($$.vs) { $t.tag = '$'; $t.vr = $$.vr } else if ($v !== '$._') { $t.tag = $v; ($t.vr = $$.vr)[$v] = '={}' } else $t.tag = '$' }
-					t:Suffix				{ if ($$.vs) { var _t = ($v === '$._' ? '_v' : $v); $$.vr[_t] = ''; $$ = '(' + $t + ')&&(' + _t + '=$._,true)' } else $$ = $t }
+Tagged		<-	v:Variable COLON			{ $t.vi = $$.vi; $t.vs = $$.vs; if ($v !== '$._') { $t.tag = $v; ($t.vr = $$.vr)[$v] = '={}' } else $t.tag = '$' }
+					t:Suffix				{ if ($$.vs && $v === '$._') { $$.vr['_v'] = ''; $$ = '(' + $t + ')&&(_v=$._,true)' } else { var _cn = ('' + $t).match(/^([A-Za-z_][A-Za-z0-9_]*)\(/); if (_cn && _vsRules[_cn[1]] && $v !== '$._') $$.vr[$v + '~v'] = true; $$ = $t } }
 				/ Suffix
 				
 # ----------------------------------------------------------------------------------------------------------------------
