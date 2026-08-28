@@ -519,3 +519,54 @@ impala.jspeg because that grammar threads meta-slot objects; it cannot carry a s
 
 Bar is unchanged: byte-identical `.gazl` (0/101) + NuXJS parity + fuzz. Note the collapse changes the
 *shape* of generated `impalaCompiler.js`, which is allowed — only its **output** must be identical.
+
+## M4 design resolved (2026-08-28): seed `_val` at tagged captures — the piece the M1 prototype lacks
+
+`impala/jspeg2.jspeg` (the M1 emission prototype) already has the target shape: param-less rules,
+`var _v`, `Primary` emitting `Sub()`, eager `($x=_val,true)` captures, conditional `&&(_val=_v,true)`,
+no `._`. **But porting it wholesale would break `impala.jspeg`**, because it was validated only on
+`jspegTest.jspeg`, whose rules *create* their values. impala's rules do the opposite: helpers
+(`makeMeta`, `binaryOp`, `lookup`, `fieldAccess`, …) **fill a caller-provided slot in place** and their
+return value is discarded. Under the prototype's emission a callee starts with `_v === undefined`, so
+`makeMeta($$,…)` fills a throwaway slot (`metaSlot(undefined)` → fresh, unstored) and the rule publishes
+`undefined`. Today that works only because hardening pre-allocates a slot per capture
+(`$x={}` → `createParserContext()` = `{_: newMetaSlot()}`).
+
+**Resolution — seed the register from the capture's own slot, then read it back:**
+
+```
+tagged capture x:Sub   →   (_val = $x, Sub() && ($x = _val, true))
+rule entry             →   var _v = _val;
+rule exit (if assigns) →   && (_val = _v, true)
+```
+
+with `$x` still declared as a **pre-allocated fresh slot** (the existing `={}` → hardening path, now
+yielding the bare slot rather than a `{_:}` holder). This satisfies every case at once:
+
+- **Fill-in-place callee** (`Value`, `Subscript`, …): inherits the seeded slot via `var _v = _val`, so the
+  helpers mutate exactly the object the caller will read back. No grammar change.
+- **Value-replacing callee** (scalar rules: `BASE_TYPE`, literals, `$$ = {}` builders): overwrites `_v`,
+  publishes `_val = _v`, and `$x = _val` picks up the new value. Fixes the stale-alias bug that blocks
+  `jspeg.jspeg` (strings), because the value now travels through the register, not a captured alias.
+- **Untagged child** (the shared accumulator): inherits `_val` unseeded, i.e. the parent's own `_v`
+  object — the current sharing semantics, preserved.
+- **Isolation**: one pre-allocated slot per capture var (unchanged from today, including reuse across
+  loop iterations).
+- **Passthrough**: unchanged — publish only if the rule mentions `$$`.
+
+**So M4 needs no `impala.jspeg` edits at all** — it is generator surgery plus bootstrap plumbing:
+
+1. `jspeg.jspeg`, value-mode branches only (holder mode untouched, since `jspeg.jspeg` is still `<-`):
+   `Definition` (param-less + `_v=_val` init + `_val=_v` publish), `Primary` (`Sub()`), `Tagged` (the
+   seed/read-back above, plus the `$$:` form → `(_val=_v,(…)&&(_v=_val,true))`), and the Action rewriter
+   (**no `._` append in value mode** — captures hold values directly, which retires the heuristic, the
+   `~v` marker and its guard for migrated rules).
+2. `root`'s emitted preamble becomes `var _i=0,_im=0,_val,…,_b=root();` / `return [_b,_val,…]` when
+   `_vsRules['root']`, keeping `_o` + `_o.options=_hostOptions` for the host.
+3. `updateJSPEG.js` hardening: `rootInitPattern` must match the new preamble, and `$x={}` should harden
+   to a bare meta slot rather than a `{_:}` holder.
+
+Only after that does `jspeg.jspeg` migrate (blocker 2 above is gone), and only then can the `<-` path,
+`.vs` threading and the `_vsRules` prescan be deleted. Bar unchanged: byte-identical `.gazl` + parity +
+fuzz. **Not yet implemented** — the bootstrap (a self-hosting generator whose emitted preamble and
+hardening must change together) makes this a focused push, not a tail-end edit.
