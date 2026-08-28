@@ -359,3 +359,29 @@ Goal: describe the final value model for future grammar authors.
   fixtures make either safe to *verify*, but not equally easy to *review*.
 - **NuXJS.** Any new generator idiom must clear the NuXJS parity leg; the safest posture is to reuse constructs
   the current generator already emits.
+
+## M3 IN PROGRESS — dual-mode + two-pass generator built, all self-containers migrated (2026-08-28)
+
+The dual-mode generator (option B) is **built, in the production `jspeg.jspeg`/`jspegCompiler.js`, and gate-green**:
+
+- **Dual-mode:** a rule marked `<=` emits value-style (`var _v`, plain-local tags, no `._` heuristic, bridge
+  `$._ = _v` at the end); `<-` rules are unchanged. Both interoperate through `$._`. Byte-identical with no rule
+  marked.
+- **Two-pass:** the generator prelude pre-scans the grammar for `Name <=` (`_vsRules`); a capture of a value-style
+  rule is marked so the Action rewriter emits `._` on it (`$x.field` → `$x._.field`), letting a holder-style
+  caller read a value rule's fields. Detection scans **all** rule references in a tagged Suffix, so a value rule
+  inside a tagged group (`v:(VarDecl / ArrayDecl)`) is found too.
+
+**Self-containers migrated (each: flip `<-`→`<=`, add `$$ = {}`, regenerate, byte-identical `.gazl`, full gate):**
+`TypeDeclr`, `VarDecl`, `ArrayDecl`, `ExternDecl` — **all four done.**
+
+**Two interop wrinkles the gate caught and were fixed locally (both byte-identical):**
+1. **Tagged groups** — the first cut of the two-pass only saw a bare rule ref; extended to scan every rule ref in
+   the Suffix (fixes `v:(VarDecl / ArrayDecl)`).
+2. **Untagged-sharing site** — `ExternDecl` had a bare `VarDecl` filling its shared holder (the inherited-container
+   idiom). Tagged it (`d:VarDecl { $$.type = $d.type; … }`) mirroring the existing `ArrayDecl` branch. This is the
+   same class of thing the `FuncCall`/`Argument` hard core needs, in miniature — expect a few more such sites.
+
+**Remaining M3:** the `FuncCall`/`Argument` return-and-merge hard core; the ~119 mechanical value sites (each a
+flip + gate, watching for untagged-sharing sites to tag); then **M4** — once every rule is `<=`, delete the whole
+dual-mode/two-pass/holder scaffolding and collapse `$._`→`_val`, param-less.
