@@ -5617,7 +5617,7 @@ ArrayDecl   <=                                                        { $$ = {};
 # ------------------------------------------------------------------
 #  Statement rule dispatch                                      
 # ------------------------------------------------------------------
-Statement   <-                                                        {
+Statement   <=                                                        {
                                                                          /* Scanned IN PLACE rather than copying the rest of the unit
                                                                             first. `cut >= 0` was dead: find returns 0..length and
                                                                             never negative. (Measured: the copy cost nothing - V8
@@ -5773,7 +5773,7 @@ FieldAccess <=  '->'_ f:Identifier                 { if (!$$parser.dry)
                 / '.'_ f:Identifier                { if (!$$parser.dry)
                                                        $$parser.fieldAccess($$, $f, false, $$s, $$i); }
 
-FuncCall    <-  '('_                               { if (!$$parser.dry) {
+FuncCall    <=  '('_                               { if (!$$parser.dry) {
                                                        $$.count = 0;
                                                        /* how many leading output slots the callee expects (>1 = multi-return) */
                                                        var _c = metaSlot($$);
@@ -5988,7 +5988,7 @@ FuncCall    <-  '('_                               { if (!$$parser.dry) {
                                                        }
                                                     } }
 
-Argument    <-  { $argAt = $$i;   /* the argument itself; end-of-rule has skipped past it */ }
+Argument    <=  { $argAt = $$i;   /* the argument itself; end-of-rule has skipped past it */ }
                 a:Expr                             { if (!$$parser.dry) {
                                                        ++$$.count;
                                                        var meta = metaSlot($a);
@@ -6345,7 +6345,7 @@ DestTarget  <=                                      { $tgtGlobal = false; }
 # ---------------------------------------------------------------------------
 #   SWITCH (expr == from TO to) { ... }
 # ---------------------------------------------------------------------------
-Switch      <-  SWITCH _ '('_ $$:Expr
+Switch      <=  SWITCH _ '('_ $$:Expr
                 '=='_ f:Expr TO _ t:Expr    {
                                                         var switchMeta = metaSlot($$);
 
@@ -6445,7 +6445,7 @@ Switch      <-  SWITCH _ '('_ $$:Expr
 # ---------------------------------------------------------------------------
 #   single “case ...” inside a switch
 # ---------------------------------------------------------------------------
-CaseExpr    <-  Expr                                {
+CaseExpr    <=  Expr                                {
                                                         /* offset = constant(expr) - switch.from                         */
                                                         var ctx      = $$parser.switchStack[$$parser.switchStack.length - 1];
                                                         var caseMeta = metaSlot($$);
