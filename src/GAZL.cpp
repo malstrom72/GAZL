@@ -1614,7 +1614,7 @@ Int Processor::run() {
 			case COPY_VCC:	ui = V0.i - MEMORY_OFFSET; ui2 = C1.i - MEMORY_OFFSET; goto copy;
 			case COPY_CVC:	ui = C0.i - MEMORY_OFFSET; ui2 = V1.i - MEMORY_OFFSET; goto copy;
 			case COPY_CCC:	ui = C0.i - MEMORY_OFFSET; ui2 = C1.i - MEMORY_OFFSET; goto copy;
-			copy:			if (ui + C2.i < rwMemorySize && ui2 + C2.i < memorySize) {
+			copy:			if (ui + C2.i <= rwMemorySize && ui2 + C2.i <= memorySize) {	// <= : copying C2 words up to index ui+C2-1 is in bounds when ui+C2 reaches the size exactly, matching PEEK/POKE
 								// std::copy(&mb[ui2 + MEMORY_OFFSET], &mb[ui2 + MEMORY_OFFSET] + C2.i, &mb[ui + MEMORY_OFFSET]);
 								// memcpy(&mb[ui + MEMORY_OFFSET], &mb[ui2 + MEMORY_OFFSET], sizeof (Value) * C2.i);
 								const Value* sp = &mb[ui2 + MEMORY_OFFSET];
