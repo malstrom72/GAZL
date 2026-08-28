@@ -6607,11 +6607,11 @@ WHILE       <-  'while' !SYMBOL_CHAR
 BITWISE_OP  <=  $$=( '<<' / '>>>' / '>>' / '|' !'|' / '&' !'&' / '^' )
 ADDSUB_OP   <=  $$=( '+' / '-' )
 MULDIV_OP   <=  $$=( '*' / '/' !'/' / '%' )
-COMP_OP     <-  $$=( '<=' / '>=' / '!=' / '==' / '<' / '>' )
-BASE_TYPE   <-  INT                               { $._ = 'int'; }
-            /  FLOAT                              { $._ = 'float'; }
-            /  FUNCPTR                            { $._ = 'funcptr'; }
-            /  POINTER                            { $._ = 'pointer'; }
+COMP_OP     <=  $$=( '<=' / '>=' / '!=' / '==' / '<' / '>' )
+BASE_TYPE   <=  INT                               { $$ = 'int'; }
+            /  FLOAT                              { $$ = 'float'; }
+            /  FUNCPTR                            { $$ = 'funcptr'; }
+            /  POINTER                            { $$ = 'pointer'; }
 BUILT_IN    <=  $$=( 'abs' / 'floor' / 'itof' / 'ftoi' )
 PREFIX_OP   <=  $$=( '-' !("'" / DIGIT / '-')   # `--x` is not a decrement; reject the unspaced pair, accept `- -x`
                    / '~'
