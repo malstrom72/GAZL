@@ -5688,7 +5688,7 @@ MulDiv      <=  l:PrePost                           { $$ = $l }
                                                        $$parser.mulDivOp($op, $$, $r, $$s, $$i); }
                 )*
 
-PrePost     <-  (op:PREFIX_OP _
+PrePost     <=  (op:PREFIX_OP _
                 / '('_ op:BASE_TYPE _               { $cdesc = $$parser.CASTS_TO_TYPES[$op]; }
                   ( POINTER _                       { $cdesc = $$parser.pointerDesc($cdesc); $ccast = 'pointer'; }
                   )* ')'_
@@ -5714,7 +5714,7 @@ PrePost     <-  (op:PREFIX_OP _
                                                           $ccast = 'pointer';
                                                       }
                                                     }
-                ) PrePost                           { if (!$$parser.dry) {
+                ) p:PrePost                         { $$ = $p; if (!$$parser.dry) {
                                                        if ($ccast) {          /* a named/pointer cast; a bare BASE_TYPE cast has no $ccast */
                                                            if ($ccast === 'funcptr') {
                                                                $$parser.checkFuncTypeCast($$, $$parser.descTail($cdesc), $$s, $$i);
@@ -5725,7 +5725,7 @@ PrePost     <-  (op:PREFIX_OP _
                                                            $$parser.unaryOp($op, $$, $$s, $$i);
                                                        }
                                                      } }
-                / Value (FuncCall / Subscript / FieldAccess)*
+                / Value (FuncCall / Subscript / FieldAccess)*   { $$ = $._ }
 
 # ONE subscript. `a[i]` strides by the declared element size, whatever that is - one word for a scalar
 # element, `.z.Struct` for a struct one - and the stride folds at GAZL assembly time whenever the index is
