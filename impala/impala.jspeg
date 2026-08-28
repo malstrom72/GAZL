@@ -6086,7 +6086,7 @@ Comp        <-  '!'_                                {
                                                     }
 
 
-Assert      <-  ASSERT _                            {
+Assert      <=  ASSERT _                            {
                                                         $okLabel  = $$parser.beginDebugGuard('a');
                                                         $start    = $$i;
                                                         $exprText = '';
@@ -6100,10 +6100,10 @@ Assert      <-  ASSERT _                            {
                                                     }
 
 
-Block       <-  '{'_ Statement* '}'_
+Block       <=  '{'_ Statement* '}'_
 
 
-Goto        <-  GOTO _                              { $gotoStart = $$i; }  # before `';'_` swallows the trailing
+Goto        <=  GOTO _                              { $gotoStart = $$i; }  # before `';'_` swallows the trailing
                                                                            # newline, which put E445 on the next line
                 label:Identifier ';'_               {
                                                         $$parser.emit('-->', undefined, '@' + $label._, undefined, undefined);
@@ -6115,7 +6115,7 @@ Goto        <-  GOTO _                              { $gotoStart = $$i; }  # bef
                                                     }
 
 
-Return      <-  RETURN _
+Return      <=  RETURN _
                 (   ';'_                             {   /* bare `return;` is an early exit - RETU returns whatever the slot holds */
                                                         $$parser.emit('--^', undefined, undefined, undefined, undefined);
                                                     }
@@ -6131,12 +6131,12 @@ Return      <-  RETURN _
 # `break`/`continue` are reserved but unsupported - there is no valid lowering, so the statement form is a
 # hard error in both modes (unlike a reserved-word LABEL, which --legacy still accepts). `!SYMBOL_CHAR`
 # keeps `breakage`/`continued` as ordinary identifiers.
-Break       <-  { $start = $$i; } 'break' !SYMBOL_CHAR _ ';'_    {
+Break       <=  { $start = $$i; } 'break' !SYMBOL_CHAR _ ';'_    {
                                                         $$parser.fail("'break' is not supported: a switch arm already does not fall through, and a loop is left with `goto` to a label after it",
                                                             $$s, $start, 'E450',
                                                             'replace `break;` with `goto` to a label placed after the loop');
                                                     }
-Continue    <-  { $start = $$i; } 'continue' !SYMBOL_CHAR _ ';'_ {
+Continue    <=  { $start = $$i; } 'continue' !SYMBOL_CHAR _ ';'_ {
                                                         $$parser.fail("'continue' is not supported: jump to a label at the end of the loop body with `goto`",
                                                             $$s, $start, 'E450',
                                                             'replace `continue;` with `goto` to a label at the loop-body end');
@@ -6145,7 +6145,7 @@ Continue    <-  { $start = $$i; } 'continue' !SYMBOL_CHAR _ ';'_ {
 
 # TODO : if full jump-optimisation is implemented we could always
 #        fold the “empty else” block here.
-If          <-  IF _ BoolGroup                      { 
+If          <=  IF _ BoolGroup                      { 
                                                         $dontLabel = $$parser.newLabel('f');
                                                         $$parser.emit('?->', false, $dontLabel, undefined, undefined); 
                                                     }
@@ -6174,7 +6174,7 @@ If          <-  IF _ BoolGroup                      {
                 )
 
 
-DoWhile     <-  DO _                                { 
+DoWhile     <=  DO _                                { 
                                                         $loopLabel = $$parser.newLabel('l');
                                                         $$parser.emit('<-?', false, $loopLabel, undefined, undefined); 
                                                     }
@@ -6184,7 +6184,7 @@ DoWhile     <-  DO _                                {
                                                     }
 
 
-Loop        <-  LOOP _                              { 
+Loop        <=  LOOP _                              { 
                                                         $loopLabel = $$parser.newLabel('l');
                                                         $$parser.emit('<--', undefined, $loopLabel, undefined, undefined); 
                                                     }
@@ -6195,7 +6195,7 @@ Loop        <-  LOOP _                              {
 # ---------------------------------------------------------------------------
 #   FOR ... TO ... loop
 # ---------------------------------------------------------------------------
-For         <-  FOR _ '('_                          { $varStart = $$i; }   # name the variable, not the token after it
+For         <=  FOR _ '('_                          { $varStart = $$i; }   # name the variable, not the token after it
                 var:Variable                        {
                                                         /* loop-variable must be local, modifiable int / pointer */
                                                         var varMeta = metaSlot($var);
@@ -6278,7 +6278,7 @@ For         <-  FOR _ '('_                          { $varStart = $$i; }   # nam
 # ---------------------------------------------------------------------------
 #   COPY (len) FROM src TO dst
 # ---------------------------------------------------------------------------
-Copy        <-  COPY _ '('_ l:Expr FROM _ f:Expr TO _ t:Expr ')' _
+Copy        <=  COPY _ '('_ l:Expr FROM _ f:Expr TO _ t:Expr ')' _
                                                     {
                                                         var fromMeta = metaSlot($f);
                                                         var toMeta   = metaSlot($t);
@@ -6330,14 +6330,14 @@ Copy        <-  COPY _ '('_ l:Expr FROM _ f:Expr TO _ t:Expr ')' _
 #   Destructuring assignment for multi-value calls:  a, b = f(...)
 #   (needs >= 2 targets before '='; single `a = ...` falls through to Expr)
 # ---------------------------------------------------------------------------
-Destructure <-  DestTarget (','_ DestTarget)+ '='_  {   /* PARKED for Impala 3.0 - see design/ParkedFeatures.md.
+Destructure <=  DestTarget (','_ DestTarget)+ '='_  {   /* PARKED for Impala 3.0 - see design/ParkedFeatures.md.
                                                          Kept only to recognise the shape and reject it well;
                                                          the targets themselves are never needed. */
                                                       $$parser.fail('Destructuring assignment is not supported in Impala 2.0',
                                                               $$s, $$i, 'E429',
                                                               'assign one value per statement'); }
 
-DestTarget  <-                                      { $tgtGlobal = false; }
+DestTarget  <=                                      { $tgtGlobal = false; }
                 (GLOBAL _                           { $tgtGlobal = true; }
                 )?
                 id:Identifier                       { $tgtName = $id; }
@@ -6496,7 +6496,7 @@ CaseExpr    <-  Expr                                {
 # ---------------------------------------------------------------------------
 #   WHILE  condition  statement
 # ---------------------------------------------------------------------------
-While       <-  WHILE _                             {
+While       <=  WHILE _                             {
                                                         $loopLabel = $$parser.newLabel('l');
                                                         $$parser.emit('<--', undefined, $loopLabel, undefined, undefined);
                                                     }
