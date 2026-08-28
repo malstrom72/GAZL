@@ -1040,8 +1040,8 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 				if (srcConst) { matConst(e, W10, in.p1.i - static_cast<Int>(MEMORY_OFFSET)); }
 				else { loadSlot(e, W10, in.p1.i); matConst(e, W12, static_cast<Int>(MEMORY_OFFSET)); e.sub(W10, W10, W12); }
 				matConst(e, W15, in.p2.i);																				// count
-				e.add(W12, W9, W15); e.ldrW(W14, X0, o.rwmemsize); e.cmp(W12, W14); e.bcond(HS, trap);					// destIdx+count < rwMemorySize
-				e.add(W12, W10, W15); e.ldrW(W14, X0, o.memsize); e.cmp(W12, W14); e.bcond(HS, trap);					// srcIdx+count < memorySize
+				e.add(W12, W9, W15); e.ldrW(W14, X0, o.rwmemsize); e.cmp(W12, W14); e.bcond(HI, trap);					// destIdx+count <= rwMemorySize
+				e.add(W12, W10, W15); e.ldrW(W14, X0, o.memsize); e.cmp(W12, W14); e.bcond(HI, trap);					// srcIdx+count <= memorySize
 				e.movz(W11, 0);																							// i = 0
 				e.bind(lp);
 				e.cmp(W11, W15); e.bcond(HS, ldone);																	// i >= count → done
