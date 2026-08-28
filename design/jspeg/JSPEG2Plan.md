@@ -485,3 +485,37 @@ param-less (`_val`), which is the actual "drop the `$` container" end-state. The
 does **not** change in M4 — only the generator and the shape of the emitted functions. `jspeg.jspeg`'s
 OWN rules are still holder-style and must migrate too before the `<-` path can be deleted (the generator
 self-hosts). Bar stays byte-identical `.gazl`, plus NuXJS parity + fuzz.
+
+## M4 first attempt (2026-08-28): why `jspeg.jspeg` cannot self-migrate under the alias scheme
+
+Flipping all 40 of `jspeg.jspeg`'s own rules to `<=` fails (`TypeError: Cannot set properties of
+undefined (setting 'tag')`). Reverted; tree green. Two blockers, the second fundamental:
+
+1. **Uninitialized value slot.** `Definition` writes `$$.tag/.vi/.vr/.vs` as *context*. In value mode
+   that is `_v.tag` with `_v = $._`, and a fresh sub-holder (`$x = {}`) has `$._ === undefined`. Fixable
+   the usual way (`$$ = {}` first), same as the impala self-containers.
+
+2. **The alias goes stale when a child REPLACES the value (fundamental).** `var _v = $._` works only
+   because impala's meta slots are *mutated in place* — helpers fill the same object, so the alias stays
+   valid. `jspeg.jspeg` builds **strings**: every rule does `$$ = '…'` / `$$ += '…'`, which **rebinds**.
+   An untagged child (e.g. `Definition`'s bare `Expression`) sets its own `_v` to a new string and
+   bridges `$._ = _v`; the parent's `_v`, aliased at entry, still points at the *old* value. Holder mode
+   worked because parent and child literally shared one `$._` cell.
+
+**So the `_v=$._` init is not general — it is exactly a mutate-in-place optimization.** It carried all of
+impala.jspeg because that grammar threads meta-slot objects; it cannot carry a string-building grammar.
+
+**This reorders M4.** The collapse must come first, not last:
+
+- **Option A — tag-and-thread `jspeg.jspeg` first.** Tag every untagged value-producing child
+  (`e:Expression { $$ = $e }`) so the value arrives through a capture instead of a shared cell, and move
+  the threaded context (`$$.vi/.tag/.vr/.vs`) onto those sub-holders. Mechanical but invasive, and it
+  churns the rules M4 is about to delete anyway.
+- **Option B (recommended) — do the `_val` collapse first.** Replace the per-rule holder with a single
+  return register: a rule sets `_val`, the caller reads `_val`, a tagged capture saves it to a local
+  right after the call. "Child replaces the value" then works by construction (no aliasing), which
+  dissolves blocker 2 *and* blocker 1, and `jspeg.jspeg` migrates without the Option-A churn. It is the
+  actual "drop the `$` container" end-state, so the work is not throwaway.
+
+Bar is unchanged: byte-identical `.gazl` (0/101) + NuXJS parity + fuzz. Note the collapse changes the
+*shape* of generated `impalaCompiler.js`, which is allowed — only its **output** must be identical.
