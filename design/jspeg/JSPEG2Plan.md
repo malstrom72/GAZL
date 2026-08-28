@@ -74,6 +74,21 @@ Measured on the two grammars (2026-08-28):
   self-grammar the `vi/tag/vr` uses move from `$$.` to `$.`; **`impala.jspeg` needs none of this**, so its
   migration is uniform and mechanical.
 
+**The passthrough refinement (found stress-testing `_val` against `jspegTest.jspeg`).** A shared register has a
+clobbering hazard the holder model does not: in a passthrough rule like `group <- number _ / '(' _ expr ')' _`,
+`number` sets the value but the trailing `_` (whitespace, no action) runs *after* it. With a naive
+"set `_val = $$` at every rule end," `_`'s call would overwrite `_val` with junk and `group` would lose
+`number`'s value. The holder model is immune because `number` and `_` share `group`'s one holder and only
+`number` writes it. Resolution, and the precise emission rule:
+
+> A rule sets `_val` **only if it assigns `$$`** (via an action, a `$$:` tag, or a `$$=` capture). Value-less
+> rules (`_`, pure token rules) leave `_val` exactly as their sub-calls left it. So `_val` is touched only by
+> value-producing rules, and passthrough works: after `number() && _()`, `_val` still holds `number`'s value,
+> and a `group` with no `$$` action forwards it untouched.
+
+The generator must therefore track a per-rule "assigns `$$`" flag (a small addition alongside the existing
+`vars` tracking) and emit the trailing `&& (_val = $$, true)` conditionally.
+
 This is the working decision; the next implementation step is to prototype the `_val`-register emission in the
 generator and prove byte-identical output. The bootstrap wrinkle to settle there: regenerating `jspegCompiler.js`
 with the new emission self-hosts the *self-grammar*, so its downward-context uses must be handled (migrate them
