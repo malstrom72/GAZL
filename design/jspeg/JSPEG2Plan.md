@@ -241,6 +241,32 @@ self-grammar's `vi/tag/vr` onto the `$` context param) so it can be the toolchai
 `FuncCall` return-and-merge; (3) the four declaration rules gain `$$ = {}`; (4) the ~119 mechanical sites;
 (5) switch `updateJSPEG.js` and prove byte-identical `.gazl` on the full corpus.
 
+## DECISION: dual-mode — and it is validated, so M3 IS incrementally reviewable (2026-08-28)
+
+Dual-mode chosen, and the enabling insight is now proven: **the holder's `._` field already IS the transfer
+register.** Every generated rule (holder OR value style) writes its value to `$._`; captures read `$._`. So a
+value-style rule needs only to (a) use a local `_v` and plain-local tags internally, (b) suppress the `._`
+heuristic in its actions, and (c) **bridge `$._ = _v` on success**. Holder-style rules are completely unchanged.
+Both styles then interoperate through `._` with zero glue.
+
+**Validated** by [`dualModeProto.js`](dualModeProto.js): a hand-written parser mixing holder-style
+(`root`/`product`/`group`/`_`) and value-style-bridged (`expr`/`number`) rules computes all 9 arithmetic cases,
+with the style boundary crossed in **both** directions (holder `product`→value `number`; value `expr`→holder
+`product`). So a rule can be migrated to value style **independently**, and it keeps working alongside unmigrated
+rules — the migration is rule-by-rule under the byte-identical parity gate, not a big-bang. `_val` (the global
+register) is not needed for the transition; it becomes a *final* mechanical step (rename `$._`→`_val`, drop the
+holder param) once every rule is value style.
+
+Revised M3 order (dual-mode): (1) extend the generator with a **per-rule value-style flag** (a marker or a
+name-set) that switches action-rewriting to the value style and appends the `$._ = _v` bridge — a small addition
+to `jspeg2.jspeg`'s Definition/Action/Tagged/Capture; (2) migrate rules to value style in reviewable batches
+(mechanical self-containers, then the `Argument`/`FuncCall` return-and-merge as one unit), each behind
+`node impala/updateJSPEG.js` + `tools/test-js` byte-identical; (3) when the last rule flips, do the final
+`$._`→`_val` + drop-holder mechanical pass and delete the holder machinery (M4).
+
+Everything through here is de-risked with runnable proofs; the next coding step is the per-rule value-style flag
+in the generator.
+
 ## Relationship to the other jspeg work
 
 - **[`RefactorPlan.md`](RefactorPlan.md) (return-style helpers) becomes moot for its stated goal.** That plan
