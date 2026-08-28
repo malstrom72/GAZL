@@ -385,3 +385,23 @@ The dual-mode generator (option B) is **built, in the production `jspeg.jspeg`/`
 **Remaining M3:** the `FuncCall`/`Argument` return-and-merge hard core; the ~119 mechanical value sites (each a
 flip + gate, watching for untagged-sharing sites to tag); then **M4** — once every rule is `<=`, delete the whole
 dual-mode/two-pass/holder scaffolding and collapse `$._`→`_val`, param-less.
+
+## M3 mechanical batch (2026-08-28): 9 leaf rules + the shape of what's left
+
+Migrated (byte-identical, full gate): the scalar-capture leaves `ADDSUB_OP`, `MULDIV_OP`, `BITWISE_OP`,
+`PREFIX_OP`, `BUILT_IN`, `IntegerLiteral`, `FloatLiteral`, `StringLiteral`, and `TypeBase`. **13 rules total now
+value-style** (these + the 4 self-containers).
+
+**The "~119 mechanical sites" are not uniformly a flip.** Trying `Identifier` (22 errors, reverted) showed the
+remaining rules split three ways:
+1. **Clean leaves** — scalar/record consumed via tags. Flip + gate (done above).
+2. **Untagged-sharing rules** — used bare somewhere, so a consumer reads them via `$$`-sharing. Each needs its
+   untagged sites tagged first (the `ExternDecl`-`VarDecl` fix). `Identifier` is this, with *many* consumers.
+3. **The expression precedence chain** (`Expr`/`Bitwise`/`AddSub`/`MulDiv`/`PrePost`/`Comp`/`Value`/`Subscript`/
+   `FieldAccess`) — shares `$$` up the chain like the `FuncCall` postfix chain: a **second cluster** to migrate as
+   a unit, not rule-by-rule.
+
+So the real remaining M3 is: a few more clean leaves; then per-rule tagging for the untagged-sharing rules; then
+the two clusters (expression chain, call chain incl. `FuncCall`/`Argument` return-and-merge). The
+dual-mode/two-pass machinery handles all of it — it is surgery, not trivial flips. Then M4 deletes the scaffolding
+and collapses `$._`→`_val`.
