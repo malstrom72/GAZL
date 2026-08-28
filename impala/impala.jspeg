@@ -5662,12 +5662,14 @@ Statement   <-                                                        {
                                                                      }
                 )
 
-Expr        <-  Bitwise ('='_ r:Expr               { if (!$$parser.dry)
+Expr        <=  l:Bitwise                           { $$ = $l }
+                ('='_ r:Expr                       { if (!$$parser.dry)
                                                        $$parser.assign($$, $$, $r, $$s, $$i); }
                 )?
 
-Bitwise     <-                                     { $first = undefined; }
-                AddSub (op:BITWISE_OP _ r:AddSub   { if (!$$parser.dry) {
+Bitwise     <=                                     { $first = undefined; }
+                l:AddSub                           { $$ = $l }
+                (op:BITWISE_OP _ r:AddSub          { if (!$$parser.dry) {
                                                        if ($first === undefined) $first = $op;
                                                        else if ($first !== $op)
                                                            $$parser.mixedBitwise($first, $op, $$s, $$i);
@@ -5676,11 +5678,13 @@ Bitwise     <-                                     { $first = undefined; }
                 )*                                 { if (!$$parser.dry)
                                                        $$parser.stampBitwise($$, $first !== undefined); }
 
-AddSub      <-  MulDiv (op:ADDSUB_OP _ r:MulDiv    { if (!$$parser.dry)
+AddSub      <=  l:MulDiv                            { $$ = $l }
+                (op:ADDSUB_OP _ r:MulDiv           { if (!$$parser.dry)
                                                        $$parser.binaryOp($op, $$, $r, $$s, $$i); }
                 )*
 
-MulDiv      <-  PrePost (op:MULDIV_OP _ r:PrePost  { if (!$$parser.dry)
+MulDiv      <=  l:PrePost                           { $$ = $l }
+                (op:MULDIV_OP _ r:PrePost          { if (!$$parser.dry)
                                                        $$parser.mulDivOp($op, $$, $r, $$s, $$i); }
                 )*
 
