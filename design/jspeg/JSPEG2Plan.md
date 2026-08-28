@@ -619,3 +619,40 @@ at all:
 So the last step is one combined change: **replace `vr` threading with a global, delete the `<-` path,
 `.vs`, `_vsRules`/`~v` and the `tag`/`vi` threading, and flip `jspeg.jspeg` in the same commit** — the
 current dual-mode compiler builds that new generator, which is then value-only. Bar unchanged.
+
+## JSPEG 2 COMPLETE (2026-08-28): one rule form, no holders anywhere
+
+Both grammars are fully migrated — **150 rules, 0 holder rules, 0 rules taking a parameter, no `._`**
+(the three `'$._'` left in `jspegCompiler.js` are the *sentinel string* naming the `$$` tag, not holder
+access). Dual-mode, the `.vs`/`tag`/`vi` threading, the `_vsRules` prescan and the `~v` marker are all
+deleted. Corpus 0/101 byte-identical, NuXJS parity, dead-strip, fuzz 3000 clean.
+
+**The final model is simpler than the one M4 landed with: `$$` IS `_val`.** No per-rule `_v` copy and no
+publish step. Getting here went through two wrong turns worth recording:
+
+- **`var _v = _val` + publish (the M4 shape) is only correct when values are MUTATED.** It carried
+  `impala.jspeg` (meta slots, filled in place) but not the self-grammar (strings, always replaced): a
+  parent reading an untagged child's result got its own stale copy. Patching that with sync wrappers
+  fails too, because a wrapper on the callee cannot tell whether it sits under a tag (whose seed it
+  would overwrite).
+- **The "assigns `$$`" flag is per-RULE, not per-alternative.** So a rule with a passthrough alternative
+  (`Prefix … / Capture`) still published its stale `_v`, clobbering the child's value. That bug is
+  *structural* in the copy-and-publish model, and it simply cannot occur when `$$` is the register.
+
+With `$$` ≡ `_val`, an untagged child shares the register exactly as it used to share the holder's `_`,
+so passthrough costs nothing and nothing goes stale. A tagged capture is the only thing that needs care:
+it seeds the register with its own pre-allocated slot and restores the parent's on **success and
+failure** (PEG backtracking does not unwind a register) — `((_sv$x=_val,_val=$x,(SUF))&&($x=_val,
+_val=_sv$x,true)||(_val=_sv$x,false))`.
+
+**Grammar edits the collapse required** (small, and all "say what you mean"): explicit `._` derefs
+dropped (`$label._`, `$f._`, `$$._`); `_v`-named author locals renamed (they shadow the register inside
+an action's IIFE); and in the self-grammar, tag every site that reads a child's value — including
+passthrough alternatives (`/ c:Capture { $$ = $c }`) and `OPEN e:Expression CLOSE`.
+
+**Bootstrap note.** Changing the emission model makes gen1 ≠ gen2 (gen1 is built by the *old* compiler),
+so `regenerate()`'s fixed-point check fails by design. Run one extra generation by hand, write gen2 as
+`jspegCompiler.js`, then the normal pipeline reaches gen2 == gen3. Verified before committing.
+
+`LEFTARROW` now accepts `<-` and `<=` identically — JSPEG 2 has **one** rule form. Flipping the two
+grammars back to a single spelling is cosmetic and can be done any time under the same gate.
