@@ -123,7 +123,7 @@ Action          <-      b=PikaBlock Spacing                     {
                                                                                                       $b = $b.slice(e);
                                                                                                       if (!hasOwn($$.vr, id)) {
                                                                                                         $$.vr[id] = '';
-                                                                                                      } else if (hasOwn($$.vr, id + '~v') || ($$.vr[id] !== '' && $b[0] !== '.')) {
+                                                                                                      } else if (($b.slice(0, 2) !== '._') && (hasOwn($$.vr, id + '~v') || ($$.vr[id] !== '' && $b[0] !== '.'))) {
                                                                                                         s += '._';
                                                                                                       }
                                                                                                     }

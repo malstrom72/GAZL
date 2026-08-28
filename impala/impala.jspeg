@@ -6570,7 +6570,7 @@ Variable    <-                                      { $global = false; }
 #    Lexical Syntax    #
 ########################
 
-Identifier      <-  !KEYWORD $$=([A-Za-z_$] SYMBOL_CHAR*) _
+Identifier      <=  !KEYWORD $$=([A-Za-z_$] SYMBOL_CHAR*) _
 FloatLiteral    <=  $$=([-+]? DIGIT+ "." DIGIT+ (("E" / "e") ([-+]? DIGIT+))?) _
 IntegerLiteral  <=  $$=([-+]? ("0x" HEX+ / "'" (!"'" ASCII)* "'" / DIGIT+)) _
 StringLiteral   <=  $$=( '"' ( !["\\\0-\37\200-\377] . / "\\" ( [\"\\bfnrt] / 'u' HEX HEX HEX HEX ) )* '"' ) _
