@@ -442,3 +442,46 @@ real design: `root`/`Variable`; `Switch`/`CaseExpr`; the expression chain
 (`Expr`/`Bitwise`/`AddSub`/`MulDiv`/`PrePost`/`Subscript`/`FieldAccess`/`FuncCall`/`Argument`/`Group`/
 `BoolGroup`/`And`/`Comp`/`Value`) which threads the result register through a shared `$$`; and the
 trivial token/keyword leaves (no `$$` at all) which are a mechanical M4-sweep flip.
+
+## M3 COMPLETE (2026-08-28): every impala.jspeg rule is value-style — and the hard core was a non-event
+
+**The whole grammar is now `<=`, byte-identical throughout.** The "FuncCall/Argument return-and-merge
+hard core" and the expression precedence chain — the parts flagged as the risky, design-heavy cluster —
+turned out to need **zero special handling**. They are pure arrow flips.
+
+**The one insight that dissolved the hard core: initialize the value register to the incoming slot.**
+The generator now emits `var _v = $._;` (was `var _v;`) for every value rule. Why this is the whole game:
+
+- Meta slots are **mutated in place, never reassigned**. `makeMeta`/`binaryOp`/`lookup`/`fieldAccess`/…
+  all receive the slot object (`$._`) and fill it via `metaSlot(rec)`; the slot at `$._` is allocated
+  once (`createParserContext`) and its identity is stable for the rule's lifetime.
+- So aliasing `_v = $._` at entry means: a rule that only **threads** an accumulator (the expression
+  chain folding `binaryOp($op, $$, $r)` in place; the postfix chain where `FuncCall`/`Subscript`/
+  `FieldAccess` hang fields on the shared slot; `Switch`/`CaseExpr` reading `metaSlot($$)`) has `_v`
+  pointing at the same object every helper mutates, and the bridge `$._ = _v` is a **no-op**.
+- A rule that **builds a fresh value** (`$$ = {}`, a literal, a fold seed) simply overwrites `_v`, and
+  the bridge publishes it. Byte-identical to the old `var _v;` for every such rule (they assigned `_v`
+  before use anyway).
+
+This one line retired every seed hack tried along the way (`$$ = $l` tagged-child seeds, `$$ = $._`
+per-alt seeds). It also fixed a real clobber it exposed: a multi-alt rule (`Comp`) where only some alts
+set `_v` had the bridge writing `$._ = undefined` on the other alts, corrupting a slot a later stage
+(the assert message via `endDebugGuard`) reused. With the init, unset `_v` == the incoming slot, so the
+bridge is always safe.
+
+**Also required:** the two-pass `~v` marker + the `._`-guard (batch 2) for value-rule captures a holder
+reads; and `updateJSPEG.js`'s `KEYWORD` scan now accepts either arrow (`<[-=]`).
+
+**Migration order that worked:** self-containers/statements/decls/array-builders (flip) → arithmetic
+chain via seed-and-fold (later simplified to flips by the init) → the init → everything else as flips,
+incl. `FuncCall`/`Argument`/`Switch`/`CaseExpr`/`Statement`. All 101 goldens byte-identical at every step.
+
+## What M4 is now
+
+M4 = **delete the dual-mode scaffolding** and make value-style the only mode: drop the `<-` path and the
+`.vs` threading in `jspeg.jspeg`; drop the two-pass `_vsRules` prescan + `~v` marker (with every rule
+`<=`, every capture is a value capture); collapse `$._`→a single return register and make rules
+param-less (`_val`), which is the actual "drop the `$` container" end-state. The `impala.jspeg` grammar
+does **not** change in M4 — only the generator and the shape of the emitted functions. `jspeg.jspeg`'s
+OWN rules are still holder-style and must migrate too before the `<-` path can be deleted (the generator
+self-hosts). Bar stays byte-identical `.gazl`, plus NuXJS parity + fuzz.
