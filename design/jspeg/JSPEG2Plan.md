@@ -44,6 +44,42 @@ Candidate protocols, to be chosen and prototyped in M1:
 
 M1's job is to pick one, prove it on the self-grammar, and record why. Everything downstream assumes the choice.
 
+## M1 findings (2026-08-28): the holder's dual role, and why the self-grammar is the *hard* case
+
+Reading the generator source surfaced a subtlety Problem 2 understates: the holder `$` carries **two** channels,
+not one.
+
+- **Upward — the value.** `$._` is the rule's semantic result. This is the channel JSPEG 2 is about.
+- **Downward — scope context.** In the self-grammar, `Definition` sets `$$.tag/vi/vr` and the `Expression`
+  sub-rule *reads them back* from the same holder it is handed ([`jspeg.jspeg:46-47,67`](../../impala/jspeg.jspeg)) —
+  the holder is threaded *down* to pass the current variable-numbering scope into nested expressions.
+
+Measured on the two grammars (2026-08-28):
+
+- **`impala.jspeg` (the real target) uses only the upward channel.** Zero `$tag.field = $$.field` downward-copy
+  sites; every `$$.field` is result-record building (`$$.words`, `$$.retSlots`, `$$.elems`, `$$.type`, …), and
+  all cross-rule state lives on `$$parser.*` globals (`fail`×87, `emit`×70, `metacode`, `symbols`, `declare`,
+  `newLabel`, `counters`, …). So `$$` there is a plain bottom-up record and nothing is threaded through holders.
+- **Only the self-grammar threads context down** (`vi/tag/vr`). It is therefore the *atypical, hard* case — the
+  opposite of the plan's original "prototype on the self-grammar first (easy)" assumption.
+
+**Consequence for the protocol.** Split the holder's two roles instead of collapsing them:
+
+- **`$$` becomes the value** — a plain rule-local, object-valued where used as a container (initialize `$$ = {}`
+  before the first `$$.field =`), scalar otherwise. It flows *up* via a shared return register (`_val`): a rule
+  keeps its boolean combinator return (so the `&&`/`||` chains are unchanged) and sets `_val` to its result;
+  tags capture `_val` **eagerly** in the same `&&` step as the call (`Sub() && ($x = _val, true)`), so the single
+  register is never clobbered before capture. This deletes holder allocation and the `._` convention.
+- **`$` (single) becomes the downward context param**, kept only for rules that thread scope. In a migrated
+  self-grammar the `vi/tag/vr` uses move from `$$.` to `$.`; **`impala.jspeg` needs none of this**, so its
+  migration is uniform and mechanical.
+
+This is the working decision; the next implementation step is to prototype the `_val`-register emission in the
+generator and prove byte-identical output. The bootstrap wrinkle to settle there: regenerating `jspegCompiler.js`
+with the new emission self-hosts the *self-grammar*, so its downward-context uses must be handled (migrate them
+to the `$` context param, or keep the generator's own actions holder-style behind a mode) — a concern isolated
+to the generator, not to `impala.jspeg`.
+
 ## Relationship to the other jspeg work
 
 - **[`RefactorPlan.md`](RefactorPlan.md) (return-style helpers) becomes moot for its stated goal.** That plan
@@ -80,14 +116,18 @@ M1's job is to pick one, prove it on the self-grammar, and record why. Everythin
 
 ## Milestones
 
-### M1 — Protocol design + generator prototype on the self-grammar
-Goal: settle the value/success protocol and prove a value-returning generator on throwaway grammars before any
-`impala.jspeg` exposure.
-- Choose among the candidate protocols above; write the decision (a short section in this file).
-- Prototype the new codegen in a copy of `jspeg.jspeg` (the self-grammar) and regenerate.
-- Prove it compiles `impala/jspegTest.jspeg` and `impala/tagCaptureTest.jspeg` to working parsers.
+### M1 — Protocol design + generator prototype
+Goal: settle the value/success protocol (**done — the `_val`-register split, see M1 findings above**) and prove a
+value-returning *emission* on throwaway grammars before any `impala.jspeg` exposure.
+- ~~Choose among the candidate protocols~~ — **done**: `_val` return-register for the value, boolean success
+  unchanged, `$` retained as the downward context param. Recorded above.
+- Prototype the new emission in the generator and prove it compiles `impala/jspegTest.jspeg` and
+  `impala/tagCaptureTest.jspeg` to working parsers. **Note the inversion (M1 findings): the self-grammar is the
+  *hard* case (it threads `vi/tag/vr` down), so it is not the right first prototype — validate on the small
+  grammars and an `impala.jspeg` subset first, and treat self-hosting `jspegCompiler.js` as its own step.**
 - Decide dual-mode-vs-atomic (see guardrails) and record it.
-- Exit: a working value-returning generator for the small grammars + a written protocol/transition decision.
+- Exit: a working value-returning emission for the small grammars + a written protocol/transition decision
+  (protocol done; emission prototype + transition decision remain).
 
 ### M2 — Generator self-hosting fixed point
 Goal: the new generator regenerates itself stably and behaves identically on the small grammars.
