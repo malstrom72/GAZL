@@ -5487,7 +5487,7 @@ LocalsDecl  <-                                                        {
 #  Simple variable & array declarators                          
 # ------------------------------------------------------------------
 # A leading type atom: a primitive keyword, or the name of a defined struct.
-TypeBase    <-  t:BASE_TYPE _                                         { $$ = $$parser.CASTS_TO_TYPES[$t]; }
+TypeBase    <=  t:BASE_TYPE _                                         { $$ = $$parser.CASTS_TO_TYPES[$t]; }
               / id:Identifier                                        {
                                                                          /* the ONE place a raw type name becomes a descriptor */
                                                                          if ($$parser.isStructName($id)) $$ = $$parser.structDesc($id);
