@@ -202,9 +202,44 @@ the same list, and (b) the scratch-pool ownership of each `$a` survives being he
 
 M1 is effectively complete: protocol decided **and** validated (hand-parser + real generator, `jspegTest` 9/9),
 value-returning generator prototyped in `jspeg2.jspeg`, the migration boundary found and the go/no-go answered
-(not uniform; hard core identified), and the hard-core strategy chosen (return-and-merge). Remaining before M3
-proper: triage the four declaration rules, then start M3 with `Argument`/`FuncCall` under the byte-identical
-parity gate.
+(not uniform; hard core identified), and the hard-core strategy chosen (return-and-merge).
+
+## M3 triage complete (2026-08-28)
+
+**A key mechanics correction confirmed during triage:** `$$.field` maps to `$.field` — a field on the **holder
+object itself** — while bare `$$` is `$._` (the value slot). So "container-style" rules store their record as
+holder FIELDS, and the holder is fresh-per-tag (`x:Rule` allocates `$x = {}`) or shared when the rule is called
+untagged. That is the precise dividing line:
+
+| Rules | Holder | `$$.field` uses | Migration |
+|---|---|---|---|
+| `FuncCall`, `Argument` | inherited/shared across the postfix chain | `++`/`+=` **accumulate** | **return-and-merge** (hard core) |
+| `TypeDeclr`, `ExternDecl`, `VarDecl`, `ArrayDecl` | own record (fresh, captured by a tagged parent) | all `=` **set** | **add `$$ = {}`** (mechanical) |
+
+**Both migration paths are now validated on the real generator**, not asserted:
+
+- Self-container path: [`selfContainerProto.jspeg`](selfContainerProto.jspeg) (`item <- key:Id '=' val:Num
+  { $$ = {}; $$.k = $key; $$.v = $val; … }`) compiled by the value-returning generator returns
+  `{"k":"foo","v":42,"tag":"rec"}` — `$$ = {}` init + `$$.field =` on the local + tagged captures all work.
+- Core protocol path: `jspegTest` 9/9 (arithmetic, accumulator loops, passthrough).
+
+The return-and-merge path for the hard core is designed (above) but not yet built — that is the first coding step
+of M3 proper.
+
+## M3 is a big-bang, not incremental — the toolchain constraint
+
+Important sequencing reality found in M1: `impala.jspeg` is compiled by the **holder-based** production generator
+(`jspegCompiler.js` via `updateJSPEG.js`). A value-returning rewrite of any rule miscompiles under that generator,
+so rules **cannot** be migrated one-at-a-time against the production toolchain. M3 therefore switches the
+generator (use the value-returning `jspeg2.jspeg`-derived generator for `impala.jspeg`) and migrates **all** sites
+in one gated step — verifiable but not incrementally reviewable — **unless** a dual-mode generator (understands
+both `._` and value styles) is built first to allow staged migration. Decide dual-mode-vs-big-bang at the top of
+M3; the byte-identical corpus parity gate makes either safe to *verify*.
+
+Order for M3 proper: (0) decide dual-mode vs big-bang; (1) self-host the value-returning generator (move the
+self-grammar's `vi/tag/vr` onto the `$` context param) so it can be the toolchain generator; (2) `Argument`/
+`FuncCall` return-and-merge; (3) the four declaration rules gain `$$ = {}`; (4) the ~119 mechanical sites;
+(5) switch `updateJSPEG.js` and prove byte-identical `.gazl` on the full corpus.
 
 ## Relationship to the other jspeg work
 
