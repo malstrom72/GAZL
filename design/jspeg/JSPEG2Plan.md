@@ -405,3 +405,40 @@ So the real remaining M3 is: a few more clean leaves; then per-rule tagging for 
 the two clusters (expression chain, call chain incl. `FuncCall`/`Argument` return-and-merge). The
 dual-mode/two-pass machinery handles all of it — it is surgery, not trivial flips. Then M4 deletes the scaffolding
 and collapses `$._`→`_val`.
+
+## M3 batch 2 (2026-08-28): the ~v/explicit-`._` guard, then 30 more rules
+
+**The "Identifier is untagged-sharing" diagnosis in batch 1 was wrong.** The real failure was a
+double-`._`: three actions write `$label._` explicitly (`Statement`, `Goto`), and once `Identifier`
+is value-style the two-pass `~v` marker *also* auto-appends `._` on that same capture → `$label._._`
+→ `undefined` label (E446). Fixed at the source — the generator's Action rewriter — not per site:
+the `~v`/heuristic `._`-append is now guarded by `$b.slice(0, 2) !== '._'`, so an action that already
+wrote `._` is left alone. One token in `jspeg.jspeg`, byte-identical for every rule already passing,
+and it is the general fix (any future value-style capture that a legacy action deref'd with `._` now
+just works). With that guard, `Identifier` migrates clean — it was never an untagged-sharing rule.
+
+**Lesson:** the "three-way split" over-counted category 2. Most rules are category 1 once the guard
+is in. The genuine shared-container rules are far fewer than feared — so far only `ExternDecl`'s
+`VarDecl` and (still ahead) the `Switch`/`CaseExpr` + expression/call chains that carry `$$` up.
+
+**Also found — the `_v` register clash.** Actions wrap in an IIFE, so an author-local `var _v`
+shadows the value register *inside* the action; a value-style `$$ =` there would write the IIFE-local,
+not the register, and the bridge would read `undefined`. Only `BracedEntry` had one; renamed its
+local `_v`→`_e` (byte-identical). Grep `\b_v\b` before migrating any rule with hand-written locals.
+
+**Migrated this batch (each byte-identical, full gate green):**
+- `Identifier` (+ the generator guard).
+- 14 self-contained statement rules: `Assert` `Block` `Goto` `Return` `Break` `Continue` `If`
+  `DoWhile` `Loop` `For` `Copy` `Destructure` `DestTarget` `While`.
+- 6 array-builders: `Braced` `BracedEntry` `BracedItem` `InitList` `ArgsDecl` `LocalsDecl`.
+- 7 self-contained decl rules: `ImportDecl` `ExportDecl` `StructDecl` `FuncTypeDecl` `ConstDecl`
+  `GlobalDecl` `FuncDecl`.
+
+**43 rules now value-style.** The recipe for a self-contained rule (no `$$` read that a *caller*
+depends on) is a pure arrow flip: `grep '\$\$([^psi]|$)'` a rule's body (minus `$$parser/$$s/$$i`);
+if it never touches the holder value, `<-`→`<=` is byte-identical. Container-builders that assign
+`$$` and are read *via a tag* also just flip (the `~v` marker feeds the caller). What is left needs
+real design: `root`/`Variable`; `Switch`/`CaseExpr`; the expression chain
+(`Expr`/`Bitwise`/`AddSub`/`MulDiv`/`PrePost`/`Subscript`/`FieldAccess`/`FuncCall`/`Argument`/`Group`/
+`BoolGroup`/`And`/`Comp`/`Value`) which threads the result register through a shared `$$`; and the
+trivial token/keyword leaves (no `$$` at all) which are a mechanical M4-sweep flip.
