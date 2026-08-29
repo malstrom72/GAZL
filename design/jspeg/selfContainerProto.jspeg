@@ -1,0 +1,5 @@
+root    <-  _ item !.
+item    <-  key:Id _ '=' _ val:Num          { $$ = {}; $$.k = $key; $$.v = $val; $$.tag = 'rec' }
+Id      <-  $$=[a-zA-Z]+
+Num     <-  digits=[0-9]+                    { $$ = +$digits }
+_       <-  ' '*

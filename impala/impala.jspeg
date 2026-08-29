@@ -5067,7 +5067,7 @@ FuncTypeDecl <- FUNCTYPE _ { $nmAt = $$i; } id:Identifier            { $ftname =
                 )?                                                   { $$parser.endFuncType($ftname); }
 
 # A type with optional variable name (funcptr-type params & returns allow types-only).
-TypeDeclr   <-  base:TypeBase                                        { $desc = $base; }
+TypeDeclr   <-  base:TypeBase                                        { $$ = {}; $desc = $base; }
                 ( POINTER _                                          { $desc = $$parser.pointerDesc($desc); }
                 )*
                 ( id:Identifier                                      { $$.name = $id; }
@@ -5324,7 +5324,7 @@ inp:ArgsDecl ')'_
                                                                          if (!$$parser.inlineMode) emitLine('');
                                                                          $$parser.inlineMode = false;
                                                                      }
-ExternDecl  <-  EXTERN _                                              { $$.scope = 'globals'; $$.structFwd = false;
+ExternDecl  <-  EXTERN _                                              { $$ = {}; $$.scope = 'globals'; $$.structFwd = false;
                                                                         $at = $$i;   /* the declaration itself - end-of-rule positions have skipped past it */
                                                                         $$parser.pendingProto = undefined; }
                 (
@@ -5400,7 +5400,8 @@ ExternDecl  <-  EXTERN _                                              { $$.scope
                 #  turns it on, fails ArrayDecl, and would otherwise leave it set for the next ordinary
                 #  declaration - which would then be told the host owns it.
                 /                                                     { $$parser.externArray = false; }
-                    VarDecl
+                    d:VarDecl                                         { $$.type = $d.type; $$.name = $d.name; $$.elem = $d.elem;
+                                                                        $$.struct = $d.struct; $$.words = $d.words; $$.at = $d.at; }
                 )                                                     {
                                                                         if ($$.structFwd) {
                                                                             $$parser.cancelStructRedeclaration($sname);
@@ -5768,12 +5769,12 @@ Braced      <-  '{' _                                                { $$ = []; 
 BracedEntry <-                                                       { $fname = undefined; $fat = $$i; }
                 ( id:Identifier ':' _                                { $fname = $id; }
                 )?
-                e:BracedItem                                         { var _v = $e;   /* bare `$e` is the VALUE; `$e.field`
+                e:BracedItem                                         { var _e = $e;   /* bare `$e` is the VALUE; `$e.field`
                                                                                        would set a CONTEXT property, and
                                                                                        `Braced` stores only the value */
-                                                                       _v.field = $fname;
-                                                                       _v.at = $fat;
-                                                                       $$ = _v; }
+                                                                       _e.field = $fname;
+                                                                       _e.at = $fat;
+                                                                       $$ = _e; }
 
 BracedItem  <-  b:Braced                                             { $$ = { braced: $b }; }
                 / x:Expr                                             {
@@ -5866,7 +5867,7 @@ TypeBase    <-  t:BASE_TYPE _                                         { $$ = $$p
                                                                          else $$parser.fail('Unknown type ' + $id, $$s, $$i, 'E413');
                                                                      }
 
-VarDecl     <-  base:TypeBase                                        { $desc = $base; }
+VarDecl     <-  base:TypeBase                                        { $$ = {}; $desc = $base; }
                 ( POINTER _                                           { $desc = $$parser.pointerDesc($desc); }
                 )*
                 { $nameStart = $$i; }
@@ -5893,7 +5894,7 @@ VarDecl     <-  base:TypeBase                                        { $desc = $
                                                                                                     SHAPED array would inherit its axes */
                                                                      }
 
-ArrayDecl   <-                                                        { $desc = undefined; $extent = undefined; $dims = undefined; }
+ArrayDecl   <-                                                        { $$ = {}; $desc = undefined; $extent = undefined; $dims = undefined; }
                 ( base:TypeBase                                      { $desc = $base; }
                   ( POINTER _                                         { $desc = $$parser.pointerDesc($desc); }
                   )*
@@ -6003,14 +6004,14 @@ Statement   <-                                                        {
                     { $lblStart = $$i; }
                     label:Identifier ':' _                            {
                                                                             $$parser.emitMeta({ operator:'<--', type:undefined,
-                                                                                                operands:[ '@' + $label._, undefined, undefined ] });
+                                                                                                operands:[ '@' + $label, undefined, undefined ] });
                                                                             /* carry the source position so processBranches can
                                                                                name the `.impala` line if this label is a duplicate */
                                                                             var lbl = $$parser.metacode[$$parser.metacode.length - 1];
                                                                             lbl.labelSource = $$s;
                                                                             lbl.labelOffset = $$i;
                                                                             /* the 1.x `goto break;` early-exit idiom is the --legacy case */
-                                                                            $$parser.checkReservedName($label._, 'label', $$s, $lblStart);
+                                                                            $$parser.checkReservedName($label, 'label', $$s, $lblStart);
                                                                         }
                 )*
                 (   ';' _
@@ -6477,7 +6478,7 @@ Block       <-  '{'_ Statement* '}'_
 Goto        <-  GOTO _                              { $gotoStart = $$i; }  # before `';'_` swallows the trailing
                                                                            # newline, which put E445 on the next line
                 label:Identifier ';'_               {
-                                                        $$parser.emit('-->', undefined, '@' + $label._, undefined, undefined);
+                                                        $$parser.emit('-->', undefined, '@' + $label, undefined, undefined);
                                                         /* carry the source position so processBranches can name the
                                                            `.impala` line if this label is never defined (E445) */
                                                         var g = $$parser.metacode[$$parser.metacode.length - 1];
@@ -6979,10 +6980,10 @@ BITWISE_OP  <-  $$=( '<<' / '>>>' / '>>' / '|' !'|' / '&' !'&' / '^' )
 ADDSUB_OP   <-  $$=( '+' / '-' )
 MULDIV_OP   <-  $$=( '*' / '/' !'/' / '%' )
 COMP_OP     <-  $$=( '<=' / '>=' / '!=' / '==' / '<' / '>' )
-BASE_TYPE   <-  INT                               { $._ = 'int'; }
-            /  FLOAT                              { $._ = 'float'; }
-            /  FUNCPTR                            { $._ = 'funcptr'; }
-            /  POINTER                            { $._ = 'pointer'; }
+BASE_TYPE   <-  INT                               { $$ = 'int'; }
+            /  FLOAT                              { $$ = 'float'; }
+            /  FUNCPTR                            { $$ = 'funcptr'; }
+            /  POINTER                            { $$ = 'pointer'; }
 BUILT_IN    <-  $$=( 'abs' / 'floor' / 'itof' / 'ftoi' )
 PREFIX_OP   <-  $$=( '-' !("'" / DIGIT / '-')   # `--x` is not a decrement; reject the unspaced pair, accept `- -x`
                    / '~'
