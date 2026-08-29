@@ -1,4 +1,4 @@
-# JSPEG's Value Model — design and migration record
+# JSPEG's Value Model - design and migration record
 
 Status: **DONE (2026-08-28).** How `$$` came to be the value register. The end-state named in
 [`JSPEGFuture.md`](JSPEGFuture.md) Problem 2: the one breaking change to the JSPEG code generator itself, and
@@ -11,12 +11,12 @@ Today every generated rule is `function Rule($){ … }` where `$` is a **holder 
 is `$._`. Two mechanisms sit on that, both in [`impala/jspegCompiler.js`](../../impala/jspegCompiler.js) (the
 generated generator) and defined in [`impala/jspeg.jspeg`](../../impala/jspeg.jspeg):
 
-- **Tag holders.** `$x:Rule` allocates a fresh holder — `Tagged` emits `($t.vr=$.vr)[$v._]='={}'`, so `$x`
+- **Tag holders.** `$x:Rule` allocates a fresh holder - `Tagged` emits `($t.vr=$.vr)[$v._]='={}'`, so `$x`
   becomes `$x={}` and its value is `$x._`. `Definition` then declares `var $x={},…` at the top of the rule.
 - **The `._` rewriter heuristics** in `Action`: `$$`→`$._`, `$$.`→the holder object, and bare `$name`→
   `$name._` *unless* the name is not a holder or is immediately followed by `.`. The consequence, and the reason
   this is worth removing, is that **the meaning of `$name` in an action depends on distant grammar context**
-  (whether that name was ever introduced as a tag) — the "holder/value duality."
+  (whether that name was ever introduced as a tag) - the "holder/value duality."
 
 Dropping the container means: a rule *produces* its value, tags become **plain local variables**, `$$` becomes
 an **ordinary variable**, and the `._` heuristics plus the `={}` holder allocation are deleted from the
@@ -28,7 +28,7 @@ holder.
 
 The current model carries **two** channels: the rule's boolean return is *parse success*; the value rides
 *out of band* in the caller's holder (`$._`). Value-returning rules collapse the value channel into the return
-— which forces a decision about how *success* is then signalled, because the sequence/choice combinators are
+- which forces a decision about how *success* is then signalled, because the sequence/choice combinators are
 built on `&&`/`||` over booleans (`p1 && p2 && … || (backtrack)`) and you cannot `&&` values.
 
 Candidate protocols, to be chosen and prototyped in M1:
@@ -49,9 +49,9 @@ M1's job is to pick one, prove it on the self-grammar, and record why. Everythin
 Reading the generator source surfaced a subtlety Problem 2 understates: the holder `$` carries **two** channels,
 not one.
 
-- **Upward — the value.** `$._` is the rule's semantic result. This is the channel this change is about.
-- **Downward — scope context.** In the self-grammar, `Definition` sets `$$.tag/vi/vr` and the `Expression`
-  sub-rule *reads them back* from the same holder it is handed ([`jspeg.jspeg:46-47,67`](../../impala/jspeg.jspeg)) —
+- **Upward - the value.** `$._` is the rule's semantic result. This is the channel this change is about.
+- **Downward - scope context.** In the self-grammar, `Definition` sets `$$.tag/vi/vr` and the `Expression`
+  sub-rule *reads them back* from the same holder it is handed ([`jspeg.jspeg:46-47,67`](../../impala/jspeg.jspeg)) -
   the holder is threaded *down* to pass the current variable-numbering scope into nested expressions.
 
 Measured on the two grammars (2026-08-28):
@@ -60,12 +60,12 @@ Measured on the two grammars (2026-08-28):
   sites; every `$$.field` is result-record building (`$$.words`, `$$.retSlots`, `$$.elems`, `$$.type`, …), and
   all cross-rule state lives on `$$parser.*` globals (`fail`×87, `emit`×70, `metacode`, `symbols`, `declare`,
   `newLabel`, `counters`, …). So `$$` there is a plain bottom-up record and nothing is threaded through holders.
-- **Only the self-grammar threads context down** (`vi/tag/vr`). It is therefore the *atypical, hard* case — the
+- **Only the self-grammar threads context down** (`vi/tag/vr`). It is therefore the *atypical, hard* case - the
   opposite of the plan's original "prototype on the self-grammar first (easy)" assumption.
 
 **Consequence for the protocol.** Split the holder's two roles instead of collapsing them:
 
-- **`$$` becomes the value** — a plain rule-local, object-valued where used as a container (initialize `$$ = {}`
+- **`$$` becomes the value** - a plain rule-local, object-valued where used as a container (initialize `$$ = {}`
   before the first `$$.field =`), scalar otherwise. It flows *up* via a shared return register (`_val`): a rule
   keeps its boolean combinator return (so the `&&`/`||` chains are unchanged) and sets `_val` to its result;
   tags capture `_val` **eagerly** in the same `&&` step as the call (`Sub() && ($x = _val, true)`), so the single
@@ -91,72 +91,72 @@ The generator must therefore track a per-rule "assigns `$$`" flag (a small addit
 
 **Protocol empirically validated (2026-08-28).** [`valueReturningProto.js`](valueReturningProto.js) is a
 hand-generated value-returning parser for `jspegTest.jspeg` (built by applying the emission rules above by hand)
-that passes all 9 arithmetic cases — passthrough (`root`, `group`), the accumulator loops (a tagged sub-call
+that passes all 9 arithmetic cases - passthrough (`root`, `group`), the accumulator loops (a tagged sub-call
 sets `_val` but does **not** clobber the parent's `$$` local), operator precedence, parens, whitespace, and
 division. So the `_val`-register model computes correctly end to end; what remains for M1 is making the
 *generator* emit this shape (not whether the shape is right).
 
 This is the working decision.
 
-## M1 emission prototype — WORKS, and it found the migration's real boundary (2026-08-28)
+## M1 emission prototype - WORKS, and it found the migration's real boundary (2026-08-28)
 
 The value-returning *generator* is prototyped in a throwaway generator (since deleted - see Artifact cleanup) (a copy of
-`jspeg.jspeg` with ~7 emission actions rewritten). Driven meta-circularly — current `compileJSPEG` compiles
-that prototype into a new-emission generator, which compiles `jspegTest.jspeg` — it produces exactly the target
+`jspeg.jspeg` with ~7 emission actions rewritten). Driven meta-circularly - current `compileJSPEG` compiles
+that prototype into a new-emission generator, which compiles `jspegTest.jspeg` - it produces exactly the target
 shape (param-less rules, `var _v` value locals, eager `($x=_val,true)` captures, a conditional
 `&&(_val=_v,true)` suffix, **no holders, no `._`**) and **passes all 9 arithmetic cases**. The generator surgery
 is real, not hand-waved. Two hazards from the M1 note were handled cleanly:
 
-- **The string-literal `$` hazard** (the rewriter processes `$` even inside emitted string literals — it is why
+- **The string-literal `$` hazard** (the rewriter processes `$` even inside emitted string literals - it is why
   the old `Definition` carries a stray `var $` from its `'($){'` literal): dodged by naming the value local `_v`
   (no `$`) and going **param-less** in the prototype (rule refs emit `ID()`, no `$` literal anywhere).
 - The generator's own actions stay holder-style (interpreted by the current compiler); only the emitted strings
-  changed — so the bootstrap is clean.
+  changed - so the bootstrap is clean.
 
-**The boundary it found — the shared-downward-container idiom does NOT survive.** `tagCaptureTest.jspeg` builds a
+**The boundary it found - the shared-downward-container idiom does NOT survive.** `tagCaptureTest.jspeg` builds a
 map with `root <- _ {$$={}} pair …` where the untagged `pair` does `$$[$key]=$value` **expecting `$$` to be
 root's map** (holder model: `pair` shares root's holder). Under value-returning, generated `pair()` gets its own
-`var _v` and writes `_v[$key]` on an *uninitialized* local — it crashes, and even if it didn't it would fill the
+`var _v` and writes `_v[$key]` on an *uninitialized* local - it crashes, and even if it didn't it would fill the
 wrong object. So a rule that mutates an **inherited** `$$` container via an untagged call is not mechanically
 migratable; such grammars must be rewritten (sub-rule *returns* a value, parent merges) or use an explicit
 accumulator (a `$$parser` global). This is exactly the kind of thing M3's "tag rebinding / container audit" must
 catch, now with a concrete failure signature to grep for.
 
-**Does `impala.jspeg` (the real target) use that idiom? — inconclusive, audit required.** Counts: 20 `$$ =`
+**Does `impala.jspeg` (the real target) use that idiom? - inconclusive, audit required.** Counts: 20 `$$ =`
 initializations vs 75 `$$.field`/`+=` writes. That ratio fits *either* "init once, write many fields locally"
-(safe) *or* some rules writing an inherited `$$` (unsafe). The dominant patterns — per-rule `makeMeta` records
-and `$$parser.*` globals for accumulation (`emit`, `metacode`, `symbols`) — lean strongly toward local records +
+(safe) *or* some rules writing an inherited `$$` (unsafe). The dominant patterns - per-rule `makeMeta` records
+and `$$parser.*` globals for accumulation (`emit`, `metacode`, `symbols`) - lean strongly toward local records +
 global accumulation (safe), but this must be **proven per-rule in M3** before the migration is declared
 mechanical. The go/no-go for the whole refactor rests here: if impala.jspeg avoids the inherited-container idiom,
 the migration is uniform; if a few rules use it, they get the return-and-merge rewrite.
 
 **Generator self-hosting** remains its own step (regenerating `jspegCompiler.js` with the new emission requires
-the self-grammar's downward-`vi/tag/vr` context to move onto the `$` param) — isolated to the generator, not to
+the self-grammar's downward-`vi/tag/vr` context to move onto the `$` param) - isolated to the generator, not to
 `impala.jspeg`.
 
-## Go/no-go audit result (2026-08-28): NOT uniform — the postfix-chain/accumulator cluster is the real work
+## Go/no-go audit result (2026-08-28): NOT uniform - the postfix-chain/accumulator cluster is the real work
 
 The audit (`auditContainer.js`: per-rule, flag any rule that mutates `$$` as a container without a direct init)
 found **6 of 93 rules** using the pattern: `TypeDeclr`, `ExternDecl`, `VarDecl`, `ArrayDecl`, `FuncCall`,
-`Argument`. Inspecting the two load-bearing ones settles the question — **the answer is that `impala.jspeg` DOES
+`Argument`. Inspecting the two load-bearing ones settles the question - **the answer is that `impala.jspeg` DOES
 use the inherited-container idiom**, in its call machinery:
 
 - **`FuncCall`** receives `$$` = the *callee's* meta record (built earlier in the postfix chain, the documented
   "`$` shared by uncaptured sub-rules" pattern) and adds `.count/.retSlots/.words/.base/.types/.elems/…` to it.
-  It never inits `$$` because `$$` is inherited — so the JSPEGFuture claim "FuncCall migrates by initializing
+  It never inits `$$` because `$$` is inherited - so the JSPEGFuture claim "FuncCall migrates by initializing
   `$$ = {}`" is **wrong**: that would destroy the inherited callee record.
 - **`Argument`** (referenced untagged ×4 inside `FuncCall`) accumulates into that shared `$$`: `++$$.count`,
-  `$$.types.push(meta.type)`, `$$.words += w`. This is exactly the tagCaptureTest crash pattern — an untagged
+  `$$.types.push(meta.type)`, `$$.words += w`. This is exactly the tagCaptureTest crash pattern - an untagged
   child mutating the parent's container.
 
 So dropping the `$` container is **not** a mechanical migration of 125 sites. There is a **hard core**: the
 postfix-chain expression builder plus the call/declaration accumulators (the 6 rules above, at least
-`FuncCall`+`Argument` confirmed as inherited-accumulators; the declaration rules — some referenced tagged, e.g.
-`v:VarDecl`, `out:TypeDeclr` — need per-rule triage into "self-container, add init = easy" vs
+`FuncCall`+`Argument` confirmed as inherited-accumulators; the declaration rules - some referenced tagged, e.g.
+`v:VarDecl`, `out:TypeDeclr` - need per-rule triage into "self-container, add init = easy" vs
 "inherited-accumulator = rewrite"). These rules keep a *mutable record threaded across sibling rules*, which the
 per-rule-`_v` model does not provide.
 
-**This is the real design decision the refactor turns on** — how to carry that threaded record without the
+**This is the real design decision the refactor turns on** - how to carry that threaded record without the
 holder. Options (to weigh before M3):
 
 1. **Explicit accumulator off `$$`.** Move the call/decl record onto `$$parser` state (a small stack of
@@ -167,7 +167,7 @@ holder. Options (to weigh before M3):
    list. Purely functional, no shared state, but a larger rewrite of the argument loop and the close-of-call
    checks that currently read the accumulated fields.
 3. **A context object threaded down the chain** (the `$` param this plan already reserves for the self-grammar's
-   scope) — carry the in-progress record on `$` for exactly these rules. Smallest diff to the existing actions,
+   scope) - carry the in-progress record on `$` for exactly these rules. Smallest diff to the existing actions,
    but reintroduces a downward container for one cluster (a scoped, honest version of what we're removing).
 
 Recommendation leans (1): it matches how impala.jspeg already threads cross-rule state and keeps `$$` a pure
@@ -176,7 +176,7 @@ value everywhere. The choice gates M3; the other ~119 sites remain the mechanica
 ### DECISION (2026-08-28): return-and-merge (option 2) for the hard core
 
 `Argument` *returns* its contribution instead of mutating a shared record; `FuncCall` folds the list. No shared
-mutable state — `$$` is a pure value everywhere, the strongest end-state. Concrete shape:
+mutable state - `$$` is a pure value everywhere, the strongest end-state. Concrete shape:
 
 - **`Argument`** returns a record `{ meta: $a, type, elem, opnd, structWords }` (structWords = 1 for a scalar,
   `structWords(struct)` for a by-value struct) and does **not** place the value or touch a shared `$$`. The
@@ -189,10 +189,10 @@ mutable state — `$$` is a pure value everywhere, the strongest end-state. Conc
 
 **The load-bearing risk is emission ORDER.** Today placement (`makeArgValue`/`copyStructArg`, which *emit*)
 happens *during* the argument loop; return-and-merge moves it into the post-loop fold. The fold must emit in the
-same left-to-right arg order so the generated `.gazl` is **byte-identical** — the corpus parity gate is the
+same left-to-right arg order so the generated `.gazl` is **byte-identical** - the corpus parity gate is the
 proof. Two things to verify when it lands: (a) the by-value-struct `svals` LAST-door check at close still sees
 the same list, and (b) the scratch-pool ownership of each `$a` survives being held in the array until the fold
-(see the `<X>` scratch-ownership note in memory) — i.e. the args' meta slots must not be released until placement.
+(see the `<X>` scratch-ownership note in memory) - i.e. the args' meta slots must not be released until placement.
 
 `Argument`+`FuncCall` are the confirmed inherited-accumulators. The four declaration rules (`TypeDeclr`,
 `ExternDecl`, `VarDecl`, `ArrayDecl`) get the M3 triage: a tagged-only, self-contained record just gains a
@@ -206,8 +206,8 @@ value-returning generator prototyped, the migration boundary found and the go/no
 
 ## M3 triage complete (2026-08-28)
 
-**A key mechanics correction confirmed during triage:** `$$.field` maps to `$.field` — a field on the **holder
-object itself** — while bare `$$` is `$._` (the value slot). So "container-style" rules store their record as
+**A key mechanics correction confirmed during triage:** `$$.field` maps to `$.field` - a field on the **holder
+object itself** - while bare `$$` is `$._` (the value slot). So "container-style" rules store their record as
 holder FIELDS, and the holder is fresh-per-tag (`x:Rule` allocates `$x = {}`) or shared when the rule is called
 untagged. That is the precise dividing line:
 
@@ -220,19 +220,19 @@ untagged. That is the precise dividing line:
 
 - Self-container path: [`selfContainerProto.jspeg`](selfContainerProto.jspeg) (`item <- key:Id '=' val:Num
   { $$ = {}; $$.k = $key; $$.v = $val; … }`) compiled by the value-returning generator returns
-  `{"k":"foo","v":42,"tag":"rec"}` — `$$ = {}` init + `$$.field =` on the local + tagged captures all work.
+  `{"k":"foo","v":42,"tag":"rec"}` - `$$ = {}` init + `$$.field =` on the local + tagged captures all work.
 - Core protocol path: `jspegTest` 9/9 (arithmetic, accumulator loops, passthrough).
 
-The return-and-merge path for the hard core is designed (above) but not yet built — that is the first coding step
+The return-and-merge path for the hard core is designed (above) but not yet built - that is the first coding step
 of M3 proper.
 
-## M3 is a big-bang, not incremental — the toolchain constraint
+## M3 is a big-bang, not incremental - the toolchain constraint
 
 Important sequencing reality found in M1: `impala.jspeg` is compiled by the **holder-based** production generator
 (`jspegCompiler.js` via `updateJSPEG.js`). A value-returning rewrite of any rule miscompiles under that generator,
 so rules **cannot** be migrated one-at-a-time against the production toolchain. M3 therefore switches the
 generator (use the value-returning prototype-derived generator for `impala.jspeg`) and migrates **all** sites
-in one gated step — verifiable but not incrementally reviewable — **unless** a dual-mode generator (understands
+in one gated step - verifiable but not incrementally reviewable - **unless** a dual-mode generator (understands
 both `._` and value styles) is built first to allow staged migration. Decide dual-mode-vs-big-bang at the top of
 M3; the byte-identical corpus parity gate makes either safe to *verify*.
 
@@ -241,7 +241,7 @@ self-grammar's `vi/tag/vr` onto the `$` context param) so it can be the toolchai
 `FuncCall` return-and-merge; (3) the four declaration rules gain `$$ = {}`; (4) the ~119 mechanical sites;
 (5) switch `updateJSPEG.js` and prove byte-identical `.gazl` on the full corpus.
 
-## DECISION: dual-mode — and it is validated, so M3 IS incrementally reviewable (2026-08-28)
+## DECISION: dual-mode - and it is validated, so M3 IS incrementally reviewable (2026-08-28)
 
 Dual-mode chosen, and the enabling insight is now proven: **the holder's `._` field already IS the transfer
 register.** Every generated rule (holder OR value style) writes its value to `$._`; captures read `$._`. So a
@@ -253,12 +253,12 @@ Both styles then interoperate through `._` with zero glue.
 (`root`/`product`/`group`/`_`) and value-style-bridged (`expr`/`number`) rules computes all 9 arithmetic cases,
 with the style boundary crossed in **both** directions (holder `product`→value `number`; value `expr`→holder
 `product`). So a rule can be migrated to value style **independently**, and it keeps working alongside unmigrated
-rules — the migration is rule-by-rule under the byte-identical parity gate, not a big-bang. `_val` (the global
+rules - the migration is rule-by-rule under the byte-identical parity gate, not a big-bang. `_val` (the global
 register) is not needed for the transition; it becomes a *final* mechanical step (rename `$._`→`_val`, drop the
 holder param) once every rule is value style.
 
 Revised M3 order (dual-mode): (1) extend the generator with a **per-rule value-style flag** (a marker or a
-name-set) that switches action-rewriting to the value style and appends the `$._ = _v` bridge — a small addition
+name-set) that switches action-rewriting to the value style and appends the `$._ = _v` bridge - a small addition
 to the prototype's Definition/Action/Tagged/Capture; (2) migrate rules to value style in reviewable batches
 (mechanical self-containers, then the `Argument`/`FuncCall` return-and-merge as one unit), each behind
 `node impala/updateJSPEG.js` + `tools/test-js` byte-identical; (3) when the last rule flips, do the final
@@ -271,7 +271,7 @@ in the generator.
 
 - **[`RefactorPlan.md`](RefactorPlan.md) (return-style helpers) becomes moot for its stated goal.** That plan
   reduces the number of *holder-touching* action sites while **keeping** the container; this change removes the
-  container outright. If this lands we do not also need RefactorPlan — but its milestone discipline
+  container outright. If this lands we do not also need RefactorPlan - but its milestone discipline
   (behavior-preserving, fixture-gated, one reviewable step at a time) is the model this plan follows. Do not
   invest in RefactorPlan's `binaryRet`/`lookupRet` wrappers as a prerequisite; they would be migrated away
   again.
@@ -281,14 +281,14 @@ in the generator.
 
 ## Current state (verified 2026-08-28)
 
-- **125** `$$.` holder-escape sites in `impala/impala.jspeg` — the mechanical migration surface.
+- **125** `$$.` holder-escape sites in `impala/impala.jspeg` - the mechanical migration surface.
 - **0** return-style `Ret(` helpers present (RefactorPlan is genuinely 0/8, nothing to unwind).
 - `impala/impala.node.js` (fast dev compiler) exists; `tools/test-js.{sh,cmd}` is the parity gate.
 
 ## Guardrails
 
 - **The parity fixtures are the spec.** Generated `.gazl` output must stay **byte-identical** across every
-  milestone — `tools/test-js.{sh,cmd}` runs the corpus byte-compare plus the NuXJS parity set. A milestone is
+  milestone - `tools/test-js.{sh,cmd}` runs the corpus byte-compare plus the NuXJS parity set. A milestone is
   not done until that gate is green. Behavior change, if any is ever intended, is a separate reviewed step.
 - Regenerate generated files with `node impala/updateJSPEG.js` after any grammar/generator edit; run
   `node impala/updateJSPEG.js --check` to confirm the checked-in generator is current.
@@ -303,44 +303,44 @@ in the generator.
 
 ## Milestones
 
-### M1 — Protocol design + generator prototype
-Goal: settle the value/success protocol (**done — the `_val`-register split, see M1 findings above**) and prove a
+### M1 - Protocol design + generator prototype
+Goal: settle the value/success protocol (**done - the `_val`-register split, see M1 findings above**) and prove a
 value-returning *emission* on throwaway grammars before any `impala.jspeg` exposure.
-- ~~Choose among the candidate protocols~~ — **done**: `_val` return-register for the value, boolean success
+- ~~Choose among the candidate protocols~~ - **done**: `_val` return-register for the value, boolean success
   unchanged, `$` retained as the downward context param. Recorded above.
 - Prototype the new emission in the generator and prove it compiles `impala/jspegTest.jspeg` and
   `impala/tagCaptureTest.jspeg` to working parsers. **Note the inversion (M1 findings): the self-grammar is the
-  *hard* case (it threads `vi/tag/vr` down), so it is not the right first prototype — validate on the small
+  *hard* case (it threads `vi/tag/vr` down), so it is not the right first prototype - validate on the small
   grammars and an `impala.jspeg` subset first, and treat self-hosting `jspegCompiler.js` as its own step.**
 - Decide dual-mode-vs-atomic (see guardrails) and record it.
 - Exit: a working value-returning emission for the small grammars + a written protocol/transition decision
   (protocol done; emission prototype + transition decision remain).
 
-### M2 — Generator self-hosting fixed point
+### M2 - Generator self-hosting fixed point
 Goal: the new generator regenerates itself stably and behaves identically on the small grammars.
 - Feed the new `jspeg.jspeg` through the new generator; confirm a fixed point (regenerating again is a no-op).
 - Confirm byte-identical parser behavior on `jspegTest` / `tagCaptureTest` outputs.
 - Exit: `node impala/updateJSPEG.js` is stable under the new generator; self-grammar tests pass.
 
-### M3 — Migrate `impala.jspeg` actions to the value style
+### M3 - Migrate `impala.jspeg` actions to the value style
 Goal: convert the 125 `$$.` sites and the implicit `$name._` reads to plain-variable form.
 - Migrate in reviewable batches by rule family (expressions → assignment → calls → control flow), mirroring
   RefactorPlan's risk ordering, if dual-mode (M1) allows incremental migration; otherwise stage the edits and
   land them together with the generator switch.
-- Audit tag rebinding (a name reused as a tag in more than one alternative) — the one place plain locals differ
+- Audit tag rebinding (a name reused as a tag in more than one alternative) - the one place plain locals differ
   from per-alternative holders.
 - Keep generated `.gazl` byte-identical after each batch: `node impala/updateJSPEG.js` then
   `node impala/jspegCompilerTests.js` and the full `tools/test-js` gate.
 - Exit: no `$$.` holder-escape sites remain; the corpus and NuXJS parity are byte-identical.
 
-### M4 — Delete the holder machinery from the generator
+### M4 - Delete the holder machinery from the generator
 Goal: remove the now-dead container support.
 - Remove the `={}` holder allocation (`Tagged`/`Definition`) and the `._` heuristics (`Action`) from
   `jspeg.jspeg`; regenerate.
 - Search generated + source for any residual `._`/holder use; the gate must stay green with the machinery gone.
 - Exit: `node impala/updateJSPEG.js --check` clean; no holder/`._` codegen remains; gate byte-identical.
 
-### M5 — Documentation
+### M5 - Documentation
 Goal: describe the final value model for future grammar authors.
 - Rewrite the holder/`._` semantics section of [`JSPEG.md`](JSPEG.md) as the value-returning model; delete the
   duality material.
@@ -353,14 +353,14 @@ Goal: describe the final value model for future grammar authors.
 - **The protocol choice (M1) is the whole risk.** If none of the candidates yields byte-identical output
   without ugly special-casing, stop and reconsider scope before touching `impala.jspeg`.
 - **Zero-width and falsy values.** Any protocol must distinguish "matched, produced a falsy/empty value" from
-  "failed" — the FAIL-sentinel and position-delta options handle this differently; the prototype must cover a
+  "failed" - the FAIL-sentinel and position-delta options handle this differently; the prototype must cover a
   rule that legitimately yields `''`, `0`, or `undefined`.
 - **Dual-mode feasibility** decides whether M3 is incremental or a single large gated commit; the byte-identical
   fixtures make either safe to *verify*, but not equally easy to *review*.
 - **NuXJS.** Any new generator idiom must clear the NuXJS parity leg; the safest posture is to reuse constructs
   the current generator already emits.
 
-## M3 IN PROGRESS — dual-mode + two-pass generator built, all self-containers migrated (2026-08-28)
+## M3 IN PROGRESS - dual-mode + two-pass generator built, all self-containers migrated (2026-08-28)
 
 The dual-mode generator (option B) is **built, in the production `jspeg.jspeg`/`jspegCompiler.js`, and gate-green**:
 
@@ -373,17 +373,17 @@ The dual-mode generator (option B) is **built, in the production `jspeg.jspeg`/`
   inside a tagged group (`v:(VarDecl / ArrayDecl)`) is found too.
 
 **Self-containers migrated (each: flip `<-`→`<=`, add `$$ = {}`, regenerate, byte-identical `.gazl`, full gate):**
-`TypeDeclr`, `VarDecl`, `ArrayDecl`, `ExternDecl` — **all four done.**
+`TypeDeclr`, `VarDecl`, `ArrayDecl`, `ExternDecl` - **all four done.**
 
 **Two interop wrinkles the gate caught and were fixed locally (both byte-identical):**
-1. **Tagged groups** — the first cut of the two-pass only saw a bare rule ref; extended to scan every rule ref in
+1. **Tagged groups** - the first cut of the two-pass only saw a bare rule ref; extended to scan every rule ref in
    the Suffix (fixes `v:(VarDecl / ArrayDecl)`).
-2. **Untagged-sharing site** — `ExternDecl` had a bare `VarDecl` filling its shared holder (the inherited-container
+2. **Untagged-sharing site** - `ExternDecl` had a bare `VarDecl` filling its shared holder (the inherited-container
    idiom). Tagged it (`d:VarDecl { $$.type = $d.type; … }`) mirroring the existing `ArrayDecl` branch. This is the
-   same class of thing the `FuncCall`/`Argument` hard core needs, in miniature — expect a few more such sites.
+   same class of thing the `FuncCall`/`Argument` hard core needs, in miniature - expect a few more such sites.
 
 **Remaining M3:** the `FuncCall`/`Argument` return-and-merge hard core; the ~119 mechanical value sites (each a
-flip + gate, watching for untagged-sharing sites to tag); then **M4** — once every rule is `<=`, delete the whole
+flip + gate, watching for untagged-sharing sites to tag); then **M4** - once every rule is `<=`, delete the whole
 dual-mode/two-pass/holder scaffolding and collapse `$._`→`_val`, param-less.
 
 ## M3 mechanical batch (2026-08-28): 9 leaf rules + the shape of what's left
@@ -394,16 +394,16 @@ value-style** (these + the 4 self-containers).
 
 **The "~119 mechanical sites" are not uniformly a flip.** Trying `Identifier` (22 errors, reverted) showed the
 remaining rules split three ways:
-1. **Clean leaves** — scalar/record consumed via tags. Flip + gate (done above).
-2. **Untagged-sharing rules** — used bare somewhere, so a consumer reads them via `$$`-sharing. Each needs its
+1. **Clean leaves** - scalar/record consumed via tags. Flip + gate (done above).
+2. **Untagged-sharing rules** - used bare somewhere, so a consumer reads them via `$$`-sharing. Each needs its
    untagged sites tagged first (the `ExternDecl`-`VarDecl` fix). `Identifier` is this, with *many* consumers.
 3. **The expression precedence chain** (`Expr`/`Bitwise`/`AddSub`/`MulDiv`/`PrePost`/`Comp`/`Value`/`Subscript`/
-   `FieldAccess`) — shares `$$` up the chain like the `FuncCall` postfix chain: a **second cluster** to migrate as
+   `FieldAccess`) - shares `$$` up the chain like the `FuncCall` postfix chain: a **second cluster** to migrate as
    a unit, not rule-by-rule.
 
 So the real remaining M3 is: a few more clean leaves; then per-rule tagging for the untagged-sharing rules; then
 the two clusters (expression chain, call chain incl. `FuncCall`/`Argument` return-and-merge). The
-dual-mode/two-pass machinery handles all of it — it is surgery, not trivial flips. Then M4 deletes the scaffolding
+dual-mode/two-pass machinery handles all of it - it is surgery, not trivial flips. Then M4 deletes the scaffolding
 and collapses `$._`→`_val`.
 
 ## M3 batch 2 (2026-08-28): the ~v/explicit-`._` guard, then 30 more rules
@@ -411,17 +411,17 @@ and collapses `$._`→`_val`.
 **The "Identifier is untagged-sharing" diagnosis in batch 1 was wrong.** The real failure was a
 double-`._`: three actions write `$label._` explicitly (`Statement`, `Goto`), and once `Identifier`
 is value-style the two-pass `~v` marker *also* auto-appends `._` on that same capture → `$label._._`
-→ `undefined` label (E446). Fixed at the source — the generator's Action rewriter — not per site:
+→ `undefined` label (E446). Fixed at the source - the generator's Action rewriter - not per site:
 the `~v`/heuristic `._`-append is now guarded by `$b.slice(0, 2) !== '._'`, so an action that already
 wrote `._` is left alone. One token in `jspeg.jspeg`, byte-identical for every rule already passing,
 and it is the general fix (any future value-style capture that a legacy action deref'd with `._` now
-just works). With that guard, `Identifier` migrates clean — it was never an untagged-sharing rule.
+just works). With that guard, `Identifier` migrates clean - it was never an untagged-sharing rule.
 
 **Lesson:** the "three-way split" over-counted category 2. Most rules are category 1 once the guard
-is in. The genuine shared-container rules are far fewer than feared — so far only `ExternDecl`'s
+is in. The genuine shared-container rules are far fewer than feared - so far only `ExternDecl`'s
 `VarDecl` and (still ahead) the `Switch`/`CaseExpr` + expression/call chains that carry `$$` up.
 
-**Also found — the `_v` register clash.** Actions wrap in an IIFE, so an author-local `var _v`
+**Also found - the `_v` register clash.** Actions wrap in an IIFE, so an author-local `var _v`
 shadows the value register *inside* the action; a value-style `$$ =` there would write the IIFE-local,
 not the register, and the bridge would read `undefined`. Only `BracedEntry` had one; renamed its
 local `_v`→`_e` (byte-identical). Grep `\b_v\b` before migrating any rule with hand-written locals.
@@ -443,10 +443,10 @@ real design: `root`/`Variable`; `Switch`/`CaseExpr`; the expression chain
 `BoolGroup`/`And`/`Comp`/`Value`) which threads the result register through a shared `$$`; and the
 trivial token/keyword leaves (no `$$` at all) which are a mechanical M4-sweep flip.
 
-## M3 COMPLETE (2026-08-28): every impala.jspeg rule is value-style — and the hard core was a non-event
+## M3 COMPLETE (2026-08-28): every impala.jspeg rule is value-style - and the hard core was a non-event
 
 **The whole grammar is now `<=`, byte-identical throughout.** The "FuncCall/Argument return-and-merge
-hard core" and the expression precedence chain — the parts flagged as the risky, design-heavy cluster —
+hard core" and the expression precedence chain - the parts flagged as the risky, design-heavy cluster -
 turned out to need **zero special handling**. They are pure arrow flips.
 
 **The one insight that dissolved the hard core: initialize the value register to the incoming slot.**
@@ -482,7 +482,7 @@ M4 = **delete the dual-mode scaffolding** and make value-style the only mode: dr
 `.vs` threading in `jspeg.jspeg`; drop the two-pass `_vsRules` prescan + `~v` marker (with every rule
 `<=`, every capture is a value capture); collapse `$._`→a single return register and make rules
 param-less (`_val`), which is the actual "drop the `$` container" end-state. The `impala.jspeg` grammar
-does **not** change in M4 — only the generator and the shape of the emitted functions. `jspeg.jspeg`'s
+does **not** change in M4 - only the generator and the shape of the emitted functions. `jspeg.jspeg`'s
 OWN rules are still holder-style and must migrate too before the `<-` path can be deleted (the generator
 self-hosts). Bar stays byte-identical `.gazl`, plus NuXJS parity + fuzz.
 
@@ -496,31 +496,31 @@ undefined (setting 'tag')`). Reverted; tree green. Two blockers, the second fund
    the usual way (`$$ = {}` first), same as the impala self-containers.
 
 2. **The alias goes stale when a child REPLACES the value (fundamental).** `var _v = $._` works only
-   because impala's meta slots are *mutated in place* — helpers fill the same object, so the alias stays
+   because impala's meta slots are *mutated in place* - helpers fill the same object, so the alias stays
    valid. `jspeg.jspeg` builds **strings**: every rule does `$$ = '…'` / `$$ += '…'`, which **rebinds**.
    An untagged child (e.g. `Definition`'s bare `Expression`) sets its own `_v` to a new string and
    bridges `$._ = _v`; the parent's `_v`, aliased at entry, still points at the *old* value. Holder mode
    worked because parent and child literally shared one `$._` cell.
 
-**So the `_v=$._` init is not general — it is exactly a mutate-in-place optimization.** It carried all of
+**So the `_v=$._` init is not general - it is exactly a mutate-in-place optimization.** It carried all of
 impala.jspeg because that grammar threads meta-slot objects; it cannot carry a string-building grammar.
 
 **This reorders M4.** The collapse must come first, not last:
 
-- **Option A — tag-and-thread `jspeg.jspeg` first.** Tag every untagged value-producing child
+- **Option A - tag-and-thread `jspeg.jspeg` first.** Tag every untagged value-producing child
   (`e:Expression { $$ = $e }`) so the value arrives through a capture instead of a shared cell, and move
   the threaded context (`$$.vi/.tag/.vr/.vs`) onto those sub-holders. Mechanical but invasive, and it
   churns the rules M4 is about to delete anyway.
-- **Option B (recommended) — do the `_val` collapse first.** Replace the per-rule holder with a single
+- **Option B (recommended) - do the `_val` collapse first.** Replace the per-rule holder with a single
   return register: a rule sets `_val`, the caller reads `_val`, a tagged capture saves it to a local
   right after the call. "Child replaces the value" then works by construction (no aliasing), which
   dissolves blocker 2 *and* blocker 1, and `jspeg.jspeg` migrates without the Option-A churn. It is the
   actual "drop the `$` container" end-state, so the work is not throwaway.
 
 Bar is unchanged: byte-identical `.gazl` (0/101) + NuXJS parity + fuzz. Note the collapse changes the
-*shape* of generated `impalaCompiler.js`, which is allowed — only its **output** must be identical.
+*shape* of generated `impalaCompiler.js`, which is allowed - only its **output** must be identical.
 
-## M4 design resolved (2026-08-28): seed `_val` at tagged captures — the piece the M1 prototype lacks
+## M4 design resolved (2026-08-28): seed `_val` at tagged captures - the piece the M1 prototype lacks
 
 The M1 emission prototype already had the target shape: param-less rules,
 `var _v`, `Primary` emitting `Sub()`, eager `($x=_val,true)` captures, conditional `&&(_val=_v,true)`,
@@ -532,7 +532,7 @@ return value is discarded. Under the prototype's emission a callee starts with `
 `undefined`. Today that works only because hardening pre-allocates a slot per capture
 (`$x={}` → `createParserContext()` = `{_: newMetaSlot()}`).
 
-**Resolution — seed the register from the capture's own slot, then read it back:**
+**Resolution - seed the register from the capture's own slot, then read it back:**
 
 ```
 tagged capture x:Sub   →   (_val = $x, Sub() && ($x = _val, true))
@@ -549,17 +549,17 @@ yielding the bare slot rather than a `{_:}` holder). This satisfies every case a
   publishes `_val = _v`, and `$x = _val` picks up the new value. Fixes the stale-alias bug that blocks
   `jspeg.jspeg` (strings), because the value now travels through the register, not a captured alias.
 - **Untagged child** (the shared accumulator): inherits `_val` unseeded, i.e. the parent's own `_v`
-  object — the current sharing semantics, preserved.
+  object - the current sharing semantics, preserved.
 - **Isolation**: one pre-allocated slot per capture var (unchanged from today, including reuse across
   loop iterations).
-- **Passthrough**: unchanged — publish only if the rule mentions `$$`.
+- **Passthrough**: unchanged - publish only if the rule mentions `$$`.
 
-**So M4 needs no `impala.jspeg` edits at all** — it is generator surgery plus bootstrap plumbing:
+**So M4 needs no `impala.jspeg` edits at all** - it is generator surgery plus bootstrap plumbing:
 
 1. `jspeg.jspeg`, value-mode branches only (holder mode untouched, since `jspeg.jspeg` is still `<-`):
    `Definition` (param-less + `_v=_val` init + `_val=_v` publish), `Primary` (`Sub()`), `Tagged` (the
    seed/read-back above, plus the `$$:` form → `(_val=_v,(…)&&(_v=_val,true))`), and the Action rewriter
-   (**no `._` append in value mode** — captures hold values directly, which retires the heuristic, the
+   (**no `._` append in value mode** - captures hold values directly, which retires the heuristic, the
    `~v` marker and its guard for migrated rules).
 2. `root`'s emitted preamble becomes `var _i=0,_im=0,_val,…,_b=root();` / `return [_b,_val,…]` when
    `_vsRules['root']`, keeping `_o` + `_o.options=_hostOptions` for the host.
@@ -568,10 +568,10 @@ yielding the bare slot rather than a `{_:}` holder). This satisfies every case a
 
 Only after that does `jspeg.jspeg` migrate (blocker 2 above is gone), and only then can the `<-` path,
 `.vs` threading and the `_vsRules` prescan be deleted. Bar unchanged: byte-identical `.gazl` + parity +
-fuzz. **Not yet implemented** — the bootstrap (a self-hosting generator whose emitted preamble and
+fuzz. **Not yet implemented** - the bootstrap (a self-hosting generator whose emitted preamble and
 hardening must change together) makes this a focused push, not a tail-end edit.
 
-## M4 LANDED (2026-08-28): the holder is gone — param-less rules + a `_val` register, byte-identical
+## M4 LANDED (2026-08-28): the holder is gone - param-less rules + a `_val` register, byte-identical
 
 `impala.jspeg`'s generated parser now has **zero holders, zero `._`, and 110 param-less rules**, with the
 value travelling through a single `_val` register. Corpus 0/101 byte-identical, NuXJS parity, dead-strip
@@ -579,18 +579,18 @@ and fuzz 3000 all green. This is the "drop the `$` container" end-state for the 
 
 **What it took, beyond the design already recorded above:**
 
-1. **Seed the register at a tagged capture** — `(_val=$x, Sub() && ($x=_val, …))` with `$x` a
+1. **Seed the register at a tagged capture** - `(_val=$x, Sub() && ($x=_val, …))` with `$x` a
    pre-allocated slot. Reconciles impala's fill-in-place helpers with a register model.
 2. **Restore `_val` after a capture** (`,_val=_v`). A capture hands the register to the callee; without
    putting the rule's own value back, a *following untagged* child inherits the capture's value. This is
    what broke `ConstDecl` (`makeConstant` saw an unfilled slot).
-3. **Restore `_val` when a capture FAILS** — the subtle one. `((_val=$x,(Sub()))&&(…)||(_val=_v,false))`.
+3. **Restore `_val` when a capture FAILS** - the subtle one. `((_val=$x,(Sub()))&&(…)||(_val=_v,false))`.
    PEG backtracking does not unwind the register: `PrePost`'s `op:PREFIX_OP` seeds `_val`, fails on `0`,
    and the `Value` alternative then filled the *wrong* slot (E407 "Expected constant int").
 4. **Seed `_val` from the root context slot** (`var _val=_o._`). A bare `var _val` starts `undefined`, so
    the first `lookup`/`makeMeta` filled a throwaway and `assign` hit its missing-meta guard.
 5. `_v` is now declared in **every** value rule (it seeds and restores the register), so it can no longer
-   double as the "assigns `$$`" flag — that moved to a separate `~a` key, preserving the passthrough rule.
+   double as the "assigns `$$`" flag - that moved to a separate `~a` key, preserving the passthrough rule.
 6. Grammar edit (the one exception to "no `impala.jspeg` changes"): the three explicit `$label._` derefs
    drop their `._`, since a capture now holds the value itself.
 
@@ -600,29 +600,29 @@ are param-less.
 
 ## What is left: deleting holder mode needs the self-grammar's *downward* channel rethought
 
-Flipping `jspeg.jspeg`'s own 40 rules still fails — but no longer from stale aliases (that is fixed).
+Flipping `jspeg.jspeg`'s own 40 rules still fails - but no longer from stale aliases (that is fixed).
 It now fails on exactly the **downward context channel** the M1 findings called the self-grammar's hard
 case: `Sequence` pre-fills `$p.vi/.tag/.vr` and then captures the value into the *same* var
-(`p:(Prefix / Action)`). In holder mode `$p` was a persistent box — parent wrote `$p.vi`, child's value
+(`p:(Prefix / Action)`). In holder mode `$p` was a persistent box - parent wrote `$p.vi`, child's value
 landed in `$p._`, and the context survived every loop iteration. With a register, `$p = _val` **overwrites
 the box with the value**, so iteration 2 hands `Prefix` a string and `Capture` dies on `_v.vr[...]`.
 
-The fix is not more generator plumbing — it is that this context should not be threaded through holders
+The fix is not more generator plumbing - it is that this context should not be threaded through holders
 at all:
 
 - `vr` (the vars map) is per-`Definition` and rules never nest, so it can simply be a generator **global**
   (`Definition` sets it; everyone reads it). That deletes the threading outright.
-- `tag` is only read by `Primary` to emit a holder argument — **dead once holder mode goes**.
-- `vi` appears to be write-only propagation (verify), and `vs` exists solely to select the mode — both
+- `tag` is only read by `Primary` to emit a holder argument - **dead once holder mode goes**.
+- `vi` appears to be write-only propagation (verify), and `vs` exists solely to select the mode - both
   disappear with dual-mode.
 
 So the last step is one combined change: **replace `vr` threading with a global, delete the `<-` path,
-`.vs`, `_vsRules`/`~v` and the `tag`/`vi` threading, and flip `jspeg.jspeg` in the same commit** — the
+`.vs`, `_vsRules`/`~v` and the `tag`/`vi` threading, and flip `jspeg.jspeg` in the same commit** - the
 current dual-mode compiler builds that new generator, which is then value-only. Bar unchanged.
 
 ## COMPLETE (2026-08-28): one rule form, no holders anywhere
 
-Both grammars are fully migrated — **150 rules, 0 holder rules, 0 rules taking a parameter, no `._`**
+Both grammars are fully migrated - **150 rules, 0 holder rules, 0 rules taking a parameter, no `._`**
 (the three `'$._'` left in `jspegCompiler.js` are the *sentinel string* naming the `$$` tag, not holder
 access). Dual-mode, the `.vs`/`tag`/`vi` threading, the `_vsRules` prescan and the `~v` marker are all
 deleted. Corpus 0/101 byte-identical, NuXJS parity, dead-strip, fuzz 3000 clean.
@@ -642,19 +642,19 @@ publish step. Getting here went through two wrong turns worth recording:
 With `$$` ≡ `_val`, an untagged child shares the register exactly as it used to share the holder's `_`,
 so passthrough costs nothing and nothing goes stale. A tagged capture is the only thing that needs care:
 it seeds the register with its own pre-allocated slot and restores the parent's on **success and
-failure** (PEG backtracking does not unwind a register) — `((_sv$x=_val,_val=$x,(SUF))&&($x=_val,
+failure** (PEG backtracking does not unwind a register) - `((_sv$x=_val,_val=$x,(SUF))&&($x=_val,
 _val=_sv$x,true)||(_val=_sv$x,false))`.
 
 **Grammar edits the collapse required** (small, and all "say what you mean"): explicit `._` derefs
 dropped (`$label._`, `$f._`, `$$._`); `_v`-named author locals renamed (they shadow the register inside
-an action's IIFE); and in the self-grammar, tag every site that reads a child's value — including
+an action's IIFE); and in the self-grammar, tag every site that reads a child's value - including
 passthrough alternatives (`/ c:Capture { $$ = $c }`) and `OPEN e:Expression CLOSE`.
 
 **Bootstrap note.** Changing the emission model makes gen1 ≠ gen2 (gen1 is built by the *old* compiler),
 so `regenerate()`'s fixed-point check fails by design. Run one extra generation by hand, write gen2 as
 `jspegCompiler.js`, then the normal pipeline reaches gen2 == gen3. Verified before committing.
 
-`LEFTARROW` now accepts `<-` and `<=` identically — JSPEG has **one** rule form. Flipping the two
+`LEFTARROW` now accepts `<-` and `<=` identically - JSPEG has **one** rule form. Flipping the two
 grammars back to a single spelling is cosmetic and can be done any time under the same gate.
 
 ## Artifact cleanup (2026-08-29)
@@ -662,15 +662,15 @@ grammars back to a single spelling is cosmetic and can be done any time under th
 Four throwaway artifacts from this migration were deleted once the value model landed; git history retains
 them, and what each established is already written down above.
 
-- The M1 emission prototype — deleted. Superseded: the shape that shipped is *different*
-  from it (no `_v`, no publish step — see the two wrong turns above), it still carried a literal
+- The M1 emission prototype - deleted. Superseded: the shape that shipped is *different*
+  from it (no `_v`, no publish step - see the two wrong turns above), it still carried a literal
   `else if (false)` branch, and it was the only throwaway proof sitting in `impala/` beside the
   production grammars, where it would drift and mislead.
-- `design/jspeg/dualArith.jspeg` — became byte-equivalent to the existing `impala/jspegTest.jspeg` once
+- `design/jspeg/dualArith.jspeg` - became byte-equivalent to the existing `impala/jspegTest.jspeg` once
   the two arrows merged.
-- `design/jspeg/fieldInteropProto.jspeg` — proved holder-caller/value-callee field interop, a
+- `design/jspeg/fieldInteropProto.jspeg` - proved holder-caller/value-callee field interop, a
   combination that no longer exists.
-- `design/jspeg/auditContainer.js` — a one-shot scan for the inherited-container idiom. Its answer is
+- `design/jspeg/auditContainer.js` - a one-shot scan for the inherited-container idiom. Its answer is
   recorded above, and it had become actively misleading: it matched `^Name <-` against a grammar that
   had none left, so it reported a clean "GO" unconditionally. (It also hardcoded an absolute path.)
 
@@ -694,23 +694,23 @@ value, and nothing errors. Two were hit during this migration (`BracedEntry`'s `
 `_v`) back when the register was named `_v`; both were renamed (`_e`, `_vl`).
 
 Enforcing this in the `Action` rewriter was considered and **rejected**: the rewriter is not
-string-literal aware (it scans for `$`, `/` and whitespace only), and the first real candidate — the
-`"var _i=0,_im=0,_val,…"` preamble string inside `root`'s own action — would be a false positive. A
+string-literal aware (it scans for `$`, `/` and whitespace only), and the first real candidate - the
+`"var _i=0,_im=0,_val,…"` preamble string inside `root`'s own action - would be a false positive. A
 check would have to parse JS strings to be correct, which is not worth it for a hazard the
 byte-identical gate already catches: a shadowed register changes the generated output.
 
-## A predicate no longer disturbs the value — and why backtracking still does (2026-08-29)
+## A predicate no longer disturbs the value - and why backtracking still does (2026-08-29)
 
 `&expr` and `!expr` now save and restore `_val` around the predicate, alongside the input cursor they
 already restored. A predicate consumes nothing by definition, so it should produce nothing either.
 This removes a wart the grammar had worked around: `InitList`'s `!(Identifier ':')` clobbered `$$`
 mid-rule, which is why its entry count was assigned at the very end. Verified with a discriminating
-case — a predicate whose inner rule assigns `$$` now leaves the outer value intact.
+case - a predicate whose inner rule assigns `$$` now leaves the outer value intact.
 
 **The obvious generalisation is wrong, and it is worth recording why.** "Every place that saves `_i`
 also saves `_val`" looks like the principled invariant: it would make a failed alternative unable to
 leak a value, and would have prevented the capture-restore bug this document describes. It does not
-survive contact with the grammars — **a leading action's effect on `$$` is load-bearing across
+survive contact with the grammars - **a leading action's effect on `$$` is load-bearing across
 alternatives**:
 
 ```
@@ -719,7 +719,7 @@ Literal  <-              { $$ = '' }
           / ["] ( !["] c:Char { $$ += $c } )* ["] Spacing
 ```
 
-The `{ $$ = '' }` initializer belongs to the *first* alternative. The double-quoted branch has none —
+The `{ $$ = '' }` initializer belongs to the *first* alternative. The double-quoted branch has none -
 it runs with `$$` still `''` **because the single-quoted branch failed after the initializer ran**.
 Restore the value at the alternation boundary and that branch starts from its seeded slot instead, so
 `$$ += $c` stringifies an object; the self-hosted compiler then emits `"[object Object]\\"` for a
@@ -727,7 +727,7 @@ literal and diverges instead of reaching a fixed point (19561 → 21343 → 2166
 
 So the ordering is deliberate, not accidental: **an action that runs before a failure is allowed to
 leave its mark.** Grammar authors rely on it to hoist a shared initializer out of parallel
-alternatives. Making the value obey backtracking would be a real change to JSPEG's semantics — it
-would require every alternative to initialize what it uses — and the payoff is small now that tags
+alternatives. Making the value obey backtracking would be a real change to JSPEG's semantics - it
+would require every alternative to initialize what it uses - and the payoff is small now that tags
 restore themselves. Predicates are the one case where "no side effect" is unambiguous, so that is the
 only place the restore belongs.

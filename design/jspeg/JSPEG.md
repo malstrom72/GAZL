@@ -53,7 +53,7 @@ Generated parsers return `[ success, value, endIndex ]`. Parsing starts at the r
 ## `$$`, Tags, And Captures
 
 `$$` is the value a rule produces. Inside an action it is an ordinary variable: read it, assign
-it, mutate its fields. A rule matches or it does not — that is the boolean the parser tracks —
+it, mutate its fields. A rule matches or it does not - that is the boolean the parser tracks -
 and `$$` is what it leaves behind when it does.
 
 - **Sub-rules share your `$$`.** Reference a rule without a tag and it works on the same value
@@ -67,14 +67,14 @@ and `$$` is what it leaves behind when it does.
   into `$$` itself.
 
 - **`&expr` and `!expr` (predicates)** test whether `expr` matches at this point *without consuming
-  input* — `&` succeeds when it matches, `!` when it does not. They leave `$$` exactly as they
+  input* - `&` succeeds when it matches, `!` when it does not. They leave `$$` exactly as they
   found it, so you can look ahead with a rule that assigns `$$` and keep your own value.
 
 - **`$name` is the value.** `$name.field` is a field on it. Both mean exactly what they look like.
 
 ### A failed alternative keeps what its actions did
 
-When an alternative fails partway, the input position rewinds to where that alternative started —
+When an alternative fails partway, the input position rewinds to where that alternative started -
 but anything its actions already did to `$$` stands. This is deliberate, and grammars rely on it to
 hoist a shared initializer out of parallel alternatives:
 
@@ -85,7 +85,7 @@ Literal  <-              { $$ = '' }
 ```
 
 `{ $$ = '' }` sits in the first alternative, before the quote character that decides which branch
-matches. On a double-quoted literal the first branch fails immediately after that action — and the
+matches. On a double-quoted literal the first branch fails immediately after that action - and the
 second branch runs with `$$` already `''`, which is exactly what it needs. Write the second branch
 assuming a fresh `$$` and it will append to whatever the caller left there instead.
 
@@ -96,19 +96,19 @@ Also available inside an action: `$$s` (the whole source string), `$$i` (the cur
 
 ### Examples
 
-Build a record from key/value pairs — `$$` is the record, `$key`/`$val` are the captured text:
+Build a record from key/value pairs - `$$` is the record, `$key`/`$val` are the captured text:
 
 ```
 pair <- key=ident ':' _ val=number  { $$[$key] = $val }
 ```
 
-Accumulate — `$$` carries the running total across the loop. Parsing `"1 2 3"` gives `6`:
+Accumulate - `$$` carries the running total across the loop. Parsing `"1 2 3"` gives `6`:
 
 ```
 root <- { $$ = 0 } ( _ n=[0-9]+ { $$ += +$n } )* _ !.
 ```
 
-Take a sub-rule's value while keeping your own — `$t` gets `TypeBase`'s value, `$$` stays yours:
+Take a sub-rule's value while keeping your own - `$t` gets `TypeBase`'s value, `$$` stays yours:
 
 ```
 VarDecl <- { $$ = {} } t:TypeBase id:Identifier  { $$.type = $t; $$.name = $id }
@@ -118,10 +118,10 @@ VarDecl <- { $$ = {} } t:TypeBase id:Identifier  { $$.type = $t; $$.name = $id }
 
 Enough to read the generated file or debug a miscompile:
 
-- A rule compiles to `function Rule()` — no parameters — returning `true`/`false` for match.
+- A rule compiles to `function Rule()` - no parameters - returning `true`/`false` for match.
 - `$$` compiles to `_val`, one module-level variable; `$$.field` to `_val.field`. That is why an
   untagged sub-rule shares your value: it is literally the same variable.
-- A tag saves `_val`, gives the sub-rule a fresh slot, then restores — on failure as well as
+- A tag saves `_val`, gives the sub-rule a fresh slot, then restores - on failure as well as
   success, since an alternative that fails rewinds `_i` but deliberately not `_val` (above).
 - `&`/`!` compile to a wrapper that saves both `_i` and `_val` and puts both back.
 - `$$s`/`$$i` compile to `_s`/`_i`.
@@ -133,7 +133,7 @@ JavaScript* rather than a grammar error. These are the ones that have actually c
 verifiable from `impala/jspeg.jspeg` and from the generated `impalaCompiler.js`.
 
 - **Comment syntax depends on where you are.** At grammar level (between rules, between terms)
-  comments are `#`-to-end-of-line only — `Comment <- '#' (!EndOfLine .)* …` (`impala/jspeg.jspeg:241`).
+  comments are `#`-to-end-of-line only - `Comment <- '#' (!EndOfLine .)* …` (`impala/jspeg.jspeg:241`).
   A `/* … */` there is a syntax error, and `updateJSPEG.js` reports it as a byte *index* into the
   grammar with no line number. Inside an action block, `/* */` and `//` are both fine (`PikaComment`,
   `impala/jspeg.jspeg:283`).
@@ -149,12 +149,12 @@ verifiable from `impala/jspeg.jspeg` and from the generated `impalaCompiler.js`.
 - **A rule that builds a record must initialize it.** `$$.count = 0` needs `$$` to already be an
   object. Value rules that act as containers start with `$$ = {}` (see `TypeDeclr`, `VarDecl`,
   `ArrayDecl`, `ExternDecl` in `impala.jspeg`).
-- **Before reaching for a new rule, check whether one exists** — and before merging two that look
+- **Before reaching for a new rule, check whether one exists** - and before merging two that look
   alike, measure. `TypeDeclr` (optionally-named) and `VarDecl` (required-name) already cover both
   declarator shapes, so a third rule written for an extern prototype's return was deleted once
   `TypeDeclr` was found. But they are *not* redundant: their `words` differ for a funcptr type
   (`TypeDeclr` sets 1, `VarDecl` leaves it undefined), and making them agree reds four goldens. Reuse
-  the rule whose fields the call site actually reads — the extern-return site reads only
+  the rule whose fields the call site actually reads - the extern-return site reads only
   `type`/`elem`/`struct`, which is why `TypeDeclr` is safe there.
 
 ## Regenerating Compilers
@@ -188,10 +188,10 @@ Impala parity tests and the Impala CLI are documented in `ImpalaJS.md`.
 ## Programmatic Notes
 
 JSPEG began as a direct translation of the old PPEG grammar into JavaScript, which is why the
-syntax looks the way it does — rules, tags, captures and inline actions all carry over.
+syntax looks the way it does - rules, tags, captures and inline actions all carry over.
 
 The prelude at the top of `impala.jspeg` is ordinary JavaScript, not a compatibility layer. Most of
-it is the Impala compiler itself — meta records, the symbol table, diagnostics, signature rendering.
+it is the Impala compiler itself - meta records, the symbol table, diagnostics, signature rendering.
 The rest is a short list of small utilities that exist because the generated compiler has to run
 under NuXJS as well as Node: `replace` (replace-all), `find` / `span` / `rspan` (character
 scanning), `map` (building handler tables) and `iterate` (array walks).
