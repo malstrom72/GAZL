@@ -100,7 +100,7 @@ This is the working decision.
 
 ## M1 emission prototype — WORKS, and it found the migration's real boundary (2026-08-28)
 
-The value-returning *generator* is prototyped in [`impala/jspeg2.jspeg`](../../impala/jspeg2.jspeg) (a copy of
+The value-returning *generator* is prototyped in `impala/jspeg2.jspeg` (since deleted - see Artifact cleanup) (a copy of
 `jspeg.jspeg` with ~7 emission actions rewritten). Driven meta-circularly — current `compileJSPEG` compiles
 `jspeg2.jspeg` into a new-emission generator, which compiles `jspegTest.jspeg` — it produces exactly the target
 shape (param-less rules, `var _v` value locals, eager `($x=_val,true)` captures, a conditional
@@ -656,3 +656,23 @@ so `regenerate()`'s fixed-point check fails by design. Run one extra generation 
 
 `LEFTARROW` now accepts `<-` and `<=` identically — JSPEG 2 has **one** rule form. Flipping the two
 grammars back to a single spelling is cosmetic and can be done any time under the same gate.
+
+## Artifact cleanup (2026-08-29)
+
+Four throwaway artifacts from this migration were deleted once JSPEG 2 landed; git history retains
+them, and what each established is already written down above.
+
+- `impala/jspeg2.jspeg` — the M1 emission prototype. Superseded: the shape that shipped is *different*
+  from it (no `_v`, no publish step — see the two wrong turns above), it still carried a literal
+  `else if (false)` branch, and it was the only throwaway proof sitting in `impala/` beside the
+  production grammars, where it would drift and mislead.
+- `design/jspeg/dualArith.jspeg` — became byte-equivalent to the existing `impala/jspegTest.jspeg` once
+  the two arrows merged.
+- `design/jspeg/fieldInteropProto.jspeg` — proved holder-caller/value-callee field interop, a
+  combination that no longer exists.
+- `design/jspeg/auditContainer.js` — a one-shot scan for the inherited-container idiom. Its answer is
+  recorded above, and it had become actively misleading: it matched `^Name <-` against a grammar that
+  had none left, so it reported a clean "GO" unconditionally. (It also hardcoded an absolute path.)
+
+`valueReturningProto.js`, `dualModeProto.js` and `selfContainerProto.jspeg` are kept: they are the
+runnable evidence behind the protocol decision, and the plan cites them as such.
