@@ -142,6 +142,12 @@ verifiable from `impala/jspeg.jspeg` and from the generated `impalaCompiler.js`.
   rewritten and its line breaks are collapsed. A real example from `impala.jspeg`'s `VarDecl`: the
   source comment says “an end-of-rule `$$i`” and the generated file says “an end-of-rule `_i`”. Prose
   about `$$`/`$$i`/`$name` is safest in a `#` comment above the rule, or in a `//` comment.
+- **Actions must stay inside the JavaScript subset NuXJS supports.** The generated compiler ships
+  as a NuXJS program as well as a Node one, so an action cannot use whatever the local Node happens
+  to have. `dims.map(...)` is the case that got through: NuXJS has no `Array.prototype.map`, and it
+  survived from `1aae39a` to 2026-08-07 because the only NuXJS gate was a four-program smoke test
+  that declares no shapes. `nuxjsParityTests.js` now compares 13 programs; the prelude carries
+  `iterate`, `map`, `replace`, `find`/`span`/`rspan` so you rarely need a modern builtin at all.
 - **Never declare `_val`, `_s` or `_i` in an action.** An action body is wrapped in
   `(function(){ … })()`, so a `var` of one of those names shadows the parser variable that `$$`,
   `$$s` and `$$i` compile to. The failure is a *silent miscompile*: the action writes its own local,
@@ -184,14 +190,3 @@ For using the JavaScript Impala compiler (CLI, API, and tests), see `design/jspe
 - `node jspegCompilerTests.js` - verifies `jspegCompiler.js` matches `jspeg.jspeg`, and that a self-hosted compile reproduces identical output.
 
 Impala parity tests and the Impala CLI are documented in `ImpalaJS.md`.
-
-## Programmatic Notes
-
-JSPEG began as a direct translation of the old PPEG grammar into JavaScript, which is why the
-syntax looks the way it does - rules, tags, captures and inline actions all carry over.
-
-The prelude at the top of `impala.jspeg` is ordinary JavaScript, not a compatibility layer. Most of
-it is the Impala compiler itself - meta records, the symbol table, diagnostics, signature rendering.
-The rest is a short list of small utilities that exist because the generated compiler has to run
-under NuXJS as well as Node: `replace` (replace-all), `find` / `span` / `rspan` (character
-scanning), `map` (building handler tables) and `iterate` (array walks).
