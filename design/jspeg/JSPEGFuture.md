@@ -82,12 +82,12 @@ problem.**
   *Impact on `impala.jspeg`: rule structure unchanged; every action rewritten from emit-now to
   build-node. Note this is **not** a change to JSPEG - nothing in the code generator stops a grammar
   from building nodes in its actions today, so it is a rewrite of `impala.jspeg` and sits with the
-  grammar author alone. It pairs well with JSPEG 2 (Problem 2), which makes a node simply the value
+  grammar author alone. It pairs well with the value model (Problem 2), which makes a node simply the value
   a rule returns, but neither waits for the other.*
 
-## Problem 2: The `._` holder duality — **SOLVED (2026-08-28), shipped as JSPEG 2**
+## Problem 2: The `._` holder duality — **SOLVED (2026-08-28)**
 
-Full record: [`JSPEG2Plan.md`](JSPEG2Plan.md). Summary of what landed, since the design below is
+Full record: [`ValueModel.md`](ValueModel.md). Summary of what landed, since the design below is
 no longer the plan of record:
 
 - `$$` **is** the value register (`_val`). No holder objects, no `._` convention, no rewriter
@@ -210,8 +210,8 @@ fixtures.
 |---|---|---|---|
 | Any time, independent | Expected-set error reporting; finish `RefactorPlan.md` return-style helpers; retire the PikaScript emulation shim (delete `bake` - a vestigial eval hazard - plus six dead wrappers; inline `evaluate`/`resetQueue`) | none / mechanical; net line reduction | error reporting should exist by the time 2.0 *ships* (Diagnostics contract); none blocks Step 1 |
 | Before Steps 4/5, *if adopted* | Retire the speculation patches (`dry` + the `FuncCall` hard-fail) - flag/receiver tricks only *manage* it and don't generalize (see Problem 1); the general fix is two-phase, whose on-ramp is a recording board (needs state on a real object first, a superset of `RefactorPlan`); de-IIFE + char-class codegen | rule structure unchanged; actions move from emit-now to build-node | destructuring lookahead and import interface mode are the two features that lean on the side-effect weakness - the only real ordering edge in this document |
-| After 2.0 stabilizes, if ever ("JSPEG 2") | Value-returning rules - the `$$`/holder change, and the only breaking change to JSPEG itself | mechanical migration of the ~126 `$$.` sites; holders and the `._` convention retired | none - optional end-state |
-| Independent of JSPEG entirely | Two-phase AST in `impala.jspeg` (actions build nodes, a walk emits) | rules unchanged; every action rewritten as a node constructor | not a JSPEG change at all - possible today; convenient to do alongside JSPEG 2, not gated on it |
+| ~~Done 2026-08-28~~ | ~~Value-returning rules~~ - `$$` is the value register; see Problem 2 and [`ValueModel.md`](ValueModel.md) | byte-identical migration of both grammars | was optional; landed early |
+| Independent of JSPEG entirely | Two-phase AST in `impala.jspeg` (actions build nodes, a walk emits) | rules unchanged; every action rewritten as a node constructor | not a JSPEG change at all - possible today; convenient to do alongside it, not gated on it |
 
 The closing point from the Impala 2.0 review bears repeating: JSPEG's parity discipline is its best
 feature, because it makes every one of these changes - up to and including a full replacement of
