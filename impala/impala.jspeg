@@ -4657,7 +4657,7 @@ var _sn = $$parser.strideStruct(field.elem);
 # position has run past its trailing whitespace and comments onto the NEXT declaration - so an
 # origin taken there names the wrong line. Each declaration records where it STARTED instead;
 # every emit site reports `$$parser.declOffset`, error sites keep using the precise `$$i`.
-root        <=  _                                                     { $$parser.start(); }
+root        <-  _                                                     { $$parser.start(); }
                 ( { $$parser.declOffset = $$i; $$parser.declSource = $$s; }
                   (ImportDecl / ExportDecl / FuncDecl / StructDecl / FuncTypeDecl / ExternDecl / ConstDecl
                   / GlobalDecl / ';'_) )* !.                          { $$parser.end(); }
@@ -4665,17 +4665,17 @@ root        <=  _                                                     { $$parser
 # `import "path"` names a unit for the builder's link closure. The compiler itself treats it
 # as a no-op - `impala build` resolves the closure, concatenates the sources, and compiles the
 # whole program at once, so the import directives are already satisfied by that point.
-ImportDecl  <=  IMPORT _ path:StringLiteral _
+ImportDecl  <-  IMPORT _ path:StringLiteral _
 
 # An `export` prefix marks a definition host-visible (Step 5). It rides the `; signature`
 # metadata as a role prefix and is only load-bearing under the builder's `--dead-strip`.
-ExportDecl  <=  EXPORT _                                              { $$parser.exportNext = true; }
+ExportDecl  <-  EXPORT _                                              { $$parser.exportNext = true; }
                 (FuncDecl / GlobalDecl / ConstDecl)                   { $$parser.exportNext = false; }
 
 # ------------------------------------------------------------------
 #  struct definition
 # ------------------------------------------------------------------
-StructDecl  <=  STRUCT _ { $nmAt = $$i; } id:Identifier              { $sname = $id; $$parser.beginStruct($id, $$s, $nmAt); }
+StructDecl  <-  STRUCT _ { $nmAt = $$i; } id:Identifier              { $sname = $id; $$parser.beginStruct($id, $$s, $nmAt); }
                 '{' _
                 ( f:(ArrayDecl / VarDecl)                            {
                                                                          $$parser.addStructField($sname,
@@ -4697,7 +4697,7 @@ StructDecl  <=  STRUCT _ { $nmAt = $$i; } id:Identifier              { $sname = 
 #    functype Name(params) [returns t1, t2, ...]
 #  Emits nothing - it only registers a signature usable as a base type.
 # ------------------------------------------------------------------
-FuncTypeDecl <= FUNCTYPE _ { $nmAt = $$i; } id:Identifier            { $ftname = $id; $$parser.beginFuncType($id, $$s, $nmAt); }
+FuncTypeDecl <- FUNCTYPE _ { $nmAt = $$i; } id:Identifier            { $ftname = $id; $$parser.beginFuncType($id, $$s, $nmAt); }
                 '(' _
                 ( p:TypeDeclr                                        { $$parser.addFuncTypeParam($ftname, $p.type, $p.elem, $p.struct, $p.words, $p.name, $$s, $$i); }
                   ( ',' _ p:TypeDeclr                                { $$parser.addFuncTypeParam($ftname, $p.type, $p.elem, $p.struct, $p.words, $p.name, $$s, $$i); }
@@ -4714,7 +4714,7 @@ FuncTypeDecl <= FUNCTYPE _ { $nmAt = $$i; } id:Identifier            { $ftname =
                 )?                                                   { $$parser.endFuncType($ftname); }
 
 # A type with optional variable name (funcptr-type params & returns allow types-only).
-TypeDeclr   <=  base:TypeBase                                        { $$ = {}; $desc = $base; }
+TypeDeclr   <-  base:TypeBase                                        { $$ = {}; $desc = $base; }
                 ( POINTER _                                          { $desc = $$parser.pointerDesc($desc); }
                 )*
                 ( id:Identifier                                      { $$.name = $id; }
@@ -4732,7 +4732,7 @@ TypeDeclr   <=  base:TypeBase                                        { $$ = {}; 
 # ------------------------------------------------------------------
 #  function declaration
 # ------------------------------------------------------------------
-FuncDecl    <=                                                        { $inl = false; }
+FuncDecl    <-                                                        { $inl = false; }
                 ( INLINE                                              { $inl = true; $inlAt = $$i; }
                   _
                 )?
@@ -4952,7 +4952,7 @@ inp:ArgsDecl ')'_
 
                                                                          output('');
                                                                      }
-ExternDecl  <=  EXTERN _                                              { $$ = {}; $$.scope = 'globals'; $$.structFwd = false;
+ExternDecl  <-  EXTERN _                                              { $$ = {}; $$.scope = 'globals'; $$.structFwd = false;
                                                                         $at = $$i;   /* the declaration itself - end-of-rule positions have skipped past it */
                                                                         $$parser.pendingProto = undefined; }
                 (
@@ -5146,7 +5146,7 @@ ExternDecl  <=  EXTERN _                                              { $$ = {};
                                                                         }
                                                                     }
 
-ConstDecl   <=  CONST _ base:TypeBase                                 {
+ConstDecl   <-  CONST _ base:TypeBase                                 {
                                                                          /* Same type grammar as every other declarator (TypeBase, not
                                                                             bare BASE_TYPE), so a const can name a struct pointer or a
                                                                             named functype - a const is an assembler-level address/scalar
@@ -5221,7 +5221,7 @@ ConstDecl   <=  CONST _ base:TypeBase                                 {
                                                                          }
                  )                                                     { $$parser.noForward = $nf; }
 
-GlobalDecl  <=  (   GLOBAL                                            { $section = 'GLOB'; }
+GlobalDecl  <-  (   GLOBAL                                            { $section = 'GLOB'; }
                  /  READONLY                                          { $section = 'CNST'; }
                  /  TEMPORARY                                         { $section = 'TEMP'; }
                  ) _
@@ -5384,7 +5384,7 @@ GlobalDecl  <=  (   GLOBAL                                            { $section
 #  Initialiser list for arrays                                  
 # ------------------------------------------------------------------
 # Nested brace tree of compile-time constants, for struct initializers.
-Braced      <=  '{' _                                                { $$ = []; $$.n = 0; }
+Braced      <-  '{' _                                                { $$ = []; $$.n = 0; }
                 ( i:BracedEntry                                      { $$[$$.n++] = $i; }
                   ( ',' _ i:BracedEntry                              { $$[$$.n++] = $i; }
                   )*
@@ -5394,7 +5394,7 @@ Braced      <=  '{' _                                                { $$ = []; 
 # index. One rule for both - which form is legal is decided by the consumer that knows which it is
 # (fieldEntries for a struct, indexedEntry for an array slot). The action sits AFTER the ':' so a
 # bare `ident` expression does not leave $fname set when the group backtracks.
-BracedEntry <=                                                       { $fname = undefined; $fat = $$i; }
+BracedEntry <-                                                       { $fname = undefined; $fat = $$i; }
                 ( id:Identifier ':' _                                { $fname = $id; }
                 )?
                 e:BracedItem                                         { var _e = $e;   /* bare `$e` is the VALUE; `$e.field`
@@ -5404,7 +5404,7 @@ BracedEntry <=                                                       { $fname = 
                                                                        _e.at = $fat;
                                                                        $$ = _e; }
 
-BracedItem  <=  b:Braced                                             { $$ = { braced: $b }; }
+BracedItem  <-  b:Braced                                             { $$ = { braced: $b }; }
                 / x:Expr                                             {
                                                                         var m = metaSlot($x);
                                                                         var op = $$parser.makeRValue(m, '#<&');
@@ -5414,7 +5414,7 @@ BracedItem  <=  b:Braced                                             { $$ = { br
                                                                                type: m.type, elem: m.elem };
                                                                     }
 
-InitList    <=  '{' _                                                 { $d = ' '; $type = undefined; $n = 0; }
+InitList    <-  '{' _                                                 { $d = ' '; $type = undefined; $n = 0; }
                 # Decline a `field:` entry so the ordered choice falls through to `Braced`, which owns the
                 # named form. Without this, `Expr` evaluates the name first and dies as E403 instead.
                 ( !(Identifier ':')                                  { $entryAt = $$i; }   # `Expr` eats the trailing
@@ -5465,7 +5465,7 @@ InitList    <=  '{' _                                                 { $d = ' '
 # ------------------------------------------------------------------
 #  Parameter & local-variable helper lists                      
 # ------------------------------------------------------------------
-ArgsDecl    <=                                                        {
+ArgsDecl    <-                                                        {
                                                                          $$ = [];
                                                                          $$.n = 0;
                                                                      }
@@ -5474,7 +5474,7 @@ ArgsDecl    <=                                                        {
                    )*
                  )?
 
-LocalsDecl  <=                                                        {
+LocalsDecl  <-                                                        {
                                                                          $$ = [];
                                                                          $$.n = 0;
                                                                      }
@@ -5487,7 +5487,7 @@ LocalsDecl  <=                                                        {
 #  Simple variable & array declarators                          
 # ------------------------------------------------------------------
 # A leading type atom: a primitive keyword, or the name of a defined struct.
-TypeBase    <=  t:BASE_TYPE _                                         { $$ = $$parser.CASTS_TO_TYPES[$t]; }
+TypeBase    <-  t:BASE_TYPE _                                         { $$ = $$parser.CASTS_TO_TYPES[$t]; }
               / id:Identifier                                        {
                                                                          /* the ONE place a raw type name becomes a descriptor */
                                                                          if ($$parser.isStructName($id)) $$ = $$parser.structDesc($id);
@@ -5495,7 +5495,7 @@ TypeBase    <=  t:BASE_TYPE _                                         { $$ = $$p
                                                                          else $$parser.fail('Unknown type ' + $id, $$s, $$i, 'E413');
                                                                      }
 
-VarDecl     <=  base:TypeBase                                        { $$ = {}; $desc = $base; }
+VarDecl     <-  base:TypeBase                                        { $$ = {}; $desc = $base; }
                 ( POINTER _                                           { $desc = $$parser.pointerDesc($desc); }
                 )*
                 { $nameStart = $$i; }
@@ -5522,7 +5522,7 @@ VarDecl     <=  base:TypeBase                                        { $$ = {}; 
                                                                                                     SHAPED array would inherit its axes */
                                                                      }
 
-ArrayDecl   <=                                                        { $$ = {}; $desc = undefined; $extent = undefined; $dims = undefined; }
+ArrayDecl   <-                                                        { $$ = {}; $desc = undefined; $extent = undefined; $dims = undefined; }
                 ( base:TypeBase                                      { $desc = $base; }
                   ( POINTER _                                         { $desc = $$parser.pointerDesc($desc); }
                   )*
@@ -5617,7 +5617,7 @@ ArrayDecl   <=                                                        { $$ = {};
 # ------------------------------------------------------------------
 #  Statement rule dispatch                                      
 # ------------------------------------------------------------------
-Statement   <=                                                        {
+Statement   <-                                                        {
                                                                          /* Scanned IN PLACE rather than copying the rest of the unit
                                                                             first. `cut >= 0` was dead: find returns 0..length and
                                                                             never negative. (Measured: the copy cost nothing - V8
@@ -5662,11 +5662,11 @@ Statement   <=                                                        {
                                                                      }
                 )
 
-Expr        <=  Bitwise ('='_ r:Expr               { if (!$$parser.dry)
+Expr        <-  Bitwise ('='_ r:Expr               { if (!$$parser.dry)
                                                        $$parser.assign($$, $$, $r, $$s, $$i); }
                 )?
 
-Bitwise     <=                                     { $first = undefined; }
+Bitwise     <-                                     { $first = undefined; }
                 AddSub (op:BITWISE_OP _ r:AddSub   { if (!$$parser.dry) {
                                                        if ($first === undefined) $first = $op;
                                                        else if ($first !== $op)
@@ -5676,15 +5676,15 @@ Bitwise     <=                                     { $first = undefined; }
                 )*                                 { if (!$$parser.dry)
                                                        $$parser.stampBitwise($$, $first !== undefined); }
 
-AddSub      <=  MulDiv (op:ADDSUB_OP _ r:MulDiv    { if (!$$parser.dry)
+AddSub      <-  MulDiv (op:ADDSUB_OP _ r:MulDiv    { if (!$$parser.dry)
                                                        $$parser.binaryOp($op, $$, $r, $$s, $$i); }
                 )*
 
-MulDiv      <=  PrePost (op:MULDIV_OP _ r:PrePost  { if (!$$parser.dry)
+MulDiv      <-  PrePost (op:MULDIV_OP _ r:PrePost  { if (!$$parser.dry)
                                                        $$parser.mulDivOp($op, $$, $r, $$s, $$i); }
                 )*
 
-PrePost     <=  (op:PREFIX_OP _
+PrePost     <-  (op:PREFIX_OP _
                 / '('_ op:BASE_TYPE _               { $cdesc = $$parser.CASTS_TO_TYPES[$op]; }
                   ( POINTER _                       { $cdesc = $$parser.pointerDesc($cdesc); $ccast = 'pointer'; }
                   )* ')'_
@@ -5738,7 +5738,7 @@ PrePost     <=  (op:PREFIX_OP _
 # `a[y * .d....0 + x]` and reduces to the single linear index every path below already takes. Each index is
 # r-valued as it is parsed, while its meta is still fresh - the discipline call arguments use. One index
 # takes exactly the path it took before this rule learned to count, so a 1-D subscript is byte-identical.
-Subscript   <=  '['_                               { $idxAt = $$i; $subExtra = []; $subAt = []; }
+Subscript   <-  '['_                               { $idxAt = $$i; $subExtra = []; $subAt = []; }
                 s:Expr
                 ( ','_ { $axisAt = $$i; }
                   x:Expr                           { if (!$$parser.dry) {
@@ -5768,12 +5768,12 @@ Subscript   <=  '['_                               { $idxAt = $$i; $subExtra = [
                                                        }
                                                      } }
 
-FieldAccess <=  '->'_ f:Identifier                 { if (!$$parser.dry)
+FieldAccess <-  '->'_ f:Identifier                 { if (!$$parser.dry)
                                                        $$parser.fieldAccess($$, $f, true, $$s, $$i); }
                 / '.'_ f:Identifier                { if (!$$parser.dry)
                                                        $$parser.fieldAccess($$, $f, false, $$s, $$i); }
 
-FuncCall    <=  '('_                               { if (!$$parser.dry) {
+FuncCall    <-  '('_                               { if (!$$parser.dry) {
                                                        $$.count = 0;
                                                        /* how many leading output slots the callee expects (>1 = multi-return) */
                                                        var _c = metaSlot($$);
@@ -5988,7 +5988,7 @@ FuncCall    <=  '('_                               { if (!$$parser.dry) {
                                                        }
                                                     } }
 
-Argument    <=  { $argAt = $$i;   /* the argument itself; end-of-rule has skipped past it */ }
+Argument    <-  { $argAt = $$i;   /* the argument itself; end-of-rule has skipped past it */ }
                 a:Expr                             { if (!$$parser.dry) {
                                                        ++$$.count;
                                                        var meta = metaSlot($a);
@@ -6027,11 +6027,11 @@ Argument    <=  { $argAt = $$i;   /* the argument itself; end-of-rule has skippe
                                                        }
                                                     } }
 
-Group       <=  '('_ Expr ')'_                      { if (!$$parser.dry)
+Group       <-  '('_ Expr ')'_                      { if (!$$parser.dry)
                                                         $$parser.stampBitwise($$, false); }
 
 
-BoolGroup   <=  '('_                                { $label = undefined; }
+BoolGroup   <-  '('_                                { $label = undefined; }
                 And ('||'_                          { 
                                                         if ($label === undefined) { 
                                                             $label = $$parser.newLabel('t'); 
@@ -6045,7 +6045,7 @@ BoolGroup   <=  '('_                                { $label = undefined; }
                                                     }
 
 
-And         <=                                      { $label = undefined; }
+And         <-                                      { $label = undefined; }
                 Comp ('&&'_                         { 
                                                         if ($label === undefined) { 
                                                             $label = $$parser.newLabel('f'); 
@@ -6059,7 +6059,7 @@ And         <=                                      { $label = undefined; }
                                                     }
 
 
-Comp        <=  '!'_                                {
+Comp        <-  '!'_                                {
                                                         /* `!` sits BELOW comparison, so `!x == 2` means `!(x == 2)` -
                                                            the opposite of the C reading. Require its operand to be
                                                            parenthesised (or another `!`); reuse the strict-expression
@@ -6086,7 +6086,7 @@ Comp        <=  '!'_                                {
                                                     }
 
 
-Assert      <=  ASSERT _                            {
+Assert      <-  ASSERT _                            {
                                                         $okLabel  = $$parser.beginDebugGuard('a');
                                                         $start    = $$i;
                                                         $exprText = '';
@@ -6100,10 +6100,10 @@ Assert      <=  ASSERT _                            {
                                                     }
 
 
-Block       <=  '{'_ Statement* '}'_
+Block       <-  '{'_ Statement* '}'_
 
 
-Goto        <=  GOTO _                              { $gotoStart = $$i; }  # before `';'_` swallows the trailing
+Goto        <-  GOTO _                              { $gotoStart = $$i; }  # before `';'_` swallows the trailing
                                                                            # newline, which put E445 on the next line
                 label:Identifier ';'_               {
                                                         $$parser.emit('-->', undefined, '@' + $label, undefined, undefined);
@@ -6115,7 +6115,7 @@ Goto        <=  GOTO _                              { $gotoStart = $$i; }  # bef
                                                     }
 
 
-Return      <=  RETURN _
+Return      <-  RETURN _
                 (   ';'_                             {   /* bare `return;` is an early exit - RETU returns whatever the slot holds */
                                                         $$parser.emit('--^', undefined, undefined, undefined, undefined);
                                                     }
@@ -6131,12 +6131,12 @@ Return      <=  RETURN _
 # `break`/`continue` are reserved but unsupported - there is no valid lowering, so the statement form is a
 # hard error in both modes (unlike a reserved-word LABEL, which --legacy still accepts). `!SYMBOL_CHAR`
 # keeps `breakage`/`continued` as ordinary identifiers.
-Break       <=  { $start = $$i; } 'break' !SYMBOL_CHAR _ ';'_    {
+Break       <-  { $start = $$i; } 'break' !SYMBOL_CHAR _ ';'_    {
                                                         $$parser.fail("'break' is not supported: a switch arm already does not fall through, and a loop is left with `goto` to a label after it",
                                                             $$s, $start, 'E450',
                                                             'replace `break;` with `goto` to a label placed after the loop');
                                                     }
-Continue    <=  { $start = $$i; } 'continue' !SYMBOL_CHAR _ ';'_ {
+Continue    <-  { $start = $$i; } 'continue' !SYMBOL_CHAR _ ';'_ {
                                                         $$parser.fail("'continue' is not supported: jump to a label at the end of the loop body with `goto`",
                                                             $$s, $start, 'E450',
                                                             'replace `continue;` with `goto` to a label at the loop-body end');
@@ -6145,7 +6145,7 @@ Continue    <=  { $start = $$i; } 'continue' !SYMBOL_CHAR _ ';'_ {
 
 # TODO : if full jump-optimisation is implemented we could always
 #        fold the “empty else” block here.
-If          <=  IF _ BoolGroup                      { 
+If          <-  IF _ BoolGroup                      { 
                                                         $dontLabel = $$parser.newLabel('f');
                                                         $$parser.emit('?->', false, $dontLabel, undefined, undefined); 
                                                     }
@@ -6174,7 +6174,7 @@ If          <=  IF _ BoolGroup                      {
                 )
 
 
-DoWhile     <=  DO _                                { 
+DoWhile     <-  DO _                                { 
                                                         $loopLabel = $$parser.newLabel('l');
                                                         $$parser.emit('<-?', false, $loopLabel, undefined, undefined); 
                                                     }
@@ -6184,7 +6184,7 @@ DoWhile     <=  DO _                                {
                                                     }
 
 
-Loop        <=  LOOP _                              { 
+Loop        <-  LOOP _                              { 
                                                         $loopLabel = $$parser.newLabel('l');
                                                         $$parser.emit('<--', undefined, $loopLabel, undefined, undefined); 
                                                     }
@@ -6195,7 +6195,7 @@ Loop        <=  LOOP _                              {
 # ---------------------------------------------------------------------------
 #   FOR ... TO ... loop
 # ---------------------------------------------------------------------------
-For         <=  FOR _ '('_                          { $varStart = $$i; }   # name the variable, not the token after it
+For         <-  FOR _ '('_                          { $varStart = $$i; }   # name the variable, not the token after it
                 var:Variable                        {
                                                         /* loop-variable must be local, modifiable int / pointer */
                                                         var varMeta = metaSlot($var);
@@ -6278,7 +6278,7 @@ For         <=  FOR _ '('_                          { $varStart = $$i; }   # nam
 # ---------------------------------------------------------------------------
 #   COPY (len) FROM src TO dst
 # ---------------------------------------------------------------------------
-Copy        <=  COPY _ '('_ l:Expr FROM _ f:Expr TO _ t:Expr ')' _
+Copy        <-  COPY _ '('_ l:Expr FROM _ f:Expr TO _ t:Expr ')' _
                                                     {
                                                         var fromMeta = metaSlot($f);
                                                         var toMeta   = metaSlot($t);
@@ -6330,14 +6330,14 @@ Copy        <=  COPY _ '('_ l:Expr FROM _ f:Expr TO _ t:Expr ')' _
 #   Destructuring assignment for multi-value calls:  a, b = f(...)
 #   (needs >= 2 targets before '='; single `a = ...` falls through to Expr)
 # ---------------------------------------------------------------------------
-Destructure <=  DestTarget (','_ DestTarget)+ '='_  {   /* PARKED for Impala 3.0 - see design/ParkedFeatures.md.
+Destructure <-  DestTarget (','_ DestTarget)+ '='_  {   /* PARKED for Impala 3.0 - see design/ParkedFeatures.md.
                                                          Kept only to recognise the shape and reject it well;
                                                          the targets themselves are never needed. */
                                                       $$parser.fail('Destructuring assignment is not supported in Impala 2.0',
                                                               $$s, $$i, 'E429',
                                                               'assign one value per statement'); }
 
-DestTarget  <=                                      { $tgtGlobal = false; }
+DestTarget  <-                                      { $tgtGlobal = false; }
                 (GLOBAL _                           { $tgtGlobal = true; }
                 )?
                 id:Identifier                       { $tgtName = $id; }
@@ -6345,7 +6345,7 @@ DestTarget  <=                                      { $tgtGlobal = false; }
 # ---------------------------------------------------------------------------
 #   SWITCH (expr == from TO to) { ... }
 # ---------------------------------------------------------------------------
-Switch      <=  SWITCH _ '('_ $$:Expr
+Switch      <-  SWITCH _ '('_ $$:Expr
                 '=='_ f:Expr TO _ t:Expr    {
                                                         var switchMeta = metaSlot($$);
 
@@ -6445,7 +6445,7 @@ Switch      <=  SWITCH _ '('_ $$:Expr
 # ---------------------------------------------------------------------------
 #   single “case ...” inside a switch
 # ---------------------------------------------------------------------------
-CaseExpr    <=  Expr                                {
+CaseExpr    <-  Expr                                {
                                                         /* offset = constant(expr) - switch.from                         */
                                                         var ctx      = $$parser.switchStack[$$parser.switchStack.length - 1];
                                                         var caseMeta = metaSlot($$);
@@ -6496,7 +6496,7 @@ CaseExpr    <=  Expr                                {
 # ---------------------------------------------------------------------------
 #   WHILE  condition  statement
 # ---------------------------------------------------------------------------
-While       <=  WHILE _                             {
+While       <-  WHILE _                             {
                                                         $loopLabel = $$parser.newLabel('l');
                                                         $$parser.emit('<--', undefined, $loopLabel, undefined, undefined);
                                                     }
@@ -6512,7 +6512,7 @@ While       <=  WHILE _                             {
 # ---------------------------------------------------------------------------
 #   atomic values
 # ---------------------------------------------------------------------------
-Value       <=  Group
+Value       <-  Group
                 / SIZEOF _ '('_ base:TypeBase        { if (!$$parser.dry) {
                                                         var head = $$parser.strideStruct($base);
                                                         if (head !== undefined) {            /* struct size -> symbolic .z.Name */
@@ -6556,7 +6556,7 @@ Value       <=  Group
 # ---------------------------------------------------------------------------
 #   identifiers, optionally prefixed with “global”
 # ---------------------------------------------------------------------------
-Variable    <=                                      { $global = false; }
+Variable    <-                                      { $global = false; }
                 (GLOBAL _                           { $global = true; }
                 )?
                                                     { $idStart = $$i; }   # `Identifier` eats trailing space, so
@@ -6570,58 +6570,58 @@ Variable    <=                                      { $global = false; }
 #    Lexical Syntax    #
 ########################
 
-Identifier      <=  !KEYWORD $$=([A-Za-z_$] SYMBOL_CHAR*) _
-FloatLiteral    <=  $$=([-+]? DIGIT+ "." DIGIT+ (("E" / "e") ([-+]? DIGIT+))?) _
-IntegerLiteral  <=  $$=([-+]? ("0x" HEX+ / "'" (!"'" ASCII)* "'" / DIGIT+)) _
-StringLiteral   <=  $$=( '"' ( !["\\\0-\37\200-\377] . / "\\" ( [\"\\bfnrt] / 'u' HEX HEX HEX HEX ) )* '"' ) _
+Identifier      <-  !KEYWORD $$=([A-Za-z_$] SYMBOL_CHAR*) _
+FloatLiteral    <-  $$=([-+]? DIGIT+ "." DIGIT+ (("E" / "e") ([-+]? DIGIT+))?) _
+IntegerLiteral  <-  $$=([-+]? ("0x" HEX+ / "'" (!"'" ASCII)* "'" / DIGIT+)) _
+StringLiteral   <-  $$=( '"' ( !["\\\0-\37\200-\377] . / "\\" ( [\"\\bfnrt] / 'u' HEX HEX HEX HEX ) )* '"' ) _
 
-KEYWORD     <=  ABS / ARRAY / ASSERT / CASE / CONST / COPY / DEFAULT / DO / ELSE / EXPORT / EXTERN / FLOAT / FLOOR / FOR / FROM
+KEYWORD     <-  ABS / ARRAY / ASSERT / CASE / CONST / COPY / DEFAULT / DO / ELSE / EXPORT / EXTERN / FLOAT / FLOOR / FOR / FROM
                 / FTOI / FUNCPTR / FUNCTYPE / FUNCTION / GLOBAL / GOTO / IF / IMPORT / INLINE / INT / ITOF / LOCALS / LOOP / NATIVE / NULL / NULLFUNC
                 / POINTER / READONLY / RETURNS / SIZEOF / STRUCT / SWITCH / TEMPORARY / TO / WHILE
 
-ABS         <=  'abs' !SYMBOL_CHAR          ARRAY       <=  'array' !SYMBOL_CHAR
-ASSERT      <=  'assert' !SYMBOL_CHAR       CASE        <=  'case' !SYMBOL_CHAR
-CONST       <=  'const' !SYMBOL_CHAR        COPY        <=  'copy' !SYMBOL_CHAR
-DEFAULT     <=  'default' !SYMBOL_CHAR
-DO          <=  'do' !SYMBOL_CHAR           ELSE        <=  'else' !SYMBOL_CHAR
-EXPORT      <=  'export' !SYMBOL_CHAR       IMPORT      <=  'import' !SYMBOL_CHAR
-EXTERN      <=  'extern' !SYMBOL_CHAR       FLOAT       <=  'float' !SYMBOL_CHAR
-INLINE      <=  'inline' !SYMBOL_CHAR
-FLOOR       <=  'floor' !SYMBOL_CHAR        FOR         <=  'for' !SYMBOL_CHAR
-FROM        <=  'from' !SYMBOL_CHAR
-FTOI        <=  'ftoi' !SYMBOL_CHAR         FUNCPTR     <=  'funcptr' !SYMBOL_CHAR
-FUNCTYPE    <=  'functype' !SYMBOL_CHAR
-FUNCTION    <=  'function' !SYMBOL_CHAR     GLOBAL      <=  'global' !SYMBOL_CHAR
-GOTO        <=  'goto' !SYMBOL_CHAR         IF          <=  'if' !SYMBOL_CHAR
-INT         <=  'int' !SYMBOL_CHAR          ITOF        <=  'itof' !SYMBOL_CHAR
-LOCALS      <=  'locals' !SYMBOL_CHAR       LOOP        <=  'loop' !SYMBOL_CHAR
-NATIVE      <=  'native' !SYMBOL_CHAR       NULL        <=  'null' !SYMBOL_CHAR
-NULLFUNC    <=  'nullfunc' !SYMBOL_CHAR
-POINTER     <=  'pointer' !SYMBOL_CHAR      READONLY    <=  'readonly' !SYMBOL_CHAR
-RETURN      <=  'return' !SYMBOL_CHAR       RETURNS     <=  'returns' !SYMBOL_CHAR
-SWITCH      <=  'switch' !SYMBOL_CHAR
-SIZEOF      <=  'sizeof' !SYMBOL_CHAR       STRUCT      <=  'struct' !SYMBOL_CHAR
-TEMPORARY   <=  'temporary' !SYMBOL_CHAR    TO          <=  'to' !SYMBOL_CHAR
-WHILE       <=  'while' !SYMBOL_CHAR
+ABS         <-  'abs' !SYMBOL_CHAR          ARRAY       <-  'array' !SYMBOL_CHAR
+ASSERT      <-  'assert' !SYMBOL_CHAR       CASE        <-  'case' !SYMBOL_CHAR
+CONST       <-  'const' !SYMBOL_CHAR        COPY        <-  'copy' !SYMBOL_CHAR
+DEFAULT     <-  'default' !SYMBOL_CHAR
+DO          <-  'do' !SYMBOL_CHAR           ELSE        <-  'else' !SYMBOL_CHAR
+EXPORT      <-  'export' !SYMBOL_CHAR       IMPORT      <-  'import' !SYMBOL_CHAR
+EXTERN      <-  'extern' !SYMBOL_CHAR       FLOAT       <-  'float' !SYMBOL_CHAR
+INLINE      <-  'inline' !SYMBOL_CHAR
+FLOOR       <-  'floor' !SYMBOL_CHAR        FOR         <-  'for' !SYMBOL_CHAR
+FROM        <-  'from' !SYMBOL_CHAR
+FTOI        <-  'ftoi' !SYMBOL_CHAR         FUNCPTR     <-  'funcptr' !SYMBOL_CHAR
+FUNCTYPE    <-  'functype' !SYMBOL_CHAR
+FUNCTION    <-  'function' !SYMBOL_CHAR     GLOBAL      <-  'global' !SYMBOL_CHAR
+GOTO        <-  'goto' !SYMBOL_CHAR         IF          <-  'if' !SYMBOL_CHAR
+INT         <-  'int' !SYMBOL_CHAR          ITOF        <-  'itof' !SYMBOL_CHAR
+LOCALS      <-  'locals' !SYMBOL_CHAR       LOOP        <-  'loop' !SYMBOL_CHAR
+NATIVE      <-  'native' !SYMBOL_CHAR       NULL        <-  'null' !SYMBOL_CHAR
+NULLFUNC    <-  'nullfunc' !SYMBOL_CHAR
+POINTER     <-  'pointer' !SYMBOL_CHAR      READONLY    <-  'readonly' !SYMBOL_CHAR
+RETURN      <-  'return' !SYMBOL_CHAR       RETURNS     <-  'returns' !SYMBOL_CHAR
+SWITCH      <-  'switch' !SYMBOL_CHAR
+SIZEOF      <-  'sizeof' !SYMBOL_CHAR       STRUCT      <-  'struct' !SYMBOL_CHAR
+TEMPORARY   <-  'temporary' !SYMBOL_CHAR    TO          <-  'to' !SYMBOL_CHAR
+WHILE       <-  'while' !SYMBOL_CHAR
 
-BITWISE_OP  <=  $$=( '<<' / '>>>' / '>>' / '|' !'|' / '&' !'&' / '^' )
-ADDSUB_OP   <=  $$=( '+' / '-' )
-MULDIV_OP   <=  $$=( '*' / '/' !'/' / '%' )
-COMP_OP     <=  $$=( '<=' / '>=' / '!=' / '==' / '<' / '>' )
-BASE_TYPE   <=  INT                               { $$ = 'int'; }
+BITWISE_OP  <-  $$=( '<<' / '>>>' / '>>' / '|' !'|' / '&' !'&' / '^' )
+ADDSUB_OP   <-  $$=( '+' / '-' )
+MULDIV_OP   <-  $$=( '*' / '/' !'/' / '%' )
+COMP_OP     <-  $$=( '<=' / '>=' / '!=' / '==' / '<' / '>' )
+BASE_TYPE   <-  INT                               { $$ = 'int'; }
             /  FLOAT                              { $$ = 'float'; }
             /  FUNCPTR                            { $$ = 'funcptr'; }
             /  POINTER                            { $$ = 'pointer'; }
-BUILT_IN    <=  $$=( 'abs' / 'floor' / 'itof' / 'ftoi' )
-PREFIX_OP   <=  $$=( '-' !("'" / DIGIT / '-')   # `--x` is not a decrement; reject the unspaced pair, accept `- -x`
+BUILT_IN    <-  $$=( 'abs' / 'floor' / 'itof' / 'ftoi' )
+PREFIX_OP   <-  $$=( '-' !("'" / DIGIT / '-')   # `--x` is not a decrement; reject the unspaced pair, accept `- -x`
                    / '~'
                    / '&'
                    / '*'
                    / BUILT_IN !SYMBOL_CHAR
                  )
-SYMBOL_CHAR <=  [A-Za-z_$0-9]
-HEX         <=  [0-9A-Fa-f]
-DIGIT       <=  [0-9]
-ASCII       <=  ![\0-\37\200-\377] .
-_           <=  ([ \t\r\n]+ / COMMENT)*
-COMMENT     <=  '/*' (!'*/' .)* '*/' / "//" (![\r\n] .)*
+SYMBOL_CHAR <-  [A-Za-z_$0-9]
+HEX         <-  [0-9A-Fa-f]
+DIGIT       <-  [0-9]
+ASCII       <-  ![\0-\37\200-\377] .
+_           <-  ([ \t\r\n]+ / COMMENT)*
+COMMENT     <-  '/*' (!'*/' .)* '*/' / "//" (![\r\n] .)*
