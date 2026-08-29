@@ -85,37 +85,32 @@ problem.**
   grammar author alone. It pairs well with JSPEG 2 (Problem 2), which makes a node simply the value
   a rule returns, but neither waits for the other.*
 
-## Problem 2: The `._` holder duality
+## Problem 2: The `._` holder duality — **SOLVED (2026-08-28), shipped as JSPEG 2**
 
-### Mechanics
+Full record: [`JSPEG2Plan.md`](JSPEG2Plan.md). Summary of what landed, since the design below is
+no longer the plan of record:
 
-JavaScript lacks by-reference variables, so JSPEG models `$$` and tagged names as holder objects
-whose `._` field is the value. The action rewriter then applies heuristics: bare `$name` →
-`$name._` *unless* followed by `.`, `$$` → `$._`, `$$.` → the holder itself. Whether `._` gets
-appended depends on how the name was introduced (tag vs capture) - i.e. **the meaning of action
-text depends on distant grammar context**.
+- `$$` **is** the value register (`_val`). No holder objects, no `._` convention, no rewriter
+  heuristics — so action text no longer depends on distant grammar context, which was the whole
+  complaint. Rules are param-less and still return a boolean for match/no-match.
+- Both grammars were migrated (`impala.jspeg` 110 rules, `jspeg.jspeg` 40), every step
+  **byte-identical** against the golden corpus, plus NuXJS parity and the fuzzer.
+- The `$$.` holder-escape sites this section counted at ~126 did not need a mechanical migration:
+  `$$.field` simply became `_val.field`. What *did* need hand edits was small — three explicit
+  `._` derefs, and author locals whose names collided with the register.
 
-The cost is documented by the repository itself: `JSPEG.md` needs a dedicated semantics section,
-one sigil earned a whole architecture review of its own (`docs/jspeg-dollar-report.md`, retired
-2026-08-05 once this section chose a direction none of its six options proposed), and
-`design/jspeg/RefactorPlan.md` exists to migrate helpers because "holder/value mistakes" happen in practice. `impala.jspeg`
-currently has ~126 `$$.` holder-escape sites.
+Two things the design below got wrong, worth keeping because they cost time:
 
-### What it would take
+- **"tags become plain local variables"** is true, but a tag is also the *only* construct that
+  touches the register non-locally: it must seed the register with its own slot and restore the
+  parent's — on failure as well as success, because PEG backtracking rewinds the input cursor and
+  not the register.
+- **A per-rule value local plus a publish step does not work.** It survives only while values are
+  *mutated*; a grammar whose values are *replaced* (strings — i.e. `jspeg.jspeg` itself) reads a
+  stale copy. Having `$$` be the register directly is what removes the failure mode.
 
-- **Near term - finish `RefactorPlan.md`.** Return-style helpers (`$$ = binaryRet(...)`) shrink
-  the number of places that touch holder semantics at all. Behavior-preserving, fixture-gated,
-  already planned milestone by milestone.
-- **Long term - value-returning rules. This is "JSPEG 2"** - the one breaking change to JSPEG
-  itself, and it is about `$$`, nothing else. Change the codegen so a rule is a function returning
-  its value; tags become plain local variables; `$$` becomes an ordinary variable; the rewriter's
-  heuristics and the `._` convention are deleted outright. Object-valued `$$` still supports field
-  mutation (`$$.count = 0` works on a plain object), so the container-style rules (`FuncCall`)
-  migrate by initializing `$$ = {...}` instead of relying on a pre-existing holder.
-  *Impact on `impala.jspeg`: mechanical migration of the ~126 `$$.` sites plus an audit of tag
-  rebinding; retire most of the `$$` documentation. Pairs naturally with the
-  AST move in Problem 1 - in two-phase style, `$$` is just the node under construction and the
-  holder question evaporates - so doing both in one breaking step is convenient, not required.*
+The pairing with Problem 1 noted above still holds and is still optional: in two-phase style `$$`
+is just the node under construction.
 
 ## Problem 3: Performance
 
@@ -145,8 +140,9 @@ taxes both paths.
   - Statement-style output instead of IIFEs - success flags plus labeled breaks; no closure
     allocation per parse step. Biggest single win on NuXJS.
   - Char classes as range comparisons (`c >= 'a' && c <= 'z'`) or per-class lookup tables.
-  - Allocate holder objects only for names actually used as containers (shrinks further as
-    Problem 2 progresses; disappears with value-returning rules).
+  - Allocate a capture's value slot lazily - only when that alternative actually matches. Holder
+    objects themselves are gone (Problem 2, done), but ~57% of the slots a rule allocates per
+    invocation are never seeded by any capture.
 - **Pragmatic immediately:** bless `impala/impala.node.js` as the development-loop compiler (it
   already exists and is fast); keep NuXJS as the dependency-free distribution path.
 - Packrat memoization is *not* recommended - Impala's grammar is nearly deterministic and the
