@@ -46,14 +46,6 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
     }
 
 
-    /** template baker: "Hello {name}" -> eval expressions in {...} */
-    function bake(str) {
-        // same pattern as /\{([^}]+)\}/g  but expressed as a string because poor jspeg parsing
-        var re = new RegExp("\\{([^}]+)\\}", "g");
-        return str.replace(re, function (_, expr) {
-            return eval(expr);
-        });
-    }
 
     /** simple assertion */
     function assert(cond, msg) {
@@ -98,31 +90,7 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         return ((ch + "").charCodeAt(0)) & 0xFF;
     }
 
-    function evaluate(str) {
-        return JSON.parse(str);
-    }
 
-    /** queue ops on plain Arrays */
-    function resetQueue(q) {
-        q.length = 0;
-    }
-    function queueSize(q) {
-        return q.length;
-    }
-    function pushBack(q, v) {
-        q.push(v);
-    }
-    function popBack(q) {
-        if (q.length === 0) throw new Error("Queue underrun");
-        return q.pop();
-    }
-    function pushFront(q, v) {
-        q.unshift(v);
-    }
-    function popFront(q) {
-        if (q.length === 0) throw new Error("Queue underrun");
-        return q.shift();
-    }
 
     /** math/random helpers */
     function random() {
@@ -793,7 +761,7 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
     /* 5  portable replacement for ppeg.fail */
     fail = function (error, source, offset, code, hint) {
         function oneLine(s) { return replace(replace(replace(s,"\t",' '),"\r",' '),"\n",' '); }
-        var message = bake(error);
+        var message = error;
         var hasSource = typeof source === 'string';
         var snippetSource = hasSource ? source : '';
         var snippetOffset = isFinite(offset) ? offset : 0;
@@ -2101,8 +2069,8 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
             structs[name] = held;
             var heldRow = structSignatureRow(name, false);
             structs[name] = parsed;
-            /* fail() bakes its message, and bake() EVALS anything between braces (that is how
-               `{$type1}` interpolation works), so a struct row's `{ a : int }` must not go in raw. */
+            /* A struct row is spliced into a one-line message, so its `{ a : int }` braces are
+               swapped for parens to keep the message readable. */
             function shown(row) { return replace(replace(replace(row, 'signature ', ''), '{', '('), '}', ')'); }
             failDisagreement('struct ' + name, shown(parsed.extern ? parsedRow : heldRow),
                     shown(parsed.extern ? heldRow : parsedRow), 'E438',
@@ -4418,8 +4386,8 @@ var _sn = strideStruct(field.elem);
             span(r[0], '#<&') !== 1) {
 
             fail(
-                bake('Expected constant ' +
-                     VERBOSE_TYPES[ wantType ]),
+                'Expected constant ' +
+                     VERBOSE_TYPES[ wantType ],
                 sourceCode, sourceOffset, 'E407');
         }
         return r;
@@ -4594,8 +4562,8 @@ var _sn = strideStruct(field.elem);
         /* clear transient pools and counters */
         var poolPercent = stock['%'] || (stock['%'] = []);
         var poolAngle   = stock['<'] || (stock['<'] = []);
-        resetQueue(poolPercent);
-        resetQueue(poolAngle);
+        poolPercent.length = 0;
+        poolAngle.length = 0;
         counters['%'] = 0;
         counters['<'] = 0;
 
@@ -4711,7 +4679,7 @@ function DestTarget(){var $tgtGlobal,$id=newMetaSlot(),_sv$id,$tgtName;return (f
 function Switch(){var $f=newMetaSlot(),_sv$f,$t=newMetaSlot(),_sv$t,$size,$switcher,$,$switchExit,$progress,$stmt=newMetaSlot(),_sv$stmt;return (function(){var _b=_i;return SWITCH()&&_()&&(_s[_i]==="(")&&(++_i,true)&&_()&&Expr()&&(_s.substr(_i,2)==="==")&&(_i+=2,true)&&_()&&((_sv$f=_val,_val=$f,(Expr()))&&($f=_val,_val=_sv$f,true)||(_val=_sv$f,false))&&TO()&&_()&&((_sv$t=_val,_val=$t,(Expr()))&&($t=_val,_val=_sv$t,true)||(_val=_sv$t,false))&&(function(){ var switchMeta = metaSlot(_val); /* the switch expression must be an int */ if (switchMeta.type !== 'i') { fail('Switch expression needs to be int', _s, _i, 'E306'); } /* lower bound (compile-time constant) */ switchMeta.from = makeConstant($f, 'i', _s, _i); /*    size = to - from   */ $size = subConstInt( makeConstant($t, 'i', _s, _i), switchMeta.from ); /*   switcher = (expr − from)   */ $switcher = subConstInt( makeRValue(switchMeta, '$%'), switchMeta.from ); /* snapshot the range as plain numbers now: the operands are handed back to the scratch pool below, and a case is only checkable while both ends are known. */ switchMeta.fromNum = constInt(switchMeta.from); switchMeta.sizeNum = constInt($size); switchMeta.caseSeen = {}; switchMeta.switchLabel = newLabel('s'); $switchExit              = newLabel('e'); switchStack.push(switchMeta); emit( '-->#', switchMeta.type, $switcher, '*' + dropHash($size), switchMeta.switchLabel ); returnBack($switcher); returnBack($size); $progress = undefined;       /* track case / default presence */ ; return true})()&&(_s[_i]===")")&&(++_i,true)&&_()&&(_s[_i]==="{")&&(++_i,true)&&_()&&((function(){while((function(){var _b=_i;return (function(){var _b=_i;return CASE()&&_()&&(function(){ /* multiple CASE groups -> fall-through handled here */ if ($progress !== undefined) { emit('-->', undefined, $switchExit, undefined, undefined); } else { $progress = 'gotCases'; } /* dump the literal “case ...” comment */ var snippet = _s.substring(_i, find(_s, ":\r\n", _i)); emit( ';', undefined, 'case ' + snippet, undefined, undefined ); ; return true})()&&CaseExpr()&&((function(){while((function(){var _b=_i;return (_s[_i]===",")&&(++_i,true)&&_()&&CaseExpr()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)||DEFAULT()&&_()&&(function(){ if ($progress === 'gotDefault') { fail('Default case already defined', _s, _i, 'E409', 'a switch has at most one `default` arm'); } else if ($progress !== undefined) { emit('-->', undefined, $switchExit, undefined, undefined); } var ctx = switchStack[switchStack.length - 1]; emit(';',    undefined, 'default',       undefined, undefined); emit('<--',  undefined, ctx.switchLabel,  undefined, undefined); $progress = 'gotDefault'; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&(_s[_i]===":")&&(++_i,true)&&_()&&((_sv$stmt=_val,_val=$stmt,(Statement()))&&($stmt=_val,_val=_sv$stmt,true)||(_val=_sv$stmt,false))||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(_s[_i]==="}")&&(++_i,true)&&_()&&(function(){ var ctx = switchStack.pop() || metaSlot(_val); /* no explicit “default” -> hook it up now                        */ if ($progress !== 'gotDefault') { emit('<--', undefined, ctx.switchLabel, undefined, undefined); } emit('<--', undefined, $switchExit, undefined, undefined); returnBack(ctx.from); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function CaseExpr(){var $n;return (function(){var _b=_i;return Expr()&&(function(){ /* offset = constant(expr) - switch.from                         */ var ctx      = switchStack[switchStack.length - 1]; var caseMeta = metaSlot(_val); var baseFrom = (ctx ? ctx.from : caseMeta.from); var baseLabel = (ctx ? ctx.switchLabel : caseMeta.switchLabel); var caseConst = makeConstant(caseMeta, 'i', _s, _i); checkCaseValue(ctx, constInt(caseConst), _s, _i); $n = subConstInt(caseConst, baseFrom); /* A host may narrow the window from BELOW, which makes this arm UNREACHABLE, not wrong - the same situation as a case above the window, which `SWCH` already ignores harmlessly because the offset is only a table index it never looks up. Here the offset is pasted into the LABEL TEXT, so a negative one rendered `.s0.-4` and killed the whole module at load: one direction fell dead, the other refused to build. Guard the label with an assemble-time skip so both drop out of the configuration alike. A skipped line is abandoned BEFORE the label is interpreted (`skipUntilLabel`, GAZL.cpp), so `.s0.-4` is never constructed rather than constructed and rejected. Symbolic ranges only: with a literal range Impala knows the answer and E444 says so at Impala compile time, which is strictly better. */ var caseGuard; if (ctx !== undefined && ctx.fromNum === undefined) { caseGuard = newLabel('g'); emit('<> <', 'i', $n, '#0', caseGuard); } /* create label for this case                                     */ emit( '<--', undefined, baseLabel + '#' + dropHash($n), undefined, undefined ); if (caseGuard !== undefined) { emit('<-?', true, caseGuard, undefined, undefined); metacode[metacode.length - 1].mayRide = true; } returnBack($n); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function While(){var $loopLabel,$exitLabel;return (function(){var _b=_i;return WHILE()&&_()&&(function(){ $loopLabel = newLabel('l'); emit('<--', undefined, $loopLabel, undefined, undefined); ; return true})()&&BoolGroup()&&(function(){ $exitLabel = newLabel('e'); emit('?->', false, $exitLabel, undefined, undefined); ; return true})()&&Statement()&&(function(){ emit('-->', undefined, $loopLabel, undefined, undefined); emit('<-?', false, $exitLabel, undefined, undefined); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
-function Value(){var $base=newMetaSlot(),_sv$base,$f=newMetaSlot(),_sv$f,$i=newMetaSlot(),_sv$i,$s=newMetaSlot(),_sv$s;return (function(){var _b=_i;return Group()||(_im=(_i>_im?_i:_im),_i=_b,false)||SIZEOF()&&_()&&(_s[_i]==="(")&&(++_i,true)&&_()&&((_sv$base=_val,_val=$base,(TypeBase()))&&($base=_val,_val=_sv$base,true)||(_val=_sv$base,false))&&(function(){ if (!dry) { var head = strideStruct($base); if (head !== undefined) {            /* struct size -> symbolic .z.Name */ if (!isExternStruct(head) && !structDefined(head)) fail('sizeof of incomplete struct ' + head, _s, _i, 'E419'); makeMeta(_val, ':=', 'i', undefined, '#' + extentSymbol(head), undefined); setElem(_val, undefined); } else { makeMeta(_val, ':=', 'i', undefined, '#1', undefined); setElem(_val, undefined); } } ; return true})()&&(_s[_i]===")")&&(++_i,true)&&_()||(_im=(_i>_im?_i:_im),_i=_b,false)||((_sv$f=_val,_val=$f,(FloatLiteral()))&&($f=_val,_val=_sv$f,true)||(_val=_sv$f,false))&&(function(){ if (!dry) { makeMeta(_val, ':=', 'f', undefined, '#' + $f, undefined); setElem(_val, undefined); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||((_sv$i=_val,_val=$i,(IntegerLiteral()))&&($i=_val,_val=_sv$i,true)||(_val=_sv$i,false))&&(function(){ if (!dry) { makeMeta(_val, ':=', 'i', undefined, '#' + $i, undefined); setElem(_val, undefined); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||((_sv$s=_val,_val=$s,(StringLiteral()))&&($s=_val,_val=_sv$s,true)||(_val=_sv$s,false))&&(function(){ if (!dry) { makeString('s', _val, evaluate($s), _s, _i); setElem(_val, 'i');      /* string data is int words (Impala 2) */ /* string data lives in a readonly section, so `"abc"[0] = 1` used to compile and fail at GAZL load - mark it readonly so the E404 element-write check catches the store at the source line */ metaSlot(_val).readonly = true; } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||NULL()&&_()&&(function(){ if (!dry) { makeMeta(_val, ':=', 'p', undefined, '&NULL', undefined); setElem(_val, undefined); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||NULLFUNC()&&_()&&(function(){ if (!dry) { makeMeta(_val, ':=', 't', undefined, '&NULL', undefined); setElem(_val, undefined); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||Variable()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
+function Value(){var $base=newMetaSlot(),_sv$base,$f=newMetaSlot(),_sv$f,$i=newMetaSlot(),_sv$i,$s=newMetaSlot(),_sv$s;return (function(){var _b=_i;return Group()||(_im=(_i>_im?_i:_im),_i=_b,false)||SIZEOF()&&_()&&(_s[_i]==="(")&&(++_i,true)&&_()&&((_sv$base=_val,_val=$base,(TypeBase()))&&($base=_val,_val=_sv$base,true)||(_val=_sv$base,false))&&(function(){ if (!dry) { var head = strideStruct($base); if (head !== undefined) {            /* struct size -> symbolic .z.Name */ if (!isExternStruct(head) && !structDefined(head)) fail('sizeof of incomplete struct ' + head, _s, _i, 'E419'); makeMeta(_val, ':=', 'i', undefined, '#' + extentSymbol(head), undefined); setElem(_val, undefined); } else { makeMeta(_val, ':=', 'i', undefined, '#1', undefined); setElem(_val, undefined); } } ; return true})()&&(_s[_i]===")")&&(++_i,true)&&_()||(_im=(_i>_im?_i:_im),_i=_b,false)||((_sv$f=_val,_val=$f,(FloatLiteral()))&&($f=_val,_val=_sv$f,true)||(_val=_sv$f,false))&&(function(){ if (!dry) { makeMeta(_val, ':=', 'f', undefined, '#' + $f, undefined); setElem(_val, undefined); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||((_sv$i=_val,_val=$i,(IntegerLiteral()))&&($i=_val,_val=_sv$i,true)||(_val=_sv$i,false))&&(function(){ if (!dry) { makeMeta(_val, ':=', 'i', undefined, '#' + $i, undefined); setElem(_val, undefined); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||((_sv$s=_val,_val=$s,(StringLiteral()))&&($s=_val,_val=_sv$s,true)||(_val=_sv$s,false))&&(function(){ if (!dry) { makeString('s', _val, JSON.parse($s), _s, _i); setElem(_val, 'i');      /* string data is int words (Impala 2) */ /* string data lives in a readonly section, so `"abc"[0] = 1` used to compile and fail at GAZL load - mark it readonly so the E404 element-write check catches the store at the source line */ metaSlot(_val).readonly = true; } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||NULL()&&_()&&(function(){ if (!dry) { makeMeta(_val, ':=', 'p', undefined, '&NULL', undefined); setElem(_val, undefined); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||NULLFUNC()&&_()&&(function(){ if (!dry) { makeMeta(_val, ':=', 't', undefined, '&NULL', undefined); setElem(_val, undefined); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||Variable()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function Variable(){var $global,$idStart,$id=newMetaSlot(),_sv$id;return (function(){var _b=_i;return (function(){ $global = false; ; return true})()&&((function(){var _b=_i;return GLOBAL()&&_()&&(function(){ $global = true; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&(function(){ $idStart = _i; ; return true})()&&((_sv$id=_val,_val=$id,(Identifier()))&&($id=_val,_val=_sv$id,true)||(_val=_sv$id,false))&&(function(){ if (!dry) { lookup(_val, $id, $global, _s, $idStart); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function Identifier(){return (function(){var _b=_i;return (function(){var _l=_i,_x=KEYWORD();_i=_l;return !_x})()&&(function(){var _m=_i;return (function(){var _b=_i;return (!!_s[_i]&&"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_$".indexOf(_s[_i])>=0)&&(++_i,true)&&((function(){while(SYMBOL_CHAR());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&(_val=_s.slice(_m,_i),true)})()&&_()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function FloatLiteral(){return (function(){var _b=_i;return (function(){var _m=_i;return (function(){var _b=_i;return ((!!_s[_i]&&"-+".indexOf(_s[_i])>=0)&&(++_i,true),true)&&((function(){for(var _n=0;DIGIT();++_n);return _n>0})())&&(_s[_i]===".")&&(++_i,true)&&((function(){for(var _n=0;DIGIT();++_n);return _n>0})())&&((function(){var _b=_i;return (function(){var _b=_i;return (_s[_i]==="E")&&(++_i,true)||(_im=(_i>_im?_i:_im),_i=_b,false)||(_s[_i]==="e")&&(++_i,true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&(function(){var _b=_i;return ((!!_s[_i]&&"-+".indexOf(_s[_i])>=0)&&(++_i,true),true)&&((function(){for(var _n=0;DIGIT();++_n);return _n>0})())||(_im=(_i>_im?_i:_im),_i=_b,false)})()||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&(_val=_s.slice(_m,_i),true)})()&&_()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};

@@ -33,14 +33,6 @@
     }
 
 
-    /** template baker: "Hello {name}" -> eval expressions in {...} */
-    function bake(str) {
-        // same pattern as /\{([^}]+)\}/g  but expressed as a string because poor jspeg parsing
-        var re = new RegExp("\\{([^}]+)\\}", "g");
-        return str.replace(re, function (_, expr) {
-            return eval(expr);
-        });
-    }
 
     /** simple assertion */
     function assert(cond, msg) {
@@ -85,31 +77,7 @@
         return ((ch + "").charCodeAt(0)) & 0xFF;
     }
 
-    function evaluate(str) {
-        return JSON.parse(str);
-    }
 
-    /** queue ops on plain Arrays */
-    function resetQueue(q) {
-        q.length = 0;
-    }
-    function queueSize(q) {
-        return q.length;
-    }
-    function pushBack(q, v) {
-        q.push(v);
-    }
-    function popBack(q) {
-        if (q.length === 0) throw new Error("Queue underrun");
-        return q.pop();
-    }
-    function pushFront(q, v) {
-        q.unshift(v);
-    }
-    function popFront(q) {
-        if (q.length === 0) throw new Error("Queue underrun");
-        return q.shift();
-    }
 
     /** math/random helpers */
     function random() {
@@ -780,7 +748,7 @@
     /* 5  portable replacement for ppeg.fail */
     $$parser.fail = function (error, source, offset, code, hint) {
         function oneLine(s) { return replace(replace(replace(s,"\t",' '),"\r",' '),"\n",' '); }
-        var message = bake(error);
+        var message = error;
         var hasSource = typeof source === 'string';
         var snippetSource = hasSource ? source : '';
         var snippetOffset = isFinite(offset) ? offset : 0;
@@ -2088,8 +2056,8 @@
             $$parser.structs[name] = held;
             var heldRow = $$parser.structSignatureRow(name, false);
             $$parser.structs[name] = parsed;
-            /* fail() bakes its message, and bake() EVALS anything between braces (that is how
-               `{$type1}` interpolation works), so a struct row's `{ a : int }` must not go in raw. */
+            /* A struct row is spliced into a one-line message, so its `{ a : int }` braces are
+               swapped for parens to keep the message readable. */
             function shown(row) { return replace(replace(replace(row, 'signature ', ''), '{', '('), '}', ')'); }
             failDisagreement('struct ' + name, shown(parsed.extern ? parsedRow : heldRow),
                     shown(parsed.extern ? heldRow : parsedRow), 'E438',
@@ -4405,8 +4373,8 @@ var _sn = $$parser.strideStruct(field.elem);
             span(r[0], '#<&') !== 1) {
 
             $$parser.fail(
-                bake('Expected constant ' +
-                     $$parser.VERBOSE_TYPES[ wantType ]),
+                'Expected constant ' +
+                     $$parser.VERBOSE_TYPES[ wantType ],
                 sourceCode, sourceOffset, 'E407');
         }
         return r;
@@ -4581,8 +4549,8 @@ var _sn = $$parser.strideStruct(field.elem);
         /* clear transient pools and counters */
         var poolPercent = $$parser.stock['%'] || ($$parser.stock['%'] = []);
         var poolAngle   = $$parser.stock['<'] || ($$parser.stock['<'] = []);
-        resetQueue(poolPercent);
-        resetQueue(poolAngle);
+        poolPercent.length = 0;
+        poolAngle.length = 0;
         $$parser.counters['%'] = 0;
         $$parser.counters['<'] = 0;
 
@@ -6536,7 +6504,7 @@ Value       <-  Group
                                                         $$parser.setElem($$, undefined);
                                                       } }
                 / s:StringLiteral                   { if (!$$parser.dry) {
-                                                        $$parser.makeString('s', $$, evaluate($s), $$s, $$i);
+                                                        $$parser.makeString('s', $$, JSON.parse($s), $$s, $$i);
                                                         $$parser.setElem($$, 'i');      /* string data is int words (Impala 2) */
                                                         /* string data lives in a readonly section, so `"abc"[0] = 1` used to
                                                            compile and fail at GAZL load - mark it readonly so the E404
