@@ -1,8 +1,9 @@
 # JSPEG
 
-JSPEG is the JavaScript PEG generator that powers the Impala compiler. It
-preserves the familiar PEG syntax inherited from the old PPEG toolchain: rules,
-captures, tags, and inline JavaScript actions.
+JSPEG is the JavaScript PEG generator that powers the Impala compiler. A grammar is a list of
+rules written in PEG syntax - ordered choice, greedy repetition, syntactic predicates - where any
+expression can carry an inline JavaScript action, plus tags and captures for naming values.
+`jspeg.jspeg` compiles a grammar into a single self-contained parser function.
 
 ## Current Status
 
@@ -142,12 +143,12 @@ verifiable from `impala/jspeg.jspeg` and from the generated `impalaCompiler.js`.
   rewritten and its line breaks are collapsed. A real example from `impala.jspeg`'s `VarDecl`: the
   source comment says “an end-of-rule `$$i`” and the generated file says “an end-of-rule `_i`”. Prose
   about `$$`/`$$i`/`$name` is safest in a `#` comment above the rule, or in a `//` comment.
-- **Actions must stay inside the JavaScript subset NuXJS supports.** The generated compiler ships
-  as a NuXJS program as well as a Node one, so an action cannot use whatever the local Node happens
-  to have. `dims.map(...)` is the case that got through: NuXJS has no `Array.prototype.map`, and it
-  survived from `1aae39a` to 2026-08-07 because the only NuXJS gate was a four-program smoke test
-  that declares no shapes. `nuxjsParityTests.js` now compares 13 programs; the prelude carries
-  `iterate`, `map`, `replace`, `find`/`span`/`rspan` so you rarely need a modern builtin at all.
+- **Actions must stay inside the JavaScript subset NuXJS supports.** The generated compiler runs
+  under NuXJS as well as Node, so an action cannot use a builtin just because the local Node has it.
+  `Array.prototype.map` is absent, for one. Reach for the prelude helpers instead: `iterate` for
+  array walks, `map` for building a table, `replace` for replace-all, `find`/`span`/`rspan` for
+  character scanning. `nuxjsParityTests.js` compiles the same programs under both engines and
+  byte-compares, so a slip here fails the gate rather than the user.
 - **Never declare `_val`, `_s` or `_i` in an action.** An action body is wrapped in
   `(function(){ … })()`, so a `var` of one of those names shadows the parser variable that `$$`,
   `$$s` and `$$i` compile to. The failure is a *silent miscompile*: the action writes its own local,
@@ -155,12 +156,11 @@ verifiable from `impala/jspeg.jspeg` and from the generated `impalaCompiler.js`.
 - **A rule that builds a record must initialize it.** `$$.count = 0` needs `$$` to already be an
   object. Value rules that act as containers start with `$$ = {}` (see `TypeDeclr`, `VarDecl`,
   `ArrayDecl`, `ExternDecl` in `impala.jspeg`).
-- **Before reaching for a new rule, check whether one exists** - and before merging two that look
-  alike, measure. `TypeDeclr` (optionally-named) and `VarDecl` (required-name) already cover both
-  declarator shapes, so a third rule written for an extern prototype's return was deleted once
-  `TypeDeclr` was found. But they are *not* redundant: their `words` differ for a funcptr type
-  (`TypeDeclr` sets 1, `VarDecl` leaves it undefined), and making them agree reds four goldens. Reuse
-  the rule whose fields the call site actually reads - the extern-return site reads only
+- **Reuse a declarator rule rather than adding one, but check its fields first.** `TypeDeclr`
+  (name optional) and `VarDecl` (name required) cover both declarator shapes. They look
+  interchangeable and are not: `words` differs for a funcptr type - `TypeDeclr` sets 1, `VarDecl`
+  leaves it undefined - and forcing them to agree reds four goldens. Pick the rule whose fields the
+  call site actually reads - the extern-return site reads only
   `type`/`elem`/`struct`, which is why `TypeDeclr` is safe there.
 
 ## Regenerating Compilers
