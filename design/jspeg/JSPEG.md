@@ -47,50 +47,60 @@ If wired correctly, it prints `[ true, 11, 3 ]`.
 
 ## Parser Interface
 
-- Return shape: generated parsers return `[ success, value, endIndex ]`.
-- Value holder: internally the root rule creates a container and returns its `._` field as the `value` element. This is an implementation detail to carry the `$$` value between actions. You normally do not need to interact with it directly.
-  - See `jspeg.jspeg:25`-`26` for the `var _o={_:void 0}` initializer and the return of `_o._`.
-- Actions and `$$`: within a grammar, references to `$$` are compiled to read/write that holder; tags and captures populate local temporaries as usual.
+Generated parsers return `[ success, value, endIndex ]`. Parsing starts at the rule named
+`root`, so every grammar needs one.
 
-## `$$`, Tags, Captures, And `._`
+## `$$`, Tags, And Captures
 
-- **Concept:** In PPEG/JSPEG, `$$` is the semantic value threaded through rules. It is both input to a rule and output from that rule after actions run. Tags (`name:expr`) and captures (`name=expr`) introduce named temporaries that actions can read.
-- **Why `._`:** JavaScript does not have by-reference variables. JSPEG models each tagged/captured name as a small “holder” object whose `._` property contains its current value. This lets actions either treat a name as a container (`$name.field`) or as the value itself (`$name`), with the latter desugared to `$name._` by the code generator.
-- **Codegen rules:**
-- Bare `$$` inside actions is rewritten to `$._`, and writing `$$.` (optionally followed by a property) yields the holder `$`, so grammars can opt into container semantics without losing the default value rewrite. See `jspeg.jspeg:80`-`110`.
-  - The root parser initializes `var _o={_:void 0}` and returns `_o._` as the second element of the parser tuple. See `jspeg.jspeg:25` and `jspeg.jspeg:26`.
-  - Bare `$name` in actions refers to the name’s value and is rewritten to `$name._` unless immediately followed by a `.` (meaning field access on the container). This keeps container vs. value usage unambiguous without extra syntax. See the action rewriter heuristics in `jspeg.jspeg:73`-`126`.
-- The tokeniser special-cases both `$$.` (rewritten to holder-qualified names) and bare `$$` (rewritten to `'$._'`). See `jspeg.jspeg:204`-`207`.
-- **Tags:** `name: expr` temporarily binds `$$` to `$name` while `expr` runs; on return, `$name` holds the produced value and remains visible to subsequent actions in the rule. This mirrors the original PPEG semantics.
-- **Captures:** `name=expr` stores the consumed substring into `$name` before any attached actions run. Actions can then use `$name` (value form) or `$name.…` (container form) within the same rule.
+`$$` is the value a rule produces. Inside an action it is an ordinary variable: read it, assign
+it, mutate its fields. A rule matches or it does not — that is the boolean the parser tracks —
+and `$$` is what it leaves behind when it does.
+
+- **Sub-rules share your `$$`.** Reference a rule without a tag and it works on the same value
+  you do, so whatever it leaves is what you see next. A rule with no action of its own therefore
+  passes its sub-rule's value straight up.
+
+- **`name: expr` (tag)** runs `expr` against a *fresh* value, then puts the result in `$name` and
+  leaves your `$$` untouched. Use it when you need a sub-rule's value as well as your own.
+
+- **`name = expr` (capture)** puts the *matched text* in `$name`. `$$ = expr` captures the text
+  into `$$` itself.
+
+- **`$name` is the value.** `$name.field` is a field on it. Both mean exactly what they look like.
+
+Also available inside an action: `$$s` (the whole source string), `$$i` (the current index), and
+`$$parser` (the helper/rule table).
 
 ### Examples
 
-- Build a record from pairs (classic PPEG style):
-  - Grammar: `pair <- key=ident ':' _ val=number { $$[$key] = $val }`
-  - Action intent: read the captured key/value and assign into the current container `$$`.
-  - Codegen: `$key` and `$val` are holders; bare uses rewrite to `$key._`/`$val._` so property access and arithmetic “just work”.
+Build a record from key/value pairs — `$$` is the record, `$key`/`$val` are the captured text:
 
-- Summation with `$$` as accumulator:
-  - Grammar: `sum <- $$:0 ( _ n=[0-9]+ { $$ += +$n } )* !.`
-  - Action intent: start at 0, add each number; `$$` is both the incoming accumulator and the outgoing value. Codegen maps `$$` to `$._` consistently.
+```
+pair <- key=ident ':' _ val=number  { $$[$key] = $val }
+```
 
-## Why Keep `._`
+Accumulate — `$$` carries the running total across the loop. Parsing `"1 2 3"` gives `6`:
 
-- **PPEG parity:** The holder model preserves PPEG’s by-reference flavour for `$$` and tagged names while staying idiomatic in JavaScript.
-- **Clarity in actions:** Authors can write `$name` to mean “the value” and `$name.something` to mean “a field on the container,” without extra syntax or helper calls.
-- **Deterministic codegen:** The rewriter applies a simple, local rule to add `._` where needed, producing predictable JavaScript and avoiding accidental creation of globals or getters.
+```
+root <- { $$ = 0 } ( _ n=[0-9]+ { $$ += +$n } )* _ !.
+```
 
-JSPEG keeps the old grammar semantics for actions, tags, captures, and `$$` as a
-threaded value, adapting the implementation to JavaScript’s object model.
+Take a sub-rule's value while keeping your own — `$t` gets `TypeBase`'s value, `$$` stays yours:
 
-### Legacy Semantics
+```
+VarDecl <- { $$ = {} } t:TypeBase id:Identifier  { $$.type = $t; $$.name = $id }
+```
 
-- Actions: PPEG lets you attach a code block `{ … }` to any expression. Before the block runs, `$$` already contains the value produced by that expression. The action may inspect and modify `$$` directly; helpers available inside an action are `$$` (value), `$$s` (source), `$$i` (index), and `$$parser` (rule table).
-- Tags: `name: expr` temporarily rebinds `$$` to `$name` while `expr` runs; afterward `$name` holds the result and stays available until the rule returns.
-- Captures: `name=expr` (or `$$=expr`) stores the consumed substring in `$name` before the action runs.
-- Threaded value: Every rule receives `$$` as both input and output. Without a tag, sub-rules operate on the same value; tags and captures introduce additional temporaries that actions can read.
-- JS adaptation: JSPEG keeps these rules. Because JavaScript lacks by‑reference variables, JSPEG implements names as holders with `._` for their value, and rewrites bare uses of a name to `name._` unless you explicitly access a field on the holder.
+### How it is implemented
+
+Enough to read the generated file or debug a miscompile:
+
+- A rule compiles to `function Rule()` — no parameters — returning `true`/`false` for match.
+- `$$` compiles to `_val`, one module-level variable; `$$.field` to `_val.field`. That is why an
+  untagged sub-rule shares your value: it is literally the same variable.
+- A tag saves `_val`, gives the sub-rule a fresh slot, then restores — on failure as well as
+  success, since backtracking rewinds the input but not `_val`.
+- `$$s`/`$$i` compile to `_s`/`_i`.
 
 ## Authoring Hazards
 
@@ -99,25 +109,22 @@ JavaScript* rather than a grammar error. These are the ones that have actually c
 verifiable from `impala/jspeg.jspeg` and from the generated `impalaCompiler.js`.
 
 - **Comment syntax depends on where you are.** At grammar level (between rules, between terms)
-  comments are `#`-to-end-of-line only — `Comment <- '#' (!EndOfLine .)* …` (`impala/jspeg.jspeg:243`).
+  comments are `#`-to-end-of-line only — `Comment <- '#' (!EndOfLine .)* …` (`impala/jspeg.jspeg:241`).
   A `/* … */` there is a syntax error, and `updateJSPEG.js` reports it as a byte *index* into the
   grammar with no line number. Inside an action block, `/* */` and `//` are both fine (`PikaComment`,
-  `impala/jspeg.jspeg:285`).
+  `impala/jspeg.jspeg:283`).
 - **The action rewriter walks into `/* */` comments.** It special-cases `//` (copied verbatim to the
-  newline, `impala/jspeg.jspeg:124-131`) but never `/*`, so `$` tokens inside a block comment are
+  newline, `impala/jspeg.jspeg:122-129`) but never `/*`, so `$` tokens inside a block comment are
   rewritten and its line breaks are collapsed. A real example from `impala.jspeg`'s `VarDecl`: the
   source comment says “an end-of-rule `$$i`” and the generated file says “an end-of-rule `_i`”. Prose
   about `$$`/`$$i`/`$name` is safest in a `#` comment above the rule, or in a `//` comment.
-- **To hand the holder to a helper, write `$$.` — not `$$`.** A bare `$$` compiles to `$._`, the
-  *value slot*, which is usually still unset when an action starts; `helper($$, …)` therefore passes
-  `undefined`-ish and every field the helper writes is silently lost. The trailing dot is the escape
-  hatch: `helper($$., …)` compiles to `helper($, …)` and hands over the holder itself, so shared
-  field-assignment *can* be factored out. Getting this wrong is quiet — the symptom is a downstream
-  consumer reading `undefined` out of a rule that looked like it populated fine. (`$$.field` compiles
-  to `$.field`, a property on that same holder.)
-- **Whether `$name` gains `._` depends on how the name was introduced, earlier in the file.** A name
-  registered as a tag gets `._`; a capture does not (`impala/jspeg.jspeg:118-122`). The meaning of
-  action text therefore depends on distant grammar context — see `JSPEGFuture.md:93-96`.
+- **Never declare `_val`, `_s` or `_i` in an action.** An action body is wrapped in
+  `(function(){ … })()`, so a `var` of one of those names shadows the parser variable that `$$`,
+  `$$s` and `$$i` compile to. The failure is a *silent miscompile*: the action writes its own local,
+  the register keeps a stale value, and nothing errors. The byte-compare gate is what catches it.
+- **A rule that builds a record must initialize it.** `$$.count = 0` needs `$$` to already be an
+  object. Value rules that act as containers start with `$$ = {}` (see `TypeDeclr`, `VarDecl`,
+  `ArrayDecl`, `ExternDecl` in `impala.jspeg`).
 - **Before reaching for a new rule, check whether one exists** — and before merging two that look
   alike, measure. `TypeDeclr` (optionally-named) and `VarDecl` (required-name) already cover both
   declarator shapes, so a third rule written for an extern prototype's return was deleted once
