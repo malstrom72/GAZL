@@ -49,29 +49,23 @@ Grammar		<=								{ $$ = '' }
 
 # ----------------------------------------------------------------------------------------------------------------------
 
-Definition	<=	id:Identifier LEFTARROW		{ _vr = $vars = {}; }
+Definition	<=	id:Identifier LEFTARROW		{ _vr = {}; }
 					e:Expression				{
 								var _vl = '';
-								var _p = '';
-								for (var _k in $vars) {
-									if (hasOwn($vars, _k) && _k.indexOf('~') === -1) {
-										if (_k.indexOf('.') !== -1) {
-											if ($vars[_k] !== '') {
-												_p += _k + $vars[_k] + ';';
-											}
-										} else {
-										_vl += (_vl !== '' ? ',' : '') + _k + $vars[_k];
-										}
+
+								for (var _k in _vr) {
+									if (hasOwn(_vr, _k)) {
+										_vl += (_vl !== '' ? ',' : '') + _k + _vr[_k];
 									}
 								}
-								$$ = 'function ' + $id + '(){' + (_vl === '' ? '' : ('var ' + _vl + ';')) + _p
+								$$ = 'function ' + $id + '(){' + (_vl === '' ? '' : ('var ' + _vl + ';'))
                                                                                                         + 'return ' + $e + '}'
                                                                                         }
 
 # ----------------------------------------------------------------------------------------------------------------------
 
-Expression	<=								{ $$ = '' }
-				s:Sequence					{ $$ = $s }
+Expression	<=
+				Sequence
 				( SLASH s:Sequence			{ $$ += '||' + $s }
 				)*							{ $$ = '(function(){var _b=_i;return ' + $$ + '})()' }
 
@@ -124,8 +118,6 @@ Action          <=      b=PikaBlock Spacing                     {
                                                                                                       if (!hasOwn(_vr, id)) {
                                                                                                         _vr[id] = '';
                                                                                                       }
-
-
                                                                                                     }
                                                                                                   } else if ($b.slice(0, 2) === '//') {
                                                                                                     var newline = $b.indexOf('\n');
@@ -150,24 +142,24 @@ Action          <=      b=PikaBlock Spacing                     {
 Prefix		<=
 				AND c:Capture				{ $$ = '(function(){var _l=_i' + ',_x=' + $c + ';_i=_l;return _x})()' }
 				/ NOT c:Capture				{ $$ = '(function(){var _l=_i' + ',_x=' + $c + ';_i=_l;return !_x})()' }
-				/ c:Capture				{ $$ = $c }
+				/ Capture
 
 # ----------------------------------------------------------------------------------------------------------------------
 
 
-Capture		<=	v:Variable EQUALS			{ if ($v !== '$._') _vr[$v] = '' }
-						t:Tagged				{ var _t = ($v === '$._' ? '_val' : $v); $$ = '(function(){var _m=_i;return ' + $t + '&&(' + _t + '=_s.slice(_m,_i),true)})()' }
-				/ t:Tagged					{ $$ = $t }
+Capture		<=	v:Variable EQUALS			{ if ($v !== '_val') _vr[$v] = '' }
+						t:Tagged				{ $$ = '(function(){var _m=_i;return ' + $t + '&&(' + $v + '=_s.slice(_m,_i),true)})()' }
+				/ Tagged
 
 # ----------------------------------------------------------------------------------------------------------------------
 
-Tagged		<=	v:Variable COLON			{ if ($v !== '$._') { _vr[$v] = '={}'; _vr['_sv' + $v] = '' } }
-					t:Suffix				{ if ($v === '$._') $$ = $t; else { var _q = '_sv' + $v; $$ = '((' + _q + '=_val,_val=' + $v + ',(' + $t + '))&&(' + $v + '=_val,_val=' + _q + ',true)||(_val=' + _q + ',false))' } }
-				/ s:Suffix					{ $$ = $s }
+Tagged		<=	v:Variable COLON			{ if ($v !== '_val') { _vr[$v] = '={}'; _vr['_sv' + $v] = '' } }
+					t:Suffix				{ if ($v === '_val') $$ = $t; else { var _q = '_sv' + $v; $$ = '((' + _q + '=_val,_val=' + $v + ',(' + $t + '))&&(' + $v + '=_val,_val=' + _q + ',true)||(_val=' + _q + ',false))' } }
+				/ Suffix
 				
 # ----------------------------------------------------------------------------------------------------------------------
 
-Suffix		<=	p:Primary			{ $$ = $p }
+Suffix		<=	Primary
 				( QUESTION			{ $$ = '(' + $$ + ',true)' }
 						  / STAR			{ $$ = '((function(){while(' + $$ + ');})(),true)' }
 						  / PLUS			{ $$ = '((function(){for(var _n=0;' + $$ + ';++_n);return _n>0})())' }
@@ -185,7 +177,7 @@ Primary		<=	id:Identifier !LEFTARROW	{ $$ = $id + '()' }
 											}
 				/ c:Class					{ $$ = '(!!_s[_i]&&' + $$parser.dqEscape($c) + '.indexOf(_s[_i])>=0)&&(++_i,true)' }
 				/ DOT						{ $$ = '(!!_s[_i])&&(++_i,true)' }
-				/ OPEN e:Expression CLOSE		{ $$ = $e }
+				/ OPEN Expression CLOSE
 
 # ----------------------------------------------------------------------------------------------------------------------
 
@@ -209,8 +201,7 @@ IdentCont	<=	IdentStart / [0-9]
 
 # ----------------------------------------------------------------------------------------------------------------------
 
-Variable	<=      ( '$$.' $$=PikaVar			{ $$ = '$.' + $$ }
-			  / '$$'				{ $$ = '$._' }
+Variable	<=      ( '$$'				{ $$ = '_val' }
 			  / $$=PikaVar				{ $$ = '$' + $$ }
 			) Spacing
 
