@@ -676,3 +676,25 @@ them, and what each established is already written down above.
 
 `valueReturningProto.js`, `dualModeProto.js` and `selfContainerProto.jspeg` are kept: they are the
 runnable evidence behind the protocol decision, and the plan cites them as such.
+
+### Authoring hazard: names an action must not declare
+
+An action's body is wrapped in `(function(){ … })()`, so a `var` it declares **shadows** the generated
+parser variable of the same name for the rest of that action. The rewriter substitutes three names into
+action bodies, and these are the ones that matter:
+
+| you write | becomes | so never declare |
+|---|---|---|
+| `$$`  | `_val` | `var _val` |
+| `$$s` | `_s`   | `var _s`   |
+| `$$i` | `_i`   | `var _i`   |
+
+A collision is a **silent miscompile**: the action writes its own local, the register keeps a stale
+value, and nothing errors. Two were hit during this migration (`BracedEntry`'s `_v`, `Definition`'s
+`_v`) back when the register was named `_v`; both were renamed (`_e`, `_vl`).
+
+Enforcing this in the `Action` rewriter was considered and **rejected**: the rewriter is not
+string-literal aware (it scans for `$`, `/` and whitespace only), and the first real candidate — the
+`"var _i=0,_im=0,_val,…"` preamble string inside `root`'s own action — would be a false positive. A
+check would have to parse JS strings to be correct, which is not worth it for a hazard the
+byte-identical gate already catches: a shadowed register changes the generated output.
