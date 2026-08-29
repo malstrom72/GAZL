@@ -1,6 +1,6 @@
-# JSPEG 2 — Value-Returning Rules (dropping the `$` container)
+# JSPEG's Value Model — design and migration record
 
-Status: **LIVE, NOT STARTED — plan only** (written 2026-08-28). This is the "JSPEG 2" end-state named in
+Status: **DONE (2026-08-28).** How `$$` came to be the value register. The end-state named in
 [`JSPEGFuture.md`](JSPEGFuture.md) Problem 2: the one breaking change to the JSPEG code generator itself, and
 it is about `$$`/holders, nothing else. It is independent of the two-phase AST rework (Problem 1) and of the
 `$$parser`-state-on-an-object step; none of them gate this one.
@@ -49,7 +49,7 @@ M1's job is to pick one, prove it on the self-grammar, and record why. Everythin
 Reading the generator source surfaced a subtlety Problem 2 understates: the holder `$` carries **two** channels,
 not one.
 
-- **Upward — the value.** `$._` is the rule's semantic result. This is the channel JSPEG 2 is about.
+- **Upward — the value.** `$._` is the rule's semantic result. This is the channel this change is about.
 - **Downward — scope context.** In the self-grammar, `Definition` sets `$$.tag/vi/vr` and the `Expression`
   sub-rule *reads them back* from the same holder it is handed ([`jspeg.jspeg:46-47,67`](../../impala/jspeg.jspeg)) —
   the holder is threaded *down* to pass the current variable-numbering scope into nested expressions.
@@ -100,9 +100,9 @@ This is the working decision.
 
 ## M1 emission prototype — WORKS, and it found the migration's real boundary (2026-08-28)
 
-The value-returning *generator* is prototyped in `impala/jspeg2.jspeg` (since deleted - see Artifact cleanup) (a copy of
+The value-returning *generator* is prototyped in a throwaway generator (since deleted - see Artifact cleanup) (a copy of
 `jspeg.jspeg` with ~7 emission actions rewritten). Driven meta-circularly — current `compileJSPEG` compiles
-`jspeg2.jspeg` into a new-emission generator, which compiles `jspegTest.jspeg` — it produces exactly the target
+that prototype into a new-emission generator, which compiles `jspegTest.jspeg` — it produces exactly the target
 shape (param-less rules, `var _v` value locals, eager `($x=_val,true)` captures, a conditional
 `&&(_val=_v,true)` suffix, **no holders, no `._`**) and **passes all 9 arithmetic cases**. The generator surgery
 is real, not hand-waved. Two hazards from the M1 note were handled cleanly:
@@ -201,7 +201,7 @@ the same list, and (b) the scratch-pool ownership of each `$a` survives being he
 ## Status after M1 (2026-08-28)
 
 M1 is effectively complete: protocol decided **and** validated (hand-parser + real generator, `jspegTest` 9/9),
-value-returning generator prototyped in `jspeg2.jspeg`, the migration boundary found and the go/no-go answered
+value-returning generator prototyped, the migration boundary found and the go/no-go answered
 (not uniform; hard core identified), and the hard-core strategy chosen (return-and-merge).
 
 ## M3 triage complete (2026-08-28)
@@ -231,7 +231,7 @@ of M3 proper.
 Important sequencing reality found in M1: `impala.jspeg` is compiled by the **holder-based** production generator
 (`jspegCompiler.js` via `updateJSPEG.js`). A value-returning rewrite of any rule miscompiles under that generator,
 so rules **cannot** be migrated one-at-a-time against the production toolchain. M3 therefore switches the
-generator (use the value-returning `jspeg2.jspeg`-derived generator for `impala.jspeg`) and migrates **all** sites
+generator (use the value-returning prototype-derived generator for `impala.jspeg`) and migrates **all** sites
 in one gated step — verifiable but not incrementally reviewable — **unless** a dual-mode generator (understands
 both `._` and value styles) is built first to allow staged migration. Decide dual-mode-vs-big-bang at the top of
 M3; the byte-identical corpus parity gate makes either safe to *verify*.
@@ -259,7 +259,7 @@ holder param) once every rule is value style.
 
 Revised M3 order (dual-mode): (1) extend the generator with a **per-rule value-style flag** (a marker or a
 name-set) that switches action-rewriting to the value style and appends the `$._ = _v` bridge — a small addition
-to `jspeg2.jspeg`'s Definition/Action/Tagged/Capture; (2) migrate rules to value style in reviewable batches
+to the prototype's Definition/Action/Tagged/Capture; (2) migrate rules to value style in reviewable batches
 (mechanical self-containers, then the `Argument`/`FuncCall` return-and-merge as one unit), each behind
 `node impala/updateJSPEG.js` + `tools/test-js` byte-identical; (3) when the last rule flips, do the final
 `$._`→`_val` + drop-holder mechanical pass and delete the holder machinery (M4).
@@ -270,12 +270,12 @@ in the generator.
 ## Relationship to the other jspeg work
 
 - **[`RefactorPlan.md`](RefactorPlan.md) (return-style helpers) becomes moot for its stated goal.** That plan
-  reduces the number of *holder-touching* action sites while **keeping** the container; JSPEG 2 removes the
-  container outright. If JSPEG 2 lands we do not also need RefactorPlan — but its milestone discipline
+  reduces the number of *holder-touching* action sites while **keeping** the container; this change removes the
+  container outright. If this lands we do not also need RefactorPlan — but its milestone discipline
   (behavior-preserving, fixture-gated, one reviewable step at a time) is the model this plan follows. Do not
   invest in RefactorPlan's `binaryRet`/`lookupRet` wrappers as a prerequisite; they would be migrated away
   again.
-- **Two-phase AST (Problem 1) is orthogonal.** It pairs *naturally* with JSPEG 2 (in two-phase style `$$` is
+- **Two-phase AST (Problem 1) is orthogonal.** It pairs *naturally* with it (in two-phase style `$$` is
   just the node under construction and the holder question evaporates), but neither waits for the other and this
   plan does not touch the `dry`/`FuncCall` speculation patches.
 
@@ -522,7 +522,7 @@ Bar is unchanged: byte-identical `.gazl` (0/101) + NuXJS parity + fuzz. Note the
 
 ## M4 design resolved (2026-08-28): seed `_val` at tagged captures — the piece the M1 prototype lacks
 
-`impala/jspeg2.jspeg` (the M1 emission prototype) already has the target shape: param-less rules,
+The M1 emission prototype already had the target shape: param-less rules,
 `var _v`, `Primary` emitting `Sub()`, eager `($x=_val,true)` captures, conditional `&&(_val=_v,true)`,
 no `._`. **But porting it wholesale would break `impala.jspeg`**, because it was validated only on
 `jspegTest.jspeg`, whose rules *create* their values. impala's rules do the opposite: helpers
@@ -620,7 +620,7 @@ So the last step is one combined change: **replace `vr` threading with a global,
 `.vs`, `_vsRules`/`~v` and the `tag`/`vi` threading, and flip `jspeg.jspeg` in the same commit** — the
 current dual-mode compiler builds that new generator, which is then value-only. Bar unchanged.
 
-## JSPEG 2 COMPLETE (2026-08-28): one rule form, no holders anywhere
+## COMPLETE (2026-08-28): one rule form, no holders anywhere
 
 Both grammars are fully migrated — **150 rules, 0 holder rules, 0 rules taking a parameter, no `._`**
 (the three `'$._'` left in `jspegCompiler.js` are the *sentinel string* naming the `$$` tag, not holder
@@ -654,15 +654,15 @@ passthrough alternatives (`/ c:Capture { $$ = $c }`) and `OPEN e:Expression CLOS
 so `regenerate()`'s fixed-point check fails by design. Run one extra generation by hand, write gen2 as
 `jspegCompiler.js`, then the normal pipeline reaches gen2 == gen3. Verified before committing.
 
-`LEFTARROW` now accepts `<-` and `<=` identically — JSPEG 2 has **one** rule form. Flipping the two
+`LEFTARROW` now accepts `<-` and `<=` identically — JSPEG has **one** rule form. Flipping the two
 grammars back to a single spelling is cosmetic and can be done any time under the same gate.
 
 ## Artifact cleanup (2026-08-29)
 
-Four throwaway artifacts from this migration were deleted once JSPEG 2 landed; git history retains
+Four throwaway artifacts from this migration were deleted once the value model landed; git history retains
 them, and what each established is already written down above.
 
-- `impala/jspeg2.jspeg` — the M1 emission prototype. Superseded: the shape that shipped is *different*
+- The M1 emission prototype — deleted. Superseded: the shape that shipped is *different*
   from it (no `_v`, no publish step — see the two wrong turns above), it still carried a literal
   `else if (false)` branch, and it was the only throwaway proof sitting in `impala/` beside the
   production grammars, where it would drift and mislead.

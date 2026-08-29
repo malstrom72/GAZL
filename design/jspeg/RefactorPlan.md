@@ -15,7 +15,7 @@ Two corrections to fold in when it starts:
 - The motivation is sized off "~50 `$$.` sites", which is really **126**.
 - **Re-read "holder" below as "the caller's meta slot".** Helpers like `binaryOp($op, $$, $r)` still fill
   a record the caller supplies and return nothing, which is what this plan is about; the wrapper object
-  that used to carry it is gone (see [`JSPEG2Plan.md`](JSPEG2Plan.md)). The `$$.` escape-hatch motivation
+  that used to carry it is gone (see [`ValueModel.md`](ValueModel.md)). The `$$.` escape-hatch motivation
   is void — `$$.field` is now an ordinary field access — so the remaining case for return-style helpers is
   readability and letting a rule build its value in one expression, not avoiding a sigil.
 

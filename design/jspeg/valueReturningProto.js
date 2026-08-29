@@ -1,4 +1,4 @@
-/* Hand-generated value-returning parser for jspegTest.jspeg, per the JSPEG 2 _val-register emission rules.
+/* Hand-generated value-returning parser for jspegTest.jspeg, per the _val-register emission rules.
    Validates the protocol (shared _val return register; $$ = per-rule local; tags = plain locals captured
    eagerly from _val; rule sets _val at its end iff it assigns $$) BEFORE the generator surgery. */
 
