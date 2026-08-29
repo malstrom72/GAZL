@@ -12,6 +12,12 @@
         function $$parser.hasOwn(obj, key) {
                 return Object.prototype.hasOwnProperty.call(obj, key);
         }
+
+        // The current rule's variable map. It used to be threaded down through holders
+        // (`$$.vr`); with value-returning rules there is no holder to carry it, and rules never
+        // nest, so one global set by `Definition` is exactly equivalent.
+        var _vr = null;
+
 }
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -22,8 +28,8 @@ root		<-								{
 				( Spacing b=PikaBlock		{ $fn += $b.replace(/\x24\x24parser\./g, '') + ';' }
 				)? Spacing g:Grammar		{
 												$fn += $g;
-												$fn += "var _i=0,_im=0,_o={_:void 0},_b=root(_o);\n";
-												$fn += "return [_b,_o._,(_b?_i:_im)];\n})\n";
+												$fn += "var _i=0,_im=0,_val,_o={_:void 0},_b=root();\n";
+												$fn += "return [_b,_val,(_b?_i:_im)];\n})\n";
 												$$ = $fn;
 											}
 
@@ -43,35 +49,29 @@ Grammar		<-								{ $$ = '' }
 
 # ----------------------------------------------------------------------------------------------------------------------
 
-Definition	<-	id:Identifier LEFTARROW		{ $$.tag = '$'; $$.vi = 0; $$.vr = $vars = {} }
-					Expression				{
-								var _v = '';
-								var _p = '';
-								for (var _k in $vars) {
-									if (hasOwn($vars, _k)) {
-										if (_k.indexOf('.') !== -1) {
-											if ($vars[_k] !== '') {
-												_p += _k + $vars[_k] + ';';
-											}
-										} else {
-											_v += (_v !== '' ? ',' : '') + _k + $vars[_k];
-										}
+Definition	<-	id:Identifier LEFTARROW		{ _vr = {}; }
+					e:Expression				{
+								var _vl = '';
+
+								for (var _k in _vr) {
+									if (hasOwn(_vr, _k)) {
+										_vl += (_vl !== '' ? ',' : '') + _k + _vr[_k];
 									}
 								}
-								$$ = 'function ' + $id + '($){' + (_v === '' ? '' : ('var ' + _v + ';')) + _p
-                                                                                                        + 'return ' + $$ + '}'
+								$$ = 'function ' + $id + '(){' + (_vl === '' ? '' : ('var ' + _vl + ';'))
+                                                                                                        + 'return ' + $e + '}'
                                                                                         }
 
 # ----------------------------------------------------------------------------------------------------------------------
 
-Expression	<-								{ $s.vi = $$.vi + 1; $s.tag = $$.tag; $s.vr = $$.vr; $$ = '' }
-				s:Sequence					{ $$ = $s }
+Expression	<-
+				Sequence
 				( SLASH s:Sequence			{ $$ += '||' + $s }
 				)*							{ $$ = '(function(){var _b=_i;return ' + $$ + '})()' }
 
 # ----------------------------------------------------------------------------------------------------------------------
 
-Sequence	<-								{ $p.vi = $$.vi; $p.tag = $$.tag; $p.vr = $$.vr; $$ = '' }
+Sequence	<-								{ $$ = '' }
 				( p:(Prefix / Action)		{ $$ += ($$ !== '' ? '&&' : '') + $p }
 				)*							{ $$ += ($$ === '' ? 'true' : '||(_im=(_i>_im?_i:_im),_i=_b,false)') }
 
@@ -101,13 +101,13 @@ Action          <-      b=PikaBlock Spacing                     {
                                                                                                     } else if ($b.slice(0, 3) === '\x24\x24.') {
                                                                                                       var next = $b[3] || '';
                                                                                                       var keepDot = /[A-Za-z0-9_$]/.test(next);
-                                                                                                      s += '$';
+                                                                                                      s += '_val';
                                                                                                       if (keepDot) {
                                                                                                         s += '.';
                                                                                                       }
                                                                                                       $b = $b.slice(3);
                                                                                                     } else if ($b.slice(0, 2) === '\x24\x24') {
-                                                                                                      s += '$._';
+                                                                                                      s += '_val';
                                                                                                       $b = $b.slice(2);
                                                                                                     } else {
                                                                                                       var m = $b.slice(1).match(/^[A-Za-z_]+/);
@@ -115,10 +115,8 @@ Action          <-      b=PikaBlock Spacing                     {
                                                                                                       var id = $b.slice(0, e);
                                                                                                       s += id;
                                                                                                       $b = $b.slice(e);
-                                                                                                      if (!hasOwn($$.vr, id)) {
-                                                                                                        $$.vr[id] = '';
-                                                                                                      } else if ($$.vr[id] !== '' && $b[0] !== '.') {
-                                                                                                        s += '._';
+                                                                                                      if (!hasOwn(_vr, id)) {
+                                                                                                        _vr[id] = '';
                                                                                                       }
                                                                                                     }
                                                                                                   } else if ($b.slice(0, 2) === '//') {
@@ -141,7 +139,7 @@ Action          <-      b=PikaBlock Spacing                     {
 												
 # ----------------------------------------------------------------------------------------------------------------------
 
-Prefix		<-								{ $c.vi = $$.vi; $c.tag = $$.tag; $c.vr = $$.vr }
+Prefix		<-
 				AND c:Capture				{ $$ = '(function(){var _l=_i' + ',_x=' + $c + ';_i=_l;return _x})()' }
 				/ NOT c:Capture				{ $$ = '(function(){var _l=_i' + ',_x=' + $c + ';_i=_l;return !_x})()' }
 				/ Capture
@@ -149,34 +147,35 @@ Prefix		<-								{ $c.vi = $$.vi; $c.tag = $$.tag; $c.vr = $$.vr }
 # ----------------------------------------------------------------------------------------------------------------------
 
 
-Capture		<-	v:Variable EQUALS			{ if ($v !== '$._') $$.vr[$v] = ''; }
-						Tagged				{ $$ = '(function(){var _m=_i;return ' + $$ + '&&(' + $v + '=_s.slice(_m,_i),true)})()' }
+Capture		<-	v:Variable EQUALS			{ if ($v !== '_val') _vr[$v] = '' }
+						t:Tagged				{ $$ = '(function(){var _m=_i;return ' + $t + '&&(' + $v + '=_s.slice(_m,_i),true)})()' }
 				/ Tagged
 
 # ----------------------------------------------------------------------------------------------------------------------
 
-Tagged		<-	v:Variable COLON			{ $t.vi = $$.vi; if ($v !== '$._') { $t.tag = $v; ($t.vr = $$.vr)[$v] = '={}' } else $t.tag = '$' }
-					t:Suffix				{ $$ = $t }
+Tagged		<-	v:Variable COLON			{ if ($v !== '_val') { _vr[$v] = '={}'; _vr['_sv' + $v] = '' } }
+					t:Suffix				{ if ($v === '_val') $$ = $t; else { var _q = '_sv' + $v; $$ = '((' + _q + '=_val,_val=' + $v + ',(' + $t + '))&&(' + $v + '=_val,_val=' + _q + ',true)||(_val=' + _q + ',false))' } }
 				/ Suffix
 				
 # ----------------------------------------------------------------------------------------------------------------------
 
-Suffix		<-	Primary ( QUESTION			{ $$ = '(' + $$ + ',true)' }
+Suffix		<-	Primary
+				( QUESTION			{ $$ = '(' + $$ + ',true)' }
 						  / STAR			{ $$ = '((function(){while(' + $$ + ');})(),true)' }
 						  / PLUS			{ $$ = '((function(){for(var _n=0;' + $$ + ';++_n);return _n>0})())' }
 				)?
 
 # ----------------------------------------------------------------------------------------------------------------------
 
-Primary		<-	Identifier !LEFTARROW		{ $$ += '(' + $$.tag + ')' }
-				/ Literal					{
-												var l = ($$._).length;
-												if (l == 0) $$ = 'true';
-												else if (l == 1) $$ = '(_s[_i]===' + $$parser.dqEscape($$._) + ')&&(++_i,true)';
-												else $$ = '(_s.substr(_i,' + l + ')===' + $$parser.dqEscape($$._)
-														+ ')&&(_i+=' + l + ',true)';
+Primary		<-	id:Identifier !LEFTARROW	{ $$ = $id + '()' }
+				/ l:Literal					{
+											var n = ($l).length;
+											if (n == 0) $$ = 'true';
+											else if (n == 1) $$ = '(_s[_i]===' + $$parser.dqEscape($l) + ')&&(++_i,true)';
+											else $$ = '(_s.substr(_i,' + n + ')===' + $$parser.dqEscape($l)
+													+ ')&&(_i+=' + n + ',true)';
 											}
-				/ Class						{ $$ = '(!!_s[_i]&&' + $$parser.dqEscape($$._) + '.indexOf(_s[_i])>=0)&&(++_i,true)' }
+				/ c:Class					{ $$ = '(!!_s[_i]&&' + $$parser.dqEscape($c) + '.indexOf(_s[_i])>=0)&&(++_i,true)' }
 				/ DOT						{ $$ = '(!!_s[_i])&&(++_i,true)' }
 				/ OPEN Expression CLOSE
 
@@ -202,8 +201,7 @@ IdentCont	<-	IdentStart / [0-9]
 
 # ----------------------------------------------------------------------------------------------------------------------
 
-Variable	<-      ( '$$.' $$=PikaVar			{ $$ = '$.' + $$ }
-			  / '$$'				{ $$ = '$._' }
+Variable	<-      ( '$$'				{ $$ = '_val' }
 			  / $$=PikaVar				{ $$ = '$' + $$ }
 			) Spacing
 
@@ -223,7 +221,7 @@ Class		<-								{ $$ = '' }
 
 # ----------------------------------------------------------------------------------------------------------------------
 
-Range		<-	f:Char '-' t:Char			{ $$ = ''; for (var i = ($f._).charCodeAt(0), e = ($t._).charCodeAt(0); i <= e; ++i) $$ += String.fromCharCode(i); }
+Range		<-	f:Char '-' t:Char			{ $$ = ''; for (var i = ($f).charCodeAt(0), e = ($t).charCodeAt(0); i <= e; ++i) $$ += String.fromCharCode(i); }
 				/ $$:Char
 
 # ----------------------------------------------------------------------------------------------------------------------
