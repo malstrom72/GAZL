@@ -16,7 +16,7 @@ Two corrections to fold in when it starts:
 - **Re-read "holder" below as "the caller's meta slot".** Helpers like `binaryOp($op, $$, $r)` still fill
   a record the caller supplies and return nothing, which is what this plan is about; the wrapper object
   that used to carry it is gone (see [`ValueModel.md`](ValueModel.md)). The `$$.` escape-hatch motivation
-  is void — `$$.field` is now an ordinary field access — so the remaining case for return-style helpers is
+  is void - `$$.field` is now an ordinary field access - so the remaining case for return-style helpers is
   readability and letting a rule build its value in one expression, not avoiding a sigil.
 
 This plan tracks a cleanup of the Impala JSPEG grammar actions from

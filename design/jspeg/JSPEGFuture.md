@@ -85,28 +85,28 @@ problem.**
   grammar author alone. It pairs well with the value model (Problem 2), which makes a node simply the value
   a rule returns, but neither waits for the other.*
 
-## Problem 2: The `._` holder duality — **SOLVED (2026-08-28)**
+## Problem 2: The `._` holder duality - **SOLVED (2026-08-28)**
 
 Full record: [`ValueModel.md`](ValueModel.md). Summary of what landed, since the design below is
 no longer the plan of record:
 
 - `$$` **is** the value register (`_val`). No holder objects, no `._` convention, no rewriter
-  heuristics — so action text no longer depends on distant grammar context, which was the whole
+  heuristics - so action text no longer depends on distant grammar context, which was the whole
   complaint. Rules are param-less and still return a boolean for match/no-match.
 - Both grammars were migrated (`impala.jspeg` 110 rules, `jspeg.jspeg` 40), every step
   **byte-identical** against the golden corpus, plus NuXJS parity and the fuzzer.
 - The `$$.` holder-escape sites this section counted at ~126 did not need a mechanical migration:
-  `$$.field` simply became `_val.field`. What *did* need hand edits was small — three explicit
+  `$$.field` simply became `_val.field`. What *did* need hand edits was small - three explicit
   `._` derefs, and author locals whose names collided with the register.
 
 Two things the design below got wrong, worth keeping because they cost time:
 
 - **"tags become plain local variables"** is true, but a tag is also the *only* construct that
   touches the register non-locally: it must seed the register with its own slot and restore the
-  parent's — on failure as well as success, because PEG backtracking rewinds the input cursor and
+  parent's - on failure as well as success, because PEG backtracking rewinds the input cursor and
   not the register.
 - **A per-rule value local plus a publish step does not work.** It survives only while values are
-  *mutated*; a grammar whose values are *replaced* (strings — i.e. `jspeg.jspeg` itself) reads a
+  *mutated*; a grammar whose values are *replaced* (strings - i.e. `jspeg.jspeg` itself) reads a
   stale copy. Having `$$` be the register directly is what removes the failure mode.
 
 The pairing with Problem 1 noted above still holds and is still optional: in two-phase style `$$`
