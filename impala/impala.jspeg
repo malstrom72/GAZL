@@ -5417,9 +5417,9 @@ InitList    <-  '{' _                                                 { $d = ' '
                                                                         }
                   )* )?
               '}' _                                                  {
-                                                                        $$ = $n;   /* entry count, set at the END: the
+                                                                        $$ = $n;   /* entry count. (Set at the END historically because the
                                                                               `!(Identifier ':')` predicate compiles to
-                                                                              `Identifier($)` and clobbers `$$` mid-rule */
+                                                                              `Identifier()` and used to clobber `$$` mid-rule; predicates now restore it.) */
                                                                         if ($d.substr(1) !== '') {
                                                                             $$parser.declare(
                                                                                 $$parser.initElemRow(), 'globals',

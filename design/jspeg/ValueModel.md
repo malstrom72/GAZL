@@ -698,3 +698,36 @@ string-literal aware (it scans for `$`, `/` and whitespace only), and the first 
 `"var _i=0,_im=0,_val,…"` preamble string inside `root`'s own action — would be a false positive. A
 check would have to parse JS strings to be correct, which is not worth it for a hazard the
 byte-identical gate already catches: a shadowed register changes the generated output.
+
+## A predicate no longer disturbs the value — and why backtracking still does (2026-08-29)
+
+`&expr` and `!expr` now save and restore `_val` around the predicate, alongside the input cursor they
+already restored. A predicate consumes nothing by definition, so it should produce nothing either.
+This removes a wart the grammar had worked around: `InitList`'s `!(Identifier ':')` clobbered `$$`
+mid-rule, which is why its entry count was assigned at the very end. Verified with a discriminating
+case — a predicate whose inner rule assigns `$$` now leaves the outer value intact.
+
+**The obvious generalisation is wrong, and it is worth recording why.** "Every place that saves `_i`
+also saves `_val`" looks like the principled invariant: it would make a failed alternative unable to
+leak a value, and would have prevented the capture-restore bug this document describes. It does not
+survive contact with the grammars — **a leading action's effect on `$$` is load-bearing across
+alternatives**:
+
+```
+Literal  <-              { $$ = '' }
+            ['] ( !['] c:Char { $$ += $c } )* ['] Spacing
+          / ["] ( !["] c:Char { $$ += $c } )* ["] Spacing
+```
+
+The `{ $$ = '' }` initializer belongs to the *first* alternative. The double-quoted branch has none —
+it runs with `$$` still `''` **because the single-quoted branch failed after the initializer ran**.
+Restore the value at the alternation boundary and that branch starts from its seeded slot instead, so
+`$$ += $c` stringifies an object; the self-hosted compiler then emits `"[object Object]\\"` for a
+literal and diverges instead of reaching a fixed point (19561 → 21343 → 21664 → 94 bytes).
+
+So the ordering is deliberate, not accidental: **an action that runs before a failure is allowed to
+leave its mark.** Grammar authors rely on it to hoist a shared initializer out of parallel
+alternatives. Making the value obey backtracking would be a real change to JSPEG's semantics — it
+would require every alternative to initialize what it uses — and the payoff is small now that tags
+restore themselves. Predicates are the one case where "no side effect" is unambiguous, so that is the
+only place the restore belongs.

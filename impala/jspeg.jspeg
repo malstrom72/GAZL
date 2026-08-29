@@ -140,8 +140,8 @@ Action          <-      b=PikaBlock Spacing                     {
 # ----------------------------------------------------------------------------------------------------------------------
 
 Prefix		<-
-				AND c:Capture				{ $$ = '(function(){var _l=_i' + ',_x=' + $c + ';_i=_l;return _x})()' }
-				/ NOT c:Capture				{ $$ = '(function(){var _l=_i' + ',_x=' + $c + ';_i=_l;return !_x})()' }
+				AND c:Capture				{ $$ = '(function(){var _l=_i,_lv=_val' + ',_x=' + $c + ';_i=_l;_val=_lv;return _x})()' }
+				/ NOT c:Capture				{ $$ = '(function(){var _l=_i,_lv=_val' + ',_x=' + $c + ';_i=_l;_val=_lv;return !_x})()' }
 				/ Capture
 
 # ----------------------------------------------------------------------------------------------------------------------
