@@ -66,7 +66,30 @@ and `$$` is what it leaves behind when it does.
 - **`name = expr` (capture)** puts the *matched text* in `$name`. `$$ = expr` captures the text
   into `$$` itself.
 
+- **`&expr` and `!expr` (predicates)** test whether `expr` matches at this point *without consuming
+  input* — `&` succeeds when it matches, `!` when it does not. They leave `$$` exactly as they
+  found it, so you can look ahead with a rule that assigns `$$` and keep your own value.
+
 - **`$name` is the value.** `$name.field` is a field on it. Both mean exactly what they look like.
+
+### A failed alternative keeps what its actions did
+
+When an alternative fails partway, the input position rewinds to where that alternative started —
+but anything its actions already did to `$$` stands. This is deliberate, and grammars rely on it to
+hoist a shared initializer out of parallel alternatives:
+
+```
+Literal  <-              { $$ = '' }
+            ['] ( !['] c:Char { $$ += $c } )* ['] Spacing
+          / ["] ( !["] c:Char { $$ += $c } )* ["] Spacing
+```
+
+`{ $$ = '' }` sits in the first alternative, before the quote character that decides which branch
+matches. On a double-quoted literal the first branch fails immediately after that action — and the
+second branch runs with `$$` already `''`, which is exactly what it needs. Write the second branch
+assuming a fresh `$$` and it will append to whatever the caller left there instead.
+
+Predicates are the exception: they restore `$$`, because they consume nothing.
 
 Also available inside an action: `$$s` (the whole source string), `$$i` (the current index), and
 `$$parser` (the helper/rule table).
@@ -99,7 +122,8 @@ Enough to read the generated file or debug a miscompile:
 - `$$` compiles to `_val`, one module-level variable; `$$.field` to `_val.field`. That is why an
   untagged sub-rule shares your value: it is literally the same variable.
 - A tag saves `_val`, gives the sub-rule a fresh slot, then restores — on failure as well as
-  success, since backtracking rewinds the input but not `_val`.
+  success, since an alternative that fails rewinds `_i` but deliberately not `_val` (above).
+- `&`/`!` compile to a wrapper that saves both `_i` and `_val` and puts both back.
 - `$$s`/`$$i` compile to `_s`/`_i`.
 
 ## Authoring Hazards
