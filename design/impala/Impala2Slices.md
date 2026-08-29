@@ -285,8 +285,8 @@ moves:
    (2026-07-29, `design/ParkedFeatures.md`); half-resolved cycles are the 2.0 rule and `extern` is the
    answer. Kept here as the plan of record. Precondition: finish thinning the fat inline actions into
    `$$parser` (see the architecture note above, and `design/jspeg/RefactorPlan.md` for the adjacent
-   return-style cleanup on the same surface) - worth doing on its own, since it also shrinks what a
-   later "JSPEG 2" would have to migrate. Not gated on the body-level AST rework - the split is in
+   return-style cleanup on the same surface) - worth doing on its own, since it also shrank what the
+   value-model change had to migrate. Not gated on the body-level AST rework - the split is in
    "declaration-level vs body-level two-phase" above. Done when
    `tests/impala/sources/importcycle/odd.impala` builds as a root with its `extern` deleted.
 

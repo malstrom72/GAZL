@@ -506,8 +506,8 @@ them - an existing `extern` stays correct and keeps compiling - so this is a pur
 breaking change, and nothing written against 2.0 has to be revisited.
 
 Its precondition is worth doing regardless: finishing the thinning of fat inline actions into `$$parser`
-methods (`design/jspeg/RefactorPlan.md` is the adjacent cleanup on the same surface) also shrinks the migration
-that "JSPEG 2" would face (`design/jspeg/JSPEGFuture.md` Problem 2). Do not treat collect mode as gated on JSPEG 2
+methods (`design/jspeg/RefactorPlan.md` is the adjacent cleanup on the same surface) also shrank the migration
+the value model faced (`design/jspeg/JSPEGFuture.md` Problem 2, done). Do not treat collect mode as gated on that
 or on the body-level AST rework - it is gated on neither.
 
 ### Precompiled `.gazl` blob imports
