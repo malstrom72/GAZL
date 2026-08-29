@@ -53,14 +53,6 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
     }
 
     /** turn arguments into a real Array (optional from-index) */
-    function args(src, from) {
-        var start = (arguments.length > 1 ? from : 0);
-        var a = [];
-        for (var i = start; i < src.length; i++) {
-            a.push(src[i]);
-        }
-        return a;
-    }
 
     /** string utilities */
     function replace(str, sub, by) {
@@ -93,15 +85,6 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
 
 
     /** math/random helpers */
-    function random() {
-        return Math.random();
-    }
-    function floor(x) {
-        return Math.floor(x);
-    }
-    function time() {
-        return (new Date()).getTime();
-    }
 
 
     /* --------------------------------
@@ -4598,7 +4581,7 @@ var _sn = strideStruct(field.elem);
         } else {
             for (var i = 0; i < 1000; ++i) {
                 randomId =
-                    floor(random() * 0xFFFFFFFF) ^ time();
+                    Math.floor(Math.random() * 0xFFFFFFFF) ^ (new Date()).getTime();
             }
         }
 

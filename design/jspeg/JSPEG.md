@@ -187,7 +187,11 @@ Impala parity tests and the Impala CLI are documented in `ImpalaJS.md`.
 
 ## Programmatic Notes
 
-JSPEG began as a direct translation of the old PPEG grammar into JavaScript. The
-JavaScript action library embedded in `impala.jspeg` mirrors the legacy helper
-set so grammar actions keep the established semantics without keeping the old
-implementation in the active tree.
+JSPEG began as a direct translation of the old PPEG grammar into JavaScript, which is why the
+syntax looks the way it does — rules, tags, captures and inline actions all carry over.
+
+The prelude at the top of `impala.jspeg` is ordinary JavaScript, not a compatibility layer. Most of
+it is the Impala compiler itself — meta records, the symbol table, diagnostics, signature rendering.
+The rest is a short list of small utilities that exist because the generated compiler has to run
+under NuXJS as well as Node: `replace` (replace-all), `find` / `span` / `rspan` (character
+scanning), `map` (building handler tables) and `iterate` (array walks).
