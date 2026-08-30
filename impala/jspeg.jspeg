@@ -11,6 +11,16 @@
                 return Object.prototype.hasOwnProperty.call(obj, key);
         }
 
+        function $$parser.classRangeError(s, i) {
+                var line = 1, col = 1;
+                for (var k = 0; k < i - 1; ++k) {
+                        if (s.charCodeAt(k) === 10) { ++line; col = 1; } else { ++col; }
+                }
+                throw new Error("character class at line " + line + ":" + col
+                        + ": '-' before ']' makes a range ending at the class terminator."
+                        + " Escape it as \\] for a real range to ']', or put '-' first for a literal dash");
+        }
+
         // The current rule's variable map. It used to be threaded down through holders
         // (`$$.vr`); with value-returning rules there is no holder to carry it, and rules never
         // nest, so one global set by `Definition` is exactly equivalent.
@@ -210,7 +220,8 @@ Class		<-								{ $$ = '' }
 
 # ----------------------------------------------------------------------------------------------------------------------
 
-Range		<-	f:Char '-' t:Char			{ $$ = ''; for (var i = ($f).charCodeAt(0), e = ($t).charCodeAt(0); i <= e; ++i) $$ += String.fromCharCode(i); }
+Range		<-	Char '-' &']'				{ $$parser.classRangeError($$s, $$i) }
+				/ f:Char '-' t:Char			{ $$ = ''; for (var i = ($f).charCodeAt(0), e = ($t).charCodeAt(0); i <= e; ++i) $$ += String.fromCharCode(i); }
 				/ $$:Char
 
 # ----------------------------------------------------------------------------------------------------------------------

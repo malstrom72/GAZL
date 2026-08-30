@@ -148,6 +148,10 @@ verifiable from `impala/jspeg.jspeg` and from the generated `impalaCompiler.js`.
   array walks, `map` for building a table, `replace` for replace-all, `find`/`span`/`rspan` for
   character scanning. `nuxjsParityTests.js` compiles the same programs under both engines and
   byte-compares, so a slip here fails the gate rather than the user.
+- **In a character class, `-` binds as a range even before `]`** - `[+-]` is a range from `+` to
+  the class terminator, not "plus or minus" (regex habits do not apply; `Range <- Char '-' Char`
+  follows Ford's PEG). The compiler refuses the unescaped spelling with a line:column diagnostic.
+  Write `[-+]` for a literal dash, or `[+-]]` if you really mean a range ending at `]`.
 - **Never declare `_val`, `_s` or `_i` in an action.** An action body is wrapped in
   `(function(){ … })()`, so a `var` of one of those names shadows the parser variable that `$$`,
   `$$s` and `$$i` compile to. The failure is a *silent miscompile*: the action writes its own local,
