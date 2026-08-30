@@ -1134,18 +1134,6 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         if (node == null || (typeof node !== 'object' && typeof node !== 'function')) {
             return newMetaSlot();
         }
-        /* A PARSE NODE carries its meta in the value slot `_`; anything else IS the record. Only a node
-           with no operands of its own can be the former, which is why the two tests belong together -
-           asking them separately put an `operands === undefined` branch inside the `else` of
-           `operands !== undefined`, where it could never be false, and duplicated the ensure block. */
-        if (node.operands === undefined && Object.prototype.hasOwnProperty.call(node, '_')) {
-            var slot = node._;
-            if (!slot || slot.operands === undefined) {
-                slot = newMetaSlot();
-                node._ = slot;
-            }
-            return slot;
-        }
         if (!Array.isArray(node.operands)) {                      /* absent or wrong type: give it three */
             node.operands = [ undefined, undefined, undefined ];
         } else {
@@ -1161,12 +1149,6 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         }
         return node;
     }
-
-    createParserContext = function () {
-        return {
-            _: newMetaSlot()
-        };
-    };
 
     /* overwrite the fields of an existing meta object */
     function normaliseVoid(value) {
@@ -4723,14 +4705,7 @@ function DIGIT(){return (function(){var _b=_i;return (!!_s[_i]&&"0123456789".ind
 function ASCII(){return (function(){var _b=_i;return (function(){var _l=_i,_lv=_val,_x=(!!_s[_i]&&"\u0000\u0001\u0002\u0003\u0004\u0005\u0006\u0007\b\t\n\u000b\f\r\u000e\u000f\u0010\u0011\u0012\u0013\u0014\u0015\u0016\u0017\u0018\u0019\u001a\u001b\u001c\u001d\u001e\u001f ¡¢£¤¥¦§¨©ª«¬­®¯°±²³´µ¶·¸¹º»¼½¾¿ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖ×ØÙÚÛÜÝÞßàáâãäåæçèéêëìíîïðñòóôõö÷øùúûüýþÿ".indexOf(_s[_i])>=0)&&(++_i,true);_i=_l;_val=_lv;return !_x})()&&(!!_s[_i])&&(++_i,true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function _(){return (function(){var _b=_i;return ((function(){while((function(){var _b=_i;return ((function(){for(var _n=0;(!!_s[_i]&&" \t\r\n".indexOf(_s[_i])>=0)&&(++_i,true);++_n);return _n>0})())||(_im=(_i>_im?_i:_im),_i=_b,false)||COMMENT()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function COMMENT(){return (function(){var _b=_i;return (_s.substr(_i,2)==="/*")&&(_i+=2,true)&&((function(){while((function(){var _b=_i;return (function(){var _l=_i,_lv=_val,_x=(_s.substr(_i,2)==="*/")&&(_i+=2,true);_i=_l;_val=_lv;return !_x})()&&(!!_s[_i])&&(++_i,true)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(_s.substr(_i,2)==="*/")&&(_i+=2,true)||(_im=(_i>_im?_i:_im),_i=_b,false)||(_s.substr(_i,2)==="//")&&(_i+=2,true)&&((function(){while((function(){var _b=_i;return (function(){var _l=_i,_lv=_val,_x=(!!_s[_i]&&"\r\n".indexOf(_s[_i])>=0)&&(++_i,true);_i=_l;_val=_lv;return !_x})()&&(!!_s[_i])&&(++_i,true)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
-function createParserContext() {
-        return {
-                _: { operator: undefined, type: undefined, operands: [ undefined, undefined, undefined ] }
-        };
-}
-var _i=0,_im=0,_o=createParserContext();
-_o.options=_hostOptions;
-var _val=_o._,_b=root();
+var _i=0,_im=0,_val=newMetaSlot(),_b=root();
 return [_b,_val,(_b?_i:_im)];
 });
 function impalaCompiler(source, options) {

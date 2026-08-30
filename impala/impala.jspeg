@@ -1121,18 +1121,6 @@
         if (node == null || (typeof node !== 'object' && typeof node !== 'function')) {
             return newMetaSlot();
         }
-        /* A PARSE NODE carries its meta in the value slot `_`; anything else IS the record. Only a node
-           with no operands of its own can be the former, which is why the two tests belong together -
-           asking them separately put an `operands === undefined` branch inside the `else` of
-           `operands !== undefined`, where it could never be false, and duplicated the ensure block. */
-        if (node.operands === undefined && Object.prototype.hasOwnProperty.call(node, '_')) {
-            var slot = node._;
-            if (!slot || slot.operands === undefined) {
-                slot = newMetaSlot();
-                node._ = slot;
-            }
-            return slot;
-        }
         if (!Array.isArray(node.operands)) {                      /* absent or wrong type: give it three */
             node.operands = [ undefined, undefined, undefined ];
         } else {
@@ -1148,12 +1136,6 @@
         }
         return node;
     }
-
-    $$parser.createParserContext = function () {
-        return {
-            _: newMetaSlot()
-        };
-    };
 
     /* overwrite the fields of an existing meta object */
     function normaliseVoid(value) {
