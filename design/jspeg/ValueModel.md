@@ -51,7 +51,7 @@ not one.
 
 - **Upward - the value.** `$._` is the rule's semantic result. This is the channel this change is about.
 - **Downward - scope context.** In the self-grammar, `Definition` sets `$$.tag/vi/vr` and the `Expression`
-  sub-rule *reads them back* from the same holder it is handed ([`jspeg.jspeg:46-47,67`](../../impala/jspeg.jspeg)) -
+  sub-rule *reads them back* from the same holder it is handed (pre-migration `jspeg.jspeg`) -
   the holder is threaded *down* to pass the current variable-numbering scope into nested expressions.
 
 Measured on the two grammars (2026-08-28):
@@ -173,7 +173,7 @@ holder. Options (to weigh before M3):
 Recommendation leans (1): it matches how impala.jspeg already threads cross-rule state and keeps `$$` a pure
 value everywhere. The choice gates M3; the other ~119 sites remain the mechanical migration the plan assumed.
 
-### DECISION (2026-08-28): return-and-merge (option 2) for the hard core
+### DECISION (2026-08-28): return-and-merge (option 2) for the hard core - superseded: the hard core later landed as pure arrow flips (see M3 COMPLETE)
 
 `Argument` *returns* its contribution instead of mutating a shared record; `FuncCall` folds the list. No shared
 mutable state - `$$` is a pure value everywhere, the strongest end-state. Concrete shape:
@@ -279,7 +279,7 @@ in the generator.
   just the node under construction and the holder question evaporates), but neither waits for the other and this
   plan does not touch the `dry`/`FuncCall` speculation patches.
 
-## Current state (verified 2026-08-28)
+## State at the start (verified 2026-08-28)
 
 - **125** `$$.` holder-escape sites in `impala/impala.jspeg` - the mechanical migration surface.
 - **0** return-style `Ret(` helpers present (RefactorPlan is genuinely 0/8, nothing to unwind).
@@ -677,27 +677,20 @@ them, and what each established is already written down above.
 `valueReturningProto.js`, `dualModeProto.js` and `selfContainerProto.jspeg` are kept: they are the
 runnable evidence behind the protocol decision, and the plan cites them as such.
 
-### Authoring hazard: names an action must not declare
+### Authoring hazard: reserved action locals (history)
 
-An action's body is wrapped in `(function(){ … })()`, so a `var` it declares **shadows** the generated
-parser variable of the same name for the rest of that action. The rewriter substitutes three names into
-action bodies, and these are the ones that matter:
+The rule itself lives in JSPEG.md's Authoring Hazards ("Never declare `_val`, `_s` or `_i` in an
+action" - a shadow is a silent miscompile). Record of how it was handled:
 
-| you write | becomes | so never declare |
-|---|---|---|
-| `$$`  | `_val` | `var _val` |
-| `$$s` | `_s`   | `var _s`   |
-| `$$i` | `_i`   | `var _i`   |
-
-A collision is a **silent miscompile**: the action writes its own local, the register keeps a stale
-value, and nothing errors. Two were hit during this migration (`BracedEntry`'s `_v`, `Definition`'s
-`_v`) back when the register was named `_v`; both were renamed (`_e`, `_vl`).
-
-Enforcing this in the `Action` rewriter was considered and **rejected**: the rewriter is not
-string-literal aware (it scans for `$`, `/` and whitespace only), and the first real candidate - the
-`"var _i=0,_im=0,_val,…"` preamble string inside `root`'s own action - would be a false positive. A
-check would have to parse JS strings to be correct, which is not worth it for a hazard the
-byte-identical gate already catches: a shadowed register changes the generated output.
+- Two collisions were hit during the migration (`BracedEntry`'s and `Definition`'s author locals,
+  back when the register was named `_v`); both were renamed (`_e`, `_vl`).
+- Enforcing the rule in the `Action` rewriter was **rejected**: it is not string-literal aware, and
+  `root`'s own action emits a `"var _i=0,…"` preamble *string* that would false-positive.
+- Enforcement landed one level up instead (2026-08-30): `updateJSPEG.js` refuses to harden
+  `impala.jspeg` if any action declares a reserved local. `jspeg.jspeg`, which owns the false
+  positive, stays covered by the doc alone - its 40 rules are stable.
+- The byte-identical gate is NOT sufficient by itself: a shadow on a corpus-uncovered path (an
+  error-message builder, say) changes nothing the gate compares.
 
 ## A predicate no longer disturbs the value - and why backtracking still does (2026-08-29)
 
@@ -730,4 +723,5 @@ leave its mark.** Grammar authors rely on it to hoist a shared initializer out o
 alternatives. Making the value obey backtracking would be a real change to JSPEG's semantics - it
 would require every alternative to initialize what it uses - and the payoff is small now that tags
 restore themselves. Predicates are the one case where "no side effect" is unambiguous, so that is the
-only place the restore belongs.
+only place the restore belongs. The author-facing statement of these semantics lives in JSPEG.md
+("A failed alternative keeps what its actions did").
