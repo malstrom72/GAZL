@@ -32,14 +32,10 @@
         return r;
     }
 
-
-
     /** simple assertion */
     function assert(cond, msg) {
         if (!cond) throw new Error("Assertion failed" + (msg ? ": " + msg : ""));
     }
-
-    /** turn arguments into a real Array (optional from-index) */
 
     /** string utilities */
     function replace(str, sub, by) {
@@ -68,10 +64,6 @@
     function ordinal(ch) {
         return ((ch + "").charCodeAt(0)) & 0xFF;
     }
-
-
-
-    /** math/random helpers */
 
 
     /* --------------------------------
@@ -2403,9 +2395,6 @@
     /* One declarator, COPIED out of a VarDecl/ArrayDecl node for an ArgsDecl/LocalsDecl list. The copy
        is required, not tidiness: the declarator node is pooled and recycled by the parser, so anything
        holding a reference would later see whichever declarator came last. */
-    /* Positional, not `declEntry($v)`: bare `$v` in an action is the rule's RETURN VALUE (`$v._`), while
-       `$v.name` is the context field the declarator actually wrote - so passing the node whole silently
-       hands over an empty object and every local is declared as `$undefined`. */
     $$parser.declEntry = function (type, elem, struct, words, name, size, dims, at) {
         return { type: type, elem: elem, struct: struct, words: words, name: name, size: size,
                  dims: dims, at: at };
@@ -5382,9 +5371,7 @@ InitList    <-  '{' _                                                 { $d = ' '
                                                                         }
                   )* )?
               '}' _                                                  {
-                                                                        $$ = $n;   /* entry count. (Set at the END historically because the
-                                                                              `!(Identifier ':')` predicate compiles to
-                                                                              `Identifier()` and used to clobber `$$` mid-rule; predicates now restore it.) */
+                                                                        $$ = $n;   /* entry count */
                                                                         if ($d.substr(1) !== '') {
                                                                             $$parser.declare(
                                                                                 $$parser.initElemRow(), 'globals',
