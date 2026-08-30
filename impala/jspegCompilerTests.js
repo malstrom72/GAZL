@@ -3843,4 +3843,30 @@ function runGazlText(gazlPath, text, cmdArgs, label) {
 	console.log("impala.jspeg compiler compiles tail self-recursion to the TAIL instruction under --gazl2");
 }
 
+/* Character classes keep Ford's range semantics: '-' binds as a range even before ']'. The
+   unescaped spelling would end the range at the class terminator and swallow text up to the next
+   ']', so the compiler refuses it with a positioned diagnostic; the escaped spelling is the real
+   range, and dash-first is the literal dash. */
+{
+	let caught;
+	try {
+		compileJSPEG("root <- [+-] !.\n");
+	} catch (err) {
+		caught = err;
+	}
+	assert(caught && caught.message.includes("character class at line 1:11"),
+		`unescaped ']' range endpoint must throw the positioned class diagnostic, got: ${caught && caught.message}`);
+
+	const [dashFirstOk] = compileJSPEG("root <- [-+] !.\n");
+	assert(dashFirstOk, "dash-first class must compile (literal dash)");
+
+	const [escapedOk, escapedGenerated] = compileJSPEG("root <- [+-\\]] !.\n");
+	assert(escapedOk, "escaped range to ']' must compile");
+	let escapedParse;
+	eval("escapedParse=" + escapedGenerated);
+	assert(escapedParse("5")[0] === true && escapedParse("]")[0] === true && escapedParse("^")[0] === false,
+		"[+-\\]] must be the Ford range '+'..']' (includes digits and ']', excludes '^')");
+	console.log("character class refuses an unescaped ']' range endpoint and keeps the escaped Ford range");
+}
+
 console.log("JSPEG regression suite completed successfully");
