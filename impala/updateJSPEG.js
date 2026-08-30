@@ -32,7 +32,9 @@ function mustReplace(text, pattern, replacement, label) {
 
 function applyImpalaHardening(source, grammar) {
 	let patched = source;
-	const reservedLocal = grammar.match(/\bvar\s[^;\n]*\b(_val|_s|_im|_i)\b/);
+	// First-declarator tripwire only: matching the whole statement false-positives on reserved
+	// names inside right-hand-side strings (GAZL2 has `var tag = '_i' + ...`).
+	const reservedLocal = grammar.match(/vars+(_val|_s|_im|_i)/);
 	if (reservedLocal) {
 		throw new Error("impala.jspeg action declares a reserved parser local: " + reservedLocal[0].trim());
 	}
