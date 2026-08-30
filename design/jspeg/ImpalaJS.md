@@ -117,13 +117,12 @@ labels are required.
 ## Regenerating the compiler
 
 - Run `node impala/updateJSPEG.js` to rebuild both `jspegCompiler.js` and `impalaCompiler.js`.
-- Hardened helpers (`metaSlot`, `makeMeta`, `assign`, `fail`, and
-  `createParserContext`) now live inside `impala/impala.jspeg`.
-  `updateJSPEG.js` applies `applyImpalaHardening` so the generated Impala bundle
-  adopts them even while `jspeg.jspeg` still emits legacy parser contexts.
-- `impalaCompiler.js` bootstraps its root context with a private
-  `createParserContext()` helper and keeps host state in parser-local options
-  instead of `globalThis`.
+- The compiler's helpers (`metaSlot`, `makeMeta`, `assign`, `fail`, ...) live in
+  `impala/impala.jspeg`'s prelude. `applyImpalaHardening` in `updateJSPEG.js` splices in only what
+  the generator cannot know - the host-options wrapper, the capture-slot initializer, the KEYWORD
+  word-list scanner and the root register seed - and throws if any patch fails to apply.
+- `impalaCompiler.js` seeds its value register with a fresh meta slot at startup and keeps host
+  state in parser-local options instead of `globalThis`.
 - `impalaJsCompilerRunner.js` can load `impalaCompiler.js` verbatim because the
   grammar emits the hardened helpers directly; no runtime global patching remains.
 

@@ -17,9 +17,10 @@ p1 && p2 && ... || (_im = (_i > _im ? _i : _im), _i = _b, false)
 ```
 
 Any action that already ran keeps its effects. Worse, `&`/`!` predicates *evaluate actions too* -
-the `Prefix` codegen runs the captured expression (actions included) and restores only `_i`
-(`jspeg.jspeg:144-147`). Since the Impala compiler emits code and mutates symbol tables *from
-actions*, a speculative parse would emit phantom code.
+the `Prefix` codegen runs the captured expression (actions included) and restores `_i` and the
+value register, but has no way to undo an action's `$$parser` side effects. Since the Impala
+compiler emits code and mutates symbol tables *from actions*, a speculative parse would emit
+phantom code.
 
 `impala.jspeg` avoids hitting this at every backtrack point only because its actions are hand-placed
 at **sequence ends** - they fire after an alternative has committed, so ordered-choice / `?` / `*`
@@ -160,44 +161,19 @@ agents writing new 2.0 syntax will hit parse errors constantly.
 X, Y, or Z` (offset→line:col mapping is runner-side and trivial). Token rules get display names.
 Modest codegen change, no grammar changes, and it can land before any Impala 2.0 work.
 
-## Adjacent gap: the PikaScript emulation layer
+## Adjacent gap: the PikaScript emulation layer - DONE (2026-08-29)
 
-`impala.jspeg`'s prelude still carries a shim of hand-ported PikaScript builtins - `bake`, `evaluate`,
-`replace`, `char`, `ordinal`, `args`, and the `resetQueue`/`queueSize`/`pushBack`/`popBack`/`pushFront`/
-`popFront` wrappers over plain Arrays. They were the cheapest possible port from the PikaScript original,
-not a design. Most are now removable, but the set splits three ways (call-site counts exclude each
-definition itself, verified 2026-08-11):
+The shim is gone: `bake` (an `eval` on error text whose brace interpolation never actually fired -
+`typeError` substitutes before calling `fail`), the dead `args`/queue wrappers, and the
+`evaluate`/`resetQueue`/`floor`/`random`/`time` aliases were deleted or inlined. `noop` stays: it is
+passed by name into the `UNARY_OPS` table. What remains in the prelude is not a shim - `replace`
+(global replace, shorter than `split`/`join` at 11 sites), `char`/`ordinal` (a `& 0xFF` mask over
+`fromCharCode`/`charCodeAt`), `find`/`span`/`rspan` (character scanning), and `map`/`iterate`
+(NuXJS-safe table building and array walks).
 
-- **Already dead - `args`, `queueSize`, `pushBack`, `popBack`, `pushFront`, `popFront`.** Zero call
-  sites. Pure deletion.
-- **Live but a pure alias - `evaluate` (1 site) is `JSON.parse`; `resetQueue` (2 sites) is `q.length = 0`.**
-  Inline and delete.
-- **Keep - `replace` (11 sites), `char`/`ordinal` (3/2), `find`/`span`/`rspan`.** These are NOT
-  builtin-aliases. `replace(s, a, b)` is a GLOBAL replace - `String.prototype.replace` with a string
-  argument hits only the first match - so each call site would grow to `s.split(a).join(b)`; the helper
-  spells them shorter, not longer (the reverse of what this note used to claim). `char`/`ordinal` carry
-  a `& 0xFF` mask over `fromCharCode`/`charCodeAt`. Inlining any of these ADDS lines and loses meaning.
-
-**`bake` is the one that bites - and it turns out to be functionally dead.** Every `$$parser.fail`
-message is passed through it, and it **`eval`s whatever sits between braces**. This note used to say that
-is how `{$type1}` interpolation in `typeError` works - it is NOT: the `typeError` helper does its own
-substitution with `replace(desc, '{$type1}', verboseType(...))` BEFORE it calls `fail`, so by the time
-`bake` sees the message the braces are already gone. `bake`'s eval therefore never fires for
-interpolation; its only live effect is the HAZARD that a stray `{…}` in a diagnostic is executed as
-JavaScript. A struct row (`struct S { a : int }`) in an error message throws a `SyntaxError` from inside
-`eval` with nothing in the stack naming the real cause, so `E438` mangles its rows `{`->`(` to dodge it,
-and one other site (the E407 "Expected constant" message) redundantly double-bakes a brace-free string.
-Both are workarounds for a routine that was never needed.
-
-**What it would take:** delete `bake` outright - `fail` uses its `error` argument directly, the E438
-row-mangling and the E407 double-bake both drop out (E438's message regains its true `{ }` rendering),
-and NO `format(template, values)` replacement is required, because the interpolation the shim was
-credited with is already `replace`'s job. Then inline the two pure aliases and delete the six dead
-wrappers. Mechanical, fixture-gated, behaviour-preserving, and a net line reduction. The messages are
-covered by `impala/jspegCompilerTests.js` with substring assertions, so the `{ }` restoration surfaces
-as a golden check rather than a test break. NuXJS-safe by construction: every builtin the inlines lean
-on (`JSON.parse`, `arr.length =`, `split`/`join`, `fromCharCode`) is already exercised by the shim code
-being removed.
+One deviation from the plan as written: E438 keeps its `{`->`(` row mangling. With `bake` gone the
+swap is no longer a defence, but a struct row still reads better unbraced in a one-line message, so
+it stays as a formatting choice.
 
 ## Sequencing
 
@@ -208,7 +184,7 @@ fixtures.
 
 | When | Work | `impala.jspeg` impact | Ordering constraint |
 |---|---|---|---|
-| Any time, independent | Expected-set error reporting; finish `RefactorPlan.md` return-style helpers; retire the PikaScript emulation shim (delete `bake` - a vestigial eval hazard - plus six dead wrappers; inline `evaluate`/`resetQueue`) | none / mechanical; net line reduction | error reporting should exist by the time 2.0 *ships* (Diagnostics contract); none blocks Step 1 |
+| Any time, independent | Expected-set error reporting; finish `RefactorPlan.md` return-style helpers (the PikaScript emulation shim is retired - see the DONE section above) | none / mechanical | error reporting should exist by the time 2.0 *ships* (Diagnostics contract); none blocks Step 1 |
 | Before Steps 4/5, *if adopted* | Retire the speculation patches (`dry` + the `FuncCall` hard-fail) - flag/receiver tricks only *manage* it and don't generalize (see Problem 1); the general fix is two-phase, whose on-ramp is a recording board (needs state on a real object first, a superset of `RefactorPlan`); de-IIFE + char-class codegen | rule structure unchanged; actions move from emit-now to build-node | destructuring lookahead and import interface mode are the two features that lean on the side-effect weakness - the only real ordering edge in this document |
 | ~~Done 2026-08-28~~ | ~~Value-returning rules~~ - `$$` is the value register; see Problem 2 and [`ValueModel.md`](ValueModel.md) | byte-identical migration of both grammars | was optional; landed early |
 | Independent of JSPEG entirely | Two-phase AST in `impala.jspeg` (actions build nodes, a walk emits) | rules unchanged; every action rewritten as a node constructor | not a JSPEG change at all - possible today; convenient to do alongside it, not gated on it |

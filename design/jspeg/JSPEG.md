@@ -134,12 +134,11 @@ JavaScript* rather than a grammar error. These are the ones that have actually c
 verifiable from `impala/jspeg.jspeg` and from the generated `impalaCompiler.js`.
 
 - **Comment syntax depends on where you are.** At grammar level (between rules, between terms)
-  comments are `#`-to-end-of-line only - `Comment <- '#' (!EndOfLine .)* …` (`impala/jspeg.jspeg:241`).
+  comments are `#`-to-end-of-line only - `Comment <- '#' (!EndOfLine .)* …`.
   A `/* … */` there is a syntax error, and `updateJSPEG.js` reports it as a byte *index* into the
-  grammar with no line number. Inside an action block, `/* */` and `//` are both fine (`PikaComment`,
-  `impala/jspeg.jspeg:283`).
+  grammar with no line number. Inside an action block, `/* */` and `//` are both fine (`PikaComment`).
 - **The action rewriter walks into `/* */` comments.** It special-cases `//` (copied verbatim to the
-  newline, `impala/jspeg.jspeg:122-129`) but never `/*`, so `$` tokens inside a block comment are
+  newline) but never `/*`, so `$` tokens inside a block comment are
   rewritten and its line breaks are collapsed. A real example from `impala.jspeg`'s `VarDecl`: the
   source comment says “an end-of-rule `$$i`” and the generated file says “an end-of-rule `_i`”. Prose
   about `$$`/`$$i`/`$name` is safest in a `#` comment above the rule, or in a `//` comment.
