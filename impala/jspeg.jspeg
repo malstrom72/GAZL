@@ -1,8 +1,6 @@
-# this one works (except actions and vars), but is slow with:
-#
-#  . [a-z] (should create expressions instead of indexOf)
-#  . creating millions of anonymous functions every single time it needs a new local var
-#  . parsing through shared _i, perhaps we can return i instead (and < 0 is false?)
+# The self-hosting JSPEG grammar: compiles a PEG grammar (this file's own syntax) into one
+# self-contained JavaScript parser function. The language is documented in design/jspeg/JSPEG.md;
+# regenerate the checked-in compilers with `node impala/updateJSPEG.js`.
 
 {
         function $$parser.dqEscape(s) {
@@ -28,7 +26,7 @@ root		<-								{
 				( Spacing b=PikaBlock		{ $fn += $b.replace(/\x24\x24parser\./g, '') + ';' }
 				)? Spacing g:Grammar		{
 												$fn += $g;
-												$fn += "var _i=0,_im=0,_val,_o={_:void 0},_b=root();\n";
+												$fn += "var _i=0,_im=0,_val,_b=root();\n";
 												$fn += "return [_b,_val,(_b?_i:_im)];\n})\n";
 												$$ = $fn;
 											}
@@ -52,7 +50,6 @@ Grammar		<-								{ $$ = '' }
 Definition	<-	id:Identifier LEFTARROW		{ _vr = {}; }
 					e:Expression				{
 								var _vl = '';
-
 								for (var _k in _vr) {
 									if (hasOwn(_vr, _k)) {
 										_vl += (_vl !== '' ? ',' : '') + _k + _vr[_k];
@@ -97,14 +94,6 @@ Action          <-      b=PikaBlock Spacing                     {
                                                                                                       $b = $b.slice(3);
                                                                                                     } else if ($b.slice(0, 3) === '\x24\x24i') {
                                                                                                       s += '_i';
-                                                                                                      $b = $b.slice(3);
-                                                                                                    } else if ($b.slice(0, 3) === '\x24\x24.') {
-                                                                                                      var next = $b[3] || '';
-                                                                                                      var keepDot = /[A-Za-z0-9_$]/.test(next);
-                                                                                                      s += '_val';
-                                                                                                      if (keepDot) {
-                                                                                                        s += '.';
-                                                                                                      }
                                                                                                       $b = $b.slice(3);
                                                                                                     } else if ($b.slice(0, 2) === '\x24\x24') {
                                                                                                       s += '_val';
@@ -263,7 +252,7 @@ EndOfFile	<-	!.
 
 # ----------------------------------------------------------------------------------------------------------------------
 
-PikaVar		<-	[a-zA-Z_] ('.'? [a-zA-Z$_0-9])*
+PikaVar		<-	[a-zA-Z_] [a-zA-Z$_0-9]*
 
 # ----------------------------------------------------------------------------------------------------------------------
 

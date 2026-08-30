@@ -32,9 +32,13 @@ function mustReplace(text, pattern, replacement, label) {
 
 function applyImpalaHardening(source, grammar) {
 	let patched = source;
+	const reservedLocal = grammar.match(/\bvar\s[^;\n]*\b(_val|_s|_im|_i)\b/);
+	if (reservedLocal) {
+		throw new Error("impala.jspeg action declares a reserved parser local: " + reservedLocal[0].trim());
+	}
 	const impalaImplSignature = "var impalaCompilerImpl = (function(_s) {";
-	if (patched.includes(impalaImplSignature)) {
-		patched = patched.replace(
+	patched = mustReplace(
+		patched,
 			impalaImplSignature,
 			() => [
 				"var impalaCompilerImpl = (function(_s, _options) {",
@@ -47,10 +51,7 @@ function applyImpalaHardening(source, grammar) {
 				"\t? _hostOptions.sourceName",
 				"\t: undefined;",
 			].join("\n"),
-		);
-	}
-
-
+		"options prelude");
 	patched = mustReplace(patched, /\$[A-Za-z0-9_]*=\{\}/g,
 		(match) => match.replace("={}", "=newMetaSlot()"), "capture-slot init");
 
@@ -67,7 +68,7 @@ function applyImpalaHardening(source, grammar) {
 		"if(!_x)return true;" +
 		"_i=_b;" +
 		"}}_im=(_i>_im?_i:_im);_i=_b;return false}\n";
-	if (keywordFunctionRegex.test(patched) && !patched.includes("KEYWORD_WORDS")) {
+	{
 		const words = keywordWordsFrom(grammar);
 		const rows = [];
 		for (let i = 0; i < words.length; i += 11) {
@@ -76,30 +77,16 @@ function applyImpalaHardening(source, grammar) {
 		// Join the rows with the separator rather than computing a last-row test per row: the boundary
 		// condition has to be right for the GENERATED file to parse, in a script whose whole job is to
 		// produce a file nobody hand-edits.
-		patched = patched.replace(
+		patched = mustReplace(patched,
 			"var _hostOptions = _options || {};",
 			["var _hostOptions = _options || {};", "var KEYWORD_WORDS = [",
 					rows.join(",\n"), "];"].join("\n"),
-		);
+			"KEYWORD word list");
 		patched = mustReplace(patched, keywordFunctionRegex, keywordFunctionReplacement, "KEYWORD scanner");
 	}
-
-
-
-	const rootInitPattern = "var _i=0,_im=0,_val,_o={_:void 0},_b=root();";
-	const hardenedRootInit = "var _i=0,_im=0,_o=createParserContext();\n_o.options=_hostOptions;\nvar _val=_o._,_b=root();";
-	if (!patched.includes(hardenedRootInit)) {
-		patched = mustReplace(patched, rootInitPattern, hardenedRootInit, "root init");
-	}
-	if (!patched.includes("function createParserContext() {")) {
-		const globalHelper =
-			"function createParserContext() {\n" +
-			"        return {\n" +
-			"                _: { operator: undefined, type: undefined, operands: [ undefined, undefined, undefined ] }\n" +
-			"        };\n" +
-			"}\n";
-		patched = patched.replace(hardenedRootInit, `${globalHelper}${hardenedRootInit}`);
-	}
+	const rootInitPattern = "var _i=0,_im=0,_val,_b=root();";
+	const hardenedRootInit = "var _i=0,_im=0,_val=newMetaSlot(),_b=root();";
+	patched = mustReplace(patched, rootInitPattern, hardenedRootInit, "root init");
 
 	return patched;
 }
