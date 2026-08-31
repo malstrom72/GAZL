@@ -2142,6 +2142,27 @@ console.log("impala.jspeg compiler never bounds-checks ADDRESS formation");
 	console.log("impala.jspeg compiler decays a struct array field passed as an argument");
 }
 
+// At an assignment the address of a place IS the result, so it belongs in the target: `ADDp $p $p #.z.V`,
+// not `ADDp %0 $p #.z.V` followed by a MOVp. Materializing first reached the target only when the borrowed
+// temp happened to BE it - which an argument slot manages often enough to hide the cost, and a named local
+// can never do. All three base kinds, and the global one carries a folded `<A>` offset scratch: it rides
+// inside the operand, so the consumer frees it on the same path it frees every other operand.
+{
+	const out = compileWithJsImpala("struct V { int n; float g }\nglobal V array bank[4]\n"
+		+ "export function main() locals V pointer p, V pointer q, V v, int pointer ip {\n"
+		+ "\tp = &global bank[0]; p = &p[1]; q = &global bank[3]; ip = &v.n;\n}\n", { randomId: 42 });
+	for (const [label, expected] of [
+		["a pointer base", /ADDp \$p \$p #\.z\.V/],
+		["a global base with a folded offset", /ADDp \$q &bank #<[A-Za-z]>/],
+		["a local base with a field offset", /ADRL \$ip \$v:\.o\.V\.n \*0/],
+	]) {
+		assert(expected.test(out), "place address (" + label + "): not emitted into the target\n" + out);
+	}
+	assert(!/MOVp \$(p|q|ip) %/.test(out),
+		"place address: copied through a temp instead of landing in the target\n" + out);
+	console.log("impala.jspeg compiler emits a place's address straight into its assignment target");
+}
+
 // E441 asked its question at an assignment and at an argument, but an INITIALIZER reaches the data rows
 // through makeConstant, which knows a type and not a funcptr TYPE - so every declaration door stored a
 // function of any shape under a name promising one shape, and published `: TickFn` in the signature row

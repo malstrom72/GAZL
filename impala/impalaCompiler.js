@@ -3237,6 +3237,29 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         return a;
     };
 
+    /* The same address as ONE DEFERRED instruction on the record itself, for the sites where the address
+       IS the result: an assignment or an argument then emits it straight into its target (`ADDp $p $p
+       #.z.Voice`, `ADRL %3 $v:off`) instead of a temp plus a MOVp. ADRL for a local, ADDp for a
+       pointer/global base carrying an offset, a plain move of the base without one. An offset scratch
+       rides inside the operand (`#<D>`, `$v:<D>`), so whoever consumes the meta frees it on the same
+       path it frees every other operand. A local frame place holding a runtime index is the one address
+       that takes two instructions: it materializes, and the deferred meta is a move of the result. */
+    placeAddressMeta = function (place) {
+        place = metaSlot(place);
+        if (place.baseKind === 'local' && place.dynIndex !== undefined) {
+            makeMeta(place, ':=', 'p', undefined, placeAddress(place), undefined);
+            return;
+        }
+        var off = foldOffset(place.offParts);
+        if (place.baseKind === 'local') {                          /* `*0` ALWAYS - see the note on ADRL spans below */
+            makeMeta(place, '=&', 'p', undefined, place.base + (off ? ':' + off : ''), '*0');
+        } else if (off) {
+            makeMeta(place, '+', 'p', undefined, place.base, '#' + off);
+        } else {
+            makeMeta(place, ':=', 'p', undefined, place.base, undefined);
+        }
+    };
+
     /* ADRL SPANS: `*0` unless the compiler owns every access through the pointer.
        ------------------------------------------------------------------------------------------
        `ADRL base *N` is defined by the JIT's aliasing rule (design/jit/JitAliasingRegAlloc.md on the
@@ -3979,15 +4002,7 @@ var _sn = strideStruct(field.elem);
            same decay. */
         if (operator === '&' && expr.place) {
             var structName = expr.struct, arrayElem = expr.arrayOf;   /* both read BEFORE makeMeta clears the place */
-            if (expr.baseKind === 'local' && (!expr.offParts || expr.offParts.length === 0) && expr.dynIndex === undefined) {
-                /* a whole local's address is a single ADRL with no offset scratch - leave it DEFERRED as
-                   '=&' so an assignment emits ADRL straight into its target ($p) instead of a temp + MOVp,
-                   exactly like &scalar / &array[i] defer in reference() */
-                var sz = '*0';                                /* ALWAYS `*0` - see the note on ADRL spans above. */
-                makeMeta(expr, '=&', 'p', undefined, expr.base, sz);
-            } else {                                          /* offset fold or global/pointer base: materialize now */
-                makeMeta(expr, ':=', 'p', undefined, placeAddress(expr), undefined);
-            }
+            placeAddressMeta(expr);                  /* deferred, so `p = &p[1]` is one ADDp into $p */
             setElem(expr, (arrayElem !== undefined ? arrayElem
                     : (structName !== undefined ? structDesc(structName) : undefined)));
             return;

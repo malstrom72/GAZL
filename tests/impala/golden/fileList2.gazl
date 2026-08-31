@@ -150,8 +150,7 @@ initFilesIfNecessary:	FUNC	; signature func initFilesIfNecessary() -> void @ fil
 		CALL ^assertFail %0 *1
 	.a1:	MOVi $index #0 	; index = 0
 		! MULi <A> #BUILT_IN_FILE_COUNT #.z.File	; filePointer = &global FILES[BUILT_IN_FILE_COUNT]
-		ADDp %0 &FILES #<A>
-		MOVp $filePointer %0 
+		ADDp $filePointer &FILES #<A>
 		MOVp $namePointer &FILE_NAMES:0 	; namePointer = &global FILE_NAMES[0, 0]
 		MOVp $datePointer &FILE_DATES:0 	; datePointer = &global FILE_DATES[0, 0]
 	.l2:	MOVi %1 $index 	; while (findFirmwarePatch(index, MAX_FILE_NAME_LENGTH, namePointer, &size, datePointer) == 1) 
@@ -169,8 +168,7 @@ initFilesIfNecessary:	FUNC	; signature func initFilesIfNecessary() -> void @ fil
 		POKE $filePointer #.o.File.size %0
 		POKE $filePointer #.o.File.date $datePointer	; filePointer->date = datePointer
 		ADDi $index $index #1	; index = index + 1
-		ADDp %0 $filePointer #.z.File	; filePointer = &filePointer[1]
-		MOVp $filePointer %0 
+		ADDp $filePointer $filePointer #.z.File	; filePointer = &filePointer[1]
 		MULi %0 $index #.d.FILE_NAMES.0	; namePointer = &global FILE_NAMES[index, 0]
 		ADDp $namePointer &FILE_NAMES %0
 		MULi %0 $index #.d.FILE_DATES.0	; datePointer = &global FILE_DATES[index, 0]

@@ -51,8 +51,7 @@ main:	FUNC	; signature func main() -> void @ structArrays.impala:26:1
 		MOVf %1 $vlocals:<B> 
 		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ structArrays.impala:38:29
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structArrays.impala:38:40
-		ADDp %0 &bank #.z.Voice	; vp = &global bank[1]
-		MOVp $vp %0 
+		ADDp $vp &bank #.z.Voice	; vp = &global bank[1]
 		PEEK %1 $vp #.o.Voice.note	; printInt(vp->note)
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ structArrays.impala:41:20
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structArrays.impala:41:31
