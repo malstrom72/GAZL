@@ -1,0 +1,60 @@
+/*
+	Regression: a `switch` range the HOST supplies is a window this build happens to select, so an arm
+	outside it is UNREACHABLE, not wrong - `design/impala/TwoStageConstants.md`. Above the window that
+	always worked, because the offset is only a table index `SWCH` never looks up. Below it, the offset
+	was pasted into the LABEL TEXT and `.s0.-4` killed the whole module at load: one direction fell
+	dead, the other refused to build. Each case under a SYMBOLIC range now carries an assemble-time
+	`! LSSi <off> #0 @.gN` that skips just its label, so both directions drop out alike.
+
+	What the golden pins:
+	  - one guard per case value, not per arm  (`case 0, 5` guards each independently)
+	  - guards nest: the skip region is ONE line, so no two are ever active at once
+	  - a LITERAL range emits NO guard - there Impala knows the answer and E444 says so at compile time
+*/
+const int DEBUG = 0
+
+const int LO;
+const int HI;
+
+// Symbolic window, one arm covering two values: each label is guarded on its own.
+function pick(int x) returns int r
+{
+	r = 0;
+	switch (x == LO to HI) {
+		case 0, 5: r = 55;
+		default: r = 99;
+	}
+}
+
+// Nested symbolic windows - the inner guards sit inside the outer arm.
+function pair(int a, int b) returns int r
+{
+	r = 0;
+	switch (a == LO to HI) {
+		case 0: {
+			switch (b == LO to HI) {
+				case 0: r = 11;
+				case 3: r = 13;
+				default: r = 19;
+			}
+		}
+		case 3: r = 30;
+		default: r = 99;
+	}
+}
+
+// Literal range: no guard, because nothing is deferred.
+function fixed(int x) returns int r
+{
+	r = 0;
+	switch (x == 0 to 4) {
+		case 1: r = 1;
+		case 3: r = 3;
+		default: r = 0;
+	}
+}
+
+function main() returns int m
+{
+	m = pick(5) + pair(0, 3) + fixed(3);
+}

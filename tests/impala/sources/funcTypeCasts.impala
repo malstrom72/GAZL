@@ -1,0 +1,66 @@
+/*
+	Funcptr cast rules (E465, 2026-08-07) - the RUNTIME half: everything the compiler accepts here
+	must actually work, since a funcptr cast is a pure retype (one MOVp, no conversion).
+
+	  - a cast between same-shape named functypes, called through the result;
+	  - a chain of no-op casts, there and back;
+	  - untyped funcptr as the corridor: named -> untyped without a cast, untyped -> named with one,
+	    and the two-step (To)(funcptr)from spelling on a SAME-shape pair, since a run test must only
+	    call through shapes that are true;
+	  - a ()->float functype, so the return shape is exercised too;
+	  - nullfunc into a named type, compared and replaced;
+	  - a struct named p and a functype named i used at runtime - the identifiers collide with the
+	    compiler's own type codes, which the kind-prefixed descriptors (f857839) must keep apart.
+
+	The compile-time rejections (different shapes, non-funcptr operands, natives, the sealed E302
+	boundary) live in jspegCompilerTests.js - a .gazl cannot witness a program that does not compile.
+	Expected (GAZLCmd funcTypeCasts.gazl main): 42 63 15 5 7 11 8
+*/
+
+const int DEBUG = 1
+
+extern native printInt
+extern native printLF
+
+functype Cb(int a) returns int
+functype Dup(int a) returns int
+functype FloatMaker() returns float
+
+struct p { int lo; int hi }
+
+functype i(int a) returns int
+
+function dbl(int a) returns int r { r = a * 2; }
+function trpl(int a) returns int r { r = a * 3; }
+function five() returns float f { f = 5.0; }
+
+function main() locals Cb c, Dup d, funcptr u, FloatMaker fm, i cb, p v, int y
+{
+	c = dbl;
+	d = (Dup)c;								// same shape: free conversion
+	y = d(21); printInt(y); printLF();		// 42
+
+	d = (Dup)(Cb)d;							// there and back, both no-ops at runtime
+	c = (Cb)trpl;							// cast on a matching direct reference
+	y = c(21); printInt(y); printLF();		// 63
+
+	u = c;									// named -> untyped needs no cast
+	d = (Dup)(funcptr)u;					// the two-step spelling, on a shape that stays true
+	y = d(5); printInt(y); printLF();		// trpl(5) = 15
+
+	fm = five;
+	y = ftoi(fm());							// a ()->float shape, called through the named type
+	printInt(y); printLF();					// 5
+
+	cb = nullfunc;
+	if (cb == nullfunc) { y = 7; }
+	printInt(y); printLF();					// 7
+
+	v.lo = 3; v.hi = 8;						// struct p: the name is the pointer type code
+	y = v.lo + v.hi;
+	printInt(y); printLF();					// 11
+
+	cb = dbl;								// functype i: the name is the int type code
+	y = cb(cb(2));
+	printInt(y); printLF();					// dbl(dbl(2)) = 8
+}

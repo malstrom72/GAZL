@@ -1,0 +1,49 @@
+/*
+	A struct array field with a SYMBOLIC extent can be initialized, up to the values actually given.
+	Its words start at a position Impala knows, so they place fine; only the ones it did NOT fill are a
+	symbolic count, and `DATA` cannot skip those - so everything BEHIND the field stays blocked (E454).
+
+	The count check is the interesting part. Impala cannot compare 3 against `N`, and neither can the
+	assembler see anything wrong with the DATA row: `v[N]` with N=2 given three values, plus a `z`,
+	emits four words that fit `1 + N + 1` EXACTLY. That is the shape that used to hand `z` the array's
+	third value in silence. So the comparison is DEFERRED - `! GRTi #3 #.z.S.v @.ERROR...` - to the one
+	stage that knows the extent. `docs/TwoStageConstants.md` rule 4.
+
+	This fixture is the PASSING side: it pins that the emitted words land where the reads look for them
+	under a symbolic extent. The failing side is `assertLoadFails` in `jspegCompilerTests.js`, because
+	it is refused at assembly time and there is no golden for a module that must not load.
+
+	Expected (GAZLCmd structSymbolicFill.gazl main): 7 8 9 0 0 1 2 3 4 0 0
+*/
+
+const int DEBUG = 1
+const int N = 5
+const int M = 3
+
+struct P { int lo; int hi }
+
+struct Scalars {
+	int array v[N]					// symbolic extent, partly filled
+}
+
+struct Elems {
+	P array p[M]					// struct-element array: the check counts WORDS, not elements
+}
+
+extern native printInt
+extern native printLF
+
+global Scalars s = { v: { 7, 8, 9 } }
+global Elems e = { p: { { lo: 1, hi: 2 }, { lo: 3, hi: 4 } } }
+
+function main()
+locals int i
+{
+	for (i = 0 to N) {
+		printInt(global s.v[i]); printLF();		// 7 8 9 0 0 - the tail zero-fills
+	}
+	for (i = 0 to M) {
+		printInt(global e.p[i].lo); printLF();	// 1 3 0
+		printInt(global e.p[i].hi); printLF();	// 2 4 0
+	}
+}

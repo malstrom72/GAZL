@@ -7,7 +7,8 @@ const fs = require('fs');
 const path = require('path');
 
 const { compileProgram, resolveImportClosure, deadStrip } = require('./impala.node.js');
-const { haveGazlCmd, runExpected } = require('./gazlAssembleCheck');
+const { compileWithJsImpala } = require('./impalaJsCompilerRunner');
+const { haveGazlCmd, runExpected, parseExpectedRun } = require('./gazlAssembleCheck');
 
 const repoRoot = path.resolve(__dirname, '..');
 const rootUnit = path.join(repoRoot, 'tests', 'impala', 'sources', 'import', 'main.impala');
@@ -27,6 +28,18 @@ function fail(message) {
 	process.exit(1);
 }
 
+// Assemble a gazl string through GAZLCmd under a temp name and check it runs to `spec` ({ args, want }),
+// cleaning up the temp file either way. `failPrefix` labels the failure for whichever check called in.
+function assembleAndRun(label, gazl, spec, failPrefix) {
+	const gazlPath = path.join(repoRoot, 'output', `deadstrip-${label}.gazl`);
+	fs.writeFileSync(gazlPath, gazl, 'latin1');
+	const failure = runExpected(gazlPath, spec);
+	fs.unlinkSync(gazlPath);
+	if (failure) {
+		fail(failPrefix + failure);
+	}
+}
+
 // The closure must gather both units, dependency-first (mathlib before main).
 const closure = resolveImportClosure(rootUnit).map((u) => path.basename(u.path));
 if (closure.length !== 2 || closure[0] !== 'mathlib.impala' || closure[1] !== 'main.impala') {
@@ -40,16 +53,15 @@ const { output } = compileProgram(rootUnit, { randomId: RANDOM_ID });
 const unstripped = compileProgram(stripRoot, { randomId: RANDOM_ID }).output;
 const stripped = deadStrip(unstripped);
 
-if (makeGold) {
-	fs.writeFileSync(goldenPath, output, 'latin1');
-	fs.writeFileSync(strippedGolden, stripped, 'latin1');
-	console.log('Updated ' + path.relative(repoRoot, goldenPath) + ' and ' + path.relative(repoRoot, strippedGolden));
-	process.exit(0);
-}
-
-const golden = fs.readFileSync(goldenPath, 'latin1');
-if (canonicalizeNewlines(golden) !== canonicalizeNewlines(output)) {
-	fail('import build output differs from golden ' + path.relative(repoRoot, goldenPath));
+/* Only the two byte-compares are skipped when minting goldens. Everything below them - the symbol
+   needles, the dead-strip assertions and the run-both-and-compare - is exactly what catches a golden
+   that faithfully records corrupt output, so it must run while the golden is being REPLACED, which is
+   the one moment nothing else is guarding it. */
+if (!makeGold) {
+	const golden = fs.readFileSync(goldenPath, 'latin1');
+	if (canonicalizeNewlines(golden) !== canonicalizeNewlines(output)) {
+		fail('import build output differs from golden ' + path.relative(repoRoot, goldenPath));
+	}
 }
 
 // Sanity: the linked program must actually contain the cross-unit definitions.
@@ -64,25 +76,35 @@ if (unstripped.indexOf('unused:') < 0) fail('default build must keep unused (no 
 if (stripped.indexOf('unused:') >= 0) fail('--dead-strip must drop the unreachable `unused`');
 if (stripped.indexOf('used:') < 0) fail('--dead-strip must keep `used` (reached from exported main)');
 if (stripped.indexOf('main:') < 0) fail('--dead-strip must keep the exported `main`');
-const strippedGold = fs.readFileSync(strippedGolden, 'latin1');
-if (canonicalizeNewlines(strippedGold) !== canonicalizeNewlines(stripped)) {
-	fail('--dead-strip output differs from golden ' + path.relative(repoRoot, strippedGolden));
+if (!makeGold) {
+	const strippedGold = fs.readFileSync(strippedGolden, 'latin1');
+	if (canonicalizeNewlines(strippedGold) !== canonicalizeNewlines(stripped)) {
+		fail('--dead-strip output differs from golden ' + path.relative(repoRoot, strippedGolden));
+	}
 }
 
 /* A byte-compare cannot prove this one: dropping a data block used to leave its unlabelled `DATA`
    continuation rows behind, where the PRECEDING block silently adopted them - so the golden would just
    record the corruption. Stripping must not change what the program prints, so run both. */
 if (haveGazlCmd()) {
-	const want = { args: ['main'], want: '42 9 9 0 0 0 7'.split(' ') };
-	for (const [label, gazl] of [['unstripped', unstripped], ['stripped', stripped]]) {
-		const gazlPath = path.join(repoRoot, 'output', `deadstrip-${label}.gazl`);
-		fs.writeFileSync(gazlPath, gazl, 'latin1');
-		const failure = runExpected(gazlPath, want);
-		fs.unlinkSync(gazlPath);
-		if (failure) {
-			fail(`--dead-strip changed program behaviour (${label}): ${failure}`);
-		}
+	// The expected output lives in the fixture, via the same `Expected (GAZLCmd ...)` row the other two
+	// harnesses read. It was a literal here until 2026-08-02, and extending stripmain.impala silently
+	// left it stale - the run then fails as a behaviour change, blaming --dead-strip for the fixture.
+	const want = parseExpectedRun(fs.readFileSync(stripRoot, 'latin1'));
+	if (!want) {
+		fail('stripmain.impala must carry an `Expected (GAZLCmd ...)` row for the dead-strip run check');
 	}
+	for (const [label, gazl] of [['unstripped', unstripped], ['stripped', stripped]]) {
+		assembleAndRun(label, gazl, want, `--dead-strip changed program behaviour (${label}): `);
+	}
+}
+
+/* Written only now, once everything above has vouched for what is about to be recorded. */
+if (makeGold) {
+	fs.writeFileSync(goldenPath, output, 'latin1');
+	fs.writeFileSync(strippedGolden, stripped, 'latin1');
+	console.log('Updated ' + path.relative(repoRoot, goldenPath) + ' and ' + path.relative(repoRoot, strippedGolden));
+	process.exit(0);
 }
 
 // --- import cycles: gathered, but only half-resolved --------------------------
@@ -93,7 +115,7 @@ if (haveGazlCmd()) {
 // which unit is named as root.
 //
 // This is the 2.0 RULE, not a known gap: collect mode is deferred to Impala 3.0
-// (docs/ParkedFeatures.md). If it ever lands the LAST assertion is the one that flips - `odd.impala`
+// (design/ParkedFeatures.md). If it ever lands the LAST assertion is the one that flips - `odd.impala`
 // as root must build too, and odd.impala's `extern function isEven` becomes redundant rather than
 // required. Turn it into a positive build-and-compare then, and delete this note.
 const cycleDir = path.join(repoRoot, 'tests', 'impala', 'sources', 'importcycle');
@@ -126,6 +148,71 @@ if (otherRootError.indexOf('even.impala:') !== 0) {
 }
 if (otherRootError.indexOf('isOdd is defined later, at odd.impala:') < 0) {
 	fail('cycle error should point at the definition it cannot see yet: ' + otherRootError);
+}
+
+// --- body-carrying `extern struct` across a cycle -----------------------------
+// The one cycle shape that used to fail SILENTLY. Rows 1-3 of the cycle story (a call backwards, a type
+// backwards, the opaque `extern struct`) all fail at Impala compile time with a diagnostic naming the
+// unit and a remedy. This one compiled clean and died at GAZL assembly on `Symbol not previously
+// defined (in expected scope): .o.AA.x` - a symbol the user never wrote - because `! DEFi` constants
+// resolve strictly top-down and the layout block sat in the unit emitted LATER. Now E464.
+const structCycle = path.join(repoRoot, 'tests', 'impala', 'sources', 'importstructcycle');
+let cycErr = null;
+try {
+	compileProgram(path.join(structCycle, 'owner.impala'), { randomId: RANDOM_ID });
+} catch (err) {
+	cycErr = (err && err.message) || String(err);
+}
+if (cycErr === null || cycErr.indexOf('E464') < 0) {
+	fail('a body-carrying extern struct used before its real definition must be E464 - got: ' + cycErr);
+}
+// It must point at the USE, in the unit that made it, not at the definition that arrived too late.
+if (cycErr.indexOf('user.impala:') !== 0) {
+	fail('E464 must name the unit holding the use, not the root: ' + cycErr);
+}
+if (cycErr.indexOf('opaque form') < 0) {
+	fail('E464 should name the opaque `extern struct` remedy: ' + cycErr);
+}
+// ...and the OPAQUE form across the same cycle still builds, which is what the remedy tells them to do.
+compileProgram(path.join(structCycle, 'opaqueOwner.impala'), { randomId: RANDOM_ID });
+
+// --- dead-strip on compiler-minted dotted data blocks -------------------------
+// Three defects shared ONE blind spot: the block-boundary regex could not match a compiler-minted DOT
+// label, so string/assert constants (`.s_...`/`.a_...`) were invisible as data definitions. None was
+// gated because `stripmain.impala` has no string constant, no exported global, and no trailing dead
+// function - so all three are reproduced from source here. See impalaImportClosure.js (DATA_LABEL_RE).
+
+// A. A string used by a LIVE function, with a trailing DEAD one: the string table trails the dead
+//    function and used to be absorbed and stripped with it, leaving a dangling `&.s_...` that will not
+//    assemble. The kept reference must still have its definition.
+const aStripped = deadStrip(compileWithJsImpala(
+	'extern native print;\nexport function live()\n{\n\tprint("keep me alive");\n}\n'
+		+ 'function dead()\n{\n\tprint("drop me");\n}\n', { randomId: RANDOM_ID }));
+const aRef = aStripped.match(/&(\.s_\w+)/);
+if (!aRef) fail('A: the live string reference vanished from the stripped output');
+if (aStripped.indexOf(aRef[1] + ':') < 0) {
+	fail('A: stripped output references ' + aRef[1] + ' but dropped its definition - would not assemble');
+}
+if (aStripped.indexOf('drop me') >= 0) fail('A: the dead function\'s string survived the strip');
+if (haveGazlCmd()) {
+	assembleAndRun('protoA', aStripped, { args: ['live'], want: ['keep', 'me', 'alive'] },
+		'A: stripped output must assemble and still print its string - ');
+}
+
+// B. An exported global that nothing references is a ROOT and must survive (the CLI's own help text).
+const bStripped = deadStrip(compileWithJsImpala(
+	'export global int array arr[2];\nexport function keep() returns int r { r = 1; }\n', { randomId: RANDOM_ID }));
+if (bStripped.indexOf('arr:') < 0) fail('B: --dead-strip dropped the exported (unreferenced) global `arr`');
+
+// C. The three corpus programs whose `.s_` constants sit among other data used to throw
+//    "initializer row belongs to no data block". They must strip cleanly.
+for (const name of ['chess', 'Priyome', 'ImpalaDemo']) {
+	try {
+		deadStrip(compileProgram(path.join(repoRoot, 'tests', 'impala', 'sources', name + '.impala'),
+			{ randomId: RANDOM_ID }).output);
+	} catch (err) {
+		fail('C: --dead-strip threw on ' + name + ': ' + ((err && err.message) || String(err)));
+	}
 }
 
 console.log('import build + dead-strip + cycle tests passed.');

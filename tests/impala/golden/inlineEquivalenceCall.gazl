@@ -1,21 +1,21 @@
-; Compiled with Impala version 1.0
+; Compiled with Impala version 2.0
 
 ; signatures version=1
-DEBUG:	! DEFi #1	; signature const DEBUG : int @ 19:1
-; signature extern native printInt() -> unknown @ 21:1
-; signature extern native printLF() -> unknown @ 22:1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ inlineEquivalenceCall.impala:19:1
+; signature extern native printInt() -> unknown @ inlineEquivalenceCall.impala:21:1
+; signature extern native printLF() -> unknown @ inlineEquivalenceCall.impala:22:1
 	GLOB *1
-shared:	DATi #0	; signature global shared : int @ 24:1
+shared:	DATi #0	; signature global shared : int @ inlineEquivalenceCall.impala:24:1
 	! MOVi <a> #0	; layout of struct P
 .o.P.x:	! DEFi #<a>
 	! ADDi <a> #<a> #1
 .o.P.y:	! DEFi #<a>
 	! ADDi <a> #<a> #1
 .z.P:	! DEFi #<a>
-; signature struct P { x : int, y : int } @ 26:1
+; signature struct P { x : int, y : int } @ inlineEquivalenceCall.impala:26:1
 
 ;-----------------------------------------------------------------------------
-pure:	FUNC	; signature func pure(int a, int b) -> int @ 28:1
+pure:	FUNC	; signature func pure(int a, int b) -> int @ inlineEquivalenceCall.impala:28:1
 	$r:	OUTi
 	$a:	INPi
 	$b:	INPi
@@ -26,7 +26,7 @@ pure:	FUNC	; signature func pure(int a, int b) -> int @ 28:1
 
 
 ;-----------------------------------------------------------------------------
-clobber:	FUNC	; signature func clobber(int a) -> int @ 30:1
+clobber:	FUNC	; signature func clobber(int a) -> int @ inlineEquivalenceCall.impala:30:1
 	$r:	OUTi
 	$a:	INPi
 ;-----------------------------------------------------------------------------
@@ -36,7 +36,7 @@ clobber:	FUNC	; signature func clobber(int a) -> int @ 30:1
 
 
 ;-----------------------------------------------------------------------------
-clamp:	FUNC	; signature func clamp(int v, int lo, int hi) -> int @ 36:1
+clamp:	FUNC	; signature func clamp(int v, int lo, int hi) -> int @ inlineEquivalenceCall.impala:36:1
 	$r:	OUTi
 	$v:	INPi
 	$lo:	INPi
@@ -53,7 +53,7 @@ clamp:	FUNC	; signature func clamp(int v, int lo, int hi) -> int @ 36:1
 
 
 ;-----------------------------------------------------------------------------
-viaPointer:	FUNC	; signature func viaPointer(int-ptr p, int a) -> int @ 45:1
+viaPointer:	FUNC	; signature func viaPointer(int-ptr p, int a) -> int @ inlineEquivalenceCall.impala:45:1
 	$r:	OUTi
 	$p:	INPp
 	$a:	INPi
@@ -64,13 +64,13 @@ viaPointer:	FUNC	; signature func viaPointer(int-ptr p, int a) -> int @ 45:1
 
 
 ;-----------------------------------------------------------------------------
-sum3:	FUNC	; signature func sum3(int a, int b, int c) -> int @ 51:1
+sum3:	FUNC	; signature func sum3(int a, int b, int c) -> int @ inlineEquivalenceCall.impala:51:1
 	$r:	OUTi
 	$a:	INPi
 	$b:	INPi
 	$c:	INPi
-.x.sum3.buf:	! DEFi #3
-	$buf:	LOCA *.x.sum3.buf
+.z.sum3.buf:	! DEFi #3
+	$buf:	LOCA *.z.sum3.buf
 	$i:	LOCi
 ;-----------------------------------------------------------------------------
 		MOVi $buf:0 $a 	; buf[0] = a
@@ -86,7 +86,7 @@ sum3:	FUNC	; signature func sum3(int a, int b, int c) -> int @ 51:1
 
 
 ;-----------------------------------------------------------------------------
-dot:	FUNC	; signature func dot(int ax, int ay, int bx, int by) -> int @ 59:1
+dot:	FUNC	; signature func dot(int ax, int ay, int bx, int by) -> int @ inlineEquivalenceCall.impala:59:1
 	$r:	OUTi
 	$ax:	INPi
 	$ay:	INPi
@@ -106,7 +106,7 @@ dot:	FUNC	; signature func dot(int ax, int ay, int bx, int by) -> int @ 59:1
 
 
 ;-----------------------------------------------------------------------------
-helper:	FUNC	; signature func helper(int a) -> int @ 67:1
+helper:	FUNC	; signature func helper(int a) -> int @ inlineEquivalenceCall.impala:67:1
 	$r:	OUTi
 	$a:	INPi
 ;-----------------------------------------------------------------------------
@@ -115,32 +115,32 @@ helper:	FUNC	; signature func helper(int a) -> int @ 67:1
 
 
 ;-----------------------------------------------------------------------------
-wrap:	FUNC	; signature func wrap(int a) -> int @ 69:1
+wrap:	FUNC	; signature func wrap(int a) -> int @ inlineEquivalenceCall.impala:69:1
 	$r:	OUTi
 	$a:	INPi
 ;-----------------------------------------------------------------------------
 		MOVi %1 $a 	; r = helper(a) + 1
-		CALL &helper %0 *2	; expects helper(int) -> int @ 69:52
+		CALL &helper %0 *2	; expects helper(int) -> int @ inlineEquivalenceCall.impala:69:52
 		ADDi $r %0 #1
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-pick:	FUNC	; signature func pick(int i) -> int @ 71:1
+pick:	FUNC	; signature func pick(int i) -> int @ inlineEquivalenceCall.impala:71:1
 	$r:	OUTi
 	$i:	INPi
 ;-----------------------------------------------------------------------------
 		SWCH $i *3 @.s0	; switch (i == 0 to 3) 
 	.s0#0:	MOVi $r #10 	; r = 10
-		GOTO @.e1  
+		RETU   
 	.s0#1:	MOVi $r #20 	; r = 20
-		GOTO @.e1  
+		RETU   
 	.s0:	MOVi $r #99 	; r = 99
 	.e1:	RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-chk:	FUNC	; signature func chk(int a) -> int @ 74:1
+chk:	FUNC	; signature func chk(int a) -> int @ inlineEquivalenceCall.impala:74:1
 	$r:	OUTi
 	$a:	INPi
 ;-----------------------------------------------------------------------------
@@ -153,7 +153,7 @@ chk:	FUNC	; signature func chk(int a) -> int @ 74:1
 
 
 ;-----------------------------------------------------------------------------
-sumTo:	FUNC	; signature func sumTo(int n) -> int @ 76:1
+sumTo:	FUNC	; signature func sumTo(int n) -> int @ inlineEquivalenceCall.impala:76:1
 	$r:	OUTi
 	$n:	INPi
 	$i:	LOCi
@@ -170,115 +170,115 @@ sumTo:	FUNC	; signature func sumTo(int n) -> int @ 76:1
 
 
 ;-----------------------------------------------------------------------------
-main:	FUNC	; signature func main() -> void @ 80:1
+main:	FUNC	; signature func main() -> void @ inlineEquivalenceCall.impala:80:1
 		PARA *1
 	$t:	LOCi
-.x.main.cell:	! DEFi #1
-	$cell:	LOCA *.x.main.cell
+.z.main.cell:	! DEFi #1
+	$cell:	LOCA *.z.main.cell
 ;-----------------------------------------------------------------------------
 		MOVi $t #10 	; t = 10
 		MOVi %2 $t 	; printInt(pure(t, 1))
 		MOVi %3 #1 
-		CALL &pure %1 *3	; expects pure(int, int) -> int @ 84:21
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 84:22
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 84:33
+		CALL &pure %1 *3	; expects pure(int, int) -> int @ inlineEquivalenceCall.impala:84:21
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ inlineEquivalenceCall.impala:84:22
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ inlineEquivalenceCall.impala:84:33
 		POKE &shared #1 	; global shared = 1
 		PEEK %2 &shared 	; printInt(clobber(global shared))
-		CALL &clobber %1 *2	; expects clobber(int) -> int @ 87:33
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 87:34
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 87:45
+		CALL &clobber %1 *2	; expects clobber(int) -> int @ inlineEquivalenceCall.impala:87:33
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ inlineEquivalenceCall.impala:87:34
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ inlineEquivalenceCall.impala:87:45
 		PEEK %1 &shared 	; printInt(global shared)
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 88:25
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 88:36
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ inlineEquivalenceCall.impala:88:25
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ inlineEquivalenceCall.impala:88:36
 		MOVi $cell:0 #0 	; cell[0] = 0
 		MOVi $t #5 	; t = 5
 		ADRL %2 $cell:0 *0	; printInt(viaPointer(&cell[0], t))
 		MOVi %3 $t 
-		CALL &viaPointer %1 *3	; expects viaPointer(int-ptr, int) -> int @ 92:34
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 92:35
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 92:46
+		CALL &viaPointer %1 *3	; expects viaPointer(int-ptr, int) -> int @ inlineEquivalenceCall.impala:92:34
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ inlineEquivalenceCall.impala:92:35
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ inlineEquivalenceCall.impala:92:46
 		MOVi %1 $cell:0 	; printInt(cell[0])
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 93:19
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 93:30
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ inlineEquivalenceCall.impala:93:19
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ inlineEquivalenceCall.impala:93:30
 		MOVi %2 #-4 	; printInt(clamp(-4, 0, 6))
 		MOVi %3 #0 
 		MOVi %4 #6 
-		CALL &clamp %1 *4	; expects clamp(int, int, int) -> int @ 95:26
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 95:27
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 95:38
+		CALL &clamp %1 *4	; expects clamp(int, int, int) -> int @ inlineEquivalenceCall.impala:95:26
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ inlineEquivalenceCall.impala:95:27
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ inlineEquivalenceCall.impala:95:38
 		MOVi %2 #8 	; printInt(clamp(8, 0, 6))
 		MOVi %3 #0 
 		MOVi %4 #6 
-		CALL &clamp %1 *4	; expects clamp(int, int, int) -> int @ 96:25
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 96:26
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 96:37
+		CALL &clamp %1 *4	; expects clamp(int, int, int) -> int @ inlineEquivalenceCall.impala:96:25
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ inlineEquivalenceCall.impala:96:26
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ inlineEquivalenceCall.impala:96:37
 		MOVi %2 #3 	; printInt(clamp(3, 0, 6))
 		MOVi %3 #0 
 		MOVi %4 #6 
-		CALL &clamp %1 *4	; expects clamp(int, int, int) -> int @ 97:25
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 97:26
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 97:37
+		CALL &clamp %1 *4	; expects clamp(int, int, int) -> int @ inlineEquivalenceCall.impala:97:25
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ inlineEquivalenceCall.impala:97:26
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ inlineEquivalenceCall.impala:97:37
 		MOVi %2 #10 	; printInt(sum3(10, 20, 30))
 		MOVi %3 #20 
 		MOVi %4 #30 
-		CALL &sum3 %1 *4	; expects sum3(int, int, int) -> int @ 99:27
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 99:28
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 99:39
+		CALL &sum3 %1 *4	; expects sum3(int, int, int) -> int @ inlineEquivalenceCall.impala:99:27
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ inlineEquivalenceCall.impala:99:28
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ inlineEquivalenceCall.impala:99:39
 		MOVi %3 #1 	; printInt(sum3(sum3(1, 2, 3), 4, 5))
 		MOVi %4 #2 
 		MOVi %5 #3 
-		CALL &sum3 %2 *4	; expects sum3(int, int, int) -> int @ 100:29
+		CALL &sum3 %2 *4	; expects sum3(int, int, int) -> int @ inlineEquivalenceCall.impala:100:29
 		MOVi %3 #4 
 		MOVi %4 #5 
-		CALL &sum3 %1 *4	; expects sum3(int, int, int) -> int @ 100:36
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 100:37
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 100:48
+		CALL &sum3 %1 *4	; expects sum3(int, int, int) -> int @ inlineEquivalenceCall.impala:100:36
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ inlineEquivalenceCall.impala:100:37
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ inlineEquivalenceCall.impala:100:48
 		MOVi %2 #1 	; printInt(dot(1, 2, 3, 4))
 		MOVi %3 #2 
 		MOVi %4 #3 
 		MOVi %5 #4 
-		CALL &dot %1 *5	; expects dot(int, int, int, int) -> int @ 102:26
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 102:27
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 102:38
+		CALL &dot %1 *5	; expects dot(int, int, int, int) -> int @ inlineEquivalenceCall.impala:102:26
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ inlineEquivalenceCall.impala:102:27
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ inlineEquivalenceCall.impala:102:38
 		MOVi %2 #2 	; printInt(dot(2, 2, 5, 5))
 		MOVi %3 #2 
 		MOVi %4 #5 
 		MOVi %5 #5 
-		CALL &dot %1 *5	; expects dot(int, int, int, int) -> int @ 103:26
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 103:27
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 103:38
+		CALL &dot %1 *5	; expects dot(int, int, int, int) -> int @ inlineEquivalenceCall.impala:103:26
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ inlineEquivalenceCall.impala:103:27
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ inlineEquivalenceCall.impala:103:38
 		MOVi %2 #5 	; printInt(wrap(5))
-		CALL &wrap %1 *2	; expects wrap(int) -> int @ 105:18
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 105:19
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 105:30
+		CALL &wrap %1 *2	; expects wrap(int) -> int @ inlineEquivalenceCall.impala:105:18
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ inlineEquivalenceCall.impala:105:19
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ inlineEquivalenceCall.impala:105:30
 		MOVi %2 #0 	; printInt(pick(0))
-		CALL &pick %1 *2	; expects pick(int) -> int @ 106:18
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 106:19
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 106:30
+		CALL &pick %1 *2	; expects pick(int) -> int @ inlineEquivalenceCall.impala:106:18
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ inlineEquivalenceCall.impala:106:19
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ inlineEquivalenceCall.impala:106:30
 		MOVi %2 #1 	; printInt(pick(1))
-		CALL &pick %1 *2	; expects pick(int) -> int @ 107:18
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 107:19
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 107:30
+		CALL &pick %1 *2	; expects pick(int) -> int @ inlineEquivalenceCall.impala:107:18
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ inlineEquivalenceCall.impala:107:19
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ inlineEquivalenceCall.impala:107:30
 		MOVi %2 #2 	; printInt(pick(2))
-		CALL &pick %1 *2	; expects pick(int) -> int @ 108:18
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 108:19
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 108:30
+		CALL &pick %1 *2	; expects pick(int) -> int @ inlineEquivalenceCall.impala:108:18
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ inlineEquivalenceCall.impala:108:19
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ inlineEquivalenceCall.impala:108:30
 		MOVi %2 #5 	; printInt(chk(5))
-		CALL &chk %1 *2	; expects chk(int) -> int @ 110:17
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 110:18
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 110:29
+		CALL &chk %1 *2	; expects chk(int) -> int @ inlineEquivalenceCall.impala:110:17
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ inlineEquivalenceCall.impala:110:18
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ inlineEquivalenceCall.impala:110:29
 		MOVi %2 #3 	; printInt(chk(3))
-		CALL &chk %1 *2	; expects chk(int) -> int @ 111:17
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 111:18
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 111:29
+		CALL &chk %1 *2	; expects chk(int) -> int @ inlineEquivalenceCall.impala:111:17
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ inlineEquivalenceCall.impala:111:18
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ inlineEquivalenceCall.impala:111:29
 		MOVi %2 #4 	; printInt(sumTo(4))
-		CALL &sumTo %1 *2	; expects sumTo(int) -> int @ 112:19
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 112:20
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 112:31
+		CALL &sumTo %1 *2	; expects sumTo(int) -> int @ inlineEquivalenceCall.impala:112:19
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ inlineEquivalenceCall.impala:112:20
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ inlineEquivalenceCall.impala:112:31
 		MOVi %2 #3 	; printInt(sumTo(3))
-		CALL &sumTo %1 *2	; expects sumTo(int) -> int @ 113:19
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 113:20
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 113:31
+		CALL &sumTo %1 *2	; expects sumTo(int) -> int @ inlineEquivalenceCall.impala:113:19
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ inlineEquivalenceCall.impala:113:20
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ inlineEquivalenceCall.impala:113:31
 		RETU   	; }
 
 	! EQUi #DEBUG #0 @.noAssertStrings

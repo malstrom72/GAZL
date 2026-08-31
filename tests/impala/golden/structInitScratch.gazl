@@ -1,0 +1,49 @@
+; Compiled with Impala version 2.0
+
+; signatures version=1
+DEBUG:	! DEFi #0	; signature const DEBUG : int @ structInitScratch.impala:14:1
+P:	! DEFi #3	; signature const P : int @ structInitScratch.impala:15:1
+Q:	! DEFi #5	; signature const Q : int @ structInitScratch.impala:16:1
+; signature extern native printInt() -> unknown @ structInitScratch.impala:18:1
+; signature extern native printLF() -> unknown @ structInitScratch.impala:19:1
+	! MOVi <a> #0	; layout of struct S
+.o.S.x:	! DEFi #<a>
+	! ADDi <a> #<a> #1
+.o.S.y:	! DEFi #<a>
+	! ADDi <a> #<a> #1
+.o.S.z:	! DEFi #<a>
+	! ADDi <a> #<a> #1
+.z.S:	! DEFi #<a>
+; signature struct S { x : int, y : int, z : int } @ structInitScratch.impala:21:1
+s:	CNST *.z.S	; signature readonly s : S @ structInitScratch.impala:23:1
+	! SHLi <A> #1 #P
+	! SHLi <B> #1 #Q
+	DATA <A>
+	DATA <B>
+	DATA #7
+.z.packed:	! DEFi #2
+packed:	CNST *.z.packed	; signature array packed[2] : int @ structInitScratch.impala:24:1
+	! SHLi <B> #1 #P
+	! SHLi <A> #2 #P
+	DATi <B>
+	DATi <A>
+
+;-----------------------------------------------------------------------------
+main:	FUNC	; signature export func main() -> void @ structInitScratch.impala:26:1
+		PARA *1
+;-----------------------------------------------------------------------------
+		PEEK %1 &s:.o.S.x 	; printInt(global s.x)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ structInitScratch.impala:28:22
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structInitScratch.impala:29:11
+		PEEK %1 &s:.o.S.y 	; printInt(global s.y)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ structInitScratch.impala:30:22
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structInitScratch.impala:31:11
+		PEEK %1 &s:.o.S.z 	; printInt(global s.z)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ structInitScratch.impala:32:22
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structInitScratch.impala:33:11
+		PEEK %1 &packed:0 	; printInt(global packed[0] + global packed[1])
+		PEEK %2 &packed:1 
+		ADDi %1 %1 %2
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ structInitScratch.impala:34:47
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structInitScratch.impala:35:11
+		RETU   	; }

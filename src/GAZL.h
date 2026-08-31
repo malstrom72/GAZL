@@ -72,10 +72,10 @@ typedef unsigned int Pointer;																							// Pointer must be unsigned 
 typedef float Float;
 typedef Int Status;																										// Run-time status code
 
-const int VERSION = 2;						// 2 adds SCOP / ENDS local scopes. Pin an exact version with `! EQUi` (as UnitTest.gazl does - it tests one version); require a minimum with `! GEQi #GAZL_VERSION #2 @label`.
+const int VERSION = 2;						// 2 adds SCOP / ENDS local scopes, SEEK data regions, `GAZL #2` regions with the `t` call-target type, and the TAIL instruction. Pin an exact version with `! EQUi` (as UnitTest.gazl does - it tests one version); require a minimum with `! GEQi #GAZL_VERSION #2 @label`.
 const int WORD_SIZE = 32;
 const Pointer MEMORY_OFFSET = 0x12345678;																				// All memory pointers in GAZL are offsetted by this amount (thus the address of the first memory word is not zero). This makes it easier to detect invalid memory operations (such as writing to a null-pointer).
-const Pointer IP_OFFSET = 0x56789ABC;																					// All instruction / function pointers in GAZL are offsetted by this amount (thus the address of the first instruction is not zero). This makes it easier to detect invalid function calls (such as performing a function call on a null-pointer).
+const Pointer FUNCTION_OFFSET = 0x56789ABC;																				// All function pointers in GAZL are offsetted by this amount (thus the ordinal of the first function is not zero). This makes it easier to detect an invalid indirect call - through a null pointer, or through a small integer that was never a function pointer at all. A function pointer is an ORDINAL indexing `functionTable`, NOT a code address, which is why this is not an instruction-pointer offset; it was named IP_OFFSET until 2026-08-05.
 const Pointer NULL_POINTER = 0;
 
 union Value {
@@ -127,7 +127,10 @@ enum AssemblerError {
 	, NOT_ENOUGH_FUNCTION_SPACE = 32
 	, LABEL_ON_FUNCTION = 33
 	, UNBALANCED_LOCAL_SCOPE = 34
-	, ASSEMBLER_ERROR_COUNT = 35
+	, OVERLAPPING_DATA_REGIONS = 35
+	, UNSUPPORTED_GAZL_VERSION = 36
+	, UNCLOSED_GAZL_REGION = 37
+	, ASSEMBLER_ERROR_COUNT = 38
 };
 
 extern const char* ASSEMBLER_ERROR_TEXTS[];
@@ -205,6 +208,16 @@ class Symbols {
 struct Operator;
 
 /*
+	The four sizes an assembly computes: what a program actually used (from `finalize`) or will need (from `measure`).
+*/
+struct ProgramSizes {
+	UInt codeSize;
+	UInt functionCount;
+	UInt globalsSize;
+	UInt constsSize;
+};
+
+/*
 	Parses GAZL source code and emits executable data.
 
 	Maintains symbol tables and compile-time variables while converting assembly text to a binary representation.
@@ -214,8 +227,10 @@ class Assembler {
 	public:		Assembler(UInt maxCodeSize, Instruction* codeBase, UInt maxFunctionCount, UInt* functionTable, UInt maxMemorySize, Value* memoryBase, Symbols& globals); // Create an assembler for the provided buffers. `functionTable` maps each function's ordinal to its code offset (see `finalize`).
 	public:		void newUnit(const Char* unitName); // Begin assembling a new source unit.
 	public:		const Char* feed(const Char* line); // Assemble a single line and return pointer to the next.
-	public:		void finalize(UInt& codeSize, UInt& globalsSize, UInt& constsSize, UInt& functionCount); // Finish assembly and report memory usage. `functionCount` is the number of entries filled in `functionTable`.
-	
+	public:		void finalize(ProgramSizes& sizes); // Finish assembly and report memory usage. `sizes.functionCount` is the number of entries filled in `functionTable`.
+	public:		void finalize(UInt& codeSize, UInt& globalsSize, UInt& constsSize, UInt& functionCount); // Positional form of `finalize`; prefer the `ProgramSizes` overload.
+	public:		static ProgramSizes measure(const Char* source, const Symbols& globals); // Dry assembly: report what a real assembly of `source` (whole NUL-terminated text) will need, without the caller sizing or owning any buffer. Seed `globals` exactly as for a real assembly (natives, host defines); it is copied, never touched. Program errors throw exactly as feed() does.
+
 	protected:	struct CompileTimeVar {
 					int types;
 					Value value;
@@ -233,6 +248,8 @@ class Assembler {
 	protected:	Value calcConstant(const Operator* op, const Char* op1Begin, const Char* op1End, const Char* op2Begin
 						, const Char* op2End);
 	protected:	void finalizeFunction();
+	protected:	void threadBranches();		// Collapse GOTO chains and turn a GOTO onto a RETU into the RETU. In place: no address moves.
+	protected:	void closeDataRegion();		// Record the closing SEEK region's claim and check it against the section's earlier regions.
 	protected:	Instruction* const codeBase;
 	protected:	Instruction* const codeEnd;
 	protected:	const UInt maxFunctionCount;
@@ -253,7 +270,13 @@ class Assembler {
 	protected:	std::string dataLabel; // Only for error display.
 	protected:	int dataLabelType;
 	protected:	Value* dataPointer;
-	protected:	Value* dataEnd;
+	protected:	Value* dataEnd;						// Fence of the current SEEK region; `sectionEnd` for the implicit / unbounded one.
+	protected:	Value* sectionBegin;				// The current data section's own range; SEEK offsets are relative to `sectionBegin`.
+	protected:	Value* sectionEnd;
+	protected:	Int regionStart;					// Current region as section offsets; extent -1 = unbounded, claims only what it writes.
+	protected:	Int regionExtent;
+	protected:	int dialect;						// `GAZL #n` sets it; 1 outside any region, so every existing file keeps its meaning. Must be 1 again at finalize.
+	protected:	std::vector< std::pair<Int, Int> > dataRegions;	// Closed regions' claims, per section. Disjointness = no word initialized twice.
 	protected:	Symbols& globals;
 	protected:	Symbols locals;
 	protected:	CompileTimeVar compileTimeVars[128];
@@ -357,7 +380,7 @@ class Processor {
 	protected:	UInt codeSize;
 	protected:	const Instruction* codeBase;
 	protected:	UInt functionCount;
-	protected:	const UInt* functionTable;																				// Maps function ordinal -> code offset; a function pointer is `IP_OFFSET + ordinal`.
+	protected:	const UInt* functionTable;																				// Maps function ordinal -> code offset; a function pointer is `FUNCTION_OFFSET + ordinal`.
 	protected:	UInt memorySize;
 	protected:	Value* memoryBase;
 	protected:	UInt rwMemorySize;

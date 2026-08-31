@@ -64,11 +64,10 @@ locals pointer a, pointer b, int ac, int bc
 		if (ac >= 'A' && ac <= 'Z') ac = ac + ('a' - 'A');
 		if (bc >= 'A' && bc <= 'Z') bc = bc + ('a' - 'A');
 		d = ac - bc;
-		if (d != 0 || ac == 0) goto return;
+		if (d != 0 || ac == 0) return;
 		a = a + 1;
 		b = b + 1;
 	}
-return: ;
 }
 
 function upper(pointer s)

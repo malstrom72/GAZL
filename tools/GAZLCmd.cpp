@@ -211,10 +211,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size) {
 			globals.registerNative(NATIVE_NAMES[i], i);
 		}
 		
-		UInt codeSize;
-		UInt globalsSize;
-		UInt constsSize;
-		UInt functionCount = 0;
+		ProgramSizes sizes = { 0, 0, 0, 0 };
 
 		{
 			std::istringstream gazlStream(std::string(reinterpret_cast<const char*>(Data), reinterpret_cast<const char*>(Data) + Size));
@@ -226,13 +223,13 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size) {
 					getline(gazlStream, line);
 					assem.feed(line.c_str());
 				}
-				assem.finalize(codeSize, globalsSize, constsSize, functionCount);
+				assem.finalize(sizes);
 			}
 		}
 
 		{
-			Processor pmachine(codeSize, code, functionCount, functionTable, DATA_MEMORY_SIZE, memory, globalsSize
-					, constsSize, CALL_STACK_SIZE, callStack, NATIVE_TABLE, 0);
+			Processor pmachine(sizes.codeSize, code, sizes.functionCount, functionTable, DATA_MEMORY_SIZE, memory
+					, sizes.globalsSize, sizes.constsSize, CALL_STACK_SIZE, callStack, NATIVE_TABLE, 0);
 			Pointer mainFunction = globals.findFunction("main");
 			if (mainFunction != 0) {
 				Status status = pmachine.enterCall(mainFunction);
@@ -344,10 +341,7 @@ int main(int argc, const char* argv[]) {
 			globals.defineConstant(pos[i + 0], false, v);
 		}
 		
-		UInt codeSize;
-		UInt globalsSize;
-		UInt constsSize;
-		UInt functionCount = 0;
+		ProgramSizes sizes = { 0, 0, 0, 0 };
 
 		{
 			std::ifstream gazlStream(pos[1], std::ifstream::binary);
@@ -374,10 +368,10 @@ int main(int argc, const char* argv[]) {
 				}
 				if (gazlStream.bad()) throw CmdException("Problem with input stream");
 
-				assem.finalize(codeSize, globalsSize, constsSize, functionCount);
+				assem.finalize(sizes);
 
-				std::cerr << "Code size: " << codeSize << ", globals size: " << globalsSize << ", consts size: "
-						<< constsSize << ", functions: " << functionCount << std::endl;
+				std::cerr << "Code size: " << sizes.codeSize << ", globals size: " << sizes.globalsSize << ", consts size: "
+						<< sizes.constsSize << ", functions: " << sizes.functionCount << std::endl;
 				std::cerr << "--------------------------------------------------------------------------------"
 						<< std::endl;
 			}
@@ -386,8 +380,8 @@ int main(int argc, const char* argv[]) {
 		}
 		
 		{
-			Processor pmachine(codeSize, code, functionCount, functionTable, DATA_MEMORY_SIZE, memory, globalsSize
-					, constsSize, CALL_STACK_SIZE, callStack, NATIVE_TABLE, 0);
+			Processor pmachine(sizes.codeSize, code, sizes.functionCount, functionTable, DATA_MEMORY_SIZE, memory
+					, sizes.globalsSize, sizes.constsSize, CALL_STACK_SIZE, callStack, NATIVE_TABLE, 0);
 			const char* mainFunctionName = pos.size() >= 3 ? pos[2] : "main";
 			Pointer mainFunction = globals.findFunction(mainFunctionName);
 			if (mainFunction == 0) throw CmdException(std::string("Could not locate function: ") + mainFunctionName);

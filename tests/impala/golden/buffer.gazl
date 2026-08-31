@@ -1,70 +1,70 @@
-; Compiled with Impala version 1.0
+; Compiled with Impala version 2.0
 
 ; signatures version=1
-PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #1	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int @ 7:1
-; signature extern const DEBUG : int @ 8:1
-.x.PANEL_TEXT_ROWS:	! DEFi #8
-PANEL_TEXT_ROWS:	CNST *.x.PANEL_TEXT_ROWS	; signature array PANEL_TEXT_ROWS[8] : unknown @ 16:1
+PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #1	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int @ buffer.impala:7:1
+; signature extern const DEBUG : int @ buffer.impala:8:1
+.z.PANEL_TEXT_ROWS:	! DEFi #8
+PANEL_TEXT_ROWS:	CNST *.z.PANEL_TEXT_ROWS	; signature array PANEL_TEXT_ROWS[8] : unknown @ buffer.impala:16:1
 	DATA &.s_ABC888_4d2 &.s_ABC888_4d2 &.s_RM_4d3
 	DATA &.s_AMRATE_4d4 &.s_notuse_4d5 &.s_toollo_4d6
 	DATA &.s_7_4d7 &.s_ILOVEP_4d8
-; signature extern native abort() -> unknown @ 27:1
-; signature extern native trace() -> unknown @ 28:1
-; signature extern const OPERATOR_1_NOP : int @ 30:1
-; signature extern const OPERATOR_1_AND : int @ 31:1
-; signature extern const OPERATOR_1_MUL : int @ 32:1
-; signature extern const OPERATOR_1_OSC : int @ 33:1
-; signature extern const OPERATOR_1_RND : int @ 34:1
-; signature extern const OPERATOR_2_NOP : int @ 35:1
-; signature extern const OPERATOR_2_OR : int @ 36:1
-; signature extern const OPERATOR_2_XOR : int @ 37:1
-; signature extern const OPERATOR_2_MSK : int @ 38:1
-; signature extern const OPERATOR_2_SUB : int @ 39:1
-; signature extern const CLOCK_FREQUENCY_PARAM_INDEX : int @ 41:1
-; signature extern const SYNC_PARAM_INDEX : int @ 42:1
-; signature extern const OPERATOR_1_PARAM_INDEX : int @ 43:1
-; signature extern const OPERAND_1_PARAM_INDEX : int @ 44:1
-; signature extern const OPERATOR_2_PARAM_INDEX : int @ 45:1
-; signature extern const OPERAND_2_PARAM_INDEX : int @ 46:1
-; signature extern const PARAM_COUNT : int @ 47:1
+; signature extern native abort() -> unknown @ buffer.impala:27:1
+; signature extern native trace() -> unknown @ buffer.impala:28:1
+; signature extern const OPERATOR_1_NOP : int @ buffer.impala:30:1
+; signature extern const OPERATOR_1_AND : int @ buffer.impala:31:1
+; signature extern const OPERATOR_1_MUL : int @ buffer.impala:32:1
+; signature extern const OPERATOR_1_OSC : int @ buffer.impala:33:1
+; signature extern const OPERATOR_1_RND : int @ buffer.impala:34:1
+; signature extern const OPERATOR_2_NOP : int @ buffer.impala:35:1
+; signature extern const OPERATOR_2_OR : int @ buffer.impala:36:1
+; signature extern const OPERATOR_2_XOR : int @ buffer.impala:37:1
+; signature extern const OPERATOR_2_MSK : int @ buffer.impala:38:1
+; signature extern const OPERATOR_2_SUB : int @ buffer.impala:39:1
+; signature extern const CLOCK_FREQUENCY_PARAM_INDEX : int @ buffer.impala:41:1
+; signature extern const SYNC_PARAM_INDEX : int @ buffer.impala:42:1
+; signature extern const OPERATOR_1_PARAM_INDEX : int @ buffer.impala:43:1
+; signature extern const OPERAND_1_PARAM_INDEX : int @ buffer.impala:44:1
+; signature extern const OPERATOR_2_PARAM_INDEX : int @ buffer.impala:45:1
+; signature extern const OPERAND_2_PARAM_INDEX : int @ buffer.impala:46:1
+; signature extern const PARAM_COUNT : int @ buffer.impala:47:1
 	GLOB *1
-left:	DATf #0.0	; signature global left : float @ 49:1
+left:	DATf #0.0	; signature global left : float @ buffer.impala:49:1
 	GLOB *1
-right:	DATf #0.0	; signature global right : float @ 50:1
+right:	DATf #0.0	; signature global right : float @ buffer.impala:50:1
 	GLOB *1
-clock:	DATi #0	; signature global clock : int @ 51:1
-.x.params:	! DEFi #PARAM_COUNT
-params:	GLOB *.x.params	; signature array params[PARAM_COUNT] : unknown @ 52:1
+clock:	DATi #0	; signature global clock : int @ buffer.impala:51:1
+.z.params:	! DEFi #PARAM_COUNT
+params:	GLOB *.z.params	; signature array params[PARAM_COUNT] : unknown @ buffer.impala:52:1
 	GLOB *1
-instance:	DATi #0	; signature global instance : int @ 53:1
-LOG2:	! DEFf #0.69314718055994530942	; signature const LOG2 : float @ 57:1
-LOG2R:	! DEFf #1.44269504088896340736	; signature const LOG2R : float @ 58:1
-LOG10R:	! DEFf #0.43429448190325182765	; signature const LOG10R : float @ 59:1
-E:	! DEFf #2.71828182845904523536	; signature const E : float @ 60:1
-HALF_PI:	! DEFf #1.57079632679489661923	; signature const HALF_PI : float @ 61:1
-PI:	! DEFf #3.14159265358979323846	; signature const PI : float @ 62:1
+instance:	DATi #0	; signature global instance : int @ buffer.impala:53:1
+LOG2:	! DEFf #0.69314718055994530942	; signature const LOG2 : float @ buffer.impala:57:1
+LOG2R:	! DEFf #1.44269504088896340736	; signature const LOG2R : float @ buffer.impala:58:1
+LOG10R:	! DEFf #0.43429448190325182765	; signature const LOG10R : float @ buffer.impala:59:1
+E:	! DEFf #2.71828182845904523536	; signature const E : float @ buffer.impala:60:1
+HALF_PI:	! DEFf #1.57079632679489661923	; signature const HALF_PI : float @ buffer.impala:61:1
+PI:	! DEFf #3.14159265358979323846	; signature const PI : float @ buffer.impala:62:1
 	! MULf <A> #PI #2.0
-TWICE_PI:	! DEFf <A>	; signature const TWICE_PI : float @ 63:1
-COS_EPSILON:	! DEFf #1.0e-6	; signature const COS_EPSILON : float @ 64:1
-SQRT_2:	! DEFf #1.41421356237309504880	; signature const SQRT_2 : float @ 65:1
-EPSILON_FLOAT:	! DEFf #1.0e-45	; signature const EPSILON_FLOAT : float @ 67:1
-SMALL_FLOAT:	! DEFf #1.0e-5	; signature const SMALL_FLOAT : float @ 68:1
-LARGE_FLOAT:	! DEFf #1.0e+10	; signature const LARGE_FLOAT : float @ 69:1
-HUGE_FLOAT:	! DEFf #1.0e+38	; signature const HUGE_FLOAT : float @ 70:1
+TWICE_PI:	! DEFf <A>	; signature const TWICE_PI : float @ buffer.impala:63:1
+COS_EPSILON:	! DEFf #1.0e-6	; signature const COS_EPSILON : float @ buffer.impala:64:1
+SQRT_2:	! DEFf #1.41421356237309504880	; signature const SQRT_2 : float @ buffer.impala:65:1
+EPSILON_FLOAT:	! DEFf #1.0e-45	; signature const EPSILON_FLOAT : float @ buffer.impala:67:1
+SMALL_FLOAT:	! DEFf #1.0e-5	; signature const SMALL_FLOAT : float @ buffer.impala:68:1
+LARGE_FLOAT:	! DEFf #1.0e+10	; signature const LARGE_FLOAT : float @ buffer.impala:69:1
+HUGE_FLOAT:	! DEFf #1.0e+38	; signature const HUGE_FLOAT : float @ buffer.impala:70:1
 
 ;-----------------------------------------------------------------------------
-error:	FUNC	; signature func error(ptr s) -> void @ 72:1
+error:	FUNC	; signature func error(ptr s) -> void @ buffer.impala:72:1
 		PARA *1
 	$s:	INPp
 ;-----------------------------------------------------------------------------
 		MOVp %1 $s 	; trace(s)
-		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 74:10
-		CALL ^abort %0 *1	; expects abort() -> unknown @ 75:9
+		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ buffer.impala:74:10
+		CALL ^abort %0 *1	; expects abort() -> unknown @ buffer.impala:75:9
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-trunc:	FUNC	; signature func trunc(float x) -> float @ 78:1
+trunc:	FUNC	; signature func trunc(float x) -> float @ buffer.impala:78:1
 	$y:	OUTf
 	$x:	INPf
 ;-----------------------------------------------------------------------------
@@ -72,30 +72,30 @@ trunc:	FUNC	; signature func trunc(float x) -> float @ 78:1
 		SUBf %0 #0.0 $x	; y = -floor(-x)
 		FLOf %0 %0 
 		SUBf $y #0.0 %0
-		GOTO @.e1  
+		RETU   
 	.f0:	FLOf $y $x 	; y = floor(x)
 	.e1:	RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-fmod:	FUNC	; signature func fmod(float x, float y) -> float @ 85:1
+fmod:	FUNC	; signature func fmod(float x, float y) -> float @ buffer.impala:85:1
 	$z:	OUTf
 	$x:	INPf
 	$y:	INPf
 ;-----------------------------------------------------------------------------
 		NEQf $y #0.0 @.f0	; if (y == 0.0) error("Division by zero")
 		MOVp %1 &.s_Divisi_4d9 	; error("Division by zero")
-		CALL &error %0 *2	; expects error(ptr) -> void @ 88:41
-		GOTO @.e1  
+		CALL &error %0 *2	; expects error(ptr) -> void @ buffer.impala:88:41
+		RETU   
 	.f0:	DIVf %1 $x $y	; z = x - (float) trunc(x / y) * y
-		CALL &trunc %0 *2	; expects trunc(float) -> float @ 89:36
+		CALL &trunc %0 *2	; expects trunc(float) -> float @ buffer.impala:89:36
 		MULf %0 %0 $y
 		SUBf $z $x %0
 	.e1:	RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-cos:	FUNC	; signature func cos(float x) -> float @ 103:1
+cos:	FUNC	; signature func cos(float x) -> float @ buffer.impala:103:1
 	$y:	OUTf
 	$x:	INPf
 	$a:	LOCf
@@ -105,7 +105,7 @@ cos:	FUNC	; signature func cos(float x) -> float @ 103:1
 ;-----------------------------------------------------------------------------
 		MOVf %1 $x 	; m = (float) fmod(x, TWICE_PI)
 		MOVf %2 #TWICE_PI 
-		CALL &fmod %0 *3	; expects fmod(float, float) -> float @ 107:31
+		CALL &fmod %0 *3	; expects fmod(float, float) -> float @ buffer.impala:107:31
 		MOVf $m %0 
 		SUBf %0 #0.0 $m	; m = -m * m
 		MULf $m %0 $m
@@ -127,19 +127,19 @@ cos:	FUNC	; signature func cos(float x) -> float @ 103:1
 
 
 ;-----------------------------------------------------------------------------
-sin:	FUNC	; signature func sin(float x) -> float @ 120:1
+sin:	FUNC	; signature func sin(float x) -> float @ buffer.impala:120:1
 	$y:	OUTf
 	$x:	INPf
 ;-----------------------------------------------------------------------------
 		SUBf %1 $x #HALF_PI	; y = (float) cos(x - HALF_PI)
-		CALL &cos %0 *2	; expects cos(float) -> float @ 123:30
+		CALL &cos %0 *2	; expects cos(float) -> float @ buffer.impala:123:30
 		MOVf $y %0 
 		RETU   	; }
 
-; signature extern const GAZL_WORD_SIZE : int @ 130:1
+; signature extern const GAZL_WORD_SIZE : int @ buffer.impala:130:1
 
 ;-----------------------------------------------------------------------------
-intToString:	FUNC	; signature func intToString(int i, int radix, int minLength, ptr buffer) -> ptr @ 131:1
+intToString:	FUNC	; signature func intToString(int i, int radix, int minLength, ptr buffer) -> ptr @ buffer.impala:131:1
 	$p:	OUTp
 	$i:	INPi
 	$radix:	INPi
@@ -189,7 +189,7 @@ intToString:	FUNC	; signature func intToString(int i, int radix, int minLength, 
 
 
 ;-----------------------------------------------------------------------------
-floatToString:	FUNC	; signature func floatToString(float f, int precision, ptr buffer) -> ptr @ 150:1
+floatToString:	FUNC	; signature func floatToString(float f, int precision, ptr buffer) -> ptr @ buffer.impala:150:1
 	$p:	OUTp
 	$f:	INPf
 	$precision:	INPi
@@ -211,10 +211,10 @@ floatToString:	FUNC	; signature func floatToString(float f, int precision, ptr b
 	.a0:	ABSf $y $f 	; y = abs(f)
 		GRTf $y #EPSILON_FLOAT @.f2	; if (y <= EPSILON_FLOAT) p = "0"
 		MOVp $p &.s_0_4db 	; p = "0"
-		GOTO @.e3  
+		RETU   
 	.f2:	LSSf $y #HUGE_FLOAT @.f4	; if (y >= HUGE_FLOAT) p = "HUGE"
 		MOVp $p &.s_HUGE_4dc 	; p = "HUGE"
-		GOTO @.e5  
+		RETU   
 	.f4:	MOVi $e #0 	; e = 0
 		ADDp %0 $buffer #3	; ep = buffer + 3 + precision
 		ADDp $ep %0 $precision
@@ -225,10 +225,10 @@ floatToString:	FUNC	; signature func floatToString(float f, int precision, ptr b
 		ADDp $pp $pp #1	; pp = pp + 1
 		MULf $x $x #0.1	; x = x * 0.1
 		GOTO @.l7  	; }
-	.e9:	GEQp $pp $ep @.f11	; if (pp < ep && y > SMALL_FLOAT && y < LARGE_FLOAT) goto break
+	.e9:	GEQp $pp $ep @.f11	; if (pp < ep && y > SMALL_FLOAT && y < LARGE_FLOAT) goto broke
 		LEQf $y #SMALL_FLOAT @.f11
 		GEQf $y #LARGE_FLOAT @.f11
-		GOTO @break  	; goto break
+		GOTO @broke  	; goto broke
 	.f11:	MOVf $g $y 	; g = y
 	.l12:	GEQf $y #1.0 @.e13	; while (y < 1.0) 
 		SUBi $e $e #1	; e = e - 1
@@ -240,7 +240,7 @@ floatToString:	FUNC	; signature func floatToString(float f, int precision, ptr b
 		MULf $y $y #0.1	; y = y * 0.1
 		GOTO @.l14  	; }
 		GOTO @.l6  	; }
-	break:	ADDp $dp $buffer #2	; break:
+	broke:	ADDp $dp $buffer #2	; broke:
 	.l16:	GEQf $x #1.0 @.e18	; while (x < 1.0 && dp < buffer + 32) 
 		ADDp %0 $buffer #32
 		GEQp $dp %0 @.e18
@@ -326,71 +326,71 @@ floatToString:	FUNC	; signature func floatToString(float f, int precision, ptr b
 
 
 ;-----------------------------------------------------------------------------
-traceInt:	FUNC	; signature func traceInt(int i) -> void @ 259:1
+traceInt:	FUNC	; signature func traceInt(int i) -> void @ buffer.impala:259:1
 		PARA *1
 	$i:	INPi
 	! MULi <A> #8 #GAZL_WORD_SIZE
 	! ADDi <A> <A> #2
-.x.traceInt.buffer:	! DEFi #<A>
-	$buffer:	LOCA *.x.traceInt.buffer
+.z.traceInt.buffer:	! DEFi #<A>
+	$buffer:	LOCA *.z.traceInt.buffer
 ;-----------------------------------------------------------------------------
 		MOVi %2 $i 	; trace(intToString(i, 10, 1, buffer))
 		MOVi %3 #10 
 		MOVi %4 #1 
 		ADRL %5 $buffer *0
-		CALL &intToString %1 *5	; expects intToString(int, int, int, ptr) -> ptr @ 262:37
-		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 262:38
+		CALL &intToString %1 *5	; expects intToString(int, int, int, ptr) -> ptr @ buffer.impala:262:37
+		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ buffer.impala:262:38
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-traceFloat:	FUNC	; signature func traceFloat(float f) -> void @ 265:1
+traceFloat:	FUNC	; signature func traceFloat(float f) -> void @ buffer.impala:265:1
 		PARA *1
 	$f:	INPf
-.x.traceFloat.buffer:	! DEFi #32
-	$buffer:	LOCA *.x.traceFloat.buffer
+.z.traceFloat.buffer:	! DEFi #32
+	$buffer:	LOCA *.z.traceFloat.buffer
 ;-----------------------------------------------------------------------------
 		MOVf %2 $f 	; trace(floatToString(f, 6, buffer))
 		MOVi %3 #6 
 		ADRL %4 $buffer *0
-		CALL &floatToString %1 *4	; expects floatToString(float, int, ptr) -> ptr @ 268:35
-		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 268:36
+		CALL &floatToString %1 *4	; expects floatToString(float, int, ptr) -> ptr @ buffer.impala:268:35
+		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ buffer.impala:268:36
 		RETU   	; }
 
-BUFFER_SIZE:	! DEFi #256	; signature const BUFFER_SIZE : int @ 273:1
+BUFFER_SIZE:	! DEFi #256	; signature const BUFFER_SIZE : int @ buffer.impala:273:1
 	GLOB *1
-lpx:	DATf #0.0	; signature global lpx : float @ 274:1
+lpx:	DATf #0.0	; signature global lpx : float @ buffer.impala:274:1
 	GLOB *1
-lpy:	DATf #0.0	; signature global lpy : float @ 275:1
+lpy:	DATf #0.0	; signature global lpy : float @ buffer.impala:275:1
 	GLOB *1
-rpx:	DATf #0.0	; signature global rpx : float @ 276:1
+rpx:	DATf #0.0	; signature global rpx : float @ buffer.impala:276:1
 	GLOB *1
-rpy:	DATf #0.0	; signature global rpy : float @ 277:1
+rpy:	DATf #0.0	; signature global rpy : float @ buffer.impala:277:1
 	GLOB *1
-lrx:	DATf #0.0	; signature global lrx : float @ 278:1
+lrx:	DATf #0.0	; signature global lrx : float @ buffer.impala:278:1
 	GLOB *1
-lry:	DATf #0.0	; signature global lry : float @ 279:1
+lry:	DATf #0.0	; signature global lry : float @ buffer.impala:279:1
 	GLOB *1
-rrx:	DATf #0.0	; signature global rrx : float @ 280:1
+rrx:	DATf #0.0	; signature global rrx : float @ buffer.impala:280:1
 	GLOB *1
-rry:	DATf #0.0	; signature global rry : float @ 281:1
+rry:	DATf #0.0	; signature global rry : float @ buffer.impala:281:1
 	! MULi <A> #2 #BUFFER_SIZE
-.x.buffer:	! DEFi #<A>
-buffer:	GLOB *.x.buffer	; signature array buffer[] : unknown @ 282:1
+.z.buffer:	! DEFi #<A>
+buffer:	GLOB *.z.buffer	; signature array buffer[] : unknown @ buffer.impala:282:1
 	GLOB *1
-bufferPointer:	DATp &buffer	; signature global bufferPointer : ptr @ 283:1
+bufferPointer:	DATp &buffer	; signature global bufferPointer : ptr @ buffer.impala:283:1
 
 ;-----------------------------------------------------------------------------
-init:	FUNC	; signature func init() -> void @ 290:1
+init:	FUNC	; signature func init() -> void @ buffer.impala:290:1
 		PARA *1
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_init_4dd 	; trace("init")
-		CALL ^trace %0 *2	; expects trace(int-ptr) -> unknown @ 292:15
+		CALL ^trace %0 *2	; expects trace(int-ptr) -> unknown @ buffer.impala:292:15
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-reset:	FUNC	; signature func reset() -> void @ 299:1
+reset:	FUNC	; signature func reset() -> void @ buffer.impala:299:1
 		PARA *1
 	$a:	LOCf
 	$lr:	LOCf
@@ -400,7 +400,7 @@ reset:	FUNC	; signature func reset() -> void @ 299:1
 	$i:	LOCi
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_reset_4de 	; trace("reset")
-		CALL ^trace %0 *2	; expects trace(int-ptr) -> unknown @ 302:16
+		CALL ^trace %0 *2	; expects trace(int-ptr) -> unknown @ buffer.impala:302:16
 		MOVf $a #0.5 	; a = 0.5
 		! MULf <A> #TWICE_PI #440.0	; lr = TWICE_PI * 440.0 / 44100.0
 		! DIVf <A> <A> #44100.0
@@ -410,50 +410,50 @@ reset:	FUNC	; signature func reset() -> void @ 299:1
 		MOVf $rr <A> 
 		MOVf $p0 #0.0 	; p0 = 0.0
 		MOVf %1 $p0 	; global lpx = (float) cos(p0) * a
-		CALL &cos %0 *2	; expects cos(float) -> float @ 307:31
+		CALL &cos %0 *2	; expects cos(float) -> float @ buffer.impala:307:31
 		MULf %0 %0 $a
 		POKE &lpx %0 
 		MOVf %1 $p0 	; global lpy = (float) sin(p0) * a
-		CALL &sin %0 *2	; expects sin(float) -> float @ 308:31
+		CALL &sin %0 *2	; expects sin(float) -> float @ buffer.impala:308:31
 		MULf %0 %0 $a
 		POKE &lpy %0 
 		MULf %1 $lr #0.5	; t = SQRT_2 * (float) sin(lr * 0.5)
-		CALL &sin %0 *2	; expects sin(float) -> float @ 309:36
+		CALL &sin %0 *2	; expects sin(float) -> float @ buffer.impala:309:36
 		MULf $t #SQRT_2 %0
 		MULf %0 $t $t	; global lrx = t * t
 		POKE &lrx %0 
 		MOVf %1 $lr 	; global lry = (float) sin(lr)
-		CALL &sin %0 *2	; expects sin(float) -> float @ 311:30
+		CALL &sin %0 *2	; expects sin(float) -> float @ buffer.impala:311:30
 		POKE &lry %0 
 		MOVf %1 $p0 	; global rpx = (float) cos(p0) * a
-		CALL &cos %0 *2	; expects cos(float) -> float @ 312:31
+		CALL &cos %0 *2	; expects cos(float) -> float @ buffer.impala:312:31
 		MULf %0 %0 $a
 		POKE &rpx %0 
 		MOVf %1 $p0 	; global rpy = (float) sin(p0) * a
-		CALL &sin %0 *2	; expects sin(float) -> float @ 313:31
+		CALL &sin %0 *2	; expects sin(float) -> float @ buffer.impala:313:31
 		MULf %0 %0 $a
 		POKE &rpy %0 
 		MULf %1 $rr #0.5	; t = SQRT_2 * (float) sin(rr * 0.5)
-		CALL &sin %0 *2	; expects sin(float) -> float @ 314:36
+		CALL &sin %0 *2	; expects sin(float) -> float @ buffer.impala:314:36
 		MULf $t #SQRT_2 %0
 		MULf %0 $t $t	; global rrx = t * t
 		POKE &rrx %0 
 		MOVf %1 $rr 	; global rry = (float) sin(rr)
-		CALL &sin %0 *2	; expects sin(float) -> float @ 316:30
+		CALL &sin %0 *2	; expects sin(float) -> float @ buffer.impala:316:30
 		POKE &rry %0 
 		POKE &bufferPointer &buffer 	; global bufferPointer = global buffer
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-update:	FUNC	; signature func update() -> void @ 324:1
+update:	FUNC	; signature func update() -> void @ buffer.impala:324:1
 		PARA *1
 ;-----------------------------------------------------------------------------
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-process:	FUNC	; signature func process() -> void @ 338:1
+process:	FUNC	; signature func process() -> void @ buffer.impala:338:1
 		PARA *1
 	$nx:	LOCf
 	$lpx:	LOCf

@@ -1,19 +1,31 @@
 /*
-	An `extern struct` array field states NO extent, exactly like a standalone `extern array`
-	("`extern array` declaration should not include array size", Impala 1.0). The host owns that
-	layout: field positions come from host-supplied `.o.Name.field` symbols and a 1-D element stride
-	is 1, so Impala never reads the extent. A number here would be an unverifiable claim - stating
-	one is E430, omitting it anywhere else is E431.
+	A HOST-OWNED array - an `extern struct` array field, or a standalone `extern array` - states its
+	RANK and no extent. The host owns the layout: field positions come from host-supplied
+	`.o.Name.field` symbols, sizes from `.z.`, and every axis of a shape from `.d.`. A number here
+	would be an unverifiable claim Impala never reads, so stating one is E430 and omitting it
+	anywhere else is E431.
 
-	The signature row carries `a : int[]`, the same "extent unknown" wildcard gazl-validate skips
-	rather than comparing.
+	Rank is NOT optional with it (E432), and `[]` is how one axis is spelled. Rank is the one thing
+	about a host-owned layout this side genuinely knows, it is what a subscript is checked against
+	(E206), and it is what a shape strides by - so leaving it implicit meant a matrix could not be
+	declared at all, while `array cells` quietly meant rank 1 even when the host's was not.
 
-	Expected (GAZLCmd externStructArrayField.gazl main .o.Grid.n 0 .o.Grid.cells 1 .o.Grid.tag 9 .z.Grid 10): 100 4 0.5
+	`m` is that matrix. Impala emits `MULi %0 $y #.d.Grid.m.0` and defines NOTHING: the stride and
+	both bounds are the host's symbols, so the same module is accepted or rejected purely by what the
+	host publishes, with no recompile. Verified both ways - with `.d.Grid.m.0` at 3 the write below
+	assembles, at 2 the deferred `! FAIL` names axis 0.
+
+	The signature row still carries `cells : int[]` and `m : int[]`, the same "extent unknown"
+	wildcard gazl-validate skips rather than comparing. Deliberately NOT a rank claim like `int[,]`:
+	the validator compares extents as raw strings, so a rank row would conflict with a definition's
+	`int[3x4]` and report a cross-unit clash that is not one.
+
+	Expected (GAZLCmd externStructArrayField.gazl main .o.Grid.n 0 .o.Grid.cells 1 .o.Grid.m 5 .d.Grid.m.0 3 .d.Grid.m.1 2 .o.Grid.tag 11 .z.Grid 12): 100 4 77 0.5
 */
 
 const int DEBUG = 1
 
-extern struct Grid { int n; int array cells; float tag }
+extern struct Grid { int n; int array cells[]; int array m[,]; float tag }
 
 extern native printInt
 extern native printFloat
@@ -29,12 +41,14 @@ locals int i
 function poke(Grid pointer g, int i, int v) { g->cells[i] = v; }
 
 function main()
-locals int array raw[10], Grid pointer g
+locals int array raw[12], Grid pointer g
 {
 	g = (Grid pointer)&raw[0];
 	g->n = 4; g->tag = 0.5;
 	poke(g, 0, 10); poke(g, 1, 20); poke(g, 2, 30); poke(g, 3, 40);
 	printInt(sum(g)); printLF();
 	printInt(g->n); printLF();
+	g->m[1, 2] = 77;									// strides by .d.Grid.m.0 - the host's, not ours
+	printInt(g->m[1, 2]); printLF();
 	printFloat(g->tag); printLF();
 }

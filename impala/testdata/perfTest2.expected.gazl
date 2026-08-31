@@ -1,30 +1,30 @@
- ; Compiled with Impala version 1.0
+ ; Compiled with Impala version 2.0
 
  ; signatures version=1
- ; signature extern native printInt() -> unknown @ 1:1
+ ; signature extern native printInt() -> unknown @ perfTest2.impala:1:1
 
  ;-----------------------------------------------------------------------------
- fib:				FUNC		; signature func fib(int y) -> int @ 3:1
+ fib:				FUNC		; signature func fib(int y) -> int @ perfTest2.impala:3:1
  					$x:			OUTi
  					$y:			INPi
  ;-----------------------------------------------------------------------------
  								LSSi $y #2 @.f0					; if (y >= 2) 
  								SUBi %1 $y #1					; x = (int) fib(y - 1) + (int) fib(y - 2)
- 								CALL &fib %0 *2					; expects fib(int) -> int @ 7:24
+ 								CALL &fib %0 *2					; expects fib(int) -> int @ perfTest2.impala:7:24
  								SUBi %2 $y #2
- 								CALL &fib %1 *2					; expects fib(int) -> int @ 7:42
+ 								CALL &fib %1 *2					; expects fib(int) -> int @ perfTest2.impala:7:42
  								ADDi $x %0 %1
- 								GOTO @.e1  						; } else 
+ 								RETU   							; } else 
  					.f0:		MOVi $x $y 						; x = y
  					.e1:		RETU   							; }
 
 
  ;-----------------------------------------------------------------------------
- main:				FUNC		; signature func main() -> void @ 13:1
+ main:				FUNC		; signature func main() -> void @ perfTest2.impala:13:1
  								PARA *1
  ;-----------------------------------------------------------------------------
  								MOVi %2 #35 					; printInt(fib(35))
- 								CALL &fib %1 *2					; expects fib(int) -> int @ 15:18
- 								CALL ^printInt %0 *2			; expects printInt(int) -> unknown @ 15:19
+ 								CALL &fib %1 *2					; expects fib(int) -> int @ perfTest2.impala:15:18
+ 								CALL ^printInt %0 *2			; expects printInt(int) -> unknown @ perfTest2.impala:15:19
  								RETU   							; }
 

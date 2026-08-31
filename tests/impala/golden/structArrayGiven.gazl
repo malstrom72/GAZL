@@ -1,0 +1,51 @@
+; Compiled with Impala version 2.0
+
+; signatures version=1
+DEBUG:	! DEFi #0	; signature const DEBUG : int @ structArrayGiven.impala:18:1
+N:	! DEFi #4	; signature const N : int @ structArrayGiven.impala:19:1
+; signature extern native printInt() -> unknown @ structArrayGiven.impala:21:1
+; signature extern native printLF() -> unknown @ structArrayGiven.impala:22:1
+	! MOVi <a> #0	; layout of struct V
+.o.V.n:	! DEFi #<a>
+	! ADDi <a> #<a> #1
+.o.V.m:	! DEFi #<a>
+	! ADDi <a> #<a> #1
+.z.V:	! DEFi #<a>
+; signature struct V { n : int, m : int } @ structArrayGiven.impala:24:1
+	! MULi <A> #N #.z.V
+.z.bank:	! DEFi #<A>
+bank:	GLOB *.z.bank	; signature array bank[N] : V @ structArrayGiven.impala:26:1
+	! LEQi #4 #.z.bank @.g0
+	! FAIL too many initializer values for bank: 4 given, room for .z.bank
+.g0:	!
+	DATA #1 #2 #3 #4
+
+;-----------------------------------------------------------------------------
+main:	FUNC	; signature export func main() -> void @ structArrayGiven.impala:28:1
+		PARA *1
+;-----------------------------------------------------------------------------
+		PEEK %1 &bank:.o.V.n 	; printInt(global bank[0].n)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ structArrayGiven.impala:30:28
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structArrayGiven.impala:31:11
+		PEEK %1 &bank:.o.V.m 	; printInt(global bank[0].m)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ structArrayGiven.impala:32:28
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structArrayGiven.impala:33:11
+		! ADDi <A> #.z.V #.o.V.n	; printInt(global bank[1].n)
+		PEEK %1 &bank:<A> 
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ structArrayGiven.impala:34:28
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structArrayGiven.impala:35:11
+		! ADDi <A> #.z.V #.o.V.m	; printInt(global bank[1].m)
+		PEEK %1 &bank:<A> 
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ structArrayGiven.impala:36:28
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structArrayGiven.impala:37:11
+		! MULi <A> #3 #.z.V	; printInt(global bank[3].n)
+		! ADDi <B> #<A> #.o.V.n
+		PEEK %1 &bank:<B> 
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ structArrayGiven.impala:38:28
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structArrayGiven.impala:39:11
+		! MULi <B> #3 #.z.V	; printInt(global bank[3].m)
+		! ADDi <A> #<B> #.o.V.m
+		PEEK %1 &bank:<A> 
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ structArrayGiven.impala:40:28
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structArrayGiven.impala:41:11
+		RETU   	; }

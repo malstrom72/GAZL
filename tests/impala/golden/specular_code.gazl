@@ -1,82 +1,82 @@
-; Compiled with Impala version 1.0
+; Compiled with Impala version 2.0
 
 ; signatures version=1
-PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #2	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int @ 17:1
-FALSE:	! DEFi #0	; signature const FALSE : int @ 18:1
-TRUE:	! DEFi #1	; signature const TRUE : int @ 19:1
-.x.panelTextRows:	! DEFi #8
-panelTextRows:	CNST *.x.panelTextRows	; signature array panelTextRows[8] : unknown @ 27:1
+PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #2	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int @ specular_code.impala:17:1
+FALSE:	! DEFi #0	; signature const FALSE : int @ specular_code.impala:18:1
+TRUE:	! DEFi #1	; signature const TRUE : int @ specular_code.impala:19:1
+.z.panelTextRows:	! DEFi #8
+panelTextRows:	CNST *.z.panelTextRows	; signature array panelTextRows[8] : unknown @ specular_code.impala:27:1
 	DATA &.s__4d2 &.s__4d2 &.s_THRESH_4d3 &.s_00FFlo_4d4
 	DATA &.s__4d2 &.s__4d2 &.s_DECAYP_4d5 &.s_00FFx1_4d6
-; signature extern native abort() -> unknown @ 38:1
-; signature extern native trace() -> unknown @ 39:1
-; signature extern native yield() -> unknown @ 40:1
-; signature extern native write() -> unknown @ 41:1
-; signature extern native read() -> unknown @ 42:1
-; signature extern const DEBUG : int @ 44:1
-; signature extern const OPERATOR_1_NOP : int @ 46:1
-; signature extern const OPERATOR_1_AND : int @ 47:1
-; signature extern const OPERATOR_1_MUL : int @ 48:1
-; signature extern const OPERATOR_1_OSC : int @ 49:1
-; signature extern const OPERATOR_1_RND : int @ 50:1
-; signature extern const OPERATOR_1_COUNT : int @ 51:1
-; signature extern const OPERATOR_2_NOP : int @ 53:1
-; signature extern const OPERATOR_2_OR : int @ 54:1
-; signature extern const OPERATOR_2_XOR : int @ 55:1
-; signature extern const OPERATOR_2_MSK : int @ 56:1
-; signature extern const OPERATOR_2_SUB : int @ 57:1
-; signature extern const OPERATOR_2_COUNT : int @ 58:1
-; signature extern const SWITCHES_SYNC_MASK : int @ 60:1
-; signature extern const SWITCHES_TRIPLET_MASK : int @ 61:1
-; signature extern const SWITCHES_DOTTED_MASK : int @ 62:1
-; signature extern const SWITCHES_WRITE_PROTECT_MASK : int @ 63:1
-; signature extern const SWITCHES_REVERSE_MASK : int @ 64:1
-; signature extern const CLOCK_FREQ_PARAM_INDEX : int @ 66:1
-; signature extern const SWITCHES_PARAM_INDEX : int @ 67:1
-; signature extern const OPERATOR_1_PARAM_INDEX : int @ 68:1
-; signature extern const OPERAND_1_HIGH_PARAM_INDEX : int @ 69:1
-; signature extern const OPERAND_1_LOW_PARAM_INDEX : int @ 70:1
-; signature extern const OPERATOR_2_PARAM_INDEX : int @ 71:1
-; signature extern const OPERAND_2_HIGH_PARAM_INDEX : int @ 72:1
-; signature extern const OPERAND_2_LOW_PARAM_INDEX : int @ 73:1
-; signature extern const PARAM_COUNT : int @ 74:1
-; signature extern const POSITION_INT_BITS : int @ 76:1
-; signature extern const POSITION_FRACT_BITS : int @ 77:1
+; signature extern native abort() -> unknown @ specular_code.impala:38:1
+; signature extern native trace() -> unknown @ specular_code.impala:39:1
+; signature extern native yield() -> unknown @ specular_code.impala:40:1
+; signature extern native write() -> unknown @ specular_code.impala:41:1
+; signature extern native read() -> unknown @ specular_code.impala:42:1
+; signature extern const DEBUG : int @ specular_code.impala:44:1
+; signature extern const OPERATOR_1_NOP : int @ specular_code.impala:46:1
+; signature extern const OPERATOR_1_AND : int @ specular_code.impala:47:1
+; signature extern const OPERATOR_1_MUL : int @ specular_code.impala:48:1
+; signature extern const OPERATOR_1_OSC : int @ specular_code.impala:49:1
+; signature extern const OPERATOR_1_RND : int @ specular_code.impala:50:1
+; signature extern const OPERATOR_1_COUNT : int @ specular_code.impala:51:1
+; signature extern const OPERATOR_2_NOP : int @ specular_code.impala:53:1
+; signature extern const OPERATOR_2_OR : int @ specular_code.impala:54:1
+; signature extern const OPERATOR_2_XOR : int @ specular_code.impala:55:1
+; signature extern const OPERATOR_2_MSK : int @ specular_code.impala:56:1
+; signature extern const OPERATOR_2_SUB : int @ specular_code.impala:57:1
+; signature extern const OPERATOR_2_COUNT : int @ specular_code.impala:58:1
+; signature extern const SWITCHES_SYNC_MASK : int @ specular_code.impala:60:1
+; signature extern const SWITCHES_TRIPLET_MASK : int @ specular_code.impala:61:1
+; signature extern const SWITCHES_DOTTED_MASK : int @ specular_code.impala:62:1
+; signature extern const SWITCHES_WRITE_PROTECT_MASK : int @ specular_code.impala:63:1
+; signature extern const SWITCHES_REVERSE_MASK : int @ specular_code.impala:64:1
+; signature extern const CLOCK_FREQ_PARAM_INDEX : int @ specular_code.impala:66:1
+; signature extern const SWITCHES_PARAM_INDEX : int @ specular_code.impala:67:1
+; signature extern const OPERATOR_1_PARAM_INDEX : int @ specular_code.impala:68:1
+; signature extern const OPERAND_1_HIGH_PARAM_INDEX : int @ specular_code.impala:69:1
+; signature extern const OPERAND_1_LOW_PARAM_INDEX : int @ specular_code.impala:70:1
+; signature extern const OPERATOR_2_PARAM_INDEX : int @ specular_code.impala:71:1
+; signature extern const OPERAND_2_HIGH_PARAM_INDEX : int @ specular_code.impala:72:1
+; signature extern const OPERAND_2_LOW_PARAM_INDEX : int @ specular_code.impala:73:1
+; signature extern const PARAM_COUNT : int @ specular_code.impala:74:1
+; signature extern const POSITION_INT_BITS : int @ specular_code.impala:76:1
+; signature extern const POSITION_FRACT_BITS : int @ specular_code.impala:77:1
 	GLOB *1
-clock:	DATi #0	; signature global clock : int @ 79:1
-.x.params:	! DEFi #PARAM_COUNT
-params:	GLOB *.x.params	; signature array params[PARAM_COUNT] : unknown @ 80:1
-.x.displayLEDs:	! DEFi #4
-displayLEDs:	GLOB *.x.displayLEDs	; signature array displayLEDs[4] : unknown @ 81:1
+clock:	DATi #0	; signature global clock : int @ specular_code.impala:79:1
+.z.params:	! DEFi #PARAM_COUNT
+params:	GLOB *.z.params	; signature array params[PARAM_COUNT] : unknown @ specular_code.impala:80:1
+.z.displayLEDs:	! DEFi #4
+displayLEDs:	GLOB *.z.displayLEDs	; signature array displayLEDs[4] : unknown @ specular_code.impala:81:1
 	GLOB *1
-instance:	DATi #0	; signature global instance : int @ 82:1
+instance:	DATi #0	; signature global instance : int @ specular_code.impala:82:1
 	CNST *1
-clockFreqLimit:	DATi #44100	; signature readonly clockFreqLimit : int @ 83:1
-.x.signal:	! DEFi #2
-signal:	GLOB *.x.signal	; signature array signal[2] : unknown @ 86:1
+clockFreqLimit:	DATi #44100	; signature readonly clockFreqLimit : int @ specular_code.impala:83:1
+.z.signal:	! DEFi #2
+signal:	GLOB *.z.signal	; signature array signal[2] : unknown @ specular_code.impala:86:1
 
 ;-----------------------------------------------------------------------------
-error:	FUNC	; signature func error(ptr s) -> void @ 99:1
+error:	FUNC	; signature func error(ptr s) -> void @ specular_code.impala:99:1
 		PARA *1
 	$s:	INPp
 ;-----------------------------------------------------------------------------
 		MOVp %1 $s 	; trace(s)
-		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ 101:10
-		CALL ^abort %0 *1	; expects abort() -> unknown @ 102:9
+		CALL ^trace %0 *2	; expects trace(ptr) -> unknown @ specular_code.impala:101:10
+		CALL ^abort %0 *1	; expects abort() -> unknown @ specular_code.impala:102:9
 		RETU   	; }
 
-LOG2:	! DEFf #0.69314718055994530942	; signature const LOG2 : float @ 107:1
-LOG2R:	! DEFf #1.44269504088896340736	; signature const LOG2R : float @ 108:1
-LOG10R:	! DEFf #0.43429448190325182765	; signature const LOG10R : float @ 109:1
-E:	! DEFf #2.71828182845904523536	; signature const E : float @ 110:1
-HALF_PI:	! DEFf #1.57079632679489661923	; signature const HALF_PI : float @ 111:1
-PI:	! DEFf #3.14159265358979323846	; signature const PI : float @ 112:1
+LOG2:	! DEFf #0.69314718055994530942	; signature const LOG2 : float @ specular_code.impala:107:1
+LOG2R:	! DEFf #1.44269504088896340736	; signature const LOG2R : float @ specular_code.impala:108:1
+LOG10R:	! DEFf #0.43429448190325182765	; signature const LOG10R : float @ specular_code.impala:109:1
+E:	! DEFf #2.71828182845904523536	; signature const E : float @ specular_code.impala:110:1
+HALF_PI:	! DEFf #1.57079632679489661923	; signature const HALF_PI : float @ specular_code.impala:111:1
+PI:	! DEFf #3.14159265358979323846	; signature const PI : float @ specular_code.impala:112:1
 	! MULf <A> #PI #2.0
-TWICE_PI:	! DEFf <A>	; signature const TWICE_PI : float @ 113:1
-COS_EPSILON:	! DEFf #1.0e-6	; signature const COS_EPSILON : float @ 114:1
+TWICE_PI:	! DEFf <A>	; signature const TWICE_PI : float @ specular_code.impala:113:1
+COS_EPSILON:	! DEFf #1.0e-6	; signature const COS_EPSILON : float @ specular_code.impala:114:1
 
 ;-----------------------------------------------------------------------------
-trunc:	FUNC	; signature func trunc(float x) -> float @ 116:1
+trunc:	FUNC	; signature func trunc(float x) -> float @ specular_code.impala:116:1
 	$y:	OUTf
 	$x:	INPf
 ;-----------------------------------------------------------------------------
@@ -84,30 +84,30 @@ trunc:	FUNC	; signature func trunc(float x) -> float @ 116:1
 		SUBf %0 #0.0 $x	; y = -floor(-x)
 		FLOf %0 %0 
 		SUBf $y #0.0 %0
-		GOTO @.e1  
+		RETU   
 	.f0:	FLOf $y $x 	; y = floor(x)
 	.e1:	RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-fmod:	FUNC	; signature func fmod(float x, float y) -> float @ 123:1
+fmod:	FUNC	; signature func fmod(float x, float y) -> float @ specular_code.impala:123:1
 	$z:	OUTf
 	$x:	INPf
 	$y:	INPf
 ;-----------------------------------------------------------------------------
 		NEQf $y #0.0 @.f0	; if (y == 0.0) error("Division by zero")
 		MOVp %1 &.s_Divisi_4d7 	; error("Division by zero")
-		CALL &error %0 *2	; expects error(ptr) -> void @ 126:41
-		GOTO @.e1  
+		CALL &error %0 *2	; expects error(ptr) -> void @ specular_code.impala:126:41
+		RETU   
 	.f0:	DIVf %1 $x $y	; z = x - (float) trunc(x / y) * y
-		CALL &trunc %0 *2	; expects trunc(float) -> float @ 127:36
+		CALL &trunc %0 *2	; expects trunc(float) -> float @ specular_code.impala:127:36
 		MULf %0 %0 $y
 		SUBf $z $x %0
 	.e1:	RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-cos:	FUNC	; signature func cos(float x) -> float @ 141:1
+cos:	FUNC	; signature func cos(float x) -> float @ specular_code.impala:141:1
 	$y:	OUTf
 	$x:	INPf
 	$a:	LOCf
@@ -117,7 +117,7 @@ cos:	FUNC	; signature func cos(float x) -> float @ 141:1
 ;-----------------------------------------------------------------------------
 		MOVf %1 $x 	; m = (float) fmod(x, TWICE_PI)
 		MOVf %2 #TWICE_PI 
-		CALL &fmod %0 *3	; expects fmod(float, float) -> float @ 148:31
+		CALL &fmod %0 *3	; expects fmod(float, float) -> float @ specular_code.impala:148:31
 		MOVf $m %0 
 		SUBf %0 #0.0 $m	; m = -m * m
 		MULf $m %0 $m
@@ -139,25 +139,25 @@ cos:	FUNC	; signature func cos(float x) -> float @ 141:1
 
 
 ;-----------------------------------------------------------------------------
-sin:	FUNC	; signature func sin(float x) -> float @ 162:1
+sin:	FUNC	; signature func sin(float x) -> float @ specular_code.impala:162:1
 	$y:	OUTf
 	$x:	INPf
 ;-----------------------------------------------------------------------------
 		SUBf %1 $x #HALF_PI	; y = (float) cos(x - HALF_PI)
-		CALL &cos %0 *2	; expects cos(float) -> float @ 165:30
+		CALL &cos %0 *2	; expects cos(float) -> float @ specular_code.impala:165:30
 		MOVf $y %0 
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-sqrt:	FUNC	; signature func sqrt(float x) -> float @ 168:1
+sqrt:	FUNC	; signature func sqrt(float x) -> float @ specular_code.impala:168:1
 	$y:	OUTf
 	$x:	INPf
 	$t:	LOCf
 ;-----------------------------------------------------------------------------
 		GEQf $x #0.0 @.f0	; if (x < 0.0) error("Domain error")
 		MOVp %1 &.s_Domain_4d8 	; error("Domain error")
-		CALL &error %0 *2	; expects error(ptr) -> void @ 172:36
+		CALL &error %0 *2	; expects error(ptr) -> void @ specular_code.impala:172:36
 	.f0:	MOVf $y $x 	; y = x
 		MOVf $t #0.0 	; t = 0.0
 	.l1:	EQUf $y $t @.e2	; while (y != t) 
@@ -168,94 +168,94 @@ sqrt:	FUNC	; signature func sqrt(float x) -> float @ 168:1
 		GOTO @.l1  	; }
 	.e2:	RETU   	; }
 
-FFT_POWER:	! DEFi #12	; signature const FFT_POWER : int @ 184:1
+FFT_POWER:	! DEFi #12	; signature const FFT_POWER : int @ specular_code.impala:184:1
 	! SHLi <A> #1 #FFT_POWER
-FFT_SIZE:	! DEFi <A>	; signature const FFT_SIZE : int @ 185:1
+FFT_SIZE:	! DEFi <A>	; signature const FFT_SIZE : int @ specular_code.impala:185:1
 	! DIVi <A> #FFT_SIZE #2
-FFT_SIZE_2:	! DEFi <A>	; signature const FFT_SIZE_2 : int @ 186:1
-PROCESS_SPREAD_FACTOR:	! DEFi #5	; signature const PROCESS_SPREAD_FACTOR : int @ 187:1
+FFT_SIZE_2:	! DEFi <A>	; signature const FFT_SIZE_2 : int @ specular_code.impala:186:1
+PROCESS_SPREAD_FACTOR:	! DEFi #5	; signature const PROCESS_SPREAD_FACTOR : int @ specular_code.impala:187:1
 	! iTOf <A> #FFT_SIZE #1.0
 	! DIVf <A> #2.0 <A>
-IFFT_SCALE:	! DEFf <A>	; signature const IFFT_SCALE : float @ 188:1
-ANTI_DENORMAL_CONSTANT:	! DEFf #1.0e-10	; signature const ANTI_DENORMAL_CONSTANT : float @ 189:1
-PERFORM_RESET:	! DEFi #0	; signature const PERFORM_RESET : int @ 190:1
+IFFT_SCALE:	! DEFf <A>	; signature const IFFT_SCALE : float @ specular_code.impala:188:1
+ANTI_DENORMAL_CONSTANT:	! DEFf #1.0e-10	; signature const ANTI_DENORMAL_CONSTANT : float @ specular_code.impala:189:1
+PERFORM_RESET:	! DEFi #0	; signature const PERFORM_RESET : int @ specular_code.impala:190:1
 	! ADDi <A> #PERFORM_RESET #1
-ANALYSIS_WINDOW:	! DEFi <A>	; signature const ANALYSIS_WINDOW : int @ 191:1
+ANALYSIS_WINDOW:	! DEFi <A>	; signature const ANALYSIS_WINDOW : int @ specular_code.impala:191:1
 	! ADDi <A> #ANALYSIS_WINDOW #1
-ANALYSIS_REINDEX:	! DEFi <A>	; signature const ANALYSIS_REINDEX : int @ 192:1
+ANALYSIS_REINDEX:	! DEFi <A>	; signature const ANALYSIS_REINDEX : int @ specular_code.impala:192:1
 	! ADDi <A> #ANALYSIS_REINDEX #1
-ANALYSIS_FFT_2:	! DEFi <A>	; signature const ANALYSIS_FFT_2 : int @ 193:1
+ANALYSIS_FFT_2:	! DEFi <A>	; signature const ANALYSIS_FFT_2 : int @ specular_code.impala:193:1
 	! ADDi <A> #ANALYSIS_FFT_2 #FFT_POWER
 	! SUBi <A> <A> #1
-ANALYSIS_UNTANGLE:	! DEFi <A>	; signature const ANALYSIS_UNTANGLE : int @ 194:1
+ANALYSIS_UNTANGLE:	! DEFi <A>	; signature const ANALYSIS_UNTANGLE : int @ specular_code.impala:194:1
 	! ADDi <A> #ANALYSIS_UNTANGLE #1
-PROCESS_FIND_MAX:	! DEFi <A>	; signature const PROCESS_FIND_MAX : int @ 195:1
+PROCESS_FIND_MAX:	! DEFi <A>	; signature const PROCESS_FIND_MAX : int @ specular_code.impala:195:1
 	! ADDi <A> #PROCESS_FIND_MAX #1
-PROCESS_FEEDBACK:	! DEFi <A>	; signature const PROCESS_FEEDBACK : int @ 196:1
+PROCESS_FEEDBACK:	! DEFi <A>	; signature const PROCESS_FEEDBACK : int @ specular_code.impala:196:1
 	! ADDi <A> #PROCESS_FEEDBACK #1
-PROCESS_PARTIAL_1:	! DEFi <A>	; signature const PROCESS_PARTIAL_1 : int @ 197:1
+PROCESS_PARTIAL_1:	! DEFi <A>	; signature const PROCESS_PARTIAL_1 : int @ specular_code.impala:197:1
 	! ADDi <A> #PROCESS_PARTIAL_1 #8
-SYNTHESIS_SMEAR_LEFT:	! DEFi <A>	; signature const SYNTHESIS_SMEAR_LEFT : int @ 198:1
+SYNTHESIS_SMEAR_LEFT:	! DEFi <A>	; signature const SYNTHESIS_SMEAR_LEFT : int @ specular_code.impala:198:1
 	! ADDi <A> #SYNTHESIS_SMEAR_LEFT #1
-SYNTHESIS_UNTANGLE_LEFT:	! DEFi <A>	; signature const SYNTHESIS_UNTANGLE_LEFT : int @ 199:1
+SYNTHESIS_UNTANGLE_LEFT:	! DEFi <A>	; signature const SYNTHESIS_UNTANGLE_LEFT : int @ specular_code.impala:199:1
 	! ADDi <A> #SYNTHESIS_UNTANGLE_LEFT #1
-SYNTHESIS_REINDEX_LEFT:	! DEFi <A>	; signature const SYNTHESIS_REINDEX_LEFT : int @ 200:1
+SYNTHESIS_REINDEX_LEFT:	! DEFi <A>	; signature const SYNTHESIS_REINDEX_LEFT : int @ specular_code.impala:200:1
 	! ADDi <A> #SYNTHESIS_REINDEX_LEFT #1
-SYNTHESIS_FFT_LEFT_2:	! DEFi <A>	; signature const SYNTHESIS_FFT_LEFT_2 : int @ 201:1
+SYNTHESIS_FFT_LEFT_2:	! DEFi <A>	; signature const SYNTHESIS_FFT_LEFT_2 : int @ specular_code.impala:201:1
 	! ADDi <A> #SYNTHESIS_FFT_LEFT_2 #FFT_POWER
 	! SUBi <A> <A> #1
-SYNTHESIS_MIX_LEFT:	! DEFi <A>	; signature const SYNTHESIS_MIX_LEFT : int @ 202:1
+SYNTHESIS_MIX_LEFT:	! DEFi <A>	; signature const SYNTHESIS_MIX_LEFT : int @ specular_code.impala:202:1
 	! ADDi <A> #SYNTHESIS_MIX_LEFT #1
-SYNTHESIS_SMEAR_RIGHT:	! DEFi <A>	; signature const SYNTHESIS_SMEAR_RIGHT : int @ 203:1
+SYNTHESIS_SMEAR_RIGHT:	! DEFi <A>	; signature const SYNTHESIS_SMEAR_RIGHT : int @ specular_code.impala:203:1
 	! ADDi <A> #SYNTHESIS_SMEAR_RIGHT #1
-SYNTHESIS_UNTANGLE_RIGHT:	! DEFi <A>	; signature const SYNTHESIS_UNTANGLE_RIGHT : int @ 204:1
+SYNTHESIS_UNTANGLE_RIGHT:	! DEFi <A>	; signature const SYNTHESIS_UNTANGLE_RIGHT : int @ specular_code.impala:204:1
 	! ADDi <A> #SYNTHESIS_UNTANGLE_RIGHT #1
-SYNTHESIS_REINDEX_RIGHT:	! DEFi <A>	; signature const SYNTHESIS_REINDEX_RIGHT : int @ 205:1
+SYNTHESIS_REINDEX_RIGHT:	! DEFi <A>	; signature const SYNTHESIS_REINDEX_RIGHT : int @ specular_code.impala:205:1
 	! ADDi <A> #SYNTHESIS_REINDEX_RIGHT #1
-SYNTHESIS_FFT_RIGHT_2:	! DEFi <A>	; signature const SYNTHESIS_FFT_RIGHT_2 : int @ 206:1
+SYNTHESIS_FFT_RIGHT_2:	! DEFi <A>	; signature const SYNTHESIS_FFT_RIGHT_2 : int @ specular_code.impala:206:1
 	! ADDi <A> #SYNTHESIS_FFT_RIGHT_2 #FFT_POWER
 	! SUBi <A> <A> #1
-SYNTHESIS_MIX_RIGHT:	! DEFi <A>	; signature const SYNTHESIS_MIX_RIGHT : int @ 207:1
+SYNTHESIS_MIX_RIGHT:	! DEFi <A>	; signature const SYNTHESIS_MIX_RIGHT : int @ specular_code.impala:207:1
 	! ADDi <A> #SYNTHESIS_MIX_RIGHT #1
-PROCESS_STEPS:	! DEFi <A>	; signature const PROCESS_STEPS : int @ 208:1
-THRESHOLD_PARAM:	! DEFi #OPERAND_1_HIGH_PARAM_INDEX	; signature const THRESHOLD_PARAM : int @ 209:1
-BAND_PARAM:	! DEFi #OPERAND_1_LOW_PARAM_INDEX	; signature const BAND_PARAM : int @ 210:1
-DECAY_PARAM:	! DEFi #OPERAND_2_HIGH_PARAM_INDEX	; signature const DECAY_PARAM : int @ 211:1
-PARTIALS_PARAM:	! DEFi #OPERAND_2_LOW_PARAM_INDEX	; signature const PARTIALS_PARAM : int @ 212:1
+PROCESS_STEPS:	! DEFi <A>	; signature const PROCESS_STEPS : int @ specular_code.impala:208:1
+THRESHOLD_PARAM:	! DEFi #OPERAND_1_HIGH_PARAM_INDEX	; signature const THRESHOLD_PARAM : int @ specular_code.impala:209:1
+BAND_PARAM:	! DEFi #OPERAND_1_LOW_PARAM_INDEX	; signature const BAND_PARAM : int @ specular_code.impala:210:1
+DECAY_PARAM:	! DEFi #OPERAND_2_HIGH_PARAM_INDEX	; signature const DECAY_PARAM : int @ specular_code.impala:211:1
+PARTIALS_PARAM:	! DEFi #OPERAND_2_LOW_PARAM_INDEX	; signature const PARTIALS_PARAM : int @ specular_code.impala:212:1
 	CNST *1
 	! SHLi <A> #1 #THRESHOLD_PARAM
 	! SHLi <B> #1 #DECAY_PARAM
 	! IORi <A> <A> <B>
-updateMask:	DATi <A>	; signature readonly updateMask : int @ 213:1
+updateMask:	DATi <A>	; signature readonly updateMask : int @ specular_code.impala:213:1
 	GLOB *1
-doReset:	DATi #TRUE	; signature global doReset : int @ 218:1
-.x.window:	! DEFi #FFT_SIZE_2
-window:	GLOB *.x.window	; signature array window[FFT_SIZE_2] : unknown @ 219:1
-.x.cRotateRe:	! DEFi #256
-cRotateRe:	GLOB *.x.cRotateRe	; signature array cRotateRe[256] : unknown @ 220:1
-.x.cRotateIm:	! DEFi #256
-cRotateIm:	GLOB *.x.cRotateIm	; signature array cRotateIm[256] : unknown @ 221:1
-.x.partialGains:	! DEFi #8
-partialGains:	GLOB *.x.partialGains	; signature array partialGains[8] : unknown @ 222:1
+doReset:	DATi #TRUE	; signature global doReset : int @ specular_code.impala:218:1
+.z.window:	! DEFi #FFT_SIZE_2
+window:	GLOB *.z.window	; signature array window[FFT_SIZE_2] : unknown @ specular_code.impala:219:1
+.z.cRotateRe:	! DEFi #256
+cRotateRe:	GLOB *.z.cRotateRe	; signature array cRotateRe[256] : unknown @ specular_code.impala:220:1
+.z.cRotateIm:	! DEFi #256
+cRotateIm:	GLOB *.z.cRotateIm	; signature array cRotateIm[256] : unknown @ specular_code.impala:221:1
+.z.partialGains:	! DEFi #8
+partialGains:	GLOB *.z.partialGains	; signature array partialGains[8] : unknown @ specular_code.impala:222:1
 	! SUBi <A> #FFT_POWER #1
-.x.fftWPRe:	! DEFi #<A>
-fftWPRe:	GLOB *.x.fftWPRe	; signature array fftWPRe[] : unknown @ 223:1
+.z.fftWPRe:	! DEFi #<A>
+fftWPRe:	GLOB *.z.fftWPRe	; signature array fftWPRe[] : unknown @ specular_code.impala:223:1
 	! SUBi <A> #FFT_POWER #1
-.x.fftWPIm:	! DEFi #<A>
-fftWPIm:	GLOB *.x.fftWPIm	; signature array fftWPIm[] : unknown @ 224:1
+.z.fftWPIm:	! DEFi #<A>
+fftWPIm:	GLOB *.z.fftWPIm	; signature array fftWPIm[] : unknown @ specular_code.impala:224:1
 	GLOB *1
-threshold:	DATf #0.0	; signature global threshold : float @ 225:1
+threshold:	DATf #0.0	; signature global threshold : float @ specular_code.impala:225:1
 	GLOB *1
-decayConstant:	DATf #0.0	; signature global decayConstant : float @ 226:1
+decayConstant:	DATf #0.0	; signature global decayConstant : float @ specular_code.impala:226:1
 	GLOB *1
-outputGain:	DATf #0.0	; signature global outputGain : float @ 227:1
-.x.randomArray:	! DEFi #FFT_SIZE_2
-randomArray:	GLOB *.x.randomArray	; signature array randomArray[FFT_SIZE_2] : unknown @ 228:1
-.x.untangleParams:	! DEFi #2
-untangleParams:	GLOB *.x.untangleParams	; signature array untangleParams[2] : unknown @ 229:1
+outputGain:	DATf #0.0	; signature global outputGain : float @ specular_code.impala:227:1
+.z.randomArray:	! DEFi #FFT_SIZE_2
+randomArray:	GLOB *.z.randomArray	; signature array randomArray[FFT_SIZE_2] : unknown @ specular_code.impala:228:1
+.z.untangleParams:	! DEFi #2
+untangleParams:	GLOB *.z.untangleParams	; signature array untangleParams[2] : unknown @ specular_code.impala:229:1
 
 ;-----------------------------------------------------------------------------
-fftReIndex:	FUNC	; signature func fftReIndex(int n, ptr data) -> void @ 233:1
+fftReIndex:	FUNC	; signature func fftReIndex(int n, ptr data) -> void @ specular_code.impala:233:1
 		PARA *1
 	$n:	INPi
 	$data:	INPp
@@ -295,7 +295,7 @@ fftReIndex:	FUNC	; signature func fftReIndex(int n, ptr data) -> void @ 233:1
 
 
 ;-----------------------------------------------------------------------------
-fftPass4:	FUNC	; signature func fftPass4(int n, ptr data, int fftStep) -> void @ 255:1
+fftPass4:	FUNC	; signature func fftPass4(int n, ptr data, int fftStep) -> void @ specular_code.impala:255:1
 		PARA *1
 	$n:	INPi
 	$data:	INPp
@@ -439,7 +439,7 @@ fftPass4:	FUNC	; signature func fftPass4(int n, ptr data, int fftStep) -> void @
 
 
 ;-----------------------------------------------------------------------------
-fftPass0:	FUNC	; signature func fftPass0(int n, ptr data) -> void @ 312:1
+fftPass0:	FUNC	; signature func fftPass0(int n, ptr data) -> void @ specular_code.impala:312:1
 		PARA *1
 	$n:	INPi
 	$data:	INPp
@@ -477,7 +477,7 @@ fftPass0:	FUNC	; signature func fftPass0(int n, ptr data) -> void @ 312:1
 
 
 ;-----------------------------------------------------------------------------
-fftPass:	FUNC	; signature func fftPass(int n, ptr data, int fftStep) -> void @ 335:1
+fftPass:	FUNC	; signature func fftPass(int n, ptr data, int fftStep) -> void @ specular_code.impala:335:1
 		PARA *1
 	$n:	INPi
 	$data:	INPp
@@ -546,7 +546,7 @@ fftPass:	FUNC	; signature func fftPass(int n, ptr data, int fftStep) -> void @ 3
 
 
 ;-----------------------------------------------------------------------------
-fftUntangleParams:	FUNC	; signature func fftUntangleParams(int n, ptr params) -> void @ 372:1
+fftUntangleParams:	FUNC	; signature func fftUntangleParams(int n, ptr params) -> void @ specular_code.impala:372:1
 		PARA *1
 	$n:	INPi
 	$params:	INPp
@@ -554,18 +554,18 @@ fftUntangleParams:	FUNC	; signature func fftUntangleParams(int n, ptr params) ->
 	$wpIm:	LOCf
 ;-----------------------------------------------------------------------------
 		MOVf %1 #2.0 	; wpRe = (float) sqrt(2.0) * (float) sin(2.0 * PI * 0.5 / itof(n))
-		CALL &sqrt %0 *2	; expects sqrt(float) -> float @ 375:27
+		CALL &sqrt %0 *2	; expects sqrt(float) -> float @ specular_code.impala:375:27
 		! MULf <A> #2.0 #PI
 		! MULf <A> <A> #0.5
 		iTOf %2 $n #1.0
 		DIVf %2 <A> %2
-		CALL &sin %1 *2	; expects sin(float) -> float @ 375:66
+		CALL &sin %1 *2	; expects sin(float) -> float @ specular_code.impala:375:66
 		MULf $wpRe %0 %1
 		MULf $wpRe $wpRe $wpRe	; wpRe = wpRe * wpRe
 		! MULf <A> #2.0 #PI	; wpIm = (float) sin(2.0 * PI / itof(n))
 		iTOf %1 $n #1.0
 		DIVf %1 <A> %1
-		CALL &sin %0 *2	; expects sin(float) -> float @ 377:40
+		CALL &sin %0 *2	; expects sin(float) -> float @ specular_code.impala:377:40
 		MOVf $wpIm %0 
 		POKE $params #0 $wpRe	; params[0] = wpRe
 		POKE $params #1 $wpIm	; params[1] = wpIm
@@ -573,7 +573,7 @@ fftUntangleParams:	FUNC	; signature func fftUntangleParams(int n, ptr params) ->
 
 
 ;-----------------------------------------------------------------------------
-fftUntangle:	FUNC	; signature func fftUntangle(int n, ptr data, ptr params) -> void @ 382:1
+fftUntangle:	FUNC	; signature func fftUntangle(int n, ptr data, ptr params) -> void @ specular_code.impala:382:1
 		PARA *1
 	$n:	INPi
 	$data:	INPp
@@ -668,7 +668,7 @@ fftUntangle:	FUNC	; signature func fftUntangle(int n, ptr data, ptr params) -> v
 
 
 ;-----------------------------------------------------------------------------
-mixOutput:	FUNC	; signature func mixOutput(ptr fftBuffer, ptr mixBuffer, int mixBufferOffset, int channel) -> void @ 433:1
+mixOutput:	FUNC	; signature func mixOutput(ptr fftBuffer, ptr mixBuffer, int mixBufferOffset, int channel) -> void @ specular_code.impala:433:1
 		PARA *1
 	$fftBuffer:	INPp
 	$mixBuffer:	INPp
@@ -707,7 +707,7 @@ mixOutput:	FUNC	; signature func mixOutput(ptr fftBuffer, ptr mixBuffer, int mix
 
 
 ;-----------------------------------------------------------------------------
-init:	FUNC	; signature func init() -> void @ 453:1
+init:	FUNC	; signature func init() -> void @ specular_code.impala:453:1
 		PARA *1
 	$i:	LOCi
 	$theta:	LOCf
@@ -715,14 +715,14 @@ init:	FUNC	; signature func init() -> void @ 453:1
 	$prng:	LOCi
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_init_4d9 	; trace("init")
-		CALL ^trace %0 *2	; expects trace(int-ptr) -> unknown @ 456:15
+		CALL ^trace %0 *2	; expects trace(int-ptr) -> unknown @ specular_code.impala:456:15
 		MOVi $i #0 	; for (i = 0 to FFT_SIZE_2) 
 		GEQi #0 #FFT_SIZE_2 @.e0
 	.l1:	NOOP
 		! iTOf <A> #FFT_SIZE #1.0	; global window[i] = (float) sin(PI / itof(FFT_SIZE) * itof(i))
 		! DIVf <A> #PI <A>
 		iTOf %1 $i <A>
-		CALL &sin %0 *2	; expects sin(float) -> float @ 459:64
+		CALL &sin %0 *2	; expects sin(float) -> float @ specular_code.impala:459:64
 		POKE &window $i %0
 		FORi $i #FFT_SIZE_2 @.l1	; }
 	.e0:	MOVi $i #0 	; for (i = 0 to 256) 
@@ -732,17 +732,17 @@ init:	FUNC	; signature func init() -> void @ 453:1
 		! DIVf <A> <A> #256.0
 		iTOf $theta $i <A>
 		MOVf %1 $theta 	; global cRotateRe[i] = (float) cos(theta)
-		CALL &cos %0 *2	; expects cos(float) -> float @ 464:43
+		CALL &cos %0 *2	; expects cos(float) -> float @ specular_code.impala:464:43
 		POKE &cRotateRe $i %0
 		MOVf %1 $theta 	; global cRotateIm[i] = (float) sin(theta)
-		CALL &sin %0 *2	; expects sin(float) -> float @ 465:43
+		CALL &sin %0 *2	; expects sin(float) -> float @ specular_code.impala:465:43
 		POKE &cRotateIm $i %0
 		FORi $i #256 @.l3	; }
 	.e2:	MOVi $i #0 	; for (i = 0 to 8) 
 		GEQi #0 #8 @.e4
 	.l5:	ADDi %1 $i #1	; global partialGains[i] = IFFT_SCALE / (float) sqrt(itof(i + 1))
 		iTOf %1 %1 #1.0
-		CALL &sqrt %0 *2	; expects sqrt(float) -> float @ 469:66
+		CALL &sqrt %0 *2	; expects sqrt(float) -> float @ specular_code.impala:469:66
 		DIVf %0 #IFFT_SCALE %0
 		POKE &partialGains $i %0
 		FORi $i #8 @.l5	; }
@@ -755,13 +755,13 @@ init:	FUNC	; signature func init() -> void @ 453:1
 		DIVf %0 <B> %0
 		SUBf $theta #0.0 %0
 		MULf %1 #0.5 $theta	; wTemp = (float) sin(0.5 * theta)
-		CALL &sin %0 *2	; expects sin(float) -> float @ 474:38
+		CALL &sin %0 *2	; expects sin(float) -> float @ specular_code.impala:474:38
 		MOVf $wTemp %0 
 		MULf %0 #-2.0 $wTemp	; global fftWPRe[i] = -2.0 * wTemp * wTemp
 		MULf %0 %0 $wTemp
 		POKE &fftWPRe $i %0
 		MOVf %1 $theta 	; global fftWPIm[i] = (float) sin(theta)
-		CALL &sin %0 *2	; expects sin(float) -> float @ 476:44
+		CALL &sin %0 *2	; expects sin(float) -> float @ specular_code.impala:476:44
 		POKE &fftWPIm $i %0
 		FORi $i <A> @.l7	; }
 	.e6:	PEEK %0 &instance 	; prng = 2463534242 ^ (global instance << 13)
@@ -780,27 +780,27 @@ init:	FUNC	; signature func init() -> void @ 453:1
 		FORi $i #FFT_SIZE_2 @.l9	; }
 	.e8:	MOVi %1 #FFT_SIZE 	; fftUntangleParams(FFT_SIZE, global untangleParams)
 		MOVp %2 &untangleParams 
-		CALL &fftUntangleParams %0 *3	; expects fftUntangleParams(int, ptr) -> void @ 486:52
+		CALL &fftUntangleParams %0 *3	; expects fftUntangleParams(int, ptr) -> void @ specular_code.impala:486:52
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-reset:	FUNC	; signature func reset() -> void @ 495:1
+reset:	FUNC	; signature func reset() -> void @ specular_code.impala:495:1
 		PARA *1
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_reset_4da 	; trace("reset")
-		CALL ^trace %0 *2	; expects trace(int-ptr) -> unknown @ 497:16
+		CALL ^trace %0 *2	; expects trace(int-ptr) -> unknown @ specular_code.impala:497:16
 		POKE &doReset #TRUE 	; global doReset = TRUE
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-update:	FUNC	; signature func update() -> void @ 508:1
+update:	FUNC	; signature func update() -> void @ specular_code.impala:508:1
 		PARA *1
 	$f:	LOCf
 ;-----------------------------------------------------------------------------
 		MOVp %1 &.s_update_4db 	; trace("update")
-		CALL ^trace %0 *2	; expects trace(int-ptr) -> unknown @ 511:17
+		CALL ^trace %0 *2	; expects trace(int-ptr) -> unknown @ specular_code.impala:511:17
 		PEEK %0 &params:THRESHOLD_PARAM 	; f = itof((int) global params[THRESHOLD_PARAM]) * (1.0 / 255.0)
 		! DIVf <A> #1.0 #255.0
 		iTOf $f %0 <A>
@@ -817,20 +817,20 @@ update:	FUNC	; signature func update() -> void @ 508:1
 		POKE &decayConstant %0 
 		PEEK %2 &decayConstant 	; global outputGain = (float) sqrt((float) sqrt(1.0 - global decayConstant))
 		SUBf %2 #1.0 %2
-		CALL &sqrt %1 *2	; expects sqrt(float) -> float @ 519:75
-		CALL &sqrt %0 *2	; expects sqrt(float) -> float @ 519:76
+		CALL &sqrt %1 *2	; expects sqrt(float) -> float @ specular_code.impala:519:75
+		CALL &sqrt %0 *2	; expects sqrt(float) -> float @ specular_code.impala:519:76
 		POKE &outputGain %0 
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-process:	FUNC	; signature func process() -> void @ 538:1
+process:	FUNC	; signature func process() -> void @ specular_code.impala:538:1
 		PARA *1
 	! MULi <A> #FFT_SIZE #2
-.x.process.fftBuffer:	! DEFi #FFT_SIZE
-	$fftBuffer:	LOCA *.x.process.fftBuffer
-.x.process.inputBuffer:	! DEFi #FFT_SIZE
-	$inputBuffer:	LOCA *.x.process.inputBuffer
+.z.process.fftBuffer:	! DEFi #FFT_SIZE
+	$fftBuffer:	LOCA *.z.process.fftBuffer
+.z.process.inputBuffer:	! DEFi #FFT_SIZE
+	$inputBuffer:	LOCA *.z.process.inputBuffer
 	$clock:	LOCi
 	$i:	LOCi
 	$i2:	LOCi
@@ -841,10 +841,10 @@ process:	FUNC	; signature func process() -> void @ 538:1
 	$re:	LOCf
 	$im:	LOCf
 	$power:	LOCf
-.x.process.feedbackRe:	! DEFi #FFT_SIZE_2
-	$feedbackRe:	LOCA *.x.process.feedbackRe
-.x.process.feedbackIm:	! DEFi #FFT_SIZE_2
-	$feedbackIm:	LOCA *.x.process.feedbackIm
+.z.process.feedbackRe:	! DEFi #FFT_SIZE_2
+	$feedbackRe:	LOCA *.z.process.feedbackRe
+.z.process.feedbackIm:	! DEFi #FFT_SIZE_2
+	$feedbackIm:	LOCA *.z.process.feedbackIm
 	$k:	LOCf
 	$partial:	LOCi
 	$partialBase1:	LOCi
@@ -861,8 +861,8 @@ process:	FUNC	; signature func process() -> void @ 538:1
 	$y:	LOCi
 	$t:	LOCi
 	$prng:	LOCi
-.x.process.mixBuffer:	! DEFi #<A>
-	$mixBuffer:	LOCA *.x.process.mixBuffer
+.z.process.mixBuffer:	! DEFi #<A>
+	$mixBuffer:	LOCA *.z.process.mixBuffer
 	$mixBufferOffset:	LOCi
 	$myInstance:	LOCi
 ;-----------------------------------------------------------------------------
@@ -938,11 +938,11 @@ process:	FUNC	; signature func process() -> void @ 538:1
 	.s7#SYNTHESIS_REINDEX_LEFT:	NOOP
 	.s7#SYNTHESIS_REINDEX_RIGHT:	MOVi %1 #FFT_SIZE 	; fftReIndex(FFT_SIZE, fftBuffer)
 		ADRL %2 $fftBuffer *0
-		CALL &fftReIndex %0 *3	; expects fftReIndex(int, ptr) -> void @ 591:37
+		CALL &fftReIndex %0 *3	; expects fftReIndex(int, ptr) -> void @ specular_code.impala:591:37
 		GOTO @.e8  	; }
 	.s7#ANALYSIS_FFT_2:	MOVi %1 #FFT_SIZE 	; fftPass0(FFT_SIZE, fftBuffer)
 		ADRL %2 $fftBuffer *0
-		CALL &fftPass0 %0 *3	; expects fftPass0(int, ptr) -> void @ 595:35
+		CALL &fftPass0 %0 *3	; expects fftPass0(int, ptr) -> void @ specular_code.impala:595:35
 		GOTO @.e8  	; }
 		! ADDi <A> #ANALYSIS_FFT_2 #1	; case ANALYSIS_FFT_2 + 1, ANALYSIS_FFT_2 + 2, ANALYSIS_FFT_2 + 3
 	.s7#<A>:	NOOP
@@ -966,14 +966,14 @@ process:	FUNC	; signature func process() -> void @ 538:1
 	.s7#<A>:	MOVi %1 #FFT_SIZE 	; fftPass(FFT_SIZE, fftBuffer, processStep - ANALYSIS_FFT_2)
 		ADRL %2 $fftBuffer *0
 		SUBi %3 $processStep #ANALYSIS_FFT_2
-		CALL &fftPass %0 *4	; expects fftPass(int, ptr, int) -> void @ 600:64
+		CALL &fftPass %0 *4	; expects fftPass(int, ptr, int) -> void @ specular_code.impala:600:64
 		GOTO @.e8  	; }
 	.s7#ANALYSIS_UNTANGLE:	NOOP
 	.s7#SYNTHESIS_UNTANGLE_LEFT:	NOOP
 	.s7#SYNTHESIS_UNTANGLE_RIGHT:	MOVi %1 #FFT_SIZE 	; fftUntangle(FFT_SIZE, fftBuffer, global untangleParams)
 		ADRL %2 $fftBuffer *0
 		MOVp %3 &untangleParams 
-		CALL &fftUntangle %0 *4	; expects fftUntangle(int, ptr, ptr) -> void @ 604:61
+		CALL &fftUntangle %0 *4	; expects fftUntangle(int, ptr, ptr) -> void @ specular_code.impala:604:61
 		GOTO @.e8  	; }
 	.s7#PROCESS_FIND_MAX:	MOVf $useThreshold #0.0 	; useThreshold = 0.0
 		PEEK $bandBits &params:BAND_PARAM 	; bandBits = (int) global params[BAND_PARAM]
@@ -1114,7 +1114,7 @@ process:	FUNC	; signature func process() -> void @ 538:1
 		GOTO @.e8  	; }
 	.s7#SYNTHESIS_FFT_LEFT_2:	MOVi %1 #FFT_SIZE 	; fftPass0(FFT_SIZE, fftBuffer)
 		ADRL %2 $fftBuffer *0
-		CALL &fftPass0 %0 *3	; expects fftPass0(int, ptr) -> void @ 691:35
+		CALL &fftPass0 %0 *3	; expects fftPass0(int, ptr) -> void @ specular_code.impala:691:35
 		GOTO @.e8  	; }
 		! ADDi <A> #SYNTHESIS_FFT_LEFT_2 #1	; case SYNTHESIS_FFT_LEFT_2 + 1, SYNTHESIS_FFT_LEFT_2 + 2, SYNTHESIS_FFT_LEFT_2 + 3
 	.s7#<A>:	NOOP
@@ -1138,11 +1138,11 @@ process:	FUNC	; signature func process() -> void @ 538:1
 	.s7#<A>:	MOVi %1 #FFT_SIZE 	; fftPass(FFT_SIZE, fftBuffer, processStep - SYNTHESIS_FFT_LEFT_2)
 		ADRL %2 $fftBuffer *0
 		SUBi %3 $processStep #SYNTHESIS_FFT_LEFT_2
-		CALL &fftPass %0 *4	; expects fftPass(int, ptr, int) -> void @ 697:70
+		CALL &fftPass %0 *4	; expects fftPass(int, ptr, int) -> void @ specular_code.impala:697:70
 		GOTO @.e8  	; }
 	.s7#SYNTHESIS_FFT_RIGHT_2:	MOVi %1 #FFT_SIZE 	; fftPass0(FFT_SIZE, fftBuffer)
 		ADRL %2 $fftBuffer *0
-		CALL &fftPass0 %0 *3	; expects fftPass0(int, ptr) -> void @ 701:35
+		CALL &fftPass0 %0 *3	; expects fftPass0(int, ptr) -> void @ specular_code.impala:701:35
 		GOTO @.e8  	; }
 		! ADDi <A> #SYNTHESIS_FFT_RIGHT_2 #1	; case SYNTHESIS_FFT_RIGHT_2 + 1, SYNTHESIS_FFT_RIGHT_2 + 2, SYNTHESIS_FFT_RIGHT_2 + 3
 	.s7#<A>:	NOOP
@@ -1166,19 +1166,19 @@ process:	FUNC	; signature func process() -> void @ 538:1
 	.s7#<A>:	MOVi %1 #FFT_SIZE 	; fftPass(FFT_SIZE, fftBuffer, processStep - SYNTHESIS_FFT_RIGHT_2)
 		ADRL %2 $fftBuffer *0
 		SUBi %3 $processStep #SYNTHESIS_FFT_RIGHT_2
-		CALL &fftPass %0 *4	; expects fftPass(int, ptr, int) -> void @ 707:71
+		CALL &fftPass %0 *4	; expects fftPass(int, ptr, int) -> void @ specular_code.impala:707:71
 		GOTO @.e8  	; }
 	.s7#SYNTHESIS_MIX_LEFT:	ADRL %1 $fftBuffer *0	; mixOutput(fftBuffer, mixBuffer, mixBufferOffset, 0)
 		ADRL %2 $mixBuffer *0
 		MOVi %3 $mixBufferOffset 
 		MOVi %4 #0 
-		CALL &mixOutput %0 *5	; expects mixOutput(ptr, ptr, int, int) -> void @ 711:57
+		CALL &mixOutput %0 *5	; expects mixOutput(ptr, ptr, int, int) -> void @ specular_code.impala:711:57
 		GOTO @.e8  	; }
 	.s7#SYNTHESIS_MIX_RIGHT:	ADRL %1 $fftBuffer *0	; mixOutput(fftBuffer, mixBuffer, mixBufferOffset, 1)
 		ADRL %2 $mixBuffer *0
 		MOVi %3 $mixBufferOffset 
 		MOVi %4 #1 
-		CALL &mixOutput %0 *5	; expects mixOutput(ptr, ptr, int, int) -> void @ 715:57
+		CALL &mixOutput %0 *5	; expects mixOutput(ptr, ptr, int, int) -> void @ specular_code.impala:715:57
 		! SUBi <A> #FFT_SIZE_2 #1	; write((clock & ~(FFT_SIZE_2 - 1)) + (PROCESS_STEPS << PROCESS_SPREAD_FACTOR), FFT_SIZE_2, mixBuffer + mixBufferOffset)
 		! XORi <A> <A> #-1
 		ANDi %1 $clock <A>
@@ -1187,7 +1187,7 @@ process:	FUNC	; signature func process() -> void @ 538:1
 		MOVi %2 #FFT_SIZE_2 
 		ADRL %3 $mixBuffer *0
 		ADDp %3 %3 $mixBufferOffset
-		CALL ^write %0 *4	; expects write(int, int, ptr) -> unknown @ 716:124
+		CALL ^write %0 *4	; expects write(int, int, ptr) -> unknown @ specular_code.impala:716:124
 		SUBi $mixBufferOffset #FFT_SIZE $mixBufferOffset	; mixBufferOffset = FFT_SIZE - mixBufferOffset
 	.s7:	NOOP
 	.e8:	NOOP
@@ -1204,8 +1204,8 @@ process:	FUNC	; signature func process() -> void @ 538:1
 		MOVi %1 $clock 	; read(clock, 1, global signal)
 		MOVi %2 #1 
 		MOVp %3 &signal 
-		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ 723:32
-		CALL ^yield %0 *1	; expects yield() -> unknown @ 725:10
+		CALL ^read %0 *4	; expects read(int, int, ptr) -> unknown @ specular_code.impala:723:32
+		CALL ^yield %0 *1	; expects yield() -> unknown @ specular_code.impala:725:10
 		GOTO @.l4  	; }
 		RETU   	; }
 

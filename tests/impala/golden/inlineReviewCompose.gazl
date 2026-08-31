@@ -1,12 +1,12 @@
-; Compiled with Impala version 1.0
+; Compiled with Impala version 2.0
 
 ; signatures version=1
-DEBUG:	! DEFi #1	; signature const DEBUG : int @ 18:1
-; signature extern native printInt() -> unknown @ 20:1
-; signature extern native printLF() -> unknown @ 21:1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ inlineReviewCompose.impala:18:1
+; signature extern native printInt() -> unknown @ inlineReviewCompose.impala:20:1
+; signature extern native printLF() -> unknown @ inlineReviewCompose.impala:21:1
 
 ;-----------------------------------------------------------------------------
-helper:	FUNC	; signature func helper(int a) -> int @ 23:1
+helper:	FUNC	; signature func helper(int a) -> int @ inlineReviewCompose.impala:23:1
 	$r:	OUTi
 	$a:	INPi
 ;-----------------------------------------------------------------------------
@@ -15,7 +15,7 @@ helper:	FUNC	; signature func helper(int a) -> int @ 23:1
 
 
 ;-----------------------------------------------------------------------------
-takesTwo:	FUNC	; signature func takesTwo(int a, int b) -> int @ 31:1
+takesTwo:	FUNC	; signature func takesTwo(int a, int b) -> int @ inlineReviewCompose.impala:31:1
 	$r:	OUTi
 	$a:	INPi
 	$b:	INPi
@@ -25,49 +25,49 @@ takesTwo:	FUNC	; signature func takesTwo(int a, int b) -> int @ 31:1
 
 
 ;-----------------------------------------------------------------------------
-main:	FUNC	; signature func main() -> void @ 33:1
+main:	FUNC	; signature func main() -> void @ inlineReviewCompose.impala:33:1
 		PARA *1
 	$w:	LOCi
 ;-----------------------------------------------------------------------------
 		MOVi %4 #5 	; r = helper(a) + 1
-		CALL &helper %3 *2	; expects helper(int) -> int @ 25:59
+		CALL &helper %3 *2	; expects helper(int) -> int @ inlineReviewCompose.impala:25:59
 		ADDi %1 %3 #1
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 36:19
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 36:30
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ inlineReviewCompose.impala:36:19
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ inlineReviewCompose.impala:36:30
 		! MULi <A> #10 #2	; r = a * 2
 		ADDi %1 <A> #5	; }
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 37:21
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 37:32
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ inlineReviewCompose.impala:37:21
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ inlineReviewCompose.impala:37:32
 		MOVi $w #7 	; w = 7
 		MOVi %3 $w 	; printInt(takesTwo(wrap(w), twice(10)))
 		MOVi %5 %3 	; r = helper(a) + 1
-		CALL &helper %4 *2	; expects helper(int) -> int @ 25:59
+		CALL &helper %4 *2	; expects helper(int) -> int @ inlineReviewCompose.impala:25:59
 		ADDi %2 %4 #1
 		MULi %3 #10 #2	; r = a * 2
-		CALL &takesTwo %1 *3	; expects takesTwo(int, int) -> int @ 40:39
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 40:40
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 40:51
+		CALL &takesTwo %1 *3	; expects takesTwo(int, int) -> int @ inlineReviewCompose.impala:40:39
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ inlineReviewCompose.impala:40:40
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ inlineReviewCompose.impala:40:51
 		MULi %1 $w #2	; r = a * 2
 		MOVi %3 $w 	; }
 		MOVi %5 %3 	; r = helper(a) + 1
-		CALL &helper %4 *2	; expects helper(int) -> int @ 25:59
+		CALL &helper %4 *2	; expects helper(int) -> int @ inlineReviewCompose.impala:25:59
 		ADDi %2 %4 #1
 		MULi %2 %2 #2	; }
 		ADDi %1 %1 %2
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 41:34
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 41:45
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ inlineReviewCompose.impala:41:34
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ inlineReviewCompose.impala:41:45
 		MULi %3 #25 #2	; r = a * 2
 		MULi %2 %3 #2	; r = a * 2
 		MULi %1 %2 #2	; r = a * 2
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 42:35
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 42:46
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ inlineReviewCompose.impala:42:35
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ inlineReviewCompose.impala:42:46
 		MOVi %3 #1 	; printInt(wrap(helper(1)) - 3 * 2)
-		CALL &helper %2 *2	; expects helper(int) -> int @ 43:25
+		CALL &helper %2 *2	; expects helper(int) -> int @ inlineReviewCompose.impala:43:25
 		MOVi %4 %2 	; r = helper(a) + 1
-		CALL &helper %3 *2	; expects helper(int) -> int @ 25:59
+		CALL &helper %3 *2	; expects helper(int) -> int @ inlineReviewCompose.impala:25:59
 		ADDi %1 %3 #1
 		! MULi <A> #3 #2	; }
 		SUBi %1 %1 <A>
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 43:35
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 43:46
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ inlineReviewCompose.impala:43:35
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ inlineReviewCompose.impala:43:46
 		RETU   	; }

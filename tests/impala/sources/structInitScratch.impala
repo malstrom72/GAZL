@@ -1,0 +1,36 @@
+/*
+	A brace initializer may contain a value only the ASSEMBLER can compute - `1 << P` on a named const is
+	folded by emitting `! SHLi <A> #1 #P` and using `<A>` as the word. `<A>` is a compile-time SCRATCH out
+	of a 26-deep pool, and `declare` hands one back only when it can parse the row it wrote whole: a scratch
+	sitting in `DATA #8 <A> #7` is silently never returned, and the compile then dies on the boundary assert
+	"compile-time scratch leak before main". So a scratch gets a row to itself.
+
+	The flat `InitList` always did that; the buffered path every brace initializer takes did not, so this
+	program did not compile at all. Both write their rows by the same rule now.
+
+	Expected (GAZLCmd structInitScratch.gazl main): 8 32 7 24
+*/
+
+const int DEBUG = 0
+const int P = 3
+const int Q = 5
+
+extern native printInt
+extern native printLF
+
+struct S { int x; int y; int z }
+
+readonly S s = { x: 1 << P, y: 1 << Q, z: 7 }			/* two scratches inside one struct */
+readonly int array packed[2] = { 1 << P, 2 << P }		/* and the flat form, unchanged */
+
+export function main()
+{
+	printInt(global s.x);					/* 8  */
+	printLF();
+	printInt(global s.y);					/* 32 */
+	printLF();
+	printInt(global s.z);					/* 7  */
+	printLF();
+	printInt(global packed[0] + global packed[1]);		/* 8 + 16 = 24 */
+	printLF();
+}

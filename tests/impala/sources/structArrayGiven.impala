@@ -1,0 +1,42 @@
+/*
+	An initializer FILLS WHAT IT IS GIVEN; the extent is a CHECK, not a fill bound.
+
+	Two things follow, and this covers both. First, the words past the last entry are never emitted - the
+	region zero-fills them, exactly as the flat 1.x path has always relied on - so `bank[3].n` below reads 0
+	although no `DATA` word was written for it. Filling to the extent instead wrote `&NULL #0` per missing
+	element, which turned a `[100]` array given 14 entries into 400 words of data rather than 56.
+
+	Second, once the loop runs over the ENTRIES rather than the extent, a size Impala cannot evaluate stops
+	being a problem: `bank[N]` with a named-constant N used to be E414 ("needs a literal size") even though
+	the very same declaration WITHOUT an initializer was already legal. The count is only needed to reject a
+	surplus, and that is a comparison the assembler can make once N has a value - `! LEQi #4 #.z.bank` below -
+	which is the same two-stage move a symbolically-sized struct FIELD already made via assertFitsExtent.
+
+	Expected (GAZLCmd structArrayGiven.gazl main): 1 2 3 4 0 0
+*/
+
+const int DEBUG = 0
+const int N = 4									/* a named const, not a literal - this is the point */
+
+extern native printInt
+extern native printLF
+
+struct V { int n; int m }
+
+global V array bank[N] = { { n: 1, m: 2 }, { n: 3, m: 4 } }		/* 2 of 4 given; the rest is region zero-fill */
+
+export function main()
+{
+	printInt(global bank[0].n);					/* 1 */
+	printLF();
+	printInt(global bank[0].m);					/* 2 */
+	printLF();
+	printInt(global bank[1].n);					/* 3 */
+	printLF();
+	printInt(global bank[1].m);					/* 4 */
+	printLF();
+	printInt(global bank[3].n);					/* 0 - never written, the region supplies it */
+	printLF();
+	printInt(global bank[3].m);					/* 0 */
+	printLF();
+}

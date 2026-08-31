@@ -8,26 +8,39 @@ const child_process = require("child_process");
 
 const root = __dirname;
 
-function applyImpalaHardening(source) {
-	let patched = source;
-	const metaSectionHeader =
-		"\t/* --------------------------------------------------------- *\n" +
-		"\t *  Debug helpers & meta-record construction / destruction   *\n" +
-		"\t * --------------------------------------------------------- */\n\n";
-	const createContextHelper =
-		"\tcreateParserContext = function () {\n" +
-		"\t\treturn {\n" +
-		"\t\t\t_: { operator: undefined, type: undefined,\n" +
-		"\t\t\t\t operands: [ undefined, undefined, undefined ] }\n" +
-		"\t\t};\n" +
-		"\t};\n\n";
-	if (!patched.includes("createParserContext = function ()")) {
-		patched = patched.replace(metaSectionHeader, createContextHelper + metaSectionHeader);
-	}
+// The word list KEYWORD becomes, read OUT OF THE GRAMMAR rather than restated here. A hardcoded copy
+// drifts the first time someone adds a keyword to impala.jspeg alone, and it drifts SILENTLY: the new
+// word simply never matches, so it parses as an identifier and the failure surfaces far from the cause.
+// Order does not matter - the loop retries on a SYMBOL_CHAR mismatch, so `for` cannot shadow `from`.
+function keywordWordsFrom(grammar) {
+	const rule = grammar.match(/^KEYWORD[ \t]*<-([\s\S]*?)\n[ \t\r]*\n/m);
+	if (!rule) throw new Error("KEYWORD rule not found in impala.jspeg");
+	return (rule[1].match(/[A-Z][A-Z0-9_]*/g) || []).map((name) => {
+		const literal = grammar.match(new RegExp("\\b" + name + "\\s*<-\\s*'([^']*)'"));
+		if (!literal) throw new Error(`KEYWORD alternative ${name} has no literal in impala.jspeg`);
+		return literal[1];
+	});
+}
 
+function mustReplace(text, pattern, replacement, label) {
+	const out = text.replace(pattern, replacement);
+	if (out === text) {
+		throw new Error("impala hardening: " + label + " did not apply - the generated shape moved");
+	}
+	return out;
+}
+
+function applyImpalaHardening(source, grammar) {
+	let patched = source;
+	// First-declarator tripwire only: matching the whole statement false-positives on reserved
+	// names inside right-hand-side strings (GAZL2 has `var tag = '_i' + ...`).
+	const reservedLocal = grammar.match(/vars+(_val|_s|_im|_i)/);
+	if (reservedLocal) {
+		throw new Error("impala.jspeg action declares a reserved parser local: " + reservedLocal[0].trim());
+	}
 	const impalaImplSignature = "var impalaCompilerImpl = (function(_s) {";
-	if (patched.includes(impalaImplSignature)) {
-		patched = patched.replace(
+	patched = mustReplace(
+		patched,
 			impalaImplSignature,
 			() => [
 				"var impalaCompilerImpl = (function(_s, _options) {",
@@ -40,140 +53,42 @@ function applyImpalaHardening(source) {
 				"\t? _hostOptions.sourceName",
 				"\t: undefined;",
 			].join("\n"),
-		);
-	}
+		"options prelude");
+	patched = mustReplace(patched, /\$[A-Za-z0-9_]*=\{\}/g,
+		(match) => match.replace("={}", "=newMetaSlot()"), "capture-slot init");
 
-	const metaSlotRegex = /\tfunction metaSlot\(node\) \{[\s\S]*?\t\}\n\n/;
-	const metaSlotReplacement =
-		"\tfunction metaSlot(node) {\n" +
-		"\t\tif (node == null || (typeof node !== 'object' && typeof node !== 'function')) {\n" +
-		"\t\t\treturn { operator: undefined, type: undefined,\n" +
-		"\t\t\t\t\t operands: [ undefined, undefined, undefined ] };\n" +
-		"\t\t}\n" +
-		"\t\tif (node.operands !== undefined) {\n" +
-		"\t\t\tif (!Array.isArray(node.operands)) {\n" +
-		"\t\t\t\tnode.operands = [ undefined, undefined, undefined ];\n" +
-		"\t\t\t} else {\n" +
-		"\t\t\t\twhile (node.operands.length < 3) {\n" +
-		"\t\t\t\t\tnode.operands.push(undefined);\n" +
-		"\t\t\t\t}\n" +
-		"\t\t\t}\n" +
-		"\t\t\tif (!Object.prototype.hasOwnProperty.call(node, 'operator')) {\n" +
-		"\t\t\t\tnode.operator = undefined;\n" +
-		"\t\t\t}\n" +
-		"\t\t\tif (!Object.prototype.hasOwnProperty.call(node, 'type')) {\n" +
-		"\t\t\t\tnode.type = undefined;\n" +
-		"\t\t\t}\n" +
-		"\t\t\treturn node;\n" +
-		"\t\t}\n\n" +
-		"\t\tif (!Object.prototype.hasOwnProperty.call(node, '_')) {\n" +
-		"\t\t\tif (node.operands === undefined) {\n" +
-		"\t\t\t\tnode.operands = [ undefined, undefined, undefined ];\n" +
-		"\t\t\t}\n" +
-		"\t\t\tif (!Object.prototype.hasOwnProperty.call(node, 'operator')) {\n" +
-		"\t\t\t\tnode.operator = undefined;\n" +
-		"\t\t\t}\n" +
-		"\t\t\tif (!Object.prototype.hasOwnProperty.call(node, 'type')) {\n" +
-		"\t\t\t\tnode.type = undefined;\n" +
-		"\t\t\t}\n" +
-		"\t\t\treturn node;\n" +
-		"\t\t}\n\n" +
-		"\t\tvar slot = node._;\n" +
-		"\t\tif (!slot || slot.operands === undefined) {\n" +
-		"\t\t\tslot = { operator: undefined, type: undefined,\n" +
-		"\t\t\t\t\t operands: [ undefined, undefined, undefined ] };\n" +
-		"\t\t\tnode._ = slot;\n" +
-		"\t\t}\n" +
-		"\t\treturn slot;\n" +
-		"\t}\n\n";
-	patched = patched.replace(metaSlotRegex, metaSlotReplacement);
-
-	patched = patched.replace(/\$[A-Za-z0-9_]*=\{\}/g, (match) => match.replace("={}", "=createParserContext()"));
-
-	const keywordFunctionRegex = /function KEYWORD\(\$\)\{[^\n]*\n/;
+	const keywordFunctionRegex = /function KEYWORD\(\)\{[^\n]*\n/;
 	const keywordFunctionReplacement =
-		"function KEYWORD($){var _b=_i,_words=KEYWORD_WORDS,_word,_end,_x;" +
+		"function KEYWORD(){var _b=_i,_words=KEYWORD_WORDS,_word,_end,_x;" +
 		"for(var _k=0;_k<_words.length;++_k){" +
 		"_word=_words[_k];" +
 		"if(_s.substr(_i,_word.length)===_word){" +
 		"_i+=_word.length;" +
 		"_end=_i;" +
-		"_x=SYMBOL_CHAR($);" +
+		"_x=SYMBOL_CHAR();" +
 		"_i=_end;" +
 		"if(!_x)return true;" +
 		"_i=_b;" +
 		"}}_im=(_i>_im?_i:_im);_i=_b;return false}\n";
-	if (keywordFunctionRegex.test(patched) && !patched.includes("KEYWORD_WORDS")) {
-		patched = patched.replace(
+	{
+		const words = keywordWordsFrom(grammar);
+		const rows = [];
+		for (let i = 0; i < words.length; i += 11) {
+			rows.push("\t" + words.slice(i, i + 11).map((w) => `'${w}'`).join(", "));
+		}
+		// Join the rows with the separator rather than computing a last-row test per row: the boundary
+		// condition has to be right for the GENERATED file to parse, in a script whose whole job is to
+		// produce a file nobody hand-edits.
+		patched = mustReplace(patched,
 			"var _hostOptions = _options || {};",
-			[
-				"var _hostOptions = _options || {};",
-				"var KEYWORD_WORDS = [",
-				"\t'abs', 'array', 'assert', 'case', 'const', 'copy', 'default', 'do', 'else', 'export', 'extern',",
-				"\t'float', 'floor', 'for', 'from', 'ftoi', 'funcptr', 'functype', 'function', 'global', 'goto', 'if',",
-				"\t'import', 'inline', 'int', 'itof', 'locals', 'loop', 'native', 'null', 'nullfunc', 'pointer', 'readonly',",
-				"\t'returns', 'sizeof', 'struct', 'switch', 'temporary', 'to', 'while'",
-				"];",
-			].join("\n"),
-		);
-		patched = patched.replace(keywordFunctionRegex, keywordFunctionReplacement);
+			["var _hostOptions = _options || {};", "var KEYWORD_WORDS = [",
+					rows.join(",\n"), "];"].join("\n"),
+			"KEYWORD word list");
+		patched = mustReplace(patched, keywordFunctionRegex, keywordFunctionReplacement, "KEYWORD scanner");
 	}
-
-	const failFunctionPattern =
-		"\tfail = function (error, source, offset) {\n" +
-		"\t\tfunction oneLine(s) { return replace(replace(replace(s,\"\\t\",' '),\"\\r\",' '),\"\\n\",' '); }\n" +
-		"\t\tthrow bake(error) + ' : ' +\n" +
-		"\t\t      oneLine(source.substr(offset - 8, 8)) + ' <!!!!> ' +\n" +
-		"\t\t      oneLine(source.substr(offset, 40));\n" +
-		"\t};\n";
-	const failFunctionReplacement =
-		"\tfail = function (error, source, offset) {\n" +
-		"\t\tfunction oneLine(s) { return replace(replace(replace(s,\"\\t\",' '),\"\\r\",' '),\"\\n\",' '); }\n" +
-		"\t\tvar message = bake(error);\n" +
-		"\t\tvar hasSource = typeof source === 'string';\n" +
-		"\t\tvar snippetSource = hasSource ? source : '';\n" +
-		"\t\tvar snippetOffset = isFinite(offset) ? offset : 0;\n" +
-		"\t\tvar before = oneLine(snippetSource.substr(snippetOffset - 8, 8));\n" +
-		"\t\tvar after = oneLine(snippetSource.substr(snippetOffset, 40));\n" +
-		"\t\tvar err = new Error(message + ' : ' + before + ' <!!!!> ' + after);\n" +
-		"\t\terr.impalaMessage = message;\n" +
-		"\t\tif (isFinite(offset)) {\n" +
-		"\t\t\terr.impalaOffset = offset;\n" +
-		"\t\t}\n" +
-		"\t\terr.impalaSnippetBefore = before;\n" +
-		"\t\terr.impalaSnippetAfter = after;\n" +
-		"\t\tthrow err;\n" +
-		"\t};\n";
-	patched = patched.includes("err.impalaMessage = message;") ? patched : patched.replace(failFunctionPattern, failFunctionReplacement);
-
-	const makeMetaMarker = "\tmakeMeta = function (rec, op, type, op0, op1, op2) {";
-	if (!patched.includes("rec = metaSlot(rec);")) {
-		patched = patched.replace(makeMetaMarker, `${makeMetaMarker}\n\t\trec = metaSlot(rec);`);
-	}
-
-	const assignRegex = /\tassign = function \(x, leftx, rightx,\n[ \t]+sourceCode, sourceOffset\) \{/;
-	const assignGuard =
-		"\n\t\tif (!leftx || leftx.operator === undefined) {\n" +
-		"\t\t\tthrow new Error('JSPEG meta missing for assignment: ' + JSON.stringify(leftx));\n" +
-		"\t\t}";
-	patched = assignRegex.test(patched)
-		? patched.replace(assignRegex, (match) => (match.includes("JSPEG meta missing") ? match : `${match}${assignGuard}`))
-		: patched;
-
-	const rootInitPattern = "var _i=0,_im=0,_o={_:void 0},_b=root(_o);";
-	const hardenedRootInit = "var _i=0,_im=0,_o=createParserContext();\n_o.options=_hostOptions;\nvar _b=root(_o);";
-	if (!patched.includes(hardenedRootInit)) {
-		patched = patched.replace(rootInitPattern, hardenedRootInit);
-	}
-	if (!patched.includes("function createParserContext() {")) {
-		const globalHelper =
-			"function createParserContext() {\n" +
-			"        return {\n" +
-			"                _: { operator: undefined, type: undefined, operands: [ undefined, undefined, undefined ] }\n" +
-			"        };\n" +
-			"}\n";
-		patched = patched.replace(hardenedRootInit, `${globalHelper}${hardenedRootInit}`);
-	}
+	const rootInitPattern = "var _i=0,_im=0,_val,_b=root();";
+	const hardenedRootInit = "var _i=0,_im=0,_val=newMetaSlot(),_b=root();";
+	patched = mustReplace(patched, rootInitPattern, hardenedRootInit, "root init");
 
 	return patched;
 }
@@ -330,6 +245,7 @@ function regenerate() {
 				prelude: "var $$parser = {};",
 				exposeSourceNameOption: true,
 			}),
+			impalaGrammar,
 		),
 	};
 }

@@ -1,13 +1,13 @@
-; Compiled with Impala version 1.0
+; Compiled with Impala version 2.0
 
 ; signatures version=1
-DEBUG:	! DEFi #1	; signature const DEBUG : int @ 20:1
-; signature extern native printInt(int n) -> void @ 22:1
-; signature extern native printFloat(float x) -> void @ 23:1
-; signature extern native printLF() -> unknown @ 24:1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ externPrototype.impala:24:1
+; signature extern native printInt(int n) -> void @ externPrototype.impala:26:1
+; signature extern native printFloat(float x) -> void @ externPrototype.impala:27:1
+; signature extern native printLF() -> unknown @ externPrototype.impala:28:1
 
 ;-----------------------------------------------------------------------------
-divmod:	FUNC	; signature func divmod(int a, int b, int-ptr rem) -> int @ 26:1
+divmod:	FUNC	; signature func divmod(int a, int b, int-ptr rem) -> int @ externPrototype.impala:30:1
 	$q:	OUTi
 	$a:	INPi
 	$b:	INPi
@@ -22,7 +22,7 @@ divmod:	FUNC	; signature func divmod(int a, int b, int-ptr rem) -> int @ 26:1
 
 
 ;-----------------------------------------------------------------------------
-main:	FUNC	; signature func main() -> void @ 32:1
+main:	FUNC	; signature func main() -> void @ externPrototype.impala:36:1
 		PARA *1
 	$q:	LOCi
 	$r:	LOCi
@@ -30,18 +30,18 @@ main:	FUNC	; signature func main() -> void @ 32:1
 		MOVi %1 #17 	; q = divmod(17, 5, &r)
 		MOVi %2 #5 
 		ADRL %3 $r *0
-		CALL &divmod %0 *4	; expects divmod(int, int, int-ptr) -> int @ 35:23
+		CALL &divmod %0 *4	; expects divmod(int, int, int-ptr) -> int @ externPrototype.impala:39:23
 		MOVi $q %0 
 		MOVi %1 $q 	; printInt(q)
-		CALL ^printInt %0 *2	; expects printInt(int) -> void @ 36:13
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 36:24
+		CALL ^printInt %0 *2	; expects printInt(int) -> void @ externPrototype.impala:40:13
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ externPrototype.impala:40:24
 		MOVi %1 $r 	; printInt(r)
-		CALL ^printInt %0 *2	; expects printInt(int) -> void @ 37:13
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 37:24
+		CALL ^printInt %0 *2	; expects printInt(int) -> void @ externPrototype.impala:41:13
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ externPrototype.impala:41:24
 		MOVi %1 #42 	; printInt(42)
-		CALL ^printInt %0 *2	; expects printInt(int) -> void @ 38:14
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 38:25
+		CALL ^printInt %0 *2	; expects printInt(int) -> void @ externPrototype.impala:42:14
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ externPrototype.impala:42:25
 		MOVf %1 #0.5 	; printFloat(0.5)
-		CALL ^printFloat %0 *2	; expects printFloat(float) -> void @ 39:17
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 39:28
+		CALL ^printFloat %0 *2	; expects printFloat(float) -> void @ externPrototype.impala:43:17
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ externPrototype.impala:43:28
 		RETU   	; }

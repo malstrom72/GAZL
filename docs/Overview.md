@@ -66,37 +66,43 @@ The virtual machine and assembler are implemented in standard C++ in a single he
         - No need to support high-level language concepts like dynamic memory management, exceptions etc
 ```
 
-(See lines [10-33](../src/GAZL.h) in `GAZL.h`.)
+(See the `Goals` / `Non-goals` block in the header comment of [`src/GAZL.h`](../src/GAZL.h), lines 31-53.)
 
 ## Using from C++
 
-Use the `Assembler` class to parse assembly source and the `Processor` class to execute code. An example is found in `tools/GAZLCmd.cpp`:
+Use the `Assembler` class to parse assembly source and the `Processor` class to execute code. `Symbols` holds the native-function registrations and the symbol table both classes share; `functionTable` is filled in by `finalize` and handed straight to `Processor`. This is the sequence `tools/GAZLCmd.cpp` uses, condensed:
 
 ```cpp
-Assembler assem(100000, codeMemory, 100000, dataMemory, globals);
-assem.newUnit("file.gazl");
-const char* cp = source.c_str();
-while (*cp != 0) {
-    cp = assem.feed(cp);
-    if (*cp == 0) assem.finalize(codeSize, rwSize, constSize);
+Symbols globals;
+for (int i = 0; i < nativeCount; ++i) globals.registerNative(NATIVE_NAMES[i], i);
+
+ProgramSizes sizes = { 0, 0, 0, 0 };
+{
+    Assembler assem(CODE_MEMORY_SIZE, code, FUNCTION_TABLE_SIZE, functionTable,
+            DATA_MEMORY_SIZE, memory, globals);
+    assem.newUnit("file.gazl");
+    std::string line;
+    while (getline(gazlStream, line)) assem.feed(line.c_str());
+    assem.finalize(sizes);
 }
 
-Processor vm(codeSize, codeMemory, memorySize, dataMemory,
-             rwSize + 30000, rwSize, 30000,
-             ipStackSize, callStack, nativeFuncs);
-vm.enterCall(globals.findFunction("main"));
-Status result = vm.run();
+Processor pmachine(sizes.codeSize, code, sizes.functionCount, functionTable, DATA_MEMORY_SIZE, memory,
+        sizes.globalsSize, sizes.constsSize, CALL_STACK_SIZE, callStack, NATIVE_TABLE, 0);
+Pointer mainFunction = globals.findFunction("main");
+Status status = pmachine.enterCall(mainFunction);
+pmachine.resetTimeOut(0x7FFFFFFF);
+status = pmachine.run();
 ```
 
-The processor exposes helpers to access memory and parameters (`accessMemory`, `accessParams`). Writing your own native functions involves the `Processor*` interface; see the unit tests for examples.
+`run()` returns `TIME_OUT` when the cycle budget set by `resetTimeOut` runs out; call `resetTimeOut` and `run()` again to continue. The processor exposes helpers to access memory and parameters (`accessMemory`, `accessParams`). Writing your own native functions involves the `Processor*` interface; see the unit tests for examples.
 
-For a smaller example, inspect the comments around the `Assembler` and `Processor` usage in `tools/GAZLCmd.cpp`.
+The full version, with the error handling and stream checks left out above, is in `tools/GAZLCmd.cpp` — the `Assembler` construction, `finalize` call and `Processor` construction in `main`.
 
 ## Textual Representation and Compile‑Time Constants
 
 GAZL source is plain text so version control systems can store programs directly. The assembler supports compile‑time instructions introduced by `!`. These operate on special compile‑time variables written as `<A>` through `<Z>`. Instructions such as `! ADDi`, `! MULf` or `! IFDF` are executed when the file is assembled and can define constants, evaluate conditions or skip blocks of code. Changing a compile‑time definition (for example `! DEFi DEBUG #0` versus `! DEFi DEBUG #1`) changes the generated code without altering the original source.
 
-Note that "compile time" in this section means **assembly time**, which happens on the end user's machine at load. The Impala documentation uses "compile time" for the earlier `.impala` → `.gazl` stage. The two stages, and the rules the split imposes on the Impala compiler, are specified in [Two-Stage Constants](TwoStageConstants.md).
+Note that "compile time" in this section means **assembly time**, which happens on the end user's machine at load. The Impala documentation uses "compile time" for the earlier `.impala` → `.gazl` stage. The two stages, and the rules the split imposes on the Impala compiler, are specified in [Two-Stage Constants](../design/impala/TwoStageConstants.md).
 
 A complete list of compile‑time opcodes is found in [`src/UnitTest.gazl`](../src/UnitTest.gazl) and reproduced below for convenience:
 
@@ -151,4 +157,4 @@ A complete list of compile‑time opcodes is found in [`src/UnitTest.gazl`](../s
 ## Further Reference
 
 The file `src/UnitTest.gazl` acts as a living specification of the instruction set. It contains comments for nearly every operation and illustrates how globals, constants and memory operations work. Consult it when implementing new code or interfacing with the VM.
-For a condensed view, see the [Instruction Set](InstructionSet.md) reference which extracts these comment blocks into a single document.
+For a condensed view, see the [Instruction Set](gazl/InstructionSet.md) reference which extracts these comment blocks into a single document.

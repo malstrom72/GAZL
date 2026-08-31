@@ -139,7 +139,7 @@ function forwardReferenceHint(source, options, index, message) {
 		: `add a forward \`extern\` for ${name} above this point`);
 	return `${name} is defined later, at ${site} - this compiler is single-pass, so a name must be`
 		+ ` declared before it is used; ${remedy}`
-		+ (options && options.units ? ' (import cycles: see docs/Impala2.md "Cycles")' : "");
+		+ (options && options.units ? ' (import cycles: see docs/impala/Impala2.md "Cycles")' : "");
 }
 
 function formatDiagnostic(source, options, rawIndex, severity, code, message, hint) {
@@ -251,6 +251,17 @@ function compileWithJsImpala(source, options = {}) {
 	}
 	if (legacy) {
 		compilerOptions.legacy = true;
+	}
+	// The BOOLEAN compiler flags, in ONE list. Copied rather than spread because `options` also carries
+	// runner-only keys (`compilerPath`, `retabulate`, `onWarning`) and keys this function TRANSFORMS
+	// (`warn`, `sourceName`), so an `Object.assign` would hand the compiler nonsense. A per-flag `if`
+	// chain is where a flag goes to die: one that reached here and was not in the chain compiled clean
+	// with the option silently ignored - the failure `impala.node.js`'s FLAGS map prevents one layer
+	// up. Add a flag to this list.
+	for (const flag of [ "rangeChecks", "gazl2" ]) {
+		if (options[flag]) {
+			compilerOptions[flag] = true;
+		}
 	}
 	compilerOptions.warn = (message, offset, code, hint) => {
 		const formatted = formatDiagnostic(source, options, offset ?? 0, "warning", code, message, hint);

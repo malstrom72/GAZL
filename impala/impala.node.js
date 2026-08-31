@@ -46,10 +46,14 @@ function readStdinLatin1Sync() {
 
 function usageAndExit() {
 	console.error('Usage:');
-	console.error('  node impala/impala.node.js compile [--legacy] [--dead-strip] [<input.impala>] [<output.gazl>|-] [<random id>]');
-	console.error('  node impala/impala.node.js run [--legacy] [<input.impala>]');
+	console.error('  node impala/impala.node.js compile [--legacy] [--dead-strip] [--range-checks] [--gazl2] [<input.impala>] [<output.gazl>|-] [<random id>]');
+	console.error('  node impala/impala.node.js run [--legacy] [--range-checks] [--gazl2] [<input.impala>]');
 	console.error('  --legacy downgrades Impala 2 strict-expression errors to warnings');
 	console.error('  --dead-strip drops everything unreachable from an `export`');
+	console.error('  --range-checks emits DEBUG-gated runtime bounds tests (off by default: they stay in the');
+	console.error('                 .gazl TEXT even when DEBUG is 0, and that text is what ships)');
+	console.error('  --gazl2 targets the GAZL 2 assembler: struct initializers are placed with SEEK regions,');
+	console.error('          so they survive a layout re-pack and extern structs become initializable');
 	process.exit(1);
 }
 
@@ -76,9 +80,14 @@ function compileProgram(rootPath, options = {}) {
 		randomId: options.randomId,
 		retabulate: true,
 		trailingNewline: true,
-		sourceName: rootPath,
+		// The BASENAME, matching how `units` names a closure's members (relative to the root's own
+		// directory). A full path would bake this machine's directory layout into every emitted row,
+		// and a .gazl is text that ships and is diffed.
+		sourceName: (rootPath === STDIN_PATH ? undefined : path.basename(rootPath)),
 		units: spans,
 		legacy: options.legacy,
+		rangeChecks: options.rangeChecks,
+		gazl2: options.gazl2,
 	});
 	if (options.deadStrip) {
 		output = deadStrip(output);
@@ -86,7 +95,7 @@ function compileProgram(rootPath, options = {}) {
 	return { output, unitCount: units.length };
 }
 
-function compileCommand(args, legacy, wantDeadStrip) {
+function compileCommand(args, opts) {
 	let stdinSource;
 	let rootPath;
 	if (args.length === 0) {
@@ -105,7 +114,7 @@ function compileCommand(args, legacy, wantDeadStrip) {
 	let output;
 	let unitCount;
 	try {
-		const built = compileProgram(rootPath, { randomId, legacy, deadStrip: wantDeadStrip, stdinSource });
+		const built = compileProgram(rootPath, Object.assign({ randomId, stdinSource }, opts));
 		output = built.output;
 		unitCount = built.unitCount;
 	} catch (err) {
@@ -138,7 +147,7 @@ function parseRandomId(arg) {
 	return Number.isFinite(n) ? Math.trunc(n) : undefined;
 }
 
-function runCommand(args, legacy) {
+function runCommand(args, opts) {
 	let stdinSource;
 	let rootPath;
 	if (args.length === 0) {
@@ -154,7 +163,7 @@ function runCommand(args, legacy) {
 
 	let gazl;
 	try {
-		gazl = compileProgram(rootPath, { legacy, stdinSource }).output;
+		gazl = compileProgram(rootPath, Object.assign({ stdinSource }, opts)).output;
 	} catch (err) {
 		console.error((err && err.message) ? err.message : String(err));
 		process.exit(1);
@@ -183,15 +192,27 @@ function runCommand(args, legacy) {
 
 function main() {
 	const argv = process.argv.slice(2);
-	const legacy = argv.includes('--legacy');
-	const wantDeadStrip = argv.includes('--dead-strip');
-	const [cmd, ...rest] = argv.filter((arg) => arg !== '--legacy' && arg !== '--dead-strip');
+	// One list for PARSING, so the argv loop never grows. A flag still has to be passed on below and
+	// listed in impalaJsCompilerRunner's, plus usage above. An UNKNOWN `--flag` is rejected
+	// rather than taken for a filename: `--range-cheks` used to be silently dropped and compile anyway.
+	const FLAGS = { '--legacy': 'legacy', '--dead-strip': 'deadStrip', '--range-checks': 'rangeChecks', '--gazl2': 'gazl2' };
+	const opts = {};
+	const rest = [];
+	for (const arg of argv) {
+		if (arg.slice(0, 2) === '--') {
+			if (!FLAGS[arg]) { console.error(`Unknown option: ${arg}`); return usageAndExit(); }
+			opts[FLAGS[arg]] = true;
+		} else {
+			rest.push(arg);
+		}
+	}
+	const cmd = rest.shift();
 	if (!cmd) return usageAndExit();
 	switch (cmd) {
 		case 'compile':
-			return compileCommand(rest, legacy, wantDeadStrip);
+			return compileCommand(rest, opts);
 		case 'run':
-			return runCommand(rest, legacy);
+			return runCommand(rest, opts);
 		default:
 			return usageAndExit();
 	}

@@ -1,0 +1,293 @@
+# A distinct function-pointer type for GAZL 2 (`t`)
+
+Status: IMPLEMENTED 2026-08-25, with the migration REVISED from the hard break decided 2026-08-07 to
+`GAZL #2` REGIONS - see "Migration" below for both the original decision and what replaced it, and
+`docs/gazl/InstructionSet.md` (`GAZL`, `MOVt`, `EQUt`, `DIFt`, `DATt`) for the shipped semantics. The
+mechanism: `GAZL #n` sets the dialect for what follows; inside a `GAZL #2` region, `FUNC` mints a
+`TARGET`-typed address (one conditional - the whole dialect switch) and no ADDRESS-carrying position
+accepts any function constant. The `t` rows accept only targets, so they are gated away from GAZL 1
+code by the type bits alone, with no version check in the operator table. Impala emits the full
+`GAZL #2` ... `GAZL #1` bracket under `--gazl2`, which is what keeps concatenation-linking working in
+every dialect mix. Blast radius of the shipped form: ZERO forced migrations - undeclared files keep
+GAZL 1 meaning forever, and `src/UnitTest.gazl` tests both dialects in one file.
+
+Originally: researched against `src/GAZL.cpp` and GAZLCmd on 2026-08-02, re-verified 2026-08-07. The
+conclusion was that GAZL 1 has a real silent-wrong shape that no amount of Impala-side checking can
+close, because Impala has nowhere to encode the distinction.
+
+## The problem in one line
+
+GAZL has three storage types - `i`, `f`, `p` - and **`p` is doing double duty**: it is both "data
+pointer" and "function pointer", which are not the same thing and are not interchangeable.
+
+## The rule the ISA states, and one correction to it
+
+`docs/gazl/InstructionSet.md`, under `CALL`, says (as corrected 2026-08-07):
+
+> A function pointer (the value of `&function`) is an opaque handle: a stable ordinal assigned in function
+> declaration order, not a code address. Equality (`EQUp` / `NEQp`), ordering (`LSSp`, `GEQp` etc.) and
+> calling are defined operations on a function pointer. [...] Arithmetic (`ADDp`, `SUBp`, `DIFp`) applied
+> to a function pointer yields an unspecified (but memory-safe) result.
+
+(That paragraph originally put ordering on the undefined side with arithmetic. It was corrected on
+2026-08-07, for the reason set out just below; the quote above is the corrected text.)
+
+This document is asking the assembler to ENFORCE what is written down, which a shared `p` type makes
+impossible. Note too that "unspecified (but memory-safe)" is accurate but undersells `ADDp`: the result is
+not garbage, it is a *different function*, called silently.
+
+**The rule, stated by RESULT TYPE - which is the only thing that decides safety here:**
+
+> An operation on targets is safe if and only if `t` does not appear in its RESULT. A target may be
+> NAMED (`&func`), COPIED (`MOVt`) or LOADED (`DATt` / `LOCt`) - never COMPUTED. Consuming targets is
+> unrestricted.
+
+That one line derives the whole set. `&one + 1` is the defect because it *produces* a `t` naming a
+different function; `f < g`, `f == g` and `f - g` all consume targets and hand back a bool or an int, so
+none of them can name anything at all. Classifying by the NAME of the operation - "arithmetic bad" - gets
+`DIFt` wrong, because `t - t -> int` is arithmetic that cannot manufacture a target.
+
+**GAZL 1 already encodes exactly this distinction in its mnemonics.** From `DIFp` in the instruction set:
+"You cannot use `SUBp` to subtract a pointer from another. `SUBp` is only used for negatively offsetting a
+pointer." `SUBp` is `ptr - int -> ptr`; `DIFp` is `ptr - ptr -> int`. They are separate instructions
+*because the result types differ*. Keeping `DIFt` and dropping `SUBt` is not a new idea - it is applying a
+split the ISA made long ago.
+
+And ordering is *useful*, because a sorted container does not need a MEANINGFUL order - only a TOTAL and
+RUN-STABLE one. Sort a funcptr table at init and binary-search it for membership: the search never depends
+on which order declaration order happens to hand you, only that it stays consistent within the run. This
+is precisely why C++ guarantees `std::less<T*>` is a strict total order where `<` on unrelated pointers is
+not. "Meaningless by construction" is true of a declaration-order ordinal SEMANTICALLY, and irrelevant to
+whether it sorts.
+
+Impala already draws the line in the right place, and always has: `f + 1` and `f - g` are `E301`, while
+`f < g` and `f == g` compile. The compiler is the evidence; this paragraph was the thing that was wrong.
+
+So the defined operation set is **equality, ordering, difference, and calling** - everything that consumes
+a target without naming one - and `t` offers all four.
+
+**Why a target is index-like for CONSUMPTION but never for PRODUCTION.** The ordinal representation exists
+so a funcptr survives freeze/thaw: "Function pointers stored in globals survive re-assembly because they
+are stable ordinals" (`src/GAZL.h`, memory serialization). That makes it an INDEX, not an address - no
+address space, no element size, nothing contiguous. Indexes compare and subtract, which is why ordering
+and `DIFt` need no special pleading. But you may never COMPUTE one, because **the table it indexes is not
+yours**: ordinals are handed out by the assembler in declaration order, so there is no "next function" the
+program has any claim on. An int index into your own array is computable because you know that array's
+layout; `functionTable`'s layout is not yours to know.
+
+## They are already different things at run time
+
+This is not a type-system nicety layered over one representation. The two live in different numeric
+spaces, deliberately:
+
+```c
+// src/GAZL.h:77-78
+const Pointer MEMORY_OFFSET = 0x12345678;   // data pointers: memory offset + this
+const Pointer FUNCTION_OFFSET = 0x56789ABC; // function pointers: FUNCTION ORDINAL + this
+```
+
+```c
+// src/GAZL.cpp:1130
+v.p = (Int)(FUNCTION_OFFSET + functionCount);
+// "A function pointer is its stable declaration-order ordinal (not a code offset),
+//  resolved through `functionTable` at call time."
+```
+
+So a data pointer is an *address* and a function pointer is an *index*. The ISA already knows they are
+different; it just has no type to say so.
+
+## What is checked today, and what is not
+
+Verified with GAZLCmd on 2026-08-02:
+
+| shape | today |
+|---|---|
+| `CALL &gdata` (direct call to a data label) | **rejected** - `Incompatible types: gdata` |
+| `MOVp $p &gdata` then `CALL $p` | accepted; traps at run time as `BAD_CALL` |
+| `MOVp $p &target` then `PEEK` through it | accepted; traps on the memory region check |
+| `DATp &target &gdata` (both kinds, one row) | accepted, unchecked |
+| `ADDp $p $p #1` on a function pointer | **accepted - and does NOT trap** |
+| `DIFp $i $funcPtr $dataPtr` | accepted, meaningless result - MIXING the two kinds is the defect here, not the difference itself |
+| `LSSp` / `GRTp` ordering two function pointers | accepted - and CORRECTLY so, see the correction above |
+
+The direct call is caught because `CALL_c__` demands the `FUNC` bit (`src/GAZL.cpp:337`). Everything else
+accepts `ANY_FREE = NULL_PTR | FREE_ADDRESS | FUNC` (`:293`), the union - so the kind survives only while
+the address is a *constant operand* and is lost the moment it is stored or computed.
+
+## The one that does not trap
+
+Most misuse is caught dynamically, because the two offsets are `0x44444444` apart: a data pointer used as
+an ordinal underflows past `functionCount` and `CALL_VVC` rejects it (`if (ui >= functionCount) { err =
+BAD_CALL; }`, `:1284-1285`). Reaching a *valid* ordinal that way would need ~4.5 GB of data.
+
+**Arithmetic on a function pointer is the exception, and it is a silent wrong answer.** `&one + 1` is
+`ordinal + 1`, which is a perfectly valid ordinal, so nothing traps - it just calls a different function.
+Demonstrated by running it:
+
+```
+function one() { printInt(1); printLF(); }
+function two() { printInt(2); printLF(); }
+export function main() { one(); two(); }
+```
+
+with `$fp: LOCp / MOVp $fp &one / ADDp $fp $fp #1 / CALL $fp %0 *1` spliced into `main`, the program
+prints:
+
+    2 1 2
+
+The injected call ran `two()`. No diagnostic at assembly, no trap at run time, wrong function executed.
+
+Note this refutes the tempting summary that "misuse always traps". It does not, and the failing case is
+the one a type would make unrepresentable rather than merely detectable.
+
+## Why Impala cannot fix this alone
+
+`impala.jspeg`'s `TYPE_SUFFIXES` maps `'F' -> 'p'`. Impala 2.0 *has* the type - named funcptr types,
+`funcptr` declarations, element-type checks - and collapses it at emission because GAZL offers only `p`.
+Every funcptr array and every data-pointer array emit identical `DATp` rows. The information exists and is
+discarded at the boundary.
+
+## Proposal: a fourth type, suffix `t`
+
+`t` for "target" - the call target, which is what the ordinal actually names.
+
+Needed:
+
+| mnemonic | why |
+|---|---|
+| `LOCt` | a local holding a call target |
+| `MOVt` (2 forms) | assignment |
+| `DATt` | initializer rows for funcptr arrays and struct fields |
+| `EQUt` / `NEQt` (8 forms) | equality is meaningful - "is this the same function?" |
+| `LSSt` / `GRTt` / `LEQt` / `GEQt` | a TOTAL, run-stable order - sort a target table, binary-search it |
+| `DIFt` | `t - t -> int`: consumes two targets, names none |
+| `INPt` / `OUTt` | if call targets cross the host boundary |
+
+plus `CALL_v__` accepting `t` rather than the generic `VAR_PTR_R`.
+
+**The omissions are the feature, and by the result-type rule they are exactly the target-PRODUCING forms:**
+no `ADDt`, no `SUBt`, no `FORt`. Each of those hands back a `t` computed from a `t`, so `&one + 1` stops
+being a wrong answer and becomes a line that will not assemble. That is the whole return on the change.
+
+Two that look like they belong on the wrong side:
+
+- `DIFt` is KEPT though it is arithmetic - it yields an `int`. `SUBt` is dropped though it is the same
+  minus sign, because `t - int` yields a `t`. This is the `SUBp`/`DIFp` split the ISA already makes.
+- `FORt` is DROPPED though it looks like iteration rather than arithmetic - stepping a loop variable
+  through targets is `ADDt` wearing a different hat, and its result is a `t`.
+
+## Suffix letters ruled out, and why
+
+The natural letter is `f`, and float has it. Everything else is a compromise, so record the rejects:
+
+- **`F`** - `DATF` vs `DATf` would be two different instructions separated only by the case of the last
+  letter, both legal in a data row. Mnemonics are case-sensitive (`DATI` and `dati` are both rejected),
+  so it would parse - which is exactly what makes it a trap. Also breaks the convention that lowercase
+  4th char = type and uppercase = word-form.
+- **`a`** - collides the same way with `LOCA` / `DATA` / `PARA`.
+- **`e`** - collides with `MOVE`.
+- **`c`** - free and safe, but "code" has no obvious connection to a function pointer.
+
+The lowercase suffix space is only `f i p`, plus `s` (`DATs`) and `u` (`SHRu`). `t` is free and collides
+with no word-form on any stem that would take it (`MOV LOC DAT EQU NEQ INP OUT`).
+
+## Where this is anchored, so GAZL 2 cannot miss it
+
+A design note on its own gets missed. Every site that has to change carries a `GAZL 2:` comment pointing
+back here, so the work is discovered by editing the code rather than by remembering this file:
+
+| site | what it says |
+|---|---|
+| `src/GAZL.cpp`, `ANY_FREE` | SPLIT THIS - the union of `FUNC` and `FREE_ADDRESS` is the root cause |
+| `src/GAZL.cpp`, `CALL_v__` / `CALL_vvs` | indirect call takes generic `VAR_PTR_R`; retype to `t` |
+| `src/GAZL.cpp`, `DATp_c__` | one row can mix function and data addresses; needs a `DATt` sibling |
+| `impala/impala.jspeg`, `TYPE_SUFFIXES` | `'F','p'` is where Impala discards the distinction; becomes `'F','t'` |
+| `docs/gazl/InstructionSet.md`, `CALL` | the contract paragraph, plus a note that GAZL 1 cannot enforce it |
+| `docs/gazl/InstructionSet.md`, `DATp` | records that `p` covers both, and why that is a problem |
+
+**The Impala side is one map entry.** Impala already tracks funcptr as its own type `'F'` and collapses it
+only at emission, so `'F','p'` -> `'F','t'` is the whole change there. Nothing else in the compiler needs
+to learn a new concept - which is worth knowing before estimating the work, because the assembler side
+looks like the expensive half and is.
+
+## Open questions
+
+- **Struct fields and `copy`.** A struct holding a call target is a mixed-type region; `DATA` rows stay
+  the mixed form (see `consts.mixed` in `src/UnitTest.gazl`), so a funcptr field inside a struct
+  initializer is still untyped. Whether that matters depends on how much of the win is in arrays.
+- **`PEEK`/`POKE` through memory.** A word read out of memory into a `LOCt` slot is unchecked, exactly as
+  a word read into `LOCi` is unchecked today. This is the existing boundary of the type system, not a new
+  hole - but it means `t` is a declaration contract, not a guarantee about memory contents.
+- **Host boundary.** Whether `INPt`/`OUTt` are needed at all depends on whether a host ever hands a call
+  target across.
+## Migration: revised 2026-08-25 - `GAZL #2` regions, superseding the 2026-08-07 hard break
+
+The 2026-08-07 decision was: break GAZL 1, no compatibility mode, the loose path deleted. What shipped
+instead is region-scoped: `p` tightens inside a `GAZL #2` region and stays GAZL 1 outside one. The hard
+break failed on a constraint the original analysis missed - **GAZL links by plain concatenation**, and
+any file-level dialect (a sticky mode, a single header directive) either re-interprets headerless GAZL 1
+units after a v2 unit or makes assembly depend on cat order. Regions close over their unit
+(`GAZL #1` at the end restores the default), so bracketed and unbracketed units concatenate in any
+order; per-symbol `TARGET` minting carries the protection across the seams (a v2 function's address is
+rejected from `p` slots in EVERY unit, declared or not). Per-function marking alone (a `FUNt` mnemonic,
+or a head pragma) was designed and rejected on the way: it composes equally well but cannot express the
+region-wide strictness that also refuses GAZL 1 function addresses in the region's own `p` rows. The
+measured blast radius below is now historical - under regions it is zero.
+
+The original decision, kept for the record:
+
+**Measured blast radius (2026-08-07, all 133 `.gazl` in the repo):**
+
+| | files |
+|---|---|
+| unaffected | 125 |
+| need migration | 8 |
+| of those, a plain RECOMPILE | 7 |
+| of those, a HAND edit | 1 - `src/UnitTest.gazl` |
+
+Every real-world example program is untouched: `verber8_code`, `phaser_code`, `trancelvania_code`,
+`specular_code`, `sam`, `buffer`, `chess`, `Priyome`, `BitMaskMod_code`, `FFTTest_code`,
+`startupcrash_code` contain no function pointer at all. The affected set is the funcptr FIXTURES plus the
+ISA unit test.
+
+**Why the cost is this low: Impala cannot emit the hard shape.** The unmigratable case is a POLYMORPHIC
+slot - one that holds a data pointer at one point and a call target at another, so `t` would need a second
+slot and a changed frame layout. `UnitTest.gazl`'s `p0` is exactly that (walks a string, then `MOVp p0
+&StopCar; CALL p0`), and it is the only one in the repo, because it is the only hand-written file.
+Impala provably cannot produce one:
+
+- named variables - `E303` in BOTH directions ("cannot assign funcptr to pointer" / "pointer to funcptr");
+- `%N` transients - UNTYPED storage, the mnemonic suffix carries the type (`%1` in `calc.gazl` holds ints,
+  floats and pointers in one function), so there is no slot type to migrate;
+- static data - Impala emits the deliberately-untyped `DATA` row for mixed structs/arrays and single-kind
+  `DATp` for scalar funcptr globals.
+
+So every Impala-generated `.gazl` is mechanically rewritable even when it cannot be recompiled, and the
+`; signature global fp : funcptr` rows give a rewriter ground truth without dataflow analysis.
+
+**Field exposure, per Magnus:** GAZL 1 has only ever shipped inside Permut8, and the only real-world
+funcptr user he can name is the "easter egg" OS joke that hosts CALC - which is `tests/impala/sources/
+calc.impala:517`, `((funcptr)global FUNCTIONS[i * 2 + 1])(...)` over a `(name, function)` table. Its
+source is in the corpus, so even that one regenerates.
+
+**Do NOT justify this by JIT performance - verified 2026-08-07, the JIT gains NOTHING.** Type suffixes are
+an assembly-time operand check that is ERASED at finalization: `ADDi_vvv` and `ADDp_vvv` both emit
+`ADDI_VVV`, `MOVi`/`MOVp` both emit `MOVE_VC_`, `EQUi`/`EQUp` -> `EQUI_*`, `LSSi`/`LSSp` -> `LSSI_*`. The
+JIT's own plan says it: "There are no dedicated MOVp/ADDp opcodes at the finalized level." A `MOVt` mapping
+to `MOVE_VV_` hands the JIT an identical instruction stream. And it would not help anyway - the realm
+analysis asks "can this reach MY frame", not "might this be a function", and a funcptr constant already
+lands in `REALM_NONFRAME` for free because `FUNCTION_OFFSET` (0x56789ABC) > `MEMORY_OFFSET` (0x12345678),
+so `produced = (p1.p >= MEMORY_OFFSET) ? REALM_NONFRAME : REALM_UNKNOWN` classifies it correctly and
+precisely. Funcptrs are never `PEEK`/`POKE`d, so they never reach the query realms exist to answer.
+
+**The whole return on `t` is therefore assembly-time correctness**, and specifically the SPLIT rather than
+the omissions: `&one + 1` is dangerous because the writer may have believed they held a data pointer, and
+once the types are distinct that confusion is unrepresentable. Note the runtime already catches the
+out-of-table case - `if (ui >= functionCount) { err = BAD_CALL; }` (`GAZL.cpp:1385`) - so a computed target
+only misbehaves silently when it lands on ANOTHER VALID function.
+
+## See also
+
+- [`docs/gazl/InstructionSet.md`](../../docs/gazl/InstructionSet.md) - the `DAT*` family and the operand forms.
+- [`docs/impala/MemorySafetyModel.md`](../../docs/impala/MemorySafetyModel.md) - why dereferences are bounds-checked at run time.
+- [`design/ParkedFeatures.md`](../ParkedFeatures.md) - the `GAZL2` branch and what else waits on it.

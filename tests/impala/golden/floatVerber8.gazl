@@ -1,105 +1,105 @@
-; Compiled with Impala version 1.0
+; Compiled with Impala version 2.0
 
 ; signatures version=1
-PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #1	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int @ 10:1
-FALSE:	! DEFi #0	; signature const FALSE : int @ 11:1
-TRUE:	! DEFi #1	; signature const TRUE : int @ 12:1
-.x.panelTextRows:	! DEFi #8
-panelTextRows:	CNST *.x.panelTextRows	; signature array panelTextRows[8] : unknown @ 22:1
+PRAWN_FIRMWARE_PATCH_FORMAT:	! DEFi #1	; signature const PRAWN_FIRMWARE_PATCH_FORMAT : int @ floatVerber8.impala:10:1
+FALSE:	! DEFi #0	; signature const FALSE : int @ floatVerber8.impala:11:1
+TRUE:	! DEFi #1	; signature const TRUE : int @ floatVerber8.impala:12:1
+.z.panelTextRows:	! DEFi #8
+panelTextRows:	CNST *.z.panelTextRows	; signature array panelTextRows[8] : unknown @ floatVerber8.impala:22:1
 	DATA &.s_sillyr_4d2 &.s_sillyr_4d2:51 &.s_sillyr_4d2:51
 	DATA &.s_ROOMSI_4d3 &.s_ROOMSI_4d3:53 &.s_ROOMSI_4d3:53
 	DATA &.s_ROOMSI_4d3:53 &.s_FEEDBA_4d4
-; signature extern native abort() -> unknown @ 33:1
-; signature extern native trace() -> unknown @ 34:1
-; signature extern native yield() -> unknown @ 35:1
-; signature extern native read() -> unknown @ 36:1
-; signature extern native write() -> unknown @ 37:1
-; signature extern const DEBUG : int @ 39:1
-; signature extern const OPERATOR_1_NOP : int @ 41:1
-; signature extern const OPERATOR_1_AND : int @ 42:1
-; signature extern const OPERATOR_1_MUL : int @ 43:1
-; signature extern const OPERATOR_1_OSC : int @ 44:1
-; signature extern const OPERATOR_1_RND : int @ 45:1
-; signature extern const OPERATOR_2_NOP : int @ 47:1
-; signature extern const OPERATOR_2_OR : int @ 48:1
-; signature extern const OPERATOR_2_XOR : int @ 49:1
-; signature extern const OPERATOR_2_MSK : int @ 50:1
-; signature extern const OPERATOR_2_SUB : int @ 51:1
-; signature extern const SWITCHES_SYNC_MASK : int @ 53:1
-; signature extern const SWITCHES_TRIPLET_MASK : int @ 54:1
-; signature extern const SWITCHES_DOTTED_MASK : int @ 55:1
-; signature extern const SWITCHES_WRITE_PROTECT_MASK : int @ 56:1
-; signature extern const SWITCHES_REVERSE_MASK : int @ 57:1
-; signature extern const CLOCK_FREQUENCY_PARAM_INDEX : int @ 59:1
-; signature extern const SWITCHES_PARAM_INDEX : int @ 60:1
-; signature extern const OPERATOR_1_PARAM_INDEX : int @ 61:1
-; signature extern const OPERAND_1_HIGH_PARAM_INDEX : int @ 62:1
-; signature extern const OPERAND_1_LOW_PARAM_INDEX : int @ 63:1
-; signature extern const OPERATOR_2_PARAM_INDEX : int @ 64:1
-; signature extern const OPERAND_2_HIGH_PARAM_INDEX : int @ 65:1
-; signature extern const OPERAND_2_LOW_PARAM_INDEX : int @ 66:1
-; signature extern const PARAM_COUNT : int @ 67:1
+; signature extern native abort() -> unknown @ floatVerber8.impala:33:1
+; signature extern native trace() -> unknown @ floatVerber8.impala:34:1
+; signature extern native yield() -> unknown @ floatVerber8.impala:35:1
+; signature extern native read() -> unknown @ floatVerber8.impala:36:1
+; signature extern native write() -> unknown @ floatVerber8.impala:37:1
+; signature extern const DEBUG : int @ floatVerber8.impala:39:1
+; signature extern const OPERATOR_1_NOP : int @ floatVerber8.impala:41:1
+; signature extern const OPERATOR_1_AND : int @ floatVerber8.impala:42:1
+; signature extern const OPERATOR_1_MUL : int @ floatVerber8.impala:43:1
+; signature extern const OPERATOR_1_OSC : int @ floatVerber8.impala:44:1
+; signature extern const OPERATOR_1_RND : int @ floatVerber8.impala:45:1
+; signature extern const OPERATOR_2_NOP : int @ floatVerber8.impala:47:1
+; signature extern const OPERATOR_2_OR : int @ floatVerber8.impala:48:1
+; signature extern const OPERATOR_2_XOR : int @ floatVerber8.impala:49:1
+; signature extern const OPERATOR_2_MSK : int @ floatVerber8.impala:50:1
+; signature extern const OPERATOR_2_SUB : int @ floatVerber8.impala:51:1
+; signature extern const SWITCHES_SYNC_MASK : int @ floatVerber8.impala:53:1
+; signature extern const SWITCHES_TRIPLET_MASK : int @ floatVerber8.impala:54:1
+; signature extern const SWITCHES_DOTTED_MASK : int @ floatVerber8.impala:55:1
+; signature extern const SWITCHES_WRITE_PROTECT_MASK : int @ floatVerber8.impala:56:1
+; signature extern const SWITCHES_REVERSE_MASK : int @ floatVerber8.impala:57:1
+; signature extern const CLOCK_FREQUENCY_PARAM_INDEX : int @ floatVerber8.impala:59:1
+; signature extern const SWITCHES_PARAM_INDEX : int @ floatVerber8.impala:60:1
+; signature extern const OPERATOR_1_PARAM_INDEX : int @ floatVerber8.impala:61:1
+; signature extern const OPERAND_1_HIGH_PARAM_INDEX : int @ floatVerber8.impala:62:1
+; signature extern const OPERAND_1_LOW_PARAM_INDEX : int @ floatVerber8.impala:63:1
+; signature extern const OPERATOR_2_PARAM_INDEX : int @ floatVerber8.impala:64:1
+; signature extern const OPERAND_2_HIGH_PARAM_INDEX : int @ floatVerber8.impala:65:1
+; signature extern const OPERAND_2_LOW_PARAM_INDEX : int @ floatVerber8.impala:66:1
+; signature extern const PARAM_COUNT : int @ floatVerber8.impala:67:1
 	GLOB *1
-left:	DATi #0	; signature global left : int @ 69:1
+left:	DATi #0	; signature global left : int @ floatVerber8.impala:69:1
 	GLOB *1
-right:	DATi #0	; signature global right : int @ 70:1
+right:	DATi #0	; signature global right : int @ floatVerber8.impala:70:1
 	GLOB *1
-clock:	DATi #0	; signature global clock : int @ 71:1
-.x.params:	! DEFi #PARAM_COUNT
-params:	GLOB *.x.params	; signature array params[PARAM_COUNT] : unknown @ 72:1
-.x.displayLEDs:	! DEFi #4
-displayLEDs:	GLOB *.x.displayLEDs	; signature array displayLEDs[4] : unknown @ 73:1
+clock:	DATi #0	; signature global clock : int @ floatVerber8.impala:71:1
+.z.params:	! DEFi #PARAM_COUNT
+params:	GLOB *.z.params	; signature array params[PARAM_COUNT] : unknown @ floatVerber8.impala:72:1
+.z.displayLEDs:	! DEFi #4
+displayLEDs:	GLOB *.z.displayLEDs	; signature array displayLEDs[4] : unknown @ floatVerber8.impala:73:1
 	GLOB *1
-instance:	DATi #0	; signature global instance : int @ 74:1
-AND:	! DEFi #32767	; signature const AND : int @ 84:1
-TAPS_COUNT:	! DEFi #10	; signature const TAPS_COUNT : int @ 85:1
-ALLPASS_COUNT:	! DEFi #5	; signature const ALLPASS_COUNT : int @ 86:1
-T0:	! DEFi #0	; signature const T0 : int @ 88:1
-T3:	! DEFi #1	; signature const T3 : int @ 89:1
-T5:	! DEFi #2	; signature const T5 : int @ 90:1
-T7:	! DEFi #3	; signature const T7 : int @ 91:1
-T11:	! DEFi #4	; signature const T11 : int @ 92:1
-T13:	! DEFi #5	; signature const T13 : int @ 93:1
-TFB:	! DEFi #6	; signature const TFB : int @ 94:1
-TL1:	! DEFi #7	; signature const TL1 : int @ 95:1
-TL2:	! DEFi #8	; signature const TL2 : int @ 96:1
-TR:	! DEFi #9	; signature const TR : int @ 97:1
-.x.ALLPASS_PAIRS_A:	! DEFi #ALLPASS_COUNT
-ALLPASS_PAIRS_A:	CNST *.x.ALLPASS_PAIRS_A	; signature array ALLPASS_PAIRS_A[ALLPASS_COUNT] : unknown @ 99:1
+instance:	DATi #0	; signature global instance : int @ floatVerber8.impala:74:1
+AND:	! DEFi #32767	; signature const AND : int @ floatVerber8.impala:84:1
+TAPS_COUNT:	! DEFi #10	; signature const TAPS_COUNT : int @ floatVerber8.impala:85:1
+ALLPASS_COUNT:	! DEFi #5	; signature const ALLPASS_COUNT : int @ floatVerber8.impala:86:1
+T0:	! DEFi #0	; signature const T0 : int @ floatVerber8.impala:88:1
+T3:	! DEFi #1	; signature const T3 : int @ floatVerber8.impala:89:1
+T5:	! DEFi #2	; signature const T5 : int @ floatVerber8.impala:90:1
+T7:	! DEFi #3	; signature const T7 : int @ floatVerber8.impala:91:1
+T11:	! DEFi #4	; signature const T11 : int @ floatVerber8.impala:92:1
+T13:	! DEFi #5	; signature const T13 : int @ floatVerber8.impala:93:1
+TFB:	! DEFi #6	; signature const TFB : int @ floatVerber8.impala:94:1
+TL1:	! DEFi #7	; signature const TL1 : int @ floatVerber8.impala:95:1
+TL2:	! DEFi #8	; signature const TL2 : int @ floatVerber8.impala:96:1
+TR:	! DEFi #9	; signature const TR : int @ floatVerber8.impala:97:1
+.z.ALLPASS_PAIRS_A:	! DEFi #ALLPASS_COUNT
+ALLPASS_PAIRS_A:	CNST *.z.ALLPASS_PAIRS_A	; signature array ALLPASS_PAIRS_A[ALLPASS_COUNT] : unknown @ floatVerber8.impala:99:1
 	DATA #T0 #T0 #T3 #T3 #T5
-.x.ALLPASS_PAIRS_B:	! DEFi #ALLPASS_COUNT
-ALLPASS_PAIRS_B:	CNST *.x.ALLPASS_PAIRS_B	; signature array ALLPASS_PAIRS_B[ALLPASS_COUNT] : unknown @ 100:1
+.z.ALLPASS_PAIRS_B:	! DEFi #ALLPASS_COUNT
+ALLPASS_PAIRS_B:	CNST *.z.ALLPASS_PAIRS_B	; signature array ALLPASS_PAIRS_B[ALLPASS_COUNT] : unknown @ floatVerber8.impala:100:1
 	DATA #T3 #T13 #T5 #T11 #T7
 	GLOB *1
-roomSize:	DATi #11579	; signature global roomSize : int @ 102:1
+roomSize:	DATi #11579	; signature global roomSize : int @ floatVerber8.impala:102:1
 	GLOB *1
-preDelay:	DATi #0	; signature global preDelay : int @ 103:1
+preDelay:	DATi #0	; signature global preDelay : int @ floatVerber8.impala:103:1
 	GLOB *1
-feedback:	DATf #0.5	; signature global feedback : float @ 104:1
+feedback:	DATf #0.5	; signature global feedback : float @ floatVerber8.impala:104:1
 	GLOB *1
-damping:	DATf #1.0	; signature global damping : float @ 105:1
-.x.taps:	! DEFi #TAPS_COUNT
-taps:	GLOB *.x.taps	; signature array taps[TAPS_COUNT] : unknown @ 107:1
+damping:	DATf #1.0	; signature global damping : float @ floatVerber8.impala:105:1
+.z.taps:	! DEFi #TAPS_COUNT
+taps:	GLOB *.z.taps	; signature array taps[TAPS_COUNT] : unknown @ floatVerber8.impala:107:1
 
 ;-----------------------------------------------------------------------------
-init:	FUNC	; signature func init() -> void @ 112:1
+init:	FUNC	; signature func init() -> void @ floatVerber8.impala:112:1
 		PARA *1
 ;-----------------------------------------------------------------------------
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-reset:	FUNC	; signature func reset() -> void @ 120:1
+reset:	FUNC	; signature func reset() -> void @ floatVerber8.impala:120:1
 		PARA *1
 ;-----------------------------------------------------------------------------
 		RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-update:	FUNC	; signature func update() -> void @ 128:1
+update:	FUNC	; signature func update() -> void @ floatVerber8.impala:128:1
 		PARA *1
-.x.update.taps:	! DEFi #TAPS_COUNT
-	$taps:	LOCA *.x.update.taps
+.z.update.taps:	! DEFi #TAPS_COUNT
+	$taps:	LOCA *.z.update.taps
 	$size:	LOCi
 	$predelay:	LOCi
 ;-----------------------------------------------------------------------------
@@ -140,17 +140,17 @@ update:	FUNC	; signature func update() -> void @ 128:1
 
 
 ;-----------------------------------------------------------------------------
-process:	FUNC	; signature func process() -> void @ 169:1
+process:	FUNC	; signature func process() -> void @ floatVerber8.impala:169:1
 		PARA *1
 	$spinner:	LOCi
 	$in:	LOCf
 	$dI:	LOCf
-.x.process.t:	! DEFi #TAPS_COUNT
-	$t:	LOCA *.x.process.t
-.x.process.o:	! DEFi #TAPS_COUNT
-	$o:	LOCA *.x.process.o
-.x.process.taps:	! DEFi #TAPS_COUNT
-	$taps:	LOCA *.x.process.taps
+.z.process.t:	! DEFi #TAPS_COUNT
+	$t:	LOCA *.z.process.t
+.z.process.o:	! DEFi #TAPS_COUNT
+	$o:	LOCA *.z.process.o
+.z.process.taps:	! DEFi #TAPS_COUNT
+	$taps:	LOCA *.z.process.taps
 	$index:	LOCi
 	$i:	LOCi
 	$tA:	LOCi
@@ -169,7 +169,7 @@ process:	FUNC	; signature func process() -> void @ 169:1
 		SUBi $index $spinner %0
 		MOVi %1 $index 	; t[i] = itof((int) read(index, 0))
 		MOVi %2 #0 
-		CALL ^read %0 *3	; expects read(int, int) -> unknown @ 190:37
+		CALL ^read %0 *3	; expects read(int, int) -> unknown @ floatVerber8.impala:190:37
 		iTOf %0 %0 #1.0
 		SETL $t $i %0
 		SETL $o $i $index	; o[i] = index
@@ -204,14 +204,14 @@ process:	FUNC	; signature func process() -> void @ 169:1
 		MOVi %2 #0 
 		GETL %3 $t $i
 		fTOi %3 %3 #1.0
-		CALL ^write %0 *4	; expects write(int, int, int) -> unknown @ 216:68
+		CALL ^write %0 *4	; expects write(int, int, int) -> unknown @ floatVerber8.impala:216:68
 		FORi $i <A> @.l6
 	.e5:	SUBf %0 $t:TL1 $t:TL2	; global left = ftoi(((float) t[TL1] - (float) t[TL2]) * 0.75)
 		fTOi %0 %0 #0.75
 		POKE &left %0 
 		fTOi %0 $t:TR #1.0	; global right = ftoi((float) t[TR])
 		POKE &right %0 
-		CALL ^yield %0 *1	; expects yield() -> unknown @ 225:10
+		CALL ^yield %0 *1	; expects yield() -> unknown @ floatVerber8.impala:225:10
 		GOTO @.l0  	; }
 		RETU   	; }
 

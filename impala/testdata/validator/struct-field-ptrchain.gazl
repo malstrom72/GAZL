@@ -1,5 +1,0 @@
-; A unit that knows the element type of a pointer field, against a definition that does not. A bare
-; `ptr` is an element-unknown pointer and matches any chain - the same rule typesCompatible already
-; applies to a global or an array element, so a struct field must not be stricter.
-; signatures version=1
-; signature extern struct Node { link : int-ptr, n : int } @ struct-field-ptrchain.gazl:4:1

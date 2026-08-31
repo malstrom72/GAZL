@@ -10,10 +10,10 @@
 
 struct Vec2 { int x; int y }
 
-/* An `inline` helper crosses a unit boundary because the closure concatenates the defining unit
-   first, so its body is captured before any importer can call it. It emits NO symbol - grep the
-   golden for `clampi:` and there is nothing. */
-inline function clampi(int v, int lo, int hi) returns int r
+/* An ordinary helper crossing a unit boundary. It USED to be `inline`, which is parked for Impala 3.0
+   (docs/ParkedFeatures.md) - the closure concatenates the defining unit first, so an expansion across
+   units works and the shape is worth keeping covered here when it comes back. */
+function clampi(int v, int lo, int hi) returns int r
 locals int t
 {
 	t = v;

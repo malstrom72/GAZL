@@ -1,55 +1,55 @@
-; Compiled with Impala version 1.0
+; Compiled with Impala version 2.0
 
 ; signatures version=1
-DEBUG:	! DEFi #1	; signature const DEBUG : int @ 40:1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ ImpalaDemo.impala:40:1
 	GLOB *1
-uninited:	DATi #0	; signature global uninited : int @ 53:1
+uninited:	DATi #0	; signature global uninited : int @ ImpalaDemo.impala:53:1
 	GLOB *1
-inited:	DATi #23	; signature global inited : int @ 60:1
+inited:	DATi #23	; signature global inited : int @ ImpalaDemo.impala:60:1
 	GLOB *1
-aFloat:	DATf #0.0	; signature global aFloat : float @ 63:1
+aFloat:	DATf #0.0	; signature global aFloat : float @ ImpalaDemo.impala:63:1
 	GLOB *1
-aPointer:	DATp &aFloat	; signature global aPointer : ptr @ 65:1
+aPointer:	DATp &aFloat	; signature global aPointer : ptr @ ImpalaDemo.impala:65:1
 	GLOB *1
-aFuncPointer:	DATp &NULL	; signature global aFuncPointer : funcptr @ 68:1
-.x.defaultArray:	! DEFi #100
-defaultArray:	GLOB *.x.defaultArray	; signature array defaultArray[100] : unknown @ 73:1
-.x.initedArray:	! DEFi #10
-initedArray:	GLOB *.x.initedArray	; signature array initedArray[10] : unknown @ 78:1
+aFuncPointer:	DATp &NULL	; signature global aFuncPointer : funcptr @ ImpalaDemo.impala:68:1
+.z.defaultArray:	! DEFi #100
+defaultArray:	GLOB *.z.defaultArray	; signature array defaultArray[100] : unknown @ ImpalaDemo.impala:73:1
+.z.initedArray:	! DEFi #10
+initedArray:	GLOB *.z.initedArray	; signature array initedArray[10] : unknown @ ImpalaDemo.impala:78:1
 	DATA #1 #2.0 &defaultArray:0 #4
 	TEMP *1
-forgetMe:	DATi #0	; signature temporary forgetMe : int @ 82:1
-SOME_COUNT:	! DEFi #4	; signature const SOME_COUNT : int @ 87:1
-; signature extern const GAZL_WORD_SIZE : int @ 91:1
-.x.SOME_CONSTS:	! DEFi #SOME_COUNT
-SOME_CONSTS:	CNST *.x.SOME_CONSTS	; signature array SOME_CONSTS[SOME_COUNT] : unknown @ 94:1
+forgetMe:	DATi #0	; signature temporary forgetMe : int @ ImpalaDemo.impala:82:1
+SOME_COUNT:	! DEFi #4	; signature const SOME_COUNT : int @ ImpalaDemo.impala:87:1
+; signature extern const GAZL_WORD_SIZE : int @ ImpalaDemo.impala:91:1
+.z.SOME_CONSTS:	! DEFi #SOME_COUNT
+SOME_CONSTS:	CNST *.z.SOME_CONSTS	; signature array SOME_CONSTS[SOME_COUNT] : unknown @ ImpalaDemo.impala:94:1
 	DATA #100 #200 #300 #400
-; signature extern global defineMeLaterPlease : int @ 98:1
-; signature extern array futureArray[] : unknown @ 101:1
-; signature extern func thisFunctionInAnotherSource() -> unknown @ 103:1
-; signature extern native abort() -> unknown @ 107:1
+; signature extern global defineMeLaterPlease : int @ ImpalaDemo.impala:98:1
+; signature extern array futureArray[] : unknown @ ImpalaDemo.impala:101:1
+; signature extern func thisFunctionInAnotherSource() -> unknown @ ImpalaDemo.impala:103:1
+; signature extern native abort() -> unknown @ ImpalaDemo.impala:107:1
 .s_Welcom_4d2:	CNST *20
 	DATs Welcome to Impala!
 	DATi #10 #0
-WELCOME:	! DEFp &.s_Welcom_4d2	; signature const WELCOME : ptr @ 110:1
-.x.VARIOUS_LITERALS:	! DEFi #15
-VARIOUS_LITERALS:	CNST *.x.VARIOUS_LITERALS	; signature array VARIOUS_LITERALS[15] : unknown @ 116:1
+WELCOME:	! DEFp &.s_Welcom_4d2	; signature const WELCOME : ptr @ ImpalaDemo.impala:110:1
+.z.VARIOUS_LITERALS:	! DEFi #15
+VARIOUS_LITERALS:	CNST *.z.VARIOUS_LITERALS	; signature array VARIOUS_LITERALS[15] : unknown @ ImpalaDemo.impala:116:1
 	DATA #123 #-393 #+494 #0xAA55 #-0x1F2E3C4D #'A' #-''
 	DATA #'ROFL' #34.0 #-123.0e10 #256.11E-10 &.s_string_4d2
 	DATA &.s_allesc_4d3 &NULL &NULL
 
 ;-----------------------------------------------------------------------------
-abortOnZero:	FUNC	; signature func abortOnZero(int v) -> void @ 138:1
+abortOnZero:	FUNC	; signature func abortOnZero(int v) -> void @ ImpalaDemo.impala:138:1
 		PARA *1
 	$v:	INPi
 ;-----------------------------------------------------------------------------
 		NEQi $v #0 @.f0	; if (v == 0) abort()
-		CALL ^abort %0 *1	; expects abort() -> unknown @ 140:21
+		CALL ^abort %0 *1	; expects abort() -> unknown @ ImpalaDemo.impala:140:21
 	.f0:	RETU   	; }
 
 
 ;-----------------------------------------------------------------------------
-fetchSomeConst:	FUNC	; signature func fetchSomeConst(int index) -> int @ 143:1
+fetchSomeConst:	FUNC	; signature func fetchSomeConst(int index) -> int @ ImpalaDemo.impala:143:1
 	$fetched:	OUTi
 	$index:	INPi
 ;-----------------------------------------------------------------------------
@@ -58,7 +58,7 @@ fetchSomeConst:	FUNC	; signature func fetchSomeConst(int index) -> int @ 143:1
 
 
 ;-----------------------------------------------------------------------------
-findSmallest:	FUNC	; signature func findSmallest(int n, ptr vector) -> int @ 156:1
+findSmallest:	FUNC	; signature func findSmallest(int n, ptr vector) -> int @ ImpalaDemo.impala:156:1
 	$j:	OUTi
 	$n:	INPi
 	$vector:	INPp
@@ -74,39 +74,39 @@ findSmallest:	FUNC	; signature func findSmallest(int n, ptr vector) -> int @ 156
 	.f2:	FORi $i $n @.l1
 	.e0:	RETU   	; }
 
-TEST_SIZE:	! DEFi #50	; signature const TEST_SIZE : int @ 166:1
-; signature extern func myrand() -> unknown @ 167:1
-; signature extern native printInt() -> unknown @ 168:1
-; signature extern native printLF() -> unknown @ 169:1
+TEST_SIZE:	! DEFi #50	; signature const TEST_SIZE : int @ ImpalaDemo.impala:166:1
+; signature extern func myrand() -> unknown @ ImpalaDemo.impala:167:1
+; signature extern native printInt() -> unknown @ ImpalaDemo.impala:168:1
+; signature extern native printLF() -> unknown @ ImpalaDemo.impala:169:1
 
 ;-----------------------------------------------------------------------------
-test:	FUNC	; signature func test() -> void @ 171:1
+test:	FUNC	; signature func test() -> void @ ImpalaDemo.impala:171:1
 		PARA *1
 	$i:	LOCi
-.x.test.mydata:	! DEFi #TEST_SIZE
-	$mydata:	LOCA *.x.test.mydata
+.z.test.mydata:	! DEFi #TEST_SIZE
+	$mydata:	LOCA *.z.test.mydata
 ;-----------------------------------------------------------------------------
 		MOVi $i #0 	; for (i = 0 to TEST_SIZE)
 		GEQi #0 #TEST_SIZE @.e0
-	.l1:	CALL &myrand %0 *1	; expects myrand() -> unknown @ 176:23
+	.l1:	CALL &myrand %0 *1	; expects myrand() -> unknown @ ImpalaDemo.impala:176:23
 		SETL $mydata $i %0
 		FORi $i #TEST_SIZE @.l1
 	.e0:	MOVi $i #0 	; for (i = 0 to TEST_SIZE) 
 		GEQi #0 #TEST_SIZE @.e2
 	.l3:	GETL %1 $mydata $i	; printInt(mydata[i])
-		CALL ^printInt %0 *2	; expects printInt(unknown) -> unknown @ 178:22
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 179:12
+		CALL ^printInt %0 *2	; expects printInt(unknown) -> unknown @ ImpalaDemo.impala:178:22
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ ImpalaDemo.impala:179:12
 		FORi $i #TEST_SIZE @.l3	; }
 	.e2:	MOVi %2 #TEST_SIZE 	; printInt(findSmallest(TEST_SIZE, mydata))
 		ADRL %3 $mydata *0
-		CALL &findSmallest %1 *3	; expects findSmallest(int, ptr) -> int @ 181:42
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 181:43
+		CALL &findSmallest %1 *3	; expects findSmallest(int, ptr) -> int @ ImpalaDemo.impala:181:42
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ ImpalaDemo.impala:181:43
 		RETU   	; }
 
-; signature extern native printFloat() -> unknown @ 191:1
+; signature extern native printFloat() -> unknown @ ImpalaDemo.impala:191:1
 
 ;-----------------------------------------------------------------------------
-showoff:	FUNC	; signature func showoff() -> void @ 193:1
+showoff:	FUNC	; signature func showoff() -> void @ ImpalaDemo.impala:193:1
 		PARA *1
 	$a:	LOCi
 	$b:	LOCi
@@ -115,8 +115,8 @@ showoff:	FUNC	; signature func showoff() -> void @ 193:1
 	$e:	LOCi
 	$ok:	LOCi
 	$p:	LOCp
-.x.showoff.arr:	! DEFi #100
-	$arr:	LOCA *.x.showoff.arr
+.z.showoff.arr:	! DEFi #100
+	$arr:	LOCA *.z.showoff.arr
 	$f:	LOCf
 ;-----------------------------------------------------------------------------
 		MOVi $a #1 	; a = 1
@@ -141,8 +141,8 @@ showoff:	FUNC	; signature func showoff() -> void @ 193:1
 		GOTO @.e1  
 	.f0:	MOVi $ok #0 	; ok = 0
 	.e1:	MOVi %1 $ok 	; printInt(ok)
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 223:14
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 224:11
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ ImpalaDemo.impala:223:14
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ ImpalaDemo.impala:224:11
 		MOVi $b #'xyz' 	; a = b = 'xyz'
 		MOVi $a #'xyz' 
 		! MULi <A> #345 #123	; a = b = 345 * 123
@@ -162,8 +162,8 @@ showoff:	FUNC	; signature func showoff() -> void @ 193:1
 	.e4:	MOVp $p &SOME_CONSTS 	; for (p = global SOME_CONSTS to &global SOME_CONSTS[0]) 
 		GEQp &SOME_CONSTS &SOME_CONSTS:0 @.e6
 	.l7:	MOVp %1 $p 	; printInt(p)
-		CALL ^printInt %0 *2	; expects printInt(ptr) -> unknown @ 233:69
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 233:80
+		CALL ^printInt %0 *2	; expects printInt(ptr) -> unknown @ ImpalaDemo.impala:233:69
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ ImpalaDemo.impala:233:80
 		FORp $p &SOME_CONSTS:0 @.l7	; }
 	.e6:	PEEK $a &forgetMe 	; a = global forgetMe
 		MOVf $f #23.3 	; f = 23.3
@@ -181,11 +181,11 @@ showoff:	FUNC	; signature func showoff() -> void @ 193:1
 		iTOf %0 $a #1.0	; f = itof(a) / 100.0
 		DIVf $f %0 #100.0
 		MOVi %1 $a 	; printInt(a)
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 242:12
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 242:22
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ ImpalaDemo.impala:242:12
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ ImpalaDemo.impala:242:22
 		MOVf %1 $f 	; printFloat(f)
-		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 243:14
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 243:24
+		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ ImpalaDemo.impala:243:14
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ ImpalaDemo.impala:243:24
 		POKE &initedArray:2 &futureArray:4 	; global initedArray[2] = &global futureArray[4]
 		NEQi #1 #1 @.f8	; if (1 == 1) 
 		! EQUi #DEBUG #0 @.a9	; assert((pointer)global initedArray[2] == &global futureArray[4])
@@ -203,19 +203,19 @@ showoff:	FUNC	; signature func showoff() -> void @ 193:1
 	.e10:	POKE &aFuncPointer &showoff 	; global aFuncPointer = showoff
 		PEEK %0 &aFuncPointer 	; if (global aFuncPointer == nullfunc) global aFuncPointer()
 		NEQp %0 &NULL @.f12
-		PEEK %1 &aFuncPointer 	; expects function() -> unknown @ 253:59
+		PEEK %1 &aFuncPointer 	; expects function() -> unknown @ ImpalaDemo.impala:253:59
 		CALL %1 %0 *1
 	.f12:	RETU   	; }
 
 	GLOB *1
-defineMeLaterPlease:	DATi #0	; signature global defineMeLaterPlease : int @ 266:1
-.x.futureArray:	! DEFi #10
-futureArray:	GLOB *.x.futureArray	; signature array futureArray[10] : unknown @ 267:1
+defineMeLaterPlease:	DATi #0	; signature global defineMeLaterPlease : int @ ImpalaDemo.impala:266:1
+.z.futureArray:	! DEFi #10
+futureArray:	GLOB *.z.futureArray	; signature array futureArray[10] : unknown @ ImpalaDemo.impala:267:1
 	GLOB *1
-myrand_seed:	DATi #2463534242	; signature global myrand_seed : int @ 269:1
+myrand_seed:	DATi #2463534242	; signature global myrand_seed : int @ ImpalaDemo.impala:269:1
 
 ;-----------------------------------------------------------------------------
-myrand:	FUNC	; signature func myrand() -> int @ 270:1
+myrand:	FUNC	; signature func myrand() -> int @ ImpalaDemo.impala:270:1
 	$y:	OUTi
 ;-----------------------------------------------------------------------------
 		PEEK $y &myrand_seed 	; y = global myrand_seed
@@ -228,26 +228,26 @@ myrand:	FUNC	; signature func myrand() -> int @ 270:1
 		POKE &myrand_seed $y 	; global myrand_seed = y
 		RETU   	; }
 
-anInt:	! DEFi #4	; signature const anInt : int @ 280:1
-; signature extern native print() -> unknown @ 282:1
+anInt:	! DEFi #4	; signature const anInt : int @ ImpalaDemo.impala:280:1
+; signature extern native print() -> unknown @ ImpalaDemo.impala:282:1
 
 ;-----------------------------------------------------------------------------
-main:	FUNC	; signature func main() -> void @ 283:1
+main:	FUNC	; signature func main() -> void @ ImpalaDemo.impala:283:1
 		PARA *1
 	$myFloat:	LOCf
 ;-----------------------------------------------------------------------------
 		MOVp %1 #WELCOME 	; print(WELCOME)
-		CALL ^print %0 *2	; expects print(ptr) -> unknown @ 286:16
+		CALL ^print %0 *2	; expects print(ptr) -> unknown @ ImpalaDemo.impala:286:16
 		MOVf $myFloat #1000.0 	; myFloat = 1000.0
 		! SHLi <B> #1 #anInt	; printInt(ftoi(myFloat * (1.0 / itof(1 << anInt))))
 		! iTOf <B> <B> #1.0
 		! DIVf <B> #1.0 <B>
 		fTOi %1 $myFloat <B>
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 288:52
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 288:63
-		CALL &showoff %0 *1	; expects showoff() -> void @ 289:11
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ ImpalaDemo.impala:288:52
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ ImpalaDemo.impala:288:63
+		CALL &showoff %0 *1	; expects showoff() -> void @ ImpalaDemo.impala:289:11
 		MOVp %1 &.s_Bye_4d4 	; print("Bye!\n")
-		CALL ^print %0 *2	; expects print(int-ptr) -> unknown @ 290:17
+		CALL ^print %0 *2	; expects print(int-ptr) -> unknown @ ImpalaDemo.impala:290:17
 		RETU   	; }
 
 .s_string_4d2:	CNST *8

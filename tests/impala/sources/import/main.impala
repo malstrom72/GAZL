@@ -25,7 +25,7 @@ locals Vec2 p, Vec2 q, Vec2 s, int qt, int rm
 	printInt(qt); printLF();		// 3
 	printInt(rm); printLF();		// 2
 
-	printInt(clampi(-5, 0, 9)); printLF();	// 0 - an IMPORTED inline function, expanded here
+	printInt(clampi(-5, 0, 9)); printLF();	// 0 - an imported helper, called across units
 	printInt(clampi(20, 0, 9)); printLF();	// 9
 	printInt(clampi(5, 0, 9)); printLF();	// 5
 }

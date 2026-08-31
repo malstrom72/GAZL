@@ -1,18 +1,18 @@
-; Compiled with Impala version 1.0
+; Compiled with Impala version 2.0
 
 ; signatures version=1
-DEBUG:	! DEFi #1	; signature const DEBUG : int @ 22:1
-K:	! DEFi #24	; signature const K : int @ 24:1
-; signature extern native printInt() -> unknown @ 26:1
-; signature extern native printFloat() -> unknown @ 27:1
-; signature extern native printLF() -> unknown @ 28:1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ inlineReviewTypes.impala:22:1
+K:	! DEFi #24	; signature const K : int @ inlineReviewTypes.impala:24:1
+; signature extern native printInt() -> unknown @ inlineReviewTypes.impala:26:1
+; signature extern native printFloat() -> unknown @ inlineReviewTypes.impala:27:1
+; signature extern native printLF() -> unknown @ inlineReviewTypes.impala:28:1
 	GLOB *1
-g:	DATi #0	; signature global g : int @ 30:1
+g:	DATi #0	; signature global g : int @ inlineReviewTypes.impala:30:1
 	GLOB *1
-touched:	DATi #0	; signature global touched : int @ 31:1
+touched:	DATi #0	; signature global touched : int @ inlineReviewTypes.impala:31:1
 
 ;-----------------------------------------------------------------------------
-timesThree:	FUNC	; signature func timesThree(int a) -> int @ 60:1
+timesThree:	FUNC	; signature func timesThree(int a) -> int @ inlineReviewTypes.impala:60:1
 	$r:	OUTi
 	$a:	INPi
 ;-----------------------------------------------------------------------------
@@ -21,56 +21,56 @@ timesThree:	FUNC	; signature func timesThree(int a) -> int @ 60:1
 
 
 ;-----------------------------------------------------------------------------
-main:	FUNC	; signature func main() -> void @ 62:1
+main:	FUNC	; signature func main() -> void @ inlineReviewTypes.impala:62:1
 		PARA *1
 	$fv:	LOCf
 	$w:	LOCi
-.x.main.cell:	! DEFi #1
-	$cell:	LOCA *.x.main.cell
+.z.main.cell:	! DEFi #1
+	$cell:	LOCA *.z.main.cell
 	$fp:	LOCp
 ;-----------------------------------------------------------------------------
 		MOVf $fv #15.0 	; fv = 15.0
 		MULf %1 $fv #0.5	; y = x * 0.5
-		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 66:24
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 66:35
+		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ inlineReviewTypes.impala:66:24
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ inlineReviewTypes.impala:66:35
 		POKE &g #5 	; global g = 5
 		MOVi $w #20 	; w = 20
 		PEEK %2 &g 	; global g = global g + d
 		ADDi %2 %2 $w
 		POKE &g %2 
 		PEEK %1 &g 	; printInt(global g)
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 71:20
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 71:31
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ inlineReviewTypes.impala:71:20
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ inlineReviewTypes.impala:71:31
 		MOVi $cell:0 #0 	; cell[0] = 0
 		ADRL %1 $cell:0 *0	; store(&cell[0], 42)
 		MOVi %2 #42 
 		POKE %1 %2 	; *p = v
 		POKE &touched #99 	; global touched = 99
 		MOVi %1 $cell:0 	; printInt(cell[0])
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 75:19
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 75:30
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ inlineReviewTypes.impala:75:19
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ inlineReviewTypes.impala:75:30
 		MOVi $w #1 	; w = 1
 		! DIVi <A> #K #2	; r = a * (K / 2)
 		MULi %1 $w <A>
 		SUBi %1 %1 #8	; }
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 78:25
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 78:36
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ inlineReviewTypes.impala:78:25
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ inlineReviewTypes.impala:78:36
 		PEEK %1 &touched 	; printInt(global touched)
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 79:26
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 79:37
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ inlineReviewTypes.impala:79:26
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ inlineReviewTypes.impala:79:37
 		! DIVi <A> #K #2	; r = a * (K / 2)
 		MULi %1 #1 <A>
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 80:21
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 80:32
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ inlineReviewTypes.impala:80:21
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ inlineReviewTypes.impala:80:32
 		MOVp $fp &timesThree 	; fp = timesThree
 		MOVp %2 $fp 	; printInt(callThrough(fp, 10))
 		MOVi %5 #10 	; r = f(a)
-		CALL %2 %4 *2	; expects function(int) -> int @ 57:10
+		CALL %2 %4 *2	; expects function(int) -> int @ inlineReviewTypes.impala:57:10
 		MOVi %1 %4 
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ 83:31
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 83:42
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ inlineReviewTypes.impala:83:31
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ inlineReviewTypes.impala:83:42
 		! MULf <A> #15.0 #3.0	; z = x * y + x
 		ADDf %1 <A> #15.0
-		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ 84:30
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ 84:41
+		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ inlineReviewTypes.impala:84:30
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ inlineReviewTypes.impala:84:41
 		RETU   	; }

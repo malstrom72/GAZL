@@ -86,6 +86,22 @@ global.warming:         GLOB *2
     global.pointer:     DATp &NULL
 
 ;-------------------------------------------------------------------------------
+; SEEK regions (GAZL 2): symbolic offsets, out-of-order placement, and the
+; zero-filled words a bounded region claims but never writes.
+OFF_HI:                 ! DEFi #5
+OFF_LO:                 ! DEFi #1
+EXT_LO:                 ! DEFi #3
+seek.test:              GLOB *8
+;-------------------------------------------------------------------------------
+                        SEEK :OFF_HI                         ; out of order on purpose: 5 first, 1 below it later
+                        DATi #500
+                        DATf #600.5
+seek.lo:                SEEK :OFF_LO *EXT_LO                 ; bounded: claims words 1-3, writes two, the tail zero-fills; the label names the cursor and the extent becomes its size
+                        DATi #100
+                        DATi #200
+seek.mark:              SEEK :7                              ; label only: a named cursor with no DAT rows at all
+
+;-------------------------------------------------------------------------------
 test:                   FUNC
 ;-------------------------------------------------------------------------------
     f0:                 LOCf
@@ -100,6 +116,7 @@ test:                   FUNC
     p1:                 LOCp
     p2:                 LOCp
     p3:                 LOCp
+    t0:                 LOCt
     lArray:             LOCA *777
 ; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 ; SCOP / ENDS: sA and sB are SIBLINGS, so they share offsets; sInner NESTS inside
@@ -131,6 +148,49 @@ test:                   FUNC
  MOVi       sB2             #555
  NEQi       sInner          #555            @fail            ; sB2 overlays sInner likewise
  NEQi       i0              #111            @fail            ; anything declared before the first SCOP is untouched
+
+;
+; Test SEEK data regions (GAZL 2).
+;
+ PEEK       i0              &seek.test:OFF_HI
+ NEQi       i0              #500            @fail            ; landed at the symbolic offset
+ ! ADDi     <A>             #OFF_HI         #1
+ PEEK       f0              &seek.test:<A>
+ NEQf       f0              #600.5          @fail            ; rows after a SEEK fill sequentially
+ PEEK       i0              &seek.test:OFF_LO
+ NEQi       i0              #100            @fail            ; a later SEEK may sit BELOW an earlier one
+ PEEK       i1              &seek.test:2
+ NEQi       i1              #200            @fail
+ PEEK       i2              &seek.test:3
+ NEQi       i2              #0              @fail            ; the bounded region's unwritten tail is zero
+ PEEK       i3              &seek.test:0
+ NEQi       i3              #0              @fail            ; so is a word no region touched
+ PEEK       i0              &seek.lo:1
+ NEQi       i0              #200            @fail            ; a SEEK label is the region's address, offsettable like any data label
+ POKE       &seek.mark      #700
+ PEEK       i1              &seek.test:7
+ NEQi       i1              #700            @fail            ; a label-only SEEK names a cursor with no DAT behind it
+
+;
+; Test the GAZL 2 `t` call-target type. tOne / tTwo are minted inside the GAZL #2 region at the end of
+; this file, so their addresses are targets; this caller needs no region of its own - the discipline
+; rides on the SYMBOLS, which is what lets mixed-dialect units concatenate.
+;
+ MOVt       t0              &tOne
+ CALL       t0              %0              *1
+ NEQi       %0              #1111           @fail            ; called through a target local
+ PEEK       t0              &tTargets:1
+ CALL       t0              %0              *1
+ NEQi       %0              #2222           @fail            ; loaded from a DATt table - memory stays typeless
+ EQUt       t0              &tTwo           @tSame
+ GOTO       @fail
+    tSame:  NEQt t0         &tOne           @tDiffer
+ GOTO       @fail
+    tDiffer: DIFt i0        t0              &tOne
+ NEQi       i0              #1              @fail            ; declaration-order ordinals: tTwo - tOne = 1
+ MOVi       %1              #5
+ CALL       &tLoop          %0              *2
+ NEQi       %0              #3333           @fail            ; tLoop TAILed itself 5 times in ONE frame - the callee's RETU came straight back here
 
  PEEK       f0		       &consts.float
  PEEK       i0              &consts.int
@@ -322,9 +382,10 @@ checkZeroLoop: NOOP
 ; operand is merely a hint that might be used to optimize stack frame sizes or for bounds checking etc.
 ;
 ; A function pointer (the value of &function) is an opaque handle: a stable ordinal assigned in function declaration
-; order, not a code address. Only equality (EQUp / NEQp) and calling are defined operations on a function pointer;
-; ordering (LSSp, GEQp etc.) and arithmetic (ADDp, SUBp, DIFp) applied to a function pointer yield an unspecified (but
-; memory-safe) result.
+; order, not a code address. Equality (EQUp / NEQp), ordering (LSSp, GEQp etc.), difference (DIFp) and calling are
+; defined operations on a function pointer; arithmetic that PRODUCES one (ADDp, SUBp) yields an unspecified (but
+; memory-safe) result. GAZL 1 cannot enforce that contract; functions declared inside a GAZL #2 region carry the `t`
+; type, which can (see the region at the end of this file, and docs/gazl/InstructionSet.md under GAZL).
 ;
 ;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 
@@ -363,14 +424,20 @@ checkZeroLoop: NOOP
 
 ;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ;
-;DATf      #float
-;DATi      #int
-;DATp      &address
+;DATf      #float #float ...
+;DATi      #int #int ...
+;DATp      &address &address ...
 ;DATA      #const #const #const #const ...
 ;DATs      any string here
 ;
 ; DAT instructions are used to initialize globals and constant arrays. See consts declarations in top of this file for
 ; examples. Tests on global / const initializers can be found first in the unit-test function.
+;
+; All four of DATf/DATi/DATp/DATA take any number of operands - see `DATi #CR #LF #0` at the top of this file. What
+; sets DATA apart is that its operands may be of MIXED types (`consts.mixed`); the typed forms enforce their type on
+; every operand on the line, which is what makes them the safer choice whenever the values share one type.
+; DATs is the exception: it takes no operands at all - the rest of the line is the literal, one word per character,
+; with no terminating zero (`consts.string` follows it with a DATi).
 ;
 ;
 ;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
@@ -2191,3 +2258,43 @@ CallBack:               FUNC
                         RETU
     fail:               CALL ^assertFail
                         RETU
+
+;===============================================================================
+; GAZL 2 region: functions declared between `GAZL #2` and `GAZL #1` have TARGET
+; (`t`) addresses, so `&tOne` can never enter a `p` position, here or in any
+; other unit. Closing with `GAZL #1` is what makes this file safe to
+; CONCATENATE: whatever follows starts back in the GAZL 1 default.
+;===============================================================================
+                        GAZL #2
+
+;-------------------------------------------------------------------------------
+tOne:                   FUNC
+    tRes:               OUTi
+;-------------------------------------------------------------------------------
+                        MOVi tRes #1111
+                        RETU
+
+;-------------------------------------------------------------------------------
+tTwo:                   FUNC
+    tRes2:              OUTi
+;-------------------------------------------------------------------------------
+                        MOVi tRes2 #2222
+                        RETU
+
+;-------------------------------------------------------------------------------
+tLoop:                  FUNC                            ; self tail call: TAIL slides the %0 window onto the frame base and re-enters - constant stack at any depth
+    tRes3:              OUTi
+    tN:                 INPi
+;-------------------------------------------------------------------------------
+                        NEQi tN #0 @tMore
+                        MOVi tRes3 #3333
+                        RETU
+    tMore:              SUBi %1 tN #1
+                        TAIL &tLoop *2
+
+;-------------------------------------------------------------------------------
+tTargets:               CNST *2
+;-------------------------------------------------------------------------------
+                        DATt &tOne &tTwo
+
+                        GAZL #1
