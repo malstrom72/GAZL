@@ -300,10 +300,10 @@ Concrete shapes that violate the model. If you are about to write one of these, 
   GAZL identifier; `parseFloat("0x10")` is `0`, so a plain hand-written hex offset silently becomes
   zero. If you must have a number, get it from the parsed constant expression and handle "I don't have
   one" explicitly. Guarding on `operand[0] === '#'` does not establish that the rest is a decimal.
-  (FIXED 2026-08-04: `$parser.constInt` is that decoder — it returns `undefined` for everything it cannot
+  (FIXED 2026-08-04: `$parser.constInt` is that decoder - it returns `undefined` for everything it cannot
   read, which is the "I don't have one" branch, and it is now the only thing any site asks. The last two
-  hand-rolled holdouts were `dereference`, which guarded on `'#'` and then ran `parseFloat` — the exact
-  pair this bullet warns about, still shipping four days after the warning was written — and
+  hand-rolled holdouts were `dereference`, which guarded on `'#'` and then ran `parseFloat` - the exact
+  pair this bullet warns about, still shipping four days after the warning was written - and
   `subConstInt`, which spanned decimal digits. If you add a literal spelling, `constInt` is the one place
   that has to learn it.)
 - **Comparing or iterating a declared extent as if it were a number** (`for (e = 0; e < field.size; ++e)`,

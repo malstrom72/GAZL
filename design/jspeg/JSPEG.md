@@ -92,8 +92,12 @@ assuming a fresh `$$` and it will append to whatever the caller left there inste
 
 Predicates are the exception: they restore `$$`, because they consume nothing.
 
-Also available inside an action: `$$s` (the whole source string), `$$i` (the current index), and
-`$$parser` (the helper/rule table).
+Also available inside an action: `$$s` (the whole source string) and `$$i` (the current index).
+
+A `$$parser.` prefix is erased by the compiler, so `$$parser.foo` and `foo` name the same closure
+local - there is no parser object to reach at run time. The prefix is a readability convention for
+the helpers a grammar defines in its prelude, and it only works with a dot: bare `$$parser` compiles
+to nonsense.
 
 ### Examples
 
@@ -151,11 +155,13 @@ verifiable from `impala/jspeg.jspeg` and from the generated `impalaCompiler.js`.
 - **In a character class, `-` binds as a range even before `]`** - `[+-]` is a range from `+` to
   the class terminator, not "plus or minus" (regex habits do not apply; `Range <- Char '-' Char`
   follows Ford's PEG). The compiler refuses the unescaped spelling with a line:column diagnostic.
-  Write `[-+]` for a literal dash, or `[+-]]` if you really mean a range ending at `]`.
-- **Never declare `_val`, `_s` or `_i` in an action.** An action body is wrapped in
+  Write `[-+]` for a literal dash, or escape the endpoint - `[+-\]]` - if you really mean a range
+  ending at `]`.
+- **Never declare `_val`, `_s`, `_im` or `_i` in an action.** An action body is wrapped in
   `(function(){ … })()`, so a `var` of one of those names shadows the parser variable that `$$`,
-  `$$s` and `$$i` compile to. The failure is a *silent miscompile*: the action writes its own local,
-  the register keeps a stale value, and nothing errors. The byte-compare gate is what catches it.
+  `$$s` and `$$i` compile to, and the failure would be a *silent miscompile*: the action writes its
+  own local, the register keeps a stale value, and nothing errors. `updateJSPEG.js` refuses the
+  declaration at regeneration rather than letting it reach the byte-compare gate.
 - **A rule that builds a record must initialize it.** `$$.count = 0` needs `$$` to already be an
   object. Value rules that act as containers start with `$$ = {}` (see `TypeDeclr`, `VarDecl`,
   `ArrayDecl`, `ExternDecl` in `impala.jspeg`).
@@ -176,7 +182,7 @@ node impala/updateJSPEG.js          # rebuild jspegCompiler.js and impalaCompile
 node impala/updateJSPEG.js --check  # verify checked-in files are current
 ```
 
-`--check` is CI-friendly: it does not rewrite files and exits non‑zero if regeneration is needed. After regeneration (or `--check`), tests run automatically inside the script.
+`--check` is CI-friendly: it does not rewrite files and exits non-zero if regeneration is needed. After regeneration (or `--check`), tests run automatically inside the script.
 
 You can also run the full repository build and regression tests:
 
