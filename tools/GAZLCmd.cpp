@@ -153,6 +153,23 @@ Status gazlAtan2(Processor* vpu) {
 	return OK;
 };
 
+Status gazlExit(Processor*) {
+	return TERMINATED;					// expected, clean termination (e.g. a firmware harness reaching its frame budget)
+}
+
+/*
+	--forward=native:function[,native:function...]: satisfy `^native` call sites with GAZL functions. Each listed native
+	name is registered as one of these stubs; after assembly the paired GAZL function is looked up by name and every call
+	to the native pushCall()s it - the `^native` call then behaves exactly like a `&function` call (args and return value
+	in the same window). This is how the Permut8 firmware harness supplies yield/read/write/trace as concatenated GAZL
+	(see tools/permut8Host.js).
+*/
+const int MAX_FORWARDS = 8;
+static Pointer forwardTargets[MAX_FORWARDS];
+template<int INDEX> Status forwardNative(Processor* p) {
+	return p->pushCall(forwardTargets[INDEX]) != 0 ? OK : BAD_CALL;
+}
+
 
 const int DATA_MEMORY_SIZE = 128 * 1024;
 const int CODE_MEMORY_SIZE = 128 * 1024;
@@ -160,12 +177,16 @@ const int FUNCTION_TABLE_SIZE = CODE_MEMORY_SIZE;	// A function is at least one 
 const int CALL_STACK_SIZE = 2048;
 
 static const NativeFunc NATIVE_TABLE[] = {
-	abort, assertFail, printInt, printFloat, print, printLF, input, gazlAtan2, gazlSqrt, gazlLog
+	abort, assertFail, printInt, printFloat, print, printLF, input, gazlAtan2, gazlSqrt, gazlLog, gazlExit,
+	forwardNative<0>, forwardNative<1>, forwardNative<2>, forwardNative<3>,							// --forward slots;
+	forwardNative<4>, forwardNative<5>, forwardNative<6>, forwardNative<7>							// names registered on demand
 };
 
 static const char* NATIVE_NAMES[] = {
-	"abort", "assertFail", "printInt", "printFloat", "print", "printLF", "input", "atan2", "sqrt", "log"
+	"abort", "assertFail", "printInt", "printFloat", "print", "printLF", "input", "atan2", "sqrt", "log", "exit"
 };
+
+const int FIRST_FORWARD_INDEX = 11;						// index of forwardNative<0> in NATIVE_TABLE
 
 static Value memory[DATA_MEMORY_SIZE];
 static Instruction code[CODE_MEMORY_SIZE];
@@ -308,6 +329,9 @@ int main(int argc, const char* argv[]) {
 		std::vector<const char*> pos;
 		int benchRepeat = 0;	// 0 = normal single run; >0 = benchmark mode with this many measured iterations
 		int benchWarmup = 3;	// iterations run and discarded before measuring
+		bool noLibm = false;	// --no-libm: don't register the atan2/sqrt/log natives (for programs that define their own)
+		const char* noNativeSpec = 0;	// --no-native=name,...: don't register the listed built-in natives (for programs defining same-named functions)
+		const char* forwardSpec = 0;	// --forward=native:function,...: satisfy ^native calls with GAZL functions (see forwardNative)
 		for (int i = 0; i < argc; ++i) {
 			const char* a = argv[i];
 			if (i > 0 && a[0] == '-' && a[1] == '-') {
@@ -315,6 +339,12 @@ int main(int argc, const char* argv[]) {
 					benchRepeat = (a[7] == '=') ? atoi(a + 8) : 10;
 				} else if (strncmp(a, "--warmup", 8) == 0) {
 					benchWarmup = (a[8] == '=') ? atoi(a + 9) : benchWarmup;
+				} else if (strcmp(a, "--no-libm") == 0) {
+					noLibm = true;
+				} else if (strncmp(a, "--forward=", 10) == 0) {
+					forwardSpec = a + 10;
+				} else if (strncmp(a, "--no-native=", 12) == 0) {
+					noNativeSpec = a + 12;
 				} else {
 					throw CmdException(std::string("Unknown option: ") + a);
 				}
@@ -327,20 +357,51 @@ int main(int argc, const char* argv[]) {
 			std::cerr << "GAZLCmd <filename> [<function> = 'main'] [<define symbol> <define value> ...]" << std::endl;
 			std::cerr << "        [--bench[=N]] [--warmup=W]   run N timed iterations (default 10), W warmups (default 3)"
 					<< std::endl;
+			std::cerr << "        [--no-libm]                  skip the atan2/sqrt/log natives (for self-contained libm)"
+					<< std::endl;
+			std::cerr << "        [--forward=nat:func,...]     satisfy ^nat native calls with GAZL functions"
+					<< std::endl;
 			return 0;
 		}
 
 		Symbols globals;
 
-		for (int i = 0; i < sizeof (NATIVE_TABLE) / sizeof (*NATIVE_TABLE); ++i)
+		for (int i = 0; i < sizeof (NATIVE_NAMES) / sizeof (*NATIVE_NAMES); ++i) {	// NAMES, not TABLE: the unnamed tail of
+			if (noLibm && (strcmp(NATIVE_NAMES[i], "atan2") == 0 || strcmp(NATIVE_NAMES[i], "sqrt") == 0	// NATIVE_TABLE is the
+					|| strcmp(NATIVE_NAMES[i], "log") == 0))											// --forward slots
+				continue;								// a self-contained libm (e.g. perfTest) defines these itself
+			if (noNativeSpec != 0) {					// --no-native: the program defines a same-named GAZL function itself
+				const std::string spec(std::string(",") + noNativeSpec + ",");
+				if (spec.find(std::string(",") + NATIVE_NAMES[i] + ",") != std::string::npos) continue;
+			}
 			globals.registerNative(NATIVE_NAMES[i], i);
+		}
 
 		for (size_t i = 3; i + 2 <= pos.size(); i += 2) {
 			Value v;
 			v.i = atoi(pos[i + 1]);
 			globals.defineConstant(pos[i + 0], false, v);
 		}
-		
+
+		// --forward: register each native name now (the assembler must resolve `^name`); the paired GAZL function names
+		// are remembered and looked up after assembly.
+		std::vector<std::string> forwardFunctionNames;
+		if (forwardSpec != 0) {
+			std::string spec(forwardSpec);
+			size_t at = 0;
+			while (at < spec.size()) {
+				const size_t comma = spec.find(',', at);
+				const std::string pair = spec.substr(at, comma == std::string::npos ? std::string::npos : comma - at);
+				const size_t colon = pair.find(':');
+				if (colon == std::string::npos) throw CmdException(std::string("--forward: expected native:function, got '") + pair + "'");
+				if (forwardFunctionNames.size() >= MAX_FORWARDS) throw CmdException("--forward: too many forwards");
+				globals.registerNative(pair.substr(0, colon).c_str(), FIRST_FORWARD_INDEX + static_cast<int>(forwardFunctionNames.size()));
+				forwardFunctionNames.push_back(pair.substr(colon + 1));
+				if (comma == std::string::npos) break;
+				at = comma + 1;
+			}
+		}
+
 		ProgramSizes sizes = { 0, 0, 0, 0 };
 
 		{
@@ -382,6 +443,13 @@ int main(int argc, const char* argv[]) {
 		{
 			Processor pmachine(sizes.codeSize, code, sizes.functionCount, functionTable, DATA_MEMORY_SIZE, memory
 					, sizes.globalsSize, sizes.constsSize, CALL_STACK_SIZE, callStack, NATIVE_TABLE, 0);
+
+			for (size_t i = 0; i < forwardFunctionNames.size(); ++i) {		// resolve --forward targets against the assembled program
+				forwardTargets[i] = globals.findFunction(forwardFunctionNames[i].c_str());
+				if (forwardTargets[i] == NULL_POINTER)
+					throw CmdException(std::string("--forward: no function '") + forwardFunctionNames[i] + "'");
+			}
+
 			const char* mainFunctionName = pos.size() >= 3 ? pos[2] : "main";
 			Pointer mainFunction = globals.findFunction(mainFunctionName);
 			if (mainFunction == 0) throw CmdException(std::string("Could not locate function: ") + mainFunctionName);
@@ -396,7 +464,8 @@ int main(int argc, const char* argv[]) {
 					pmachine.resetTimeOut(0x7FFFFFFF);
 					status = pmachine.run();
 				} while (status == TIME_OUT);
-				if (status != OK) throw CmdException(std::string("run returned status ") + std::to_string(status));
+				// TERMINATED is a clean, expected stop via the exit() native (e.g. a firmware harness reaching its budget).
+				if (status != OK && status != TERMINATED) throw CmdException(std::string("run returned status ") + std::to_string(status));
 			};
 
 			if (benchRepeat > 0) {
