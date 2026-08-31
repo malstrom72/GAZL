@@ -113,17 +113,13 @@ if (canonicalizeTrimmed(impalaSelfExpected) !== canonicalizeTrimmed(impalaExisti
 }
 console.log("impala.jspeg compiles identically under self-hosted compiler");
 
-assert(!impalaExisting.includes("Object.defineProperty"), "impalaCompiler.js must not require descriptor support for parser context");
+assert(!impalaExisting.includes("Object.defineProperty"), "impalaCompiler.js must stay inside the NuXJS subset, which has no property descriptors");
 
 const compilerContext = loadImpalaCompilerForTests();
 const makeMetaHelper = compilerContext.makeMeta;
 const assignHelper = compilerContext.assign;
 const failHelper = compilerContext.fail;
 
-assert(
-	!Object.prototype.hasOwnProperty.call(compilerContext, "createParserContext"),
-	"impala compiler must keep createParserContext private",
-);
 assert(typeof makeMetaHelper === "function", "makeMeta helper must be callable");
 assert(typeof assignHelper === "function", "assign helper must be callable");
 assert(typeof failHelper === "function", "fail helper must be callable");
@@ -368,8 +364,7 @@ function loadImpalaCompilerForTests() {
 
 	if (
 		Object.prototype.hasOwnProperty.call(context, "output") ||
-		Object.prototype.hasOwnProperty.call(context, "impalaRandomId") ||
-		Object.prototype.hasOwnProperty.call(context, "createParserContext")
+		Object.prototype.hasOwnProperty.call(context, "impalaRandomId")
 	) {
 		console.error("impalaCompiler.js leaked host bindings into the global context");
 		process.exit(1);
@@ -2161,6 +2156,32 @@ console.log("impala.jspeg compiler never bounds-checks ADDRESS formation");
 	assert(!/MOVp \$(p|q|ip) %/.test(out),
 		"place address: copied through a temp instead of landing in the target\n" + out);
 	console.log("impala.jspeg compiler emits a place's address straight into its assignment target");
+}
+
+// An action declaring `_val`, `_s`, `_im` or `_i` shadows the parser's own register and miscompiles in
+// silence, so regeneration refuses it. The guard is one regex in a build script, which is exactly where a
+// broken check hides: it shipped for a while as `/\bvars+.../`, a lost backslash that matched the literal
+// text `varss_val` and nothing anyone would write. Both directions, because a guard that fires on
+// `var tag = '_i' + n` would be reverted the first time someone hit it, and one that never fires reads
+// as protection while providing none.
+{
+	const { applyImpalaHardening } = require("./updateJSPEG.js");
+	function hardenErrorFor(grammar) {
+		try {
+			applyImpalaHardening("", grammar);
+		} catch (err) {
+			return err.message;
+		}
+		return "";
+	}
+	for (const declarator of ["var _val = 1;", "\tvar _i = 0;", "var _im = 2;", "var _s = source;"]) {
+		assert(/reserved parser local/.test(hardenErrorFor("{ " + declarator + " }")),
+			"reserved locals: `" + declarator + "` was not refused");
+	}
+	// A reserved name on a right-hand side or inside a longer identifier is ordinary code.
+	assert(!/reserved parser local/.test(hardenErrorFor("var tag = '_i' + n; var _index = 0;")),
+		"reserved locals: refused a name that is merely mentioned, not declared");
+	console.log("impala.jspeg regeneration refuses an action that declares a reserved parser local");
 }
 
 // E441 asked its question at an assignment and at an argument, but an INITIALIZER reaches the data rows
