@@ -819,13 +819,27 @@ class JSArray : public LazyJSObject<Object> {
 class Constants : public GCItem, public Vector<Value> {
 	public:
 		typedef GCItem super;
-		Constants(GCList& gcList) : super(gcList), Vector<Value>(&gcList.getHeap()) { }
-	
+		Constants(GCList& gcList) : super(gcList), Vector<Value>(&gcList.getHeap())
+				, stringIndexes(&gcList.getHeap()), otherIndexes(&gcList.getHeap()) { }
+
+		UInt32 findOrAdd(const Value& constant);
+
 	protected:
+		/*
+			The indexes hold nothing that is not in the list anyway, so a sweep may simply take them. findOrAdd
+			keeps no pointer into them across an allocation, and one landing mid-compilation costs only a few
+			constants appended twice. (And as of 20260807, compilation can never be interrupted by a GC anyhow.)
+		*/
 		virtual void gcMarkReferences(Heap& heap) const {
 			gcMark(heap, begin(), end());
+			stringIndexes = Table(&heap);
+			otherIndexes = Vector<UInt32>(&heap);
 			super::gcMarkReferences(heap);
 		}
+
+	private:
+		mutable Table stringIndexes;			// string constant -> its index in this list
+		mutable Vector<UInt32> otherIndexes;	// indexes of the non-strings worth scanning
 };
 
 /**
