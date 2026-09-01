@@ -122,50 +122,68 @@ static double nanToZero(double d) { return (isNaN(d) ? 0.0 : d); }
 
 /* --- Unicode stuff --- */
 
-const Int32 UNICODE_MASKS[378] = {
-	0,16,-2013265922,134217726,0,69207040,-8388609,-8388609,-1,-1,-1,-1,-1,-1,-1,-62914561,16777215,0,-65536,-1,-1,
-	-100728321,196611,31,0,0,0,67108864,-10432,-5,1417641983,1048573,-8194,-1,-536936449,-1,-65533,-1,-58977,54513663,
-	0,-131072,41943039,-2,255,0,-65536,460799,0,134217726,2047,-131072,-1,2097151999,3112959,96,0,0,0,0,0,0,0,0,-32,
-	603979775,-16711680,3,-417824,63307263,-1342177280,196611,-423968,57540095,1577058304,1835008,-282656,602799615,
-	65536,1,-417824,600702463,-1342177280,3,-700594208,62899992,0,0,-139296,66059775,0,3,-139296,66059775,1073741824,
-	3,-139296,67108351,0,3,0,0,0,0,-2,917503,127,0,-17816170,537783470,805306463,0,1,0,-257,1023,3840,0,0,0,0,0,-1,
-	-65473,8388607,-1,-1,-2080374785,-1,-1,-249,-1,67108863,-1,-1,-1,-1,268435455,-1,-1,67108863,1061158911,-1,
-	-1426112705,1073741823,-1,1608515583,265232348,534519807,0,0,0,-2147483647-1,0,0,0,0,1060109444,33291600,0,-1,7,0,0,0,
-	224,4064254,-2,-1,1612709887,-2,-1,2013265919,-32,-122881,-1,-1,32767,0,0,0,1,0,0,0,0,0,0,0,32,0,0,0,0,0,8,0,0,-1,
-	-1,-1,-1,-1,-1,-1,-1,16383,0,0,0,0,0,0,-2131230593,1602223615,-37,-1,-1,262143,-524288,-1,1073741823,-65536,-1,
-	-196609,-1,255,268369920,0,0,0,-2686976,-1,-1,-1,536870911,0,134217726,134217726,-64,-1,2147483647,486341884,0,
-	67043344,-2013265922,134217726,0,69207040,-8388609,-8388609,-1,-1,63,67108867,-10432,-5,1417641983,1048573,-8194,
-	-1,-536936449,-1,-65413,-1,-58977,54513663,0,-131072,41943039,-2,-130817,-1140850693,-65514,460799,0,134217726,
-	524287,-64513,-1,2097151999,-1611694081,67059199,-18,-201326593,-14729217,65487,-417810,-741999105,-1333773921,
-	262095,-423964,-747766273,1577073031,2097088,-282642,-202506753,80831,65473,-417810,-204603905,-1329579633,65475,
-	-700594196,-1010841832,8404423,65408,-139282,-1007682049,6307295,65475,-139284,-1007682049,1080049119,65475,-139284,
-	-1006633473,8404431,65475,0,0,0,0,-2,134217727,67076095,0,-17816170,1006628014,872365919,0,50331649,-1029700609,
-	-257,-130049,-21032993,50216959,0,0,-2147483647-1,1,-2147483647-1,0,0,536805376,2,224,4128766,-2,-1,1713373183,-2,-1,
-	2147483647,-1057488769,1602223615,-37,-1,-1,262143,-524288,-1,0,1572879,57344,-2686976,-1,-1,-1,536870911,67043328,
-	-2013265922,134217726,-32,-1,2147483647,486341884,0
+/* generated: unicode tables (tools/work/generateUnicodeTables.js), do not edit by hand */
+const Int32 UNICODE_MASKS[478] = {
+	0,16,-2013265922,134217726,0,69207040,-8388609,-8388609,-1,-1,-1,-1,-1,-1,-1,-1,1048572,-65536,-1,-1,-100712449,
+	196611,16415,0,0,0,67108864,-10432,-5,-50364417,1048575,-1,-1,-1,-1,-4093,-1,-58977,54525951,0,-131072,41943039,-2,
+	255,0,-65536,460799,0,134217726,2047,-131072,-1,-1,3145727,469762144,-196608,8191,0,0,-1,63,0,0,0,0,0,0,0,0,-32,
+	603979775,-16711680,3,-417824,63307263,-1342177280,196611,-423968,57540095,1577058304,1835008,-282656,602799615,65536,
+	1,-417824,600702463,-1342177280,3,-700594208,62899992,0,0,-139296,66059775,0,3,-139296,66059775,1073741824,3,-139296,
+	67108351,0,3,-58720288,805044223,127,0,-2,917503,127,0,-17816170,537783470,805306463,0,1,0,-257,2047,3840,0,0,0,-1,
+	1787,4128768,0,0,-1,-65473,8388607,-1,-1,-2080374785,-1,-1,-249,-1,67108863,-129,-1,1031748991,-1,-49793,2134736895,
+	-8421571,-32769,2134736895,-1,134217599,0,0,-1,-1,2097151,-2,-1,-1,-1,-1,-1,-1,-1,8364031,134217726,-1,-1,2047,0,0,0,
+	0,-1,1048575,0,0,-1,-1,16777215,-1,511,0,0,-1,-1,-1,-1,268435455,-1,-1,67108863,1061158911,-1,-1426112705,1073741823,
+	-1,1608515583,265232348,534519807,0,0,0,-2147483647-1,0,0,0,0,1043332228,66829648,0,-1,15,0,0,0,224,121504766,-2,-1,
+	1612709887,-2,-1,2013265919,-32,-122881,-1,-1,32767,16777215,0,0,-1,-1,-1,-1,-1,4194303,0,0,-1,-1,-1,-1,-1,63,0,0,-1,
+	-1,-1,-1,8191,0,0,0,-1,-1,-1,-1,-1,15,0,0,-1,16383,0,0,0,0,0,0,-1594359681,1602223615,-37,-1,-1,262143,-524288,-1,
+	1073741823,-65536,-1,-196609,-1,255,268369920,0,0,0,-2686976,-1,-1,-1,536870911,0,134217726,134217726,-64,-1,
+	2147483647,486341884,0,67043344,-2013265922,134217726,0,69207040,-8388609,-8388609,-1,-1,32767,67108871,-10432,-5,
+	-50364417,1048575,-1,-1,-1,-1,-3973,-1,-58977,54525951,0,-131072,41943039,-2,-130817,-1140850693,-65514,460799,0,
+	134217726,4194303,-64513,-1,-1,-1611661313,536821247,-65536,-57345,2047,0,-1,131071,0,0,-18,-201326593,-14729217,
+	65487,-417810,-741999105,-1333773921,262095,-423964,-747766273,1577073031,2097088,-282642,-202506753,80831,65473,
+	-417810,-204603905,-1329579633,65475,-700594196,-1010841832,8404423,65408,-139282,-1007682049,6307295,65475,-139284,
+	-1007682049,1080049119,65475,-139284,-1006633473,8404431,65475,-58720276,805044223,-10517377,786432,-2,134217727,
+	67076095,0,-17816170,1006628014,872365919,0,50331649,-1029700609,-257,-129025,-16838689,536870911,64,0,-1,63436539,
+	67044351,0,0,-1,-65473,8388607,2134736895,-1,134217599,261632,0,-1,-1,2097151,0,0,0,0,-1,-1,1048575,1023,67043328,-1,
+	-1,16777215,-1,1023,0,0,-2147483647-1,1,-2147483647-1,0,0,536805376,2,224,121569278,-2,-1,1713373183,-2,-1,2147483647,
+	-520617857,1602223615,-37,-1,-1,262143,-524288,-1,0,1572879,57344,-2686976,-1,-1,-1,536870911,67043328,-2013265922,
+	134217726,-32,-1,2147483647,486341884,0
 };
 
 const UInt16 IDENTIFIER_START_OFFSETS[256] = {
-	0,8,16,24,32,40,48,56,56,64,72,80,88,96,104,112,117,125,56,56,56,56,56,56,56,56,56,56,56,56,133,141,149,157,56,56,
-	56,56,56,56,56,56,56,56,56,56,56,56,165,173,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,
-	56,56,56,56,181,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,
-	56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,
-	56,56,56,56,56,56,56,56,56,184,56,56,56,56,56,56,56,56,56,56,56,56,181,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,
-	56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,190,56,56,56,56,56,56,56,56,56,56,
-	56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,198,205,213,198,220,228,236
+	0,8,15,23,31,39,47,55,61,69,77,85,93,101,109,117,125,133,141,149,157,8,162,170,177,61,61,61,61,61,185,193,201,209,61,
+	61,61,61,61,61,61,61,61,61,61,61,61,61,217,225,61,61,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,233,8,8,8,8,8,
+	8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,
+	8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,241,8,8,8,8,249,61,61,61,61,61,61,61,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,
+	8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,257,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,
+	61,61,61,61,61,61,61,61,61,8,265,273,8,280,288,296
 };
 
 const UInt16 IDENTIFIER_PART_OFFSETS[256] = {
-	243,8,16,251,259,267,275,56,56,283,291,299,307,315,323,331,117,125,56,56,56,56,56,56,56,56,56,56,56,56,133,141,338,
-	157,56,56,56,56,56,56,56,56,56,56,56,56,56,56,346,173,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,
-	56,56,56,56,56,56,56,56,181,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,
-	56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,
-	56,56,56,56,56,56,56,56,56,56,56,56,56,184,56,56,56,56,56,56,56,56,56,56,56,56,181,56,56,56,56,56,56,56,56,56,56,
-	56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,190,56,56,56,56,56,
-	56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,56,198,205,354,198,220,362,370
+	303,8,15,311,319,327,335,343,61,351,359,367,375,383,391,399,407,133,141,415,157,8,162,423,431,61,61,61,61,61,185,193,
+	438,209,61,61,61,61,61,61,61,61,61,61,61,61,61,61,446,225,61,61,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,233,
+	8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,
+	8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,241,8,8,8,8,249,61,61,61,61,61,61,61,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,
+	8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,257,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,61,
+	61,61,61,61,61,61,61,61,61,61,61,61,8,265,454,8,280,462,470
 };
 
-static inline bool testUnicodeChar(Char c, const UInt16* offsets) {
+/*
+	WhiteSpace of 7.2 plus LineTerminator of 7.3, which every caller here wants together.
+	<USP> is category Zs of Unicode 3.0.0, so U+200B counts and U+180E does not, unlike in
+	later Unicode versions.
+*/
+static bool isWhiteSpace(Char c) {
+	switch (c) {
+		case '\t': case '\n': case '\v': case '\f': case '\r': case ' ': case 0xA0: case 0x1680: case 0x2000: case 0x2001:
+		case 0x2002: case 0x2003: case 0x2004: case 0x2005: case 0x2006: case 0x2007: case 0x2008: case 0x2009: case 0x200A:
+		case 0x200B: case 0x2028: case 0x2029: case 0x202F: case 0x3000: return true;
+		default: return false;
+	}
+}
+/* end generated: unicode tables */
+
+static bool testUnicodeChar(Char c, const UInt16* offsets) {
 	return (UNICODE_MASKS[offsets[c >> 8] + ((c & 255) >> 5)] & (1 << (c & 31))) != 0;
 }
 
@@ -234,7 +252,7 @@ static int strncmp(const Char* a, const char* b, size_t n) {
 	}
 	return (i == n ? 0 : a[i] - b[i]);
 }
-/* Built with QuickHashMaker.pika */
+/* Built with https://github.com/malstrom72/QuickHashGen */
 static int findStatementKeyword(size_t n /* string length */, const Char* s /* string (zero-termination not required) */) {
 	static const char* STRINGS[13] = {
 		"var", "if", "while", "do", "for", "return", "continue", "break", "try", 
@@ -250,7 +268,7 @@ static int findStatementKeyword(size_t n /* string length */, const Char* s /* s
 	int stringIndex = HASH_TABLE[(s[1] - s[0]) & 63];
 	return (stringIndex >= 0 && strncmp(s, STRINGS[stringIndex], n) == 0 && STRINGS[stringIndex][n] == 0) ? stringIndex : -1;
 }
-/* Built with QuickHashMaker.pika */
+/* Built with https://github.com/malstrom72/QuickHashGen */
 static int findReservedKeyword(size_t n /* string length */, const Char* s) {
 	static const char* STRINGS[36] = {
 		"break", "case", "catch", "continue", "debugger", "default", "delete", "do", 
@@ -281,7 +299,7 @@ static int findReservedKeyword(size_t n /* string length */, const Char* s) {
 	int stringIndex = QUICK_HASH_TABLE[(((s[1] + s[0]) << 3) - n) & 0xFF];
 	return (stringIndex >= 0 && strncmp(s, STRINGS[stringIndex], n) == 0 && STRINGS[stringIndex][n] == 0) ? stringIndex : -1;
 }
-/* Built with QuickHashMaker.pika */
+/* Built with https://github.com/malstrom72/QuickHashGen */
 static int findLiteralKeyword(size_t n /* string length */, const Char* s /* zero-terminated string */) {
 	static const char* STRINGS[5] = {
 		"null", "false", "true", "function", "this"
@@ -510,16 +528,17 @@ static Char* doubleToString(Char buffer[32], const double value) {
 		}
 		assert(next >= normalized); // Correct behavior is to never reach higher than digit 9.
 
-		// Do we hit goal with digit or digit + 1? If so, is next digit >= 5 (magnitude / 2) then increment it.
+		// Decide between digit and digit + 1 under final rounding; bump the digit if the lower one doesn't reconstruct
+		// to the exact value, or if we are strictly past the half-step. (Ported from Numbstrict's realToString. The
+		// previous version overwrote `reconstructed` and so missed the "lower digit doesn't round-trip but the higher
+		// one does" case, emitting a last digit one too low for some values, e.g. String(7.120236347223045e-307).)
 		reconstructed = scaleAndRound(accumulator, factor);
-		if (reconstructed != absValue) {
-			reconstructed = scaleAndRound(accumulator + magnitude, factor);
-		}
-		if (reconstructed == absValue && accumulator + magnitude / 2 < normalized) {
+		const double r1 = scaleAndRound(accumulator + magnitude, factor);
+		if ((reconstructed != absValue && r1 == absValue) || (reconstructed == absValue
+				&& accumulator + magnitude / 2 < normalized && absValue != std::numeric_limits<double>::max())) {
+			reconstructed = r1;
 			++digit;
 			assert(digit < 10); // If this happens we have failed to calculate the correct exponent above.
-		} else {
-			assert(accumulator > 0.0); // If this happens we have failed to calculate the correct exponent above.
 		}
 
 		*p++ = '0' + digit;
@@ -628,11 +647,7 @@ static const Char* parseDouble(const Char* const b, const Char* const e, double&
 }
 
 static const Char* eatStringWhite(const Char* p, const Char* e) {
-	while (p != e) {
-		switch (*p) {
-			case ' ': case '\f': case '\n': case '\r': case '\t': case '\v': case 0xA0: case 0x2028: case 0x2029: break;
-			default: return p;
-		}
+	while (p != e && isWhiteSpace(*p)) {
 		++p;
 	}
 	return p;
@@ -779,7 +794,7 @@ bool Value::toArrayIndex(UInt32& index) const {
 	switch (type) {
 		case NUMBER_TYPE: {
 			const double n = var.number;
-			if (n < 0.0 || n >= 4294967295.0) {
+			if (!(n >= 0.0 && n < 4294967295.0)) {	// NaN fails this test and is correctly rejected (avoids UB float->UInt32 cast)
 				return false;
 			}
 			index = static_cast<UInt32>(n);
@@ -1782,9 +1797,11 @@ bool JSArray::setOwnPropertyInternal(Runtime& rt, const Value& key, const Value&
 	}
 	if (key.equalsString(LENGTH_STRING)) {
 		const double rawLength = v.toDouble();
+		if (!(rawLength >= 0.0 && rawLength <= 4294967295.0)) {	// NaN-safe range check *before* the cast (avoids UB float->UInt32 cast)
+			ScriptException::throwError(rt.getHeap(), RANGE_ERROR, "Invalid array length");
+		}
 		const UInt32 coercedLength = static_cast<UInt32>(rawLength);
-		if (isNaN(rawLength) || rawLength < 0.0 || rawLength > 4294967295.0
-				|| rawLength != static_cast<double>(coercedLength)) {
+		if (rawLength != static_cast<double>(coercedLength)) {
 			ScriptException::throwError(rt.getHeap(), RANGE_ERROR, "Invalid array length");
 		}
 		result = updateLength(coercedLength);
@@ -2605,7 +2622,11 @@ void Processor::newOperation(const Int32 argc) {
 			}
 		}
 		Object* newObject = new(heap) JSObject(heap.managed(), prototype != 0 ? prototype : rt.getObjectPrototype());
-		++sp;	// if we have 0 args we make room for the new object
+		++sp;	// make room for the new object
+		// The slot just exposed by `++sp` is now inside the gc-marked stack range, so it must hold a valid Value
+		// before `construct()` runs (a re-entrant native constructor could trigger a gc). Storing `newObject` both
+		// initialises the slot and keeps `newObject` reachable across the call.
+		*sp = newObject;
 		sp[-argc] = f->construct(rt, *this, argc, sp - argc, newObject);
 		sp[-argc - 1] = newObject;
 		pop(argc);
@@ -2672,14 +2693,22 @@ void Processor::innerRun() {
 			}
 			
 			case SET_PROPERTY_OP: {
-				sp[-2].getObject()->setProperty(rt, sp[-1], sp[0]);
+				Object* o = convertToObject(sp[-2], false);
+				if (o == 0) {
+					return;
+				}
+				o->setProperty(rt, sp[-1], sp[0]);
 				sp[-2] = sp[0];
 				pop(2);
 				break;
 			}
 			
 			case SET_PROPERTY_POP_OP: {
-				sp[-2].getObject()->setProperty(rt, sp[-1], sp[0]);
+				Object* o = convertToObject(sp[-2], false);
+				if (o == 0) {
+					return;
+				}
+				o->setProperty(rt, sp[-1], sp[0]);
 				pop(3);
 				break;
 			}
@@ -2923,6 +2952,32 @@ bool Processor::run(Int32 maxCycles) {
 		}
 	}
 	return (ip != 0);
+}
+
+/* --- Constants --- */
+
+UInt32 Constants::findOrAdd(const Value& constant) {
+	const UInt32 newIndex = size();
+	if (constant.isString()) {
+		const String* string = constant.getString();
+		const Table::Bucket* found = stringIndexes.lookup(string);
+		if (found != 0) {
+			return static_cast<UInt32>(found->getIndexValue());
+		}
+		push(constant);
+		stringIndexes.update(stringIndexes.insert(string), static_cast<Int32>(newIndex));
+	} else if (constant.isObject()) {	// objects compare by identity, so a fresh one never matches
+		push(constant);
+	} else {
+		for (UInt32 i = otherIndexes.size(); i > 0; --i) {
+			if ((*this)[otherIndexes[i - 1]].isStrictlyEqualTo(constant)) {
+				return otherIndexes[i - 1];
+			}
+		}
+		push(constant);
+		otherIndexes.push(newIndex);
+	}
+	return newIndex;
 }
 
 /* --- Compiler --- */
@@ -3240,14 +3295,7 @@ void Compiler::emitBackwardBranch(Processor::Opcode opcode, const BranchPoint& p
 }
 
 UInt32 Compiler::addConstant(const Value& constant) {
-	Constants* constants = code->constants;
-	for (UInt32 index = constants->size(); index > 0;) {
-		if ((*constants)[--index].isStrictlyEqualTo(constant)) {
-			return index;
-		}
-	}
-	constants->push(constant);
-	return constants->size() - 1;
+	return code->constants->findOrAdd(constant);
 }
 
 void Compiler::emitWithConstant(Processor::Opcode opcode, const Value& constant) {
@@ -3256,22 +3304,22 @@ void Compiler::emitWithConstant(Processor::Opcode opcode, const Value& constant)
 
 void Compiler::white() {
 	while (!eof()) {
-		switch (*p) {
-			case ' ': case '\f': case '\n': case '\r': case '\t': case '\v': case 0xA0: case 0x2028: case 0x2029: ++p; break;
-			case '/':	if (p + 1 != e && p[1] == '/') {
-							p = std::find_first_of(p += 2, e, LINE_TERMINATORS, LINE_TERMINATORS + 4);
-							break;
-						} else if (p + 1 != e && p[1] == '*') {
-							static const Char END_CHARS[] = { '*', '/' };
-							p += 2;
-							p = std::search(p, e, END_CHARS, END_CHARS + 2);
-							if (eof()) {
-								error(SYNTAX_ERROR, "Missing */");
-							}
-							p += 2;
-							break;
-						}
-			default:	return;
+		if (isWhiteSpace(*p)) {
+			++p;
+		} else if (*p != '/' || p + 1 == e) {
+			return;
+		} else if (p[1] == '/') {
+			p = std::find_first_of(p += 2, e, LINE_TERMINATORS, LINE_TERMINATORS + 4);
+		} else if (p[1] == '*') {
+			static const Char END_CHARS[] = { '*', '/' };
+			p += 2;
+			p = std::search(p, e, END_CHARS, END_CHARS + 2);
+			if (eof()) {
+				error(SYNTAX_ERROR, "Missing */");
+			}
+			p += 2;
+		} else {
+			return;
 		}
 	}
 }
@@ -3377,6 +3425,10 @@ Char* Compiler::unescape(Char* buffer, const Char* e) {
 			UInt32 l = 0;
 			d = std::copy(b, p, d);
 			++p;
+			// 7.8.4: only `0` with [lookahead not DecimalDigit] escapes a digit, the rest is Annex B octal
+			if (*p >= '0' && *p <= '9' && (*p != '0' || (p + 1 != e && p[1] >= '0' && p[1] <= '9'))) {
+				error(SYNTAX_ERROR, "Invalid escape sequence");
+			}
 			const Char* f = std::find(ESCAPE_CHARS, ESCAPE_CHARS + ESCAPE_CODE_COUNT, *p);
 			if (f != ESCAPE_CHARS + ESCAPE_CODE_COUNT) {
 				l = ESCAPE_CODES[f - ESCAPE_CHARS];
@@ -3645,6 +3697,7 @@ bool Compiler::preOperate(ExpressionResult& xr, Precedence precedence) {
 		}
 		
 		case GROUP: {
+			// 11.1.6 does not GetValue, so unlike COMMA this hands the reference back and `(eval)(s)` stays direct.
 			const bool didAcceptInOperator = acceptInOperator;
 			acceptInOperator = true;
 			xr = operand(op);
@@ -3734,7 +3787,9 @@ bool Compiler::postOperate(ExpressionResult& xr, Precedence precedence) {
 	switch (op.type) {
 		case COMMA: {
 			xr = discard(xr);
-			xr = operand(op);
+			// 11.14 GetValues both operands, so a comma yields a value and never a reference: that is what makes
+			// `(0, f)()` this-less (11.2.3), `(0, eval)(s)` indirect (15.1.2.1.1), typeof/delete/assign see a value.
+			xr = makeRValue(operand(op), false);
 			break;
 		}
 			
@@ -3879,11 +3934,12 @@ bool Compiler::postOperate(ExpressionResult& xr, Precedence precedence) {
 		case PROPERTY_BRACKETS: {
 			assert(!op.primitiveInput);
 			makeRValue(xr, false);
-			emit(Processor::CHECK_OBJECT_COERCIBLE_OP);
 			const bool didAcceptInOperator = acceptInOperator;
 			acceptInOperator = true;
-			makeRValue(operand(op), true, Processor::OBJ_TO_STRING_OP); // left doesn't need to be primitive, but right does (and preferred string!)
+			const ExpressionResult keyXR = makeRValue(operand(op), false);
 			acceptInOperator = didAcceptInOperator;
+			emit(Processor::CHECK_RESOLVE_PROPERTY_OP);
+			makeRValue(keyXR, true, Processor::OBJ_TO_STRING_OP); // left doesn't need to be primitive, but right does (and preferred string!)
 			xr = ExpressionResult(ExpressionResult::PROPERTY);
 			break;
 		}
@@ -3907,19 +3963,27 @@ void Compiler::functionDefinition(const String* functionName, const String* self
 	emitWithConstant(Processor::GEN_FUNC_OP, func);
 }
 
+/*
+	Caps total live compile-time recursion depth. Expressions and statements share this one counter (it is threaded
+	into nested function compilers), so deeply nested source cannot overflow the C++ stack during compilation. It must
+	stay well below the real stack ceiling - nested function definitions, the largest frames, overflow at a few thousand
+	levels - while leaving ample room for real code and for JSON.parse(), which eval()s validated input that is already
+	bounded far below this by MAX_JSON_DEPTH in stdlib.js.
+*/
+const Int32 MAX_NESTED_COMPILE_DEPTH = 256;
 const Int32 CATCH_PARAMETER = 0x7FFFFFFF;
-const Int32 MAX_NESTED_EXPRESSION_DEPTH = 64;
+
+Compiler::NestGuard::NestGuard(Compiler& compiler) : compiler(compiler) {
+	if (compiler.nestCounter >= MAX_NESTED_COMPILE_DEPTH) {
+		compiler.error(RANGE_ERROR, "Internal compiler limitations reached. Reduce code complexity.");
+	}
+	++compiler.nestCounter;
+}
+Compiler::NestGuard::~NestGuard() { --compiler.nestCounter; }
 
 bool Compiler::optionalExpression(ExpressionResult& xr, Precedence precedence) {
-	if (nestCounter >= MAX_NESTED_EXPRESSION_DEPTH) {
-		error(RANGE_ERROR, "Internal compiler limitations reached. Reduce code complexity.");
-	}
-	struct NestCounter {
-		NestCounter(Compiler& c) : c(c) { ++c.nestCounter; };
-		~NestCounter() { --c.nestCounter; };
-		Compiler& c;
-	} nestCounter(*this);
-	
+	NestGuard nestGuard(*this);
+
 	if (!preOperate(xr, precedence)) {
 		if (eof()) {
 			return false;
@@ -4617,7 +4681,9 @@ void Compiler::switchStatement(SemanticScope* currentScope) {
 */
 void Compiler::statement(SemanticScope* currentScope, SemanticScope* scopeLabelsEnd) {
 	assert(currentSection == &mainSection); // statements must produce into main-section because of breaks etc...
-	
+
+	NestGuard nestGuard(*this);
+
 	white();
 	
 	if (token("{", false)) {
@@ -5107,9 +5173,25 @@ struct Support {
 		if (dt < 0.0) { // MSVC can crash on conversion although documentation says it should return null.
 			return NAN_VALUE;
 		}
+		if (dt > static_cast<double>(std::numeric_limits<std::time_t>::max())) {
+			return NAN_VALUE;
+		}
 		t = static_cast<std::time_t>(dt);
-		const struct std::tm localTM = *std::localtime(&t);
-		const struct std::tm utcTM = *std::gmtime(&t);
+		// std::time_t spanning the value says nothing about the conversions accepting it: MSVC's CRT stops at
+		// 3000-12-31T23:59:59Z and returns null past that, where the Date range reaches the year 275760, so
+		// new Date(3100, 0, 1) dereferenced null and took the process down. A null answers NaN like the
+		// pre-epoch case above, which is what localTimeDiff in the stdlib already substitutes a fixed offset
+		// for. The copy has to happen before the next call: the two may share one static tm.
+		const struct std::tm* const localPtr = std::localtime(&t);
+		if (localPtr == 0) {
+			return NAN_VALUE;
+		}
+		const struct std::tm localTM = *localPtr;
+		const struct std::tm* const utcPtr = std::gmtime(&t);
+		if (utcPtr == 0) {
+			return NAN_VALUE;
+		}
+		const struct std::tm utcTM = *utcPtr;
 		struct std::tm newTM;
 		std::memset(&newTM, 0, sizeof (newTM));
 		newTM.tm_year = utcTM.tm_year;
@@ -5349,9 +5431,15 @@ void Runtime::setupStandardLibrary() {
 		refTM.tm_year = 80;
 		refTM.tm_mday = 1;
 		const std::time_t refTime = std::mktime(&refTM);
-		const std::time_t refTimeAsUTC = std::mktime(std::gmtime(&refTime));
+		// gmtime answers null for a time it cannot represent and mktime would dereference it. 1980 is in range
+		// for every plausible zone and time_t, so this guards a path that should not open rather than one that
+		// does; the assert below has always come after the dereference and is gone in a release build. With no
+		// probe to go on, assume time() already counts from the unix epoch, which POSIX and Windows both do.
+		struct std::tm* const refUTC = (refTime == static_cast<std::time_t>(-1) ? 0 : std::gmtime(&refTime));
+		const std::time_t refTimeAsUTC = (refUTC == 0 ? static_cast<std::time_t>(-1) : std::mktime(refUTC));
 		assert(refTime != -1 && refTimeAsUTC != -1);
-		unixEpochTimeDiff = 315532800000.0 - refTime * 2000.0 + refTimeAsUTC * 1000.0;
+		unixEpochTimeDiff = (refTime == static_cast<std::time_t>(-1) || refTimeAsUTC == static_cast<std::time_t>(-1))
+				? 0.0 : 315532800000.0 - refTime * 2000.0 + refTimeAsUTC * 1000.0;
 	}
 	
 	JSObject* supportObject = new(heap) JSObject(heap.managed(), getObjectPrototype());

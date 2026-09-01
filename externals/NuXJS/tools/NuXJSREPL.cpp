@@ -25,13 +25,14 @@
 	NuXJS command-line tool: an interactive REPL and a script runner around the embeddable engine.
 
 	Output stream contract (relied upon by the golden-file test suite in tools/test.pika, which compares
-	stdout only and runs the binary with `-s --legacy-exceptions`):
+	stdout only and runs the binary with `-s --legacy-exceptions` plus its own `-T` guard):
 
 	  * stdout  - program-visible output: anything printed by the script via print(), and the `!!!!`
 	              lines reporting compile/runtime errors (and their stack traces). The test runner captures
 	              and compares this stream.
-	  * stderr  - REPL meta only: the interactive `\t=<result>` echo (shown only in interactive mode, and
-	              suppressed there with -s) and the timing / memory figures (-t).
+	  * stderr  - REPL meta (the interactive `\t=<result>` echo, shown only in interactive mode and
+	              suppressed there with -s, plus the timing / memory figures from -t) and anything the
+	              script writes via printErr(), which is deliberately kept off the compared stdout stream.
 
 	Do not move script-visible output or `!!!!` reporting to stderr without regenerating the .io fixtures.
 */
@@ -50,6 +51,7 @@
 #include <ctime>
 #include <cstdlib>
 #include <cstring>
+#include <climits>
 
 using namespace NuXJS;
 
@@ -197,6 +199,7 @@ static const String* utf8ToString(Heap& heap, const char* utf8, size_t size) {
 
 static bool doQuit = false;			// set by the quit() helper
 static bool pauseBeforeQuit = false;	// -p; read by main()
+static int timeOutSeconds = 0;			// -T; read by compileAndRun(), 0 for no limit
 
 // In-memory transcript of the interactive session, tagged for #save (see pushIOLines). It is recorded
 // only while an interactive session is running; PrintFunction appends to it through a pointer that is null
@@ -231,6 +234,16 @@ struct PrintFunction : public Function {
 		if (capture != 0) {
 			pushIOLines('<', *s);
 		}
+		return Value::UNDEFINED;
+	}
+};
+
+// printErr() is print()'s stderr twin: it writes to the diagnostic stream and, being off the recorded
+// stdout transcript, is never captured for #save or compared by the golden .io tests.
+struct PrintErrFunction : public Function {
+	virtual Value invoke(Runtime& rt, Processor& processor, UInt32 argc, const Value* argv, Object* thisObject) {
+		const String* s = (argc >= 1 ? argv[0].toString(rt.getHeap()) : &EMPTY_STRING);
+		std::wcerr << s->toWideString().c_str() << std::endl;
 		return Value::UNDEFINED;
 	}
 };
@@ -451,6 +464,8 @@ Var help(Runtime& rt, const Var& thisVar, const VarList& args) {
 	(void)args;
 	std::wcout << L"Available REPL helpers:" << std::endl
 			<< L"  quit()             - exit the REPL" << std::endl
+			<< L"  print(text)        - print text to stdout" << std::endl
+			<< L"  printErr(text)     - print text to stderr" << std::endl
 			<< L"  read(file)         - return UTF-8 file as string" << std::endl
 			<< L"  write(file, text)  - write text to a UTF-8 file" << std::endl
 			<< L"  load(file)         - execute a UTF-8 JavaScript file" << std::endl
@@ -522,6 +537,7 @@ void printUsage() {
 			<< "  -t: print timing and memory stats" << std::endl
 			<< "  -p: pause before quitting" << std::endl
 			<< "  -n: do not load the standard library" << std::endl
+			<< "  -T, --timeout <seconds>: abort code that runs longer (default: no limit)" << std::endl
 			<< "  -E, --legacy-exceptions: use legacy exception output" << std::endl
 			<< "  -h, --help: show this usage" << std::endl
 			<< std::endl
@@ -561,7 +577,8 @@ static bool compileAndRun(Runtime& rt, MyHeap& heap, Processor& processor, const
 
 		processor.enterGlobalCode(&globalCode);
 		bool done = false;
-		rt.resetTimeOut(60);
+		// Re-armed per chunk, so an interactive session gets the full allowance on each entry.
+		if (timeOutSeconds > 0) rt.resetTimeOut(timeOutSeconds);
 		const double start = getCPUSecs();
 		do {
 			done = !processor.run(STANDARD_CYCLES_BETWEEN_AUTO_GC);
@@ -656,8 +673,15 @@ static int runInteractive(Runtime& rt, MyHeap& heap, Processor& processor, std::
 				} else {
 					const time_t t = time(0);
 					char buf[256];
-					strftime(buf, sizeof (buf), "tests/%Y%m%d_%H%M%S.io", localtime(&t));
-					fn = buf;
+					// localtime answers null for a clock it cannot represent and strftime would dereference it;
+					// strftime itself answers 0 when the result does not fit, leaving buf unwritten. Only a
+					// machine clock set outside the CRT's range reaches either, and any name beats both.
+					const struct tm* const lt = (t == static_cast<time_t>(-1) ? 0 : localtime(&t));
+					if (lt != 0 && strftime(buf, sizeof (buf), "tests/%Y%m%d_%H%M%S.io", lt) != 0) {
+						fn = buf;
+					} else {
+						fn = "tests/unnamed.io";
+					}
 				}
 				std::ofstream saveStream(fn.c_str());
 				for (std::vector<std::string>::const_iterator it = ioLines.begin(); it != ioLines.end(); ++it) {
@@ -736,6 +760,15 @@ int replMain(int argc, const char* argv[]) {
 			else if (strcmp(argv[argi], "-s") == 0) suppressResultEcho = true;
 			else if (strcmp(argv[argi], "-p") == 0) pauseBeforeQuit = true;
 			else if (strcmp(argv[argi], "-n") == 0) loadStdLib = false;
+			else if (strcmp(argv[argi], "--timeout") == 0 || strcmp(argv[argi], "-T") == 0) {
+				char* end;		// a missing value parses as the empty string, which fails on seconds <= 0 like any other
+				const long seconds = strtol(argi + 1 < argc ? argv[++argi] : "", &end, 10);
+				if (*end != '\0' || seconds <= 0 || seconds > INT_MAX) {
+					std::cerr << "Expected a positive number of seconds after -T / --timeout" << std::endl;
+					return 1;
+				}
+				timeOutSeconds = static_cast<int>(seconds);
+			}
 			else if (strcmp(argv[argi], "--legacy-exceptions") == 0 || strcmp(argv[argi], "-E") == 0) legacyExceptions = true;
 			else if (strcmp(argv[argi], "--help") == 0 || strcmp(argv[argi], "-h") == 0) {
 				printUsage();
@@ -794,6 +827,9 @@ int replMain(int argc, const char* argv[]) {
 		printFunction.capture = (scriptMode ? 0 : &ioLines);
 		const String PRINT_STRING("print");
 		globals.setOwnProperty(rt, &PRINT_STRING, &printFunction, DONT_ENUM_FLAG);
+		PrintErrFunction printErrFunction;
+		const String PRINT_ERR_STRING("printErr");
+		globals.setOwnProperty(rt, &PRINT_ERR_STRING, &printErrFunction, DONT_ENUM_FLAG);
 		GCFunction gcFunction;
 		const String GC_STRING("gc");
 		globals.setOwnProperty(rt, &GC_STRING, &gcFunction, DONT_ENUM_FLAG);

@@ -24,6 +24,8 @@
 #ifndef NuXJS_h
 #define NuXJS_h
 
+#define NUXJS_VERSION 101
+
 #include "assert.h"
 #include <algorithm>
 #include <string>
@@ -513,7 +515,6 @@ class Table {
 		UInt32 rebuild(UInt32 newN);
 
 		Vector<Bucket, 1U << TABLE_BUILT_IN_N> buckets;
-		int bockets[123];
 		UInt32 loadCount;													///< Count of buckets with defined keys.
 };
 
@@ -818,13 +819,27 @@ class JSArray : public LazyJSObject<Object> {
 class Constants : public GCItem, public Vector<Value> {
 	public:
 		typedef GCItem super;
-		Constants(GCList& gcList) : super(gcList), Vector<Value>(&gcList.getHeap()) { }
-	
+		Constants(GCList& gcList) : super(gcList), Vector<Value>(&gcList.getHeap())
+				, stringIndexes(&gcList.getHeap()), otherIndexes(&gcList.getHeap()) { }
+
+		UInt32 findOrAdd(const Value& constant);
+
 	protected:
+		/*
+			The indexes hold nothing that is not in the list anyway, so a sweep may simply take them. findOrAdd
+			keeps no pointer into them across an allocation, and one landing mid-compilation costs only a few
+			constants appended twice. (And as of 20260807, compilation can never be interrupted by a GC anyhow.)
+		*/
 		virtual void gcMarkReferences(Heap& heap) const {
 			gcMark(heap, begin(), end());
+			stringIndexes = Table(&heap);
+			otherIndexes = Vector<UInt32>(&heap);
 			super::gcMarkReferences(heap);
 		}
+
+	private:
+		mutable Table stringIndexes;			// string constant -> its index in this list
+		mutable Vector<UInt32> otherIndexes;	// indexes of the non-strings worth scanning
 };
 
 /**
@@ -1790,6 +1805,13 @@ class Compiler : public GCItem {
 			bool inDeadCode() const { return stackDepth == DEAD_CODE_STACK_DEPTH; };
 			Int32 codeOffset;
 			Int32 stackDepth;
+		};
+
+		/// RAII guard bounding compile-time recursion depth; throws a RangeError if `MAX_NESTED_COMPILE_DEPTH` is reached.
+		struct NestGuard {
+			NestGuard(Compiler& compiler);
+			~NestGuard();
+			Compiler& compiler;
 		};
 
 		struct ExpressionResult;
