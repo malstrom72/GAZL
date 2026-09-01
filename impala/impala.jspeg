@@ -2954,8 +2954,11 @@
         slot.type     = arrayOf ? 'p' : 'S';
         slot.elem     = arrayOf || (structName !== undefined ? $$parser.structDesc(structName) : undefined);
         slot.dynIndex = dynIndex;                                 /* frame place + one runtime word-index -> terminal emits GETL/SETL */
-        slot.baseMeta = undefined;                                /* a PENDING base: see baseOperand. Callers that carry one
-                                                                     across a setPlace re-attach it after the call. */
+        slot.baseMeta = (base === undefined ? slot.baseMeta : undefined);
+                                                                  /* a PENDING base (see baseOperand) survives a re-place
+                                                                     that supplies no base: `.field` and a constant `[k]`
+                                                                     only grow offParts. `baseMeta` set always implies
+                                                                     `base` undefined, so there is no stale one to keep. */
         slot.extent   = undefined;                                /* pooled slot: never inherit another array's extent or
                                                                      another subscript's finding. The two callers that DO
                                                                      have an extent assign it after the call. */
@@ -2970,9 +2973,8 @@
        doing it. The pending operands stay borrowed until this runs, which is what keeps them valid. */
     $$parser.baseOperand = function (place) {
         if (place.baseMeta !== undefined) {
-            var pending = place.baseMeta;
+            place.base = $$parser.makeRValue(place.baseMeta);
             place.baseMeta = undefined;
-            place.base = $$parser.makeRValue(pending);
         }
         return place.base;
     };
@@ -3178,14 +3180,9 @@
                 }
                 x.offParts.push(part);
             }
-            if (elemStruct) {                                     /* a constant index only grows offParts, so a
-                                                                     pending base stays pending across it */
-                var carried = x.baseMeta;
-                $$parser.setPlace(x, x.baseKind, x.base, x.offParts, elemName, undefined, x.dynIndex);
-                x.baseMeta = carried;
-            } else {
-                $$parser.emitPlaceValue(x, x.baseKind, $$parser.baseOperand(x), x.offParts, x.dynIndex, eType, eTail);
-            }
+            if (elemStruct) $$parser.setPlace(x, x.baseKind, x.base, x.offParts, elemName, undefined, x.dynIndex);
+            else            $$parser.emitPlaceValue(x, x.baseKind, $$parser.baseOperand(x), x.offParts,
+                                    x.dynIndex, eType, eTail);
 
         } else if (x.baseKind === 'local' && x.dynIndex === undefined) {
             /* a frame place with a single runtime index: keep it frame-relative so it emits one
@@ -3216,8 +3213,7 @@
                 $$parser.emit('*', 'i', scaled, idxRV, '#' + $$parser.extentSymbol(elemName));
                 $$parser.emitRangeCheck(scaled, extent, sourceCode, sourceOffset);
                 $$parser.setPlace(x, 'pointer', undefined, [], elemName);
-                x.baseMeta = { operator: '+', type: 'p',
-                        operands: [ undefined, arrPtr, scaled ] };
+                x.baseMeta = $$parser.makeMeta(undefined, '+', 'p', undefined, arrPtr, scaled);
             } else {                                              /* scalar stride 1 -> PEEK/POKE arrPtr idx directly */
                 $$parser.emitRangeCheck(idxRV, extent, sourceCode, sourceOffset);
                 $$parser.emitPlaceValue(x, 'pointer', arrPtr, [], idxRV, eType, eTail);
@@ -3269,17 +3265,14 @@
                wants it somewhere other than the temp placeAddress happened to borrow. */
             var idx = place.dynIndex;
             place.dynIndex = undefined;
-            $$parser.makeMeta(place, '+', 'p', undefined, $$parser.placeAddress(place), idx);
-            return;
+            return $$parser.makeMeta(place, '+', 'p', undefined, $$parser.placeAddress(place), idx);
         }
         var off = $$parser.foldOffset(place.offParts);
-        if (place.baseMeta !== undefined && !off) {
-            /* The pending base IS the address, so adopt it whole: the assignment emits that `ADDp`
-               straight into its target and no register is ever chosen speculatively. */
-            var pending = place.baseMeta;
-            $$parser.makeMeta(place, pending.operator, pending.type, undefined,
+        var pending = place.baseMeta;
+        if (pending !== undefined && !off) {                       /* the pending base IS the address: adopt it whole, so
+                                                                      the assignment emits that ADDp into its target */
+            return $$parser.makeMeta(place, pending.operator, pending.type, undefined,
                     pending.operands[1], pending.operands[2]);
-            return;
         }
         var base = $$parser.baseOperand(place);
         if (place.baseKind === 'local') {                          /* `*0` ALWAYS - see the note on ADRL spans below */
@@ -3334,14 +3327,14 @@
     $$parser.fieldAccess = function (x, fieldName, arrow, sourceCode, sourceOffset) {
         x = metaSlot(x);
 
-        var bk, base, offParts, structName, dynIndex, carried;
+        var bk, base, offParts, structName, dynIndex;
         if (x.place) {
             if (arrow) {
                 $$parser.fail("Use '.' - this is a struct value, not a pointer", sourceCode,
                         sourceOffset, 'E416', 'write ' + fieldName + ' as .' + fieldName);
             }
             bk = x.baseKind; base = x.base; offParts = x.offParts || []; structName = x.struct;
-            dynIndex = x.dynIndex; carried = x.baseMeta;          /* a field only grows offParts: base stays pending */
+            dynIndex = x.dynIndex;
         } else if (x.type === 'p' && $$parser.isStructAtom(x.elem)) {
             if (!arrow) {
                 $$parser.fail("Use '->' to access a field through a pointer", sourceCode,
@@ -3370,13 +3363,11 @@
 
         if (field.type === 'S') {                                 /* nested struct -> accumulate the part, same base, NO instruction */
             $$parser.setPlace(x, bk, base, newParts, field.struct, undefined, dynIndex);
-            x.baseMeta = carried;
             return;
         }
         if (field.type === 'A') {                                 /* array field -> a fold-able array place for the next [k]
                                                                      (struct OR scalar element; subscriptStruct terminates it) */
             $$parser.setPlace(x, bk, base, newParts, undefined, field.elem, dynIndex);
-            x.baseMeta = carried;
             if (field.extent === undefined) {                      /* built once per FIELD, not per access */
                 field.extent = $$parser.arrayExtent(fieldName, structName,
                         structName + '.' + fieldName, field.size, field.dims);
@@ -3389,9 +3380,8 @@ var _sn = $$parser.strideStruct(field.elem);
             return;
         }
 
-        /* terminal scalar field: a PEEK needs the base in a register, so this is where a pending one lands */
-        $$parser.emitPlaceValue(x, bk,
-                (carried !== undefined ? $$parser.makeRValue(carried) : base),
+        /* terminal scalar field: a PEEK needs the base in a register, so a pending one lands here */
+        $$parser.emitPlaceValue(x, bk, (x.place ? $$parser.baseOperand(x) : base),
                 newParts, dynIndex, field.type, field.elem);
     };
 
@@ -3728,12 +3718,10 @@ var _sn = $$parser.strideStruct(field.elem);
                 $$parser.fail('Cannot assign to a readonly value', sourceCode, sourceOffset, 'E404',
                         'declare it `global` instead of `readonly` if it has to be written');
             }
-            $$parser.baseOperand(leftx);                          /* the COPY needs it in a register anyway, and the
-                                                                     statement's own place is rebuilt from `savedBase`
-                                                                     below - which must not be a pending computation */
+            var dst = $$parser.placeAddress(leftx);               /* materializes a pending base, so the snapshot below
+                                                                     is always a real operand */
             var savedBK = leftx.baseKind, savedBase = leftx.base,
                 savedParts = leftx.offParts, savedStruct = leftx.struct;
-            var dst = $$parser.placeAddress(leftx);
             var src = $$parser.placeAddress(rightx);
             $$parser.makeMeta(x, 'copy', '?', dst, src, $$parser.structAllocSize(leftx.struct));
             $$parser.emitMeta(x);

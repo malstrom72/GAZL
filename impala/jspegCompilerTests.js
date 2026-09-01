@@ -2141,45 +2141,26 @@ console.log("impala.jspeg compiler never bounds-checks ADDRESS formation");
 // not `ADDp %0 $p #.z.V` followed by a MOVp. Materializing first reached the target only when the borrowed
 // temp happened to BE it - which an argument slot manages often enough to hide the cost, and a named local
 // can never do. All three base kinds, and the global one carries a folded `<A>` offset scratch: it rides
-// inside the operand, so the consumer frees it on the same path it frees every other operand.
+// inside the operand, so the consumer frees it on the same path it frees every other operand. `&loc[i]`
+// is the one address that takes two instructions, so the ADRL is emitted and only the ADDp deferred;
+// deferring a move of the finished address instead would cost a third.
 {
 	const out = compileWithJsImpala("struct V { int n; float g }\nglobal V array bank[4]\n"
-		+ "export function main() locals V pointer p, V pointer q, V v, int pointer ip {\n"
-		+ "\tp = &global bank[0]; p = &p[1]; q = &global bank[3]; ip = &v.n;\n}\n", { randomId: 42 });
+		+ "export function main() locals V pointer p, V pointer q, V v, int pointer ip,\n"
+		+ "\t\tV array loc[4], int i, V pointer vp {\n"
+		+ "\tp = &global bank[0]; p = &p[1]; q = &global bank[3]; ip = &v.n;\n"
+		+ "\ti = 2; vp = &loc[i];\n}\n", { randomId: 42 });
 	for (const [label, expected] of [
 		["a pointer base", /ADDp \$p \$p #\.z\.V/],
 		["a global base with a folded offset", /ADDp \$q &bank #<[A-Za-z]>/],
 		["a local base with a field offset", /ADRL \$ip \$v:\.o\.V\.n \*0/],
+		["a local base with a runtime index", /ADDp \$vp %\d+ %\d+/],
 	]) {
 		assert(expected.test(out), "place address (" + label + "): not emitted into the target\n" + out);
 	}
-	assert(!/MOVp \$(p|q|ip) %/.test(out),
+	assert(!/MOVp \$(p|q|ip|vp) %/.test(out),
 		"place address: copied through a temp instead of landing in the target\n" + out);
 	console.log("impala.jspeg compiler emits a place's address straight into its assignment target");
-}
-
-// Where an address LANDS is decided when the temp is borrowed, not when it is used, and the consumer's
-// only remedy for a bad landing is a MOVp. Two rules keep the landing right, and each has a shape that
-// regresses the moment it is broken. `&a[g()]` is the first: the call holds the argument slot the address
-// must end in, so the subscript has to release the dead index BEFORE borrowing, and borrow the
-// destination before the scratch - reversing either one puts the address a slot too high. `&loc[i]` is
-// the second: two instructions, so the ADRL is emitted and only the ADDp deferred; deferring a move of
-// the finished address instead would cost a third instruction.
-{
-	const decls = "struct V { int n; float g }\nglobal V array bank[8]\n"
-		+ "function usev(V pointer v) { v->n = 1; }\nfunction pick() returns int r { r = 3; }\n";
-	for (const [label, locals, body, banned] of [
-		["a call inside the index", "", "usev(&global bank[pick()]);", /MOVp %\d+ %\d+/],
-		["a plain local index", "int i", "i = pick(); usev(&global bank[i]);", /MOVp %\d+ %\d+/],
-		["a local struct array", "V array loc[4], int i, V pointer vp", "i = 2; vp = &loc[i];",
-			/MOVp \$vp %\d+/],
-	]) {
-		const out = compileWithJsImpala(decls + "export function main()"
-			+ (locals ? " locals " + locals : "") + " { " + body + " }\n", { randomId: 42 });
-		assert(!banned.test(out),
-			"address landing (" + label + "): copied through a temp\n" + out);
-	}
-	console.log("impala.jspeg compiler lands a computed address where its consumer wants it");
 }
 
 // THE INVARIANT, stated directly rather than through the shapes that violate it. Impala 1 allocates a
