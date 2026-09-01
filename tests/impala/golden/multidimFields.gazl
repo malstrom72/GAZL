@@ -94,8 +94,8 @@ main:	FUNC	; signature export func main() -> void @ multidimFields.impala:71:1
 	.e0:	NOOP
 		! MULi <C> #2 #.d.Grid.cells.0	; printInt(global g.cells[2, 3])
 		! ADDi <C> <C> #3
-		! ADDi <A> #.o.Grid.cells #<C>
-		PEEK %1 &g:<A> 
+		! ADDi <C> #.o.Grid.cells #<C>
+		PEEK %1 &g:<C> 
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ multidimFields.impala:79:32
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ multidimFields.impala:80:11
 		MOVp %2 &g 	; printInt(sum(&global g, 3))
@@ -103,22 +103,22 @@ main:	FUNC	; signature export func main() -> void @ multidimFields.impala:71:1
 		CALL &sum %1 *3	; expects sum(Grid-ptr, int) -> int @ multidimFields.impala:82:28
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ multidimFields.impala:82:29
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ multidimFields.impala:83:11
-		! ADDi <A> #.d.Grid.cube.1 #2	; global g.cube[1, 2, 3] = 3
-		! MULi <A> #<A> #.d.Grid.cube.0
-		! ADDi <A> <A> #3
-		! ADDi <C> #.o.Grid.cube #<A>
+		! ADDi <C> #.d.Grid.cube.1 #2	; global g.cube[1, 2, 3] = 3
+		! MULi <C> #<C> #.d.Grid.cube.0
+		! ADDi <C> <C> #3
+		! ADDi <C> #.o.Grid.cube #<C>
 		POKE &g:<C> #3 
 		! ADDi <C> #.d.Grid.cube.1 #2	; printInt(global g.cube[1, 2, 3])
 		! MULi <C> #<C> #.d.Grid.cube.0
 		! ADDi <C> <C> #3
-		! ADDi <A> #.o.Grid.cube #<C>
-		PEEK %1 &g:<A> 
+		! ADDi <C> #.o.Grid.cube #<C>
+		PEEK %1 &g:<C> 
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ multidimFields.impala:86:34
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ multidimFields.impala:87:11
-		! ADDi <A> #.o.Grid.flat #4	; global g.flat[4] = 210
-		POKE &g:<A> #210 
-		! ADDi <A> #.o.Grid.flat #4	; printInt(global g.flat[4])
-		PEEK %1 &g:<A> 
+		! ADDi <C> #.o.Grid.flat #4	; global g.flat[4] = 210
+		POKE &g:<C> #210 
+		! ADDi <C> #.o.Grid.flat #4	; printInt(global g.flat[4])
+		PEEK %1 &g:<C> 
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ multidimFields.impala:90:28
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ multidimFields.impala:91:11
 		MOVi $y #1 	; y = 1
@@ -130,9 +130,9 @@ main:	FUNC	; signature export func main() -> void @ multidimFields.impala:71:1
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ multidimFields.impala:96:13
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ multidimFields.impala:97:11
 		POKE &sh:.o.Shaped.mark #13 	; global sh.mark = 13
-		! MULi <A> #2 #.d.Shaped.m.0	; global sh.m[2, 3] = 99
-		! ADDi <A> <A> #3
-		! ADDi <C> #.o.Shaped.m #<A>
+		! MULi <C> #2 #.d.Shaped.m.0	; global sh.m[2, 3] = 99
+		! ADDi <C> <C> #3
+		! ADDi <C> #.o.Shaped.m #<C>
 		! LSSi #2 #.d.Shaped.m.1 @.g4
 		! FAIL index 2 outside Shaped.m axis 1 (resolved only at assembly)  
 	.g4:	! LSSi #3 #.d.Shaped.m.0 @.g5
@@ -140,8 +140,8 @@ main:	FUNC	; signature export func main() -> void @ multidimFields.impala:71:1
 	.g5:	POKE &sh:<C> #99 
 		! MULi <C> #2 #.d.Shaped.m.0	; printInt(global sh.m[2, 3])
 		! ADDi <C> <C> #3
-		! ADDi <A> #.o.Shaped.m #<C>
-		PEEK %1 &sh:<A> 
+		! ADDi <C> #.o.Shaped.m #<C>
+		PEEK %1 &sh:<C> 
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ multidimFields.impala:101:29
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ multidimFields.impala:102:11
 		PEEK %1 &sh:.o.Shaped.mark 	; printInt(global sh.mark)

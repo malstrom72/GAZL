@@ -39,12 +39,12 @@ main:	FUNC	; signature export func main() -> void @ structArrayGiven.impala:28:1
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ structArrayGiven.impala:36:28
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structArrayGiven.impala:37:11
 		! MULi <A> #3 #.z.V	; printInt(global bank[3].n)
-		! ADDi <B> #<A> #.o.V.n
-		PEEK %1 &bank:<B> 
+		! ADDi <A> #<A> #.o.V.n
+		PEEK %1 &bank:<A> 
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ structArrayGiven.impala:38:28
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structArrayGiven.impala:39:11
-		! MULi <B> #3 #.z.V	; printInt(global bank[3].m)
-		! ADDi <A> #<B> #.o.V.m
+		! MULi <A> #3 #.z.V	; printInt(global bank[3].m)
+		! ADDi <A> #<A> #.o.V.m
 		PEEK %1 &bank:<A> 
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ structArrayGiven.impala:40:28
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structArrayGiven.impala:41:11

@@ -96,27 +96,27 @@ main:	FUNC	; signature func main() -> void @ structFieldExtents.impala:39:1
 	.g3:	MOVi $s:<C> #44 
 		! SUBi <C> #H #1	; s.b[H - 1] = 22
 		! MOVi <B> #<C> 
-		! ADDi <A> #.o.S.b #<C>
+		! ADDi <C> #.o.S.b #<C>
 		! LSSi #<B> #0 @.g6
 		! LSSi #<B> #.z.S.b @.g5
 	.g6:	! FAIL a computed index outside S.b (resolved only at assembly)  
-	.g5:	MOVi $s:<A> #22 
-		! SUBi <A> #N #3	; s.p[N - 3].lo = 6
-		! MULi <B> #<A> #.z.Pair
-		! MOVi <A> #<B> 
-		! LSSi #<A> #0 @.g8
-		! LSSi #<A> #.z.S.p @.g7
+	.g5:	MOVi $s:<C> #22 
+		! SUBi <C> #N #3	; s.p[N - 3].lo = 6
+		! MULi <C> #<C> #.z.Pair
+		! MOVi <B> #<C> 
+		! LSSi #<B> #0 @.g8
+		! LSSi #<B> #.z.S.p @.g7
 	.g8:	! FAIL a computed index outside S.p (resolved only at assembly)  
-	.g7:	! ADDi <A> #.o.S.p #<B>
-		! ADDi <A> #<A> #.o.Pair.lo
-		MOVi $s:<A> #6 
-		! ADDi <A> #.o.S.a #N	; printInt(s.a[N])
-		MOVi %1 $s:<A> 
+	.g7:	! ADDi <C> #.o.S.p #<C>
+		! ADDi <C> #<C> #.o.Pair.lo
+		MOVi $s:<C> #6 
+		! ADDi <C> #.o.S.a #N	; printInt(s.a[N])
+		MOVi %1 $s:<C> 
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ structFieldExtents.impala:59:18
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structFieldExtents.impala:59:29
-		! SUBi <A> #H #1	; printInt(s.b[H - 1])
-		! MOVi <B> #<A> 
-		! ADDi <C> #.o.S.b #<A>
+		! SUBi <C> #H #1	; printInt(s.b[H - 1])
+		! MOVi <B> #<C> 
+		! ADDi <C> #.o.S.b #<C>
 		! LSSi #<B> #0 @.g10
 		! LSSi #<B> #.z.S.b @.g9
 	.g10:	! FAIL a computed index outside S.b (resolved only at assembly)  
@@ -124,12 +124,12 @@ main:	FUNC	; signature func main() -> void @ structFieldExtents.impala:39:1
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ structFieldExtents.impala:60:22
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structFieldExtents.impala:60:33
 		! SUBi <C> #N #3	; printInt(s.p[N - 3].lo)
-		! MULi <B> #<C> #.z.Pair
-		! MOVi <C> #<B> 
-		! LSSi #<C> #0 @.g12
-		! LSSi #<C> #.z.S.p @.g11
+		! MULi <C> #<C> #.z.Pair
+		! MOVi <B> #<C> 
+		! LSSi #<B> #0 @.g12
+		! LSSi #<B> #.z.S.p @.g11
 	.g12:	! FAIL a computed index outside S.p (resolved only at assembly)  
-	.g11:	! ADDi <C> #.o.S.p #<B>
+	.g11:	! ADDi <C> #.o.S.p #<C>
 		! ADDi <C> #<C> #.o.Pair.lo
 		MOVi %1 $s:<C> 
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ structFieldExtents.impala:61:25

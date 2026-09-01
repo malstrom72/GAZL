@@ -2171,12 +2171,20 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
     foldOffset = function (parts) {
         if (!parts || parts.length === 0) return null;
         if (parts.length === 1) return parts[0];      /* a lone part (symbol or scratch) is returned as-is; its owner frees it */
+        /* The first two parts die in the first add, so free them BEFORE borrowing and the accumulator
+           reuses one of their slots. Parts from the third on are read by a later add and must NOT be
+           freed early - which is also why the release loop below starts at 2: returning a part the
+           accumulator is now using would hand a live scratch back to the pool. */
+        var first = '#' + parts[0], second = '#' + parts[1];
+        for (var i = 0; i < 2; ++i) {
+            if (('' + parts[i]).charAt(0) === '<') returnBack(parts[i]);
+        }
         var o = borrow('<');
-        emit('<> +', 'i', o, '#' + parts[0], '#' + parts[1]);
+        emit('<> +', 'i', o, first, second);
         for (var k = 2; k < parts.length; ++k) {
             emit('<> +', 'i', o, '#' + o, '#' + parts[k]);
         }
-        for (var j = 0; j < parts.length; ++j) {      /* release borrowed stride scratches now folded into o */
+        for (var j = 2; j < parts.length; ++j) {      /* release borrowed stride scratches now folded into o */
             if (('' + parts[j]).charAt(0) === '<') returnBack(parts[j]);
         }
         return o;
@@ -3180,8 +3188,9 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
                 var part = k;                                    /* scalar stride is 1 word -> the offset is just k */
                 if (elemStruct) {                                /* `&p[1]` is the canonical walk, so the fold
                                                                     inside scaleByStride is the common case here */
+                    if (scratch) { returnBack(k); }     /* dead at the multiply: free it BEFORE the scale
+                                                                    borrows, so the scaled result reuses its slot */
                     part = scaleByStride(k, extentSymbol(elemName));
-                    if (scratch) { returnBack(k); }     /* a folded k is a literal, never a scratch */
                 }
                 /* A folded `<X>` cannot key a deferred assertion, so the guard takes its OWN copy while the
                    value is still live - the pushed one is freed by foldOffset long before the use decides
