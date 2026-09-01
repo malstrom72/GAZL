@@ -3195,12 +3195,19 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         } else {
             var arrPtr = placeAddress(x);                /* pointer base or a second runtime index: materialize */
             if (elemStruct) {
+                /* Free the index and take the DESTINATION first, before the scratch. The pool hands out
+                   the lowest free slot and a consumer usually wants the lowest slot (an argument window
+                   fills in order), so whichever temp is borrowed first is the one that lands where it is
+                   wanted. Borrowing the scratch first leaves the address one slot too high and the
+                   consumer's only remedy is a MOVp. The index is dead at the MULi below, so releasing it
+                   here lets the address reuse its slot - which is what `f(&a[g()])` needs, since the call
+                   is holding the argument slot the address has to end up in. */
+                returnBack(idxRV);
                 var elemPtr = borrow('%'), scaled = borrow('%');
                 emit('*', 'i', scaled, idxRV, '#' + extentSymbol(elemName));
                 emitRangeCheck(scaled, extent, sourceCode, sourceOffset);
                 emit('+', 'p', elemPtr, arrPtr, scaled);
                 returnBack(scaled);
-                returnBack(idxRV);
                 returnBack(arrPtr);
                 setPlace(x, 'pointer', elemPtr, [], elemName);
             } else {                                              /* scalar stride 1 -> PEEK/POKE arrPtr idx directly */
@@ -3247,7 +3254,13 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
     placeAddressMeta = function (place) {
         place = metaSlot(place);
         if (place.baseKind === 'local' && place.dynIndex !== undefined) {
-            makeMeta(place, ':=', 'p', undefined, placeAddress(place), undefined);
+            /* Two instructions, so only the SECOND can be deferred: lift the index out and let
+               placeAddress emit the ADRL alone, then leave the ADDp that folds it back in. Deferring a
+               move of the finished address instead would cost a third instruction whenever the consumer
+               wants it somewhere other than the temp placeAddress happened to borrow. */
+            var idx = place.dynIndex;
+            place.dynIndex = undefined;
+            makeMeta(place, '+', 'p', undefined, placeAddress(place), idx);
             return;
         }
         var off = foldOffset(place.offParts);

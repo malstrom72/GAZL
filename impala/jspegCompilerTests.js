@@ -2158,6 +2158,30 @@ console.log("impala.jspeg compiler never bounds-checks ADDRESS formation");
 	console.log("impala.jspeg compiler emits a place's address straight into its assignment target");
 }
 
+// Where an address LANDS is decided when the temp is borrowed, not when it is used, and the consumer's
+// only remedy for a bad landing is a MOVp. Two rules keep the landing right, and each has a shape that
+// regresses the moment it is broken. `&a[g()]` is the first: the call holds the argument slot the address
+// must end in, so the subscript has to release the dead index BEFORE borrowing, and borrow the
+// destination before the scratch - reversing either one puts the address a slot too high. `&loc[i]` is
+// the second: two instructions, so the ADRL is emitted and only the ADDp deferred; deferring a move of
+// the finished address instead would cost a third instruction.
+{
+	const decls = "struct V { int n; float g }\nglobal V array bank[8]\n"
+		+ "function usev(V pointer v) { v->n = 1; }\nfunction pick() returns int r { r = 3; }\n";
+	for (const [label, locals, body, banned] of [
+		["a call inside the index", "", "usev(&global bank[pick()]);", /MOVp %\d+ %\d+/],
+		["a plain local index", "int i", "i = pick(); usev(&global bank[i]);", /MOVp %\d+ %\d+/],
+		["a local struct array", "V array loc[4], int i, V pointer vp", "i = 2; vp = &loc[i];",
+			/MOVp \$vp %\d+/],
+	]) {
+		const out = compileWithJsImpala(decls + "export function main()"
+			+ (locals ? " locals " + locals : "") + " { " + body + " }\n", { randomId: 42 });
+		assert(!banned.test(out),
+			"address landing (" + label + "): copied through a temp\n" + out);
+	}
+	console.log("impala.jspeg compiler lands a computed address where its consumer wants it");
+}
+
 // An action declaring `_val`, `_s`, `_im` or `_i` shadows the parser's own register and miscompiles in
 // silence, so regeneration refuses it. The guard is one regex in a build script, which is exactly where a
 // broken check hides: it shipped for a while as `/\bvars+.../`, a lost backslash that matched the literal
