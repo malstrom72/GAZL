@@ -1454,19 +1454,25 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         declare('!', 'globals', ok, undefined, true, undefined, sourceCode, sourceOffset);
     };
 
+    /* Every reader wants the same thing first: this record as ONE deferred instruction, with no destination
+       yet. A place is not an instruction, so an array place used without a subscript decays here - once,
+       rather than in each reader. Asking it separately is how the readers came to disagree: an argument
+       adopted the address while an assignment asked for a finished operand and then copied it. */
+    asValueMeta = function (expr) {
+        if (expr.place && expr.arrayOf !== undefined) {           /* -> a pointer to its element */
+            var delem = expr.arrayOf;
+            placeAddressMeta(expr);
+            setElem(expr, delem);
+        }
+        return expr;
+    };
+
     makeRValue = function (expr, classes) {
         classes = classes || '#<&^$%';
 
         expr = metaSlot(expr);
         checkIndexUse(expr);                              /* reading it - reference() would have cleared the flag */
-
-        if (expr.place && expr.arrayOf) {                         /* array place used without a subscript -> decay to a pointer */
-            var delem = expr.arrayOf;
-            var dt = placeAddress(expr);
-            makeMeta(expr, ':=', 'p', undefined, dt, undefined);
-            setElem(expr, delem);
-            return dt;
-        }
+        asValueMeta(expr);
 
         var op   = expr.operator;
         var op1  = expr.operands[1];
@@ -1509,16 +1515,10 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
 
         /* An ARGUMENT is a reading context like any other, and a place is not an instruction: `g(f.state)`
            handed the writer a raw `@place` record, whose operator is in no opcode table, and the compiler
-           died on `Cannot read properties of undefined` with no code, position or caret. Only this door
-           was missing - `p = f.state` and `&f.state[0]` both decay - because the arg path skips
-           makeRValue on purpose (it emits straight into the call window instead of a temp). Ask it about
-           the place and nothing else: it returns the moment it has decayed one, and it owns what every
-           other reader means by a place, so a new place shape cannot be right for readers and fatal here.
-           checkIndexUse is idempotent (it clears oobIndex on entry), so Argument having already run it is
-           not a double guard. */
-        if (expr.place) {
-            makeRValue(expr);
-        }
+           died on `Cannot read properties of undefined` with no code, position or caret. This path skips
+           makeRValue on purpose - it emits into the call window rather than a temp - so it takes the
+           shared step and nothing else. A struct place cannot reach here: by-value arguments are E426. */
+        asValueMeta(expr);
 
         var op   = expr.operator;
         var tgt  = '%' + number;
@@ -3744,16 +3744,7 @@ var _sn = strideStruct(field.elem);
             return;
         }
 
-        /* An array place on the right decays to a pointer. Take its address as the DEFERRED instruction,
-           the way `&` does, so the statement below emits it into the target - handing it to makeRValue
-           instead would materialize it into a temp and leave this with nothing to emit but a copy of it.
-           An argument never had this problem, because makeArgValue emits the deferred meta into the window
-           slot; the two paths only disagreed because this one asked for an operand instead of a meta. */
-        if (rightx.place && rightx.arrayOf !== undefined) {
-            var delem = rightx.arrayOf;
-            placeAddressMeta(rightx);
-            setElem(rightx, delem);
-        }
+        asValueMeta(rightx);                             /* the same first step every reader takes */
 
         if (!leftx || leftx.operator === undefined) {
             throw new Error('JSPEG meta missing for assignment: ' + JSON.stringify(leftx));
