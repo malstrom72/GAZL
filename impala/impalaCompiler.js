@@ -3283,6 +3283,10 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         var base = baseOperand(place);
         if (place.baseKind === 'local') {                          /* `*0` ALWAYS - see the note on ADRL spans below */
             makeMeta(place, '=&', 'p', undefined, base + (off ? ':' + off : ''), '*0');
+        } else if (off && place.baseKind === 'globalAddr') {       /* `&name:off` resolves at ASSEMBLY time, so a global
+                                                                      base folds its offset instead of adding it - the
+                                                                      same operand emitPlaceValue reads a field through */
+            makeMeta(place, ':=', 'p', undefined, base + ':' + off, undefined);
         } else if (off) {
             makeMeta(place, '+', 'p', undefined, base, '#' + off);
         } else {
@@ -3738,6 +3742,17 @@ var _sn = strideStruct(field.elem);
             returnBack(dst);
             setPlace(x, savedBK, savedBase, savedParts, savedStruct);
             return;
+        }
+
+        /* An array place on the right decays to a pointer. Take its address as the DEFERRED instruction,
+           the way `&` does, so the statement below emits it into the target - handing it to makeRValue
+           instead would materialize it into a temp and leave this with nothing to emit but a copy of it.
+           An argument never had this problem, because makeArgValue emits the deferred meta into the window
+           slot; the two paths only disagreed because this one asked for an operand instead of a meta. */
+        if (rightx.place && rightx.arrayOf !== undefined) {
+            var delem = rightx.arrayOf;
+            placeAddressMeta(rightx);
+            setElem(rightx, delem);
         }
 
         if (!leftx || leftx.operator === undefined) {

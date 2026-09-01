@@ -52,7 +52,7 @@ main:	FUNC	; signature export func main() -> void @ pointerStride.impala:17:1
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ pointerStride.impala:28:18
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ pointerStride.impala:28:29
 		! MULi <A> #3 #.z.S	; q = &global bank[3]
-		ADDp $q &bank #<A>
+		MOVp $q &bank:<A> 
 		DIFp %0 $q $p	; n = ((pointer) q - (pointer) p) / sizeof(S)
 		DIVi $n %0 #.z.S
 		MOVi %1 $n 	; printInt(n)
@@ -73,7 +73,7 @@ main:	FUNC	; signature export func main() -> void @ pointerStride.impala:17:1
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ pointerStride.impala:40:27
 		MOVp $p &bank 	; p = &global bank[0]
 		! MULi <A> #4 #.z.S	; end = &global bank[4]
-		ADDp $end &bank #<A>
+		MOVp $end &bank:<A> 
 	.l0:	GEQp $p $end @.e1	; while (p < end) 
 		PEEK %1 $p #.o.S.a	; printInt(p->a)
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ pointerStride.impala:47:17

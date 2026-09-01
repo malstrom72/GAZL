@@ -2125,7 +2125,7 @@ console.log("impala.jspeg compiler never bounds-checks ADDRESS formation");
 		+ "global F gf\nfunction sum(int pointer p) returns int r { r = p[0]; }\n";
 	for (const [label, body, expected] of [
 		["a LOCAL struct's array field", "locals F f { printInt(sum(f.state)); }", /ADRL %\d \$f:\.o\.F\.state \*0/],
-		["a GLOBAL struct's", "{ printInt(sum(global gf.state)); }", /ADDp %\d &gf #\.o\.F\.state/],
+		["a GLOBAL struct's", "{ printInt(sum(global gf.state)); }", /MOVp %\d &gf:\.o\.F\.state/],
 		["a NESTED field's", "locals Outer o { printInt(sum(o.inner.state)); }", /ADRL %\d \$o:<[A-Za-z]> \*0/],
 		["one reached through a pointer", "locals F pointer fp { printInt(sum(fp->state)); }", /ADDp %\d \$fp #\.o\.F\.state/],
 	]) {
@@ -2152,7 +2152,7 @@ console.log("impala.jspeg compiler never bounds-checks ADDRESS formation");
 		+ "\ti = 2; vp = &loc[i];\n}\n", { randomId: 42 });
 	for (const [label, expected] of [
 		["a pointer base", /ADDp \$p \$p #\.z\.V/],
-		["a global base with a folded offset", /ADDp \$q &bank #<[A-Za-z]>/],
+		["a global base, offset folded into the operand", /MOVp \$q &bank:<[A-Za-z]>/],
 		["a local base with a field offset", /ADRL \$ip \$v:\.o\.V\.n \*0/],
 		["a local base with a runtime index", /ADDp \$vp %\d+ %\d+/],
 	]) {
