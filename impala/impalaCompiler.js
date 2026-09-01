@@ -3051,6 +3051,10 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
             returnBack(idx);
             return stride;
         }
+        /* `acc` is read only by the first emit and `dst` is written only by it, so freeing `acc` here lets
+           the accumulator run in one register down the axes (`MULi %0 %0 #stride`). `idx` must NOT move up:
+           it is read by the SECOND emit, which `dst === idx` would clobber before the add. */
+        returnBack(acc);
         var dst = borrow(live ? '%' : '<');
         if (one) {                                                /* `1 * stride` IS `stride` - the THIRD degenerate
                                                                      step, and `a[1, x]` is as ordinary as row 0 */
@@ -3061,8 +3065,7 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
                 emit(live ? '+' : '<> +', 'i', dst, dst, idx);
             }
         }
-        returnBack(acc);
-        returnBack(idx);
+        returnBack(idx);                                 /* `acc` was freed before the borrow, above */
         return (live ? dst : '#' + dst);
     };
 
@@ -3203,10 +3206,13 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
                scalar is 1). Only a genuinely RUNTIME index reaches here - every assemble-time one, named
                or negative, folded above, because GETL/SETL have no immediate-index form. */
             if (elemStruct) {
+                returnBack(idxRV);                       /* dead at the MULi, and freeing it first lets the
+                                                                     scaled index reuse its slot - the frame index is
+                                                                     then held until the terminal access, so a slot
+                                                                     taken here is one held across the whole statement */
                 var frameIdx = borrow('%');
                 emit('*', 'i', frameIdx, idxRV, '#' + extentSymbol(elemName));
                 emitRangeCheck(frameIdx, extent, sourceCode, sourceOffset);   /* scaled: `.z.` counts words */
-                returnBack(idxRV);
                 setPlace(x, 'local', x.base, x.offParts, elemName, undefined, frameIdx);
             } else {
                 emitRangeCheck(idxRV, extent, sourceCode, sourceOffset);
@@ -3238,28 +3244,15 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
                                                                      it. A LIST - see checkIndexUse */
     };
 
-    /* a place's address: fold its offset parts into the base - ADRL for a local, ADDp for a pointer. */
+    /* A place's address as a finished operand, for the sites that feed it to another instruction. Just the
+       deferred form put through the one allocator: `makeRValue` frees the operands before it borrows, so
+       the address reuses a dying register instead of taking a fresh one and stranding the old. Writing the
+       emission out a second time here is what used to strand it - the pointer branch borrowed a new
+       register and never returned the base, so a repeated `bank[i].sub = w` climbed a register a
+       statement. Nothing to keep in step now: there is one description of an address. */
     placeAddress = function (place) {
-        place = metaSlot(place);
-        var off = foldOffset(place.offParts);
-        var a;
-        if (place.baseKind === 'local') {                         /* size hint = the pointed-at sub-object, not the enclosing frame */
-            var sz = '*0';                                        /* ALWAYS `*0` - see the note on ADRL spans above. */
-            a = borrow('%');
-            emit('=&', 'p', a, place.base + (off ? ':' + off : ''), sz);
-            if (place.dynIndex !== undefined) {                   /* fold the frame place's runtime index in (GETL/SETL fallback) */
-                emit('+', 'p', a, a, place.dynIndex);
-                returnBack(place.dynIndex);
-                place.dynIndex = undefined;
-            }
-        } else {                                                  /* pointer / globalAddr */
-            var pbase = baseOperand(place);
-            if (!off) return pbase;
-            a = borrow('%');
-            emit('+', 'p', a, pbase, '#' + off);
-        }
-        if (off && ('' + off).charAt(0) === '<') returnBack(off);
-        return a;
+        placeAddressMeta(place);
+        return makeRValue(place);
     };
 
     /* The same address as ONE DEFERRED instruction on the record itself, for the sites where the address
@@ -3731,12 +3724,15 @@ var _sn = strideStruct(field.elem);
                 fail('Cannot assign to a readonly value', sourceCode, sourceOffset, 'E404',
                         'declare it `global` instead of `readonly` if it has to be written');
             }
-            var dst = placeAddress(leftx);               /* materializes a pending base, so the snapshot below
-                                                                     is always a real operand */
+            /* placeAddress leaves a value meta behind, so snapshot the place first - and resolve a pending
+               base while snapshotting, or the statement's own place is rebuilt around a computation that
+               has already been consumed. */
+            baseOperand(leftx);
             var savedBK = leftx.baseKind, savedBase = leftx.base,
                 savedParts = leftx.offParts, savedStruct = leftx.struct;
+            var dst = placeAddress(leftx);
             var src = placeAddress(rightx);
-            makeMeta(x, 'copy', '?', dst, src, structAllocSize(leftx.struct));
+            makeMeta(x, 'copy', '?', dst, src, structAllocSize(savedStruct));
             emitMeta(x);
             returnBack(src);
             returnBack(dst);
