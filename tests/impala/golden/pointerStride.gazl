@@ -41,14 +41,13 @@ main:	FUNC	; signature export func main() -> void @ pointerStride.impala:17:1
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ pointerStride.impala:23:18
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ pointerStride.impala:23:29
 		MOVi $i #2 	; i = 2
-		MULi %1 $i #.z.S	; q = &p[i]
-		ADDp %0 $p %1
-		MOVp $q %0 
+		MULi %0 $i #.z.S	; q = &p[i]
+		ADDp $q $p %0
 		PEEK %1 $q #.o.S.a	; printInt(q->a)
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ pointerStride.impala:27:16
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ pointerStride.impala:27:27
-		MULi %2 $i #.z.S	; printInt(p[i].a)
-		ADDp %1 $p %2
+		MULi %1 $i #.z.S	; printInt(p[i].a)
+		ADDp %1 $p %1
 		PEEK %1 %1 #.o.S.a
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ pointerStride.impala:28:18
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ pointerStride.impala:28:29

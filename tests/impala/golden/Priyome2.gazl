@@ -2329,25 +2329,25 @@ registerMove:	FUNC	; signature func registerMove(int move, int piece, int captur
 		MOVi $j #0 	; for (j = 0 to global historyCount) 
 		PEEK %0 &historyCount 
 		GEQi #0 %0 @.f0
-	.l2:	MULi %2 $j #.z.HalfMove	; global history[j] = global history[j + 1]
-		ADDp %1 &history %2
+	.l2:	MULi %1 $j #.z.HalfMove	; global history[j] = global history[j + 1]
 		ADDi %2 $j #1
-		MULi %3 %2 #.z.HalfMove
-		ADDp %2 &history %3
+		MULi %2 %2 #.z.HalfMove
+		ADDp %1 &history %1
+		ADDp %2 &history %2
 		COPY %1 %2 *.z.HalfMove
 		FORi $j %0 @.l2	; }
 	.f0:	PEEK $i &historyCount 	; i = global historyCount
-		MULi %1 $i #.z.HalfMove	; global history[i].move = move
-		ADDp %0 &history %1
+		MULi %0 $i #.z.HalfMove	; global history[i].move = move
+		ADDp %0 &history %0
 		POKE %0 #.o.HalfMove.move $move
-		MULi %1 $i #.z.HalfMove	; global history[i].piece = piece
-		ADDp %0 &history %1
+		MULi %0 $i #.z.HalfMove	; global history[i].piece = piece
+		ADDp %0 &history %0
 		POKE %0 #.o.HalfMove.piece $piece
-		MULi %1 $i #.z.HalfMove	; global history[i].captured = captured
-		ADDp %0 &history %1
+		MULi %0 $i #.z.HalfMove	; global history[i].captured = captured
+		ADDp %0 &history %0
 		POKE %0 #.o.HalfMove.captured $captured
-		MULi %1 $i #.z.HalfMove	; global history[i].xCapture = xCapture
-		ADDp %0 &history %1
+		MULi %0 $i #.z.HalfMove	; global history[i].xCapture = xCapture
+		ADDp %0 &history %0
 		POKE %0 #.o.HalfMove.xCapture $xCapture
 		PEEK %0 &historyCount 	; global historyCount = global historyCount + 1
 		ADDi %0 %0 #1
@@ -2368,8 +2368,8 @@ takeBackMove:	FUNC	; signature func takeBackMove() -> int @ Priyome2.impala:1268
 		SUBi %0 %0 #1
 		POKE &historyCount %0 
 		PEEK $i &historyCount 	; i = global historyCount
-		MULi %1 $i #.z.HalfMove	; move = global history[i].move
-		ADDp %0 &history %1
+		MULi %0 $i #.z.HalfMove	; move = global history[i].move
+		ADDp %0 &history %0
 		PEEK $move %0 #.o.HalfMove.move
 		MOVi %1 $move 	; frm = moveFrom(move)
 		CALL &moveFrom %0 *2	; expects moveFrom(int) -> int @ Priyome2.impala:1276:23
@@ -2379,14 +2379,14 @@ takeBackMove:	FUNC	; signature func takeBackMove() -> int @ Priyome2.impala:1268
 		MOVi $t %0 
 		MOVi %1 $frm 	; undoMove(frm, t, global history[i].piece, global history[i].captured, global history[i].xCapture)
 		MOVi %2 $t 
-		MULi %4 $i #.z.HalfMove
-		ADDp %3 &history %4
+		MULi %3 $i #.z.HalfMove
+		ADDp %3 &history %3
 		PEEK %3 %3 #.o.HalfMove.piece
-		MULi %5 $i #.z.HalfMove
-		ADDp %4 &history %5
+		MULi %4 $i #.z.HalfMove
+		ADDp %4 &history %4
 		PEEK %4 %4 #.o.HalfMove.captured
-		MULi %6 $i #.z.HalfMove
-		ADDp %5 &history %6
+		MULi %5 $i #.z.HalfMove
+		ADDp %5 &history %5
 		PEEK %5 %5 #.o.HalfMove.xCapture
 		CALL &undoMove %0 *6	; expects undoMove(int, int, int, int, int) -> void @ Priyome2.impala:1278:100
 		RETU   	; } else 

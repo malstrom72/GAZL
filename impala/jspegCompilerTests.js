@@ -2182,6 +2182,37 @@ console.log("impala.jspeg compiler never bounds-checks ADDRESS formation");
 	console.log("impala.jspeg compiler lands a computed address where its consumer wants it");
 }
 
+// THE INVARIANT, stated directly rather than through the shapes that violate it. Impala 1 allocates a
+// transient in exactly one place - the consumer, at the moment it emits, after freeing the source
+// operands so the destination can reuse a dying one. A struct place that mints its base eagerly breaks
+// both halves: it picks a register before any consumer has said where the value goes, so the consumer's
+// only remedy is a copy, and it holds a second register while doing it. Every `MOVp %a %b` below would be
+// that copy. Checked against the 1.0-equivalent programs too, since whatever the place model costs, it
+// must not cost anything on code that has no structs in it.
+{
+	const decls = "struct V { int n; float g }\nglobal V array bank[8]\nglobal int array flat[8]\n"
+		+ "function usev(V pointer v) { v->n = 1; }\nfunction usei(int pointer p) { p[0] = 1; }\n"
+		+ "function pick() returns int r { r = 3; }\n";
+	const BODIES = [
+		["", "usev(&global bank[pick()]);"],
+		["int i", "i = pick(); usev(&global bank[i]);"],
+		["int i, V pointer vp", "i = 2; vp = &global bank[i];"],
+		["int i, int n", "i = 2; n = global bank[i].n;"],
+		["V array loc[4], int i, V pointer vp", "i = 2; vp = &loc[i];"],
+		["int i", "i = pick(); usei(&global flat[i]);"],
+		["int i, int pointer p", "i = 2; p = &global flat[i + 1];"],
+	];
+	for (const [locals, body] of BODIES) {
+		const out = compileWithJsImpala(decls + "export function main()"
+			+ (locals ? " locals " + locals : "") + " { " + body + " }\n", { randomId: 42 });
+		const copies = out.split("\n").filter((l) => /\bMOV[ipf] %\d+ %\d+\s*$/.test(l.replace(/;.*$/, "")));
+		assert(copies.length === 0,
+			"transient copy: a value was materialised before its destination was known ("
+				+ body + ")\n" + copies.join("\n") + "\n" + out);
+	}
+	console.log("impala.jspeg compiler never copies one transient into another");
+}
+
 // An action declaring `_val`, `_s`, `_im` or `_i` shadows the parser's own register and miscompiles in
 // silence, so regeneration refuses it. The guard is one regex in a build script, which is exactly where a
 // broken check hides: it shipped for a while as `/\bvars+.../`, a lost backslash that matched the literal

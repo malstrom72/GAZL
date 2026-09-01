@@ -731,8 +731,8 @@ evaluate:	FUNC	; signature func evaluate(int-ptr b, float-ptr v, int precedence)
 	symbol:	MOVi $i #0 	; symbol:
 		GEQi #0 #FUNCTION_COUNT @.e10
 	.l11:	MOVp $q $p 	; q = p
-		MULi %1 $i #.z.MathOp	; s = global FUNCTIONS[i].name
-		ADDp %0 &FUNCTIONS %1
+		MULi %0 $i #.z.MathOp	; s = global FUNCTIONS[i].name
+		ADDp %0 &FUNCTIONS %0
 		PEEK $s %0 #.o.MathOp.name
 	.l12:	PEEK $c $s 	; while ((c = *s) != 0 && lower(*q) == c) 
 		EQUi $c #0 @.e14
@@ -759,8 +759,8 @@ evaluate:	FUNC	; signature func evaluate(int-ptr b, float-ptr v, int precedence)
 		MOVp %1 &.s_Expect_4e1 	; error("Expected ')'")
 		CALL &error %0 *2	; expects error(int-ptr) -> void @ calc2.impala:544:44
 	.f17:	ADDp $p $p #1	; p = p + 1
-		MULi %1 $i #.z.MathOp	; *v = global FUNCTIONS[i].fn(*v)
-		ADDp %0 &FUNCTIONS %1
+		MULi %0 $i #.z.MathOp	; *v = global FUNCTIONS[i].fn(*v)
+		ADDp %0 &FUNCTIONS %0
 		PEEK %2 $v 
 		PEEK %0 %0 #.o.MathOp.fn	; expects function(float) -> float @ calc2.impala:546:39
 		CALL %0 %1 *2

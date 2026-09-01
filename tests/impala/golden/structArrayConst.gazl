@@ -33,10 +33,10 @@ sumB0:	FUNC	; signature func sumB0(Voice-ptr v) -> float @ structArrayConst.impa
 		MOVi $i #0 	; for (i = 0 to 3) s = s + v->filters[i].b0
 		GEQi #0 #3 @.e0
 	.l1:	ADDp %0 $v #.o.Voice.filters	; s = s + v->filters[i].b0
-		MULi %2 $i #.z.Biquad
-		ADDp %1 %0 %2
-		PEEK %1 %1 #.o.Biquad.b0
-		ADDf $s $s %1
+		MULi %1 $i #.z.Biquad
+		ADDp %0 %0 %1
+		PEEK %0 %0 #.o.Biquad.b0
+		ADDf $s $s %0
 		FORi $i #3 @.l1
 	.e0:	RETU   	; }
 

@@ -1168,6 +1168,7 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         rec.oobIndex  = undefined;
         rec.struct    = undefined;
         rec.dynIndex  = undefined;
+        rec.baseMeta  = undefined;
         rec.readonly  = false;        /* pooled slots: never inherit a previous symbol's writability */
         return rec;
     };
@@ -2966,10 +2967,27 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         slot.type     = arrayOf ? 'p' : 'S';
         slot.elem     = arrayOf || (structName !== undefined ? structDesc(structName) : undefined);
         slot.dynIndex = dynIndex;                                 /* frame place + one runtime word-index -> terminal emits GETL/SETL */
+        slot.baseMeta = undefined;                                /* a PENDING base: see baseOperand. Callers that carry one
+                                                                     across a setPlace re-attach it after the call. */
         slot.extent   = undefined;                                /* pooled slot: never inherit another array's extent or
                                                                      another subscript's finding. The two callers that DO
                                                                      have an extent assign it after the call. */
         slot.oobIndex = undefined;
+    };
+
+    /* A place's base as a REGISTER, materializing a pending computation the first time one is actually
+       needed. Impala 1 never allocates a register except here, at the point of use, and always frees the
+       source operands first so the destination can reuse a dying one (`makeRValue`, which this defers to).
+       A place that mints its base eagerly loses both: it picks a register before any consumer has said
+       where the value goes, so the consumer's only remedy is a copy - and it holds a second register while
+       doing it. The pending operands stay borrowed until this runs, which is what keeps them valid. */
+    baseOperand = function (place) {
+        if (place.baseMeta !== undefined) {
+            var pending = place.baseMeta;
+            place.baseMeta = undefined;
+            place.base = makeRValue(pending);
+        }
+        return place.base;
     };
 
     /* A place resolved to a terminal SCALAR location (a scalar field, or a scalar array element) becomes a
@@ -3173,8 +3191,14 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
                 }
                 x.offParts.push(part);
             }
-            if (elemStruct) setPlace(x, x.baseKind, x.base, x.offParts, elemName, undefined, x.dynIndex);
-            else            emitPlaceValue(x, x.baseKind, x.base, x.offParts, x.dynIndex, eType, eTail);
+            if (elemStruct) {                                     /* a constant index only grows offParts, so a
+                                                                     pending base stays pending across it */
+                var carried = x.baseMeta;
+                setPlace(x, x.baseKind, x.base, x.offParts, elemName, undefined, x.dynIndex);
+                x.baseMeta = carried;
+            } else {
+                emitPlaceValue(x, x.baseKind, baseOperand(x), x.offParts, x.dynIndex, eType, eTail);
+            }
 
         } else if (x.baseKind === 'local' && x.dynIndex === undefined) {
             /* a frame place with a single runtime index: keep it frame-relative so it emits one
@@ -3195,21 +3219,18 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         } else {
             var arrPtr = placeAddress(x);                /* pointer base or a second runtime index: materialize */
             if (elemStruct) {
-                /* Free the index and take the DESTINATION first, before the scratch. The pool hands out
-                   the lowest free slot and a consumer usually wants the lowest slot (an argument window
-                   fills in order), so whichever temp is borrowed first is the one that lands where it is
-                   wanted. Borrowing the scratch first leaves the address one slot too high and the
-                   consumer's only remedy is a MOVp. The index is dead at the MULi below, so releasing it
-                   here lets the address reuse its slot - which is what `f(&a[g()])` needs, since the call
-                   is holding the argument slot the address has to end up in. */
+                /* Scale the index, then leave `base + scaled` PENDING rather than minting a register for
+                   it. Nothing here knows where the address is wanted - a following `.field` folds it into
+                   a PEEK, `&` hands the whole computation to an assignment - so choosing a register now
+                   can only be undone by a copy later. baseOperand picks one if and when someone needs it.
+                   `arrPtr` and `scaled` stay borrowed until then; that is what keeps them valid. */
                 returnBack(idxRV);
-                var elemPtr = borrow('%'), scaled = borrow('%');
+                var scaled = borrow('%');
                 emit('*', 'i', scaled, idxRV, '#' + extentSymbol(elemName));
                 emitRangeCheck(scaled, extent, sourceCode, sourceOffset);
-                emit('+', 'p', elemPtr, arrPtr, scaled);
-                returnBack(scaled);
-                returnBack(arrPtr);
-                setPlace(x, 'pointer', elemPtr, [], elemName);
+                setPlace(x, 'pointer', undefined, [], elemName);
+                x.baseMeta = { operator: '+', type: 'p',
+                        operands: [ undefined, arrPtr, scaled ] };
             } else {                                              /* scalar stride 1 -> PEEK/POKE arrPtr idx directly */
                 emitRangeCheck(idxRV, extent, sourceCode, sourceOffset);
                 emitPlaceValue(x, 'pointer', arrPtr, [], idxRV, eType, eTail);
@@ -3236,9 +3257,10 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
                 place.dynIndex = undefined;
             }
         } else {                                                  /* pointer / globalAddr */
-            if (!off) return place.base;
+            var pbase = baseOperand(place);
+            if (!off) return pbase;
             a = borrow('%');
-            emit('+', 'p', a, place.base, '#' + off);
+            emit('+', 'p', a, pbase, '#' + off);
         }
         if (off && ('' + off).charAt(0) === '<') returnBack(off);
         return a;
@@ -3264,12 +3286,21 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
             return;
         }
         var off = foldOffset(place.offParts);
+        if (place.baseMeta !== undefined && !off) {
+            /* The pending base IS the address, so adopt it whole: the assignment emits that `ADDp`
+               straight into its target and no register is ever chosen speculatively. */
+            var pending = place.baseMeta;
+            makeMeta(place, pending.operator, pending.type, undefined,
+                    pending.operands[1], pending.operands[2]);
+            return;
+        }
+        var base = baseOperand(place);
         if (place.baseKind === 'local') {                          /* `*0` ALWAYS - see the note on ADRL spans below */
-            makeMeta(place, '=&', 'p', undefined, place.base + (off ? ':' + off : ''), '*0');
+            makeMeta(place, '=&', 'p', undefined, base + (off ? ':' + off : ''), '*0');
         } else if (off) {
-            makeMeta(place, '+', 'p', undefined, place.base, '#' + off);
+            makeMeta(place, '+', 'p', undefined, base, '#' + off);
         } else {
-            makeMeta(place, ':=', 'p', undefined, place.base, undefined);
+            makeMeta(place, ':=', 'p', undefined, base, undefined);
         }
     };
 
@@ -3316,14 +3347,14 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
     fieldAccess = function (x, fieldName, arrow, sourceCode, sourceOffset) {
         x = metaSlot(x);
 
-        var bk, base, offParts, structName, dynIndex;
+        var bk, base, offParts, structName, dynIndex, carried;
         if (x.place) {
             if (arrow) {
                 fail("Use '.' - this is a struct value, not a pointer", sourceCode,
                         sourceOffset, 'E416', 'write ' + fieldName + ' as .' + fieldName);
             }
             bk = x.baseKind; base = x.base; offParts = x.offParts || []; structName = x.struct;
-            dynIndex = x.dynIndex;
+            dynIndex = x.dynIndex; carried = x.baseMeta;          /* a field only grows offParts: base stays pending */
         } else if (x.type === 'p' && isStructAtom(x.elem)) {
             if (!arrow) {
                 fail("Use '->' to access a field through a pointer", sourceCode,
@@ -3352,11 +3383,13 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
 
         if (field.type === 'S') {                                 /* nested struct -> accumulate the part, same base, NO instruction */
             setPlace(x, bk, base, newParts, field.struct, undefined, dynIndex);
+            x.baseMeta = carried;
             return;
         }
         if (field.type === 'A') {                                 /* array field -> a fold-able array place for the next [k]
                                                                      (struct OR scalar element; subscriptStruct terminates it) */
             setPlace(x, bk, base, newParts, undefined, field.elem, dynIndex);
+            x.baseMeta = carried;
             if (field.extent === undefined) {                      /* built once per FIELD, not per access */
                 field.extent = arrayExtent(fieldName, structName,
                         structName + '.' + fieldName, field.size, field.dims);
@@ -3369,8 +3402,10 @@ var _sn = strideStruct(field.elem);
             return;
         }
 
-        /* terminal scalar field */
-        emitPlaceValue(x, bk, base, newParts, dynIndex, field.type, field.elem);
+        /* terminal scalar field: a PEEK needs the base in a register, so this is where a pending one lands */
+        emitPlaceValue(x, bk,
+                (carried !== undefined ? makeRValue(carried) : base),
+                newParts, dynIndex, field.type, field.elem);
     };
 
     checkPtrAssign = function (leftx, rightx, sourceCode, sourceOffset) {
@@ -3706,6 +3741,9 @@ var _sn = strideStruct(field.elem);
                 fail('Cannot assign to a readonly value', sourceCode, sourceOffset, 'E404',
                         'declare it `global` instead of `readonly` if it has to be written');
             }
+            baseOperand(leftx);                          /* the COPY needs it in a register anyway, and the
+                                                                     statement's own place is rebuilt from `savedBase`
+                                                                     below - which must not be a pending computation */
             var savedBK = leftx.baseKind, savedBase = leftx.base,
                 savedParts = leftx.offParts, savedStruct = leftx.struct;
             var dst = placeAddress(leftx);
