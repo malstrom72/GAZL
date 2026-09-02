@@ -119,8 +119,8 @@ main:	FUNC	; signature func main() -> void @ disasm2.impala:105:1
 		MOVp %1 &.s_Fileno_4d5 	; outputLine("File not found")
 		CALL &outputLine %0 *2	; expects outputLine(int-ptr) -> void @ disasm2.impala:115:61
 		RETU   
-	.f1:	MULi %1 $file #.z.File	; if ((type = global FILES[file].type) != FILE_TYPE_EXE
-		ADDp %0 &FILES %1
+	.f1:	MULi %0 $file #.z.File	; if ((type = global FILES[file].type) != FILE_TYPE_EXE
+		ADDp %0 &FILES %0
 		PEEK $type %0 #.o.File.type
 		EQUi $type #FILE_TYPE_EXE @.f4
 		EQUi $type #FILE_TYPE_SYS @.f4

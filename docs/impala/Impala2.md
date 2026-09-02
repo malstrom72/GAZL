@@ -1,4 +1,4 @@
-# Impala 2.0 Design
+﻿# Impala 2.0 Design
 
 > **Status: implemented, with Step 4 parked.** Steps 1, 2, 3 and 5 (typed pointers/arrays, structs,
 > typed function pointers, import) plus the strict-expression rules and coded diagnostics are
@@ -135,9 +135,12 @@ expression. It costs nothing at runtime.
 Declarations become **type-first with stackable trailing keyword modifiers**:
 
 ```
-Declaration := (BASE_TYPE)? (POINTER | ARRAY)* Identifier ('[' ConstExpr ']')?
-BASE_TYPE   := int | float | pointer | funcptr | <struct name, in a later release>
+Declaration := (BASE_TYPE)? (POINTER | ARRAY)* Identifier ('[' ConstExpr (',' ConstExpr)* ']')?
+BASE_TYPE   := int | float | pointer | funcptr | <struct name> | <functype name>
 ```
+
+A host-owned array writes the bracket clause with the axes empty (`[]`, `[,]`), stating its rank
+without a size. Every other array states an extent per axis.
 
 A scalar is simply the zero-modifier case. The modifiers read left-to-right as an English noun
 phrase:
@@ -164,7 +167,7 @@ in 1.0:
 ```impala
 global int pointer head
 readonly float array WINDOW[512] = { /* ... */ }
-extern int array futureArray            // extern arrays still omit the size
+extern int array futureArray[]          // host-owned: states its rank, never its size
 function findSmallest(int n, int pointer vector) returns int j locals int i { /* ... */ }
 ```
 
@@ -173,9 +176,9 @@ function findSmallest(int n, int pointer vector) returns int j locals int i { /*
 - **`funcptr` stays a keyword.** C's function-pointer declarator is the single most
   agent-hostile piece of C syntax. Impala's `funcptr` is strictly better and composes cleanly
   (`funcptr array`, `funcptr pointer`). 2.0 never adopts `int (*fp)(int)`.
-- **The `array` keyword is kept** (`int array a[10]`, not `int a[10]`). Beyond consistency, it
-  future-proofs structs: `Filter f` will be one struct value and `Filter array f[4]` an array of
-  four, a distinction that would otherwise rest entirely on the presence of `[4]`.
+- **The `array` keyword is kept** (`int array a[10]`, not `int a[10]`). Beyond consistency, it is
+  what separates the two struct declarations: `Filter f` is one struct value and `Filter array f[4]`
+  an array of four, a distinction that would otherwise rest entirely on the presence of `[4]`.
 - **Pointer-to-pointer is spelled out** (`int pointer pointer p`). Rare, unambiguous, and clearer
   than a `**` shorthand; no shorthand is introduced.
 
@@ -307,7 +310,7 @@ every such golden change is verified to differ in MOV-variant mnemonics alone be
 
 ### Cross-unit checking
 
-An `extern int array futureArray` now advertises an element type, so the `; signature` metadata that
+An `extern int array futureArray[]` now advertises an element type, so the `; signature` metadata that
 already rides inside `.gazl` carries element information. *Implemented:* definition-side rows emit
 **element chains as single-token categories** - `; signature array values[5] : int`,
 `; signature global cursor : int-ptr`, `func take(int-ptr-ptr h) -> int-ptr`, const rows likewise -
@@ -376,13 +379,12 @@ regression, full stop. This is wired into the existing JSPEG parity harness
 
 ## Step 2: Structs (implemented)
 
-> **Slice 1 implemented** (`tests/impala/sources/structPointers.impala`): `struct` definitions,
-> field layout, `sizeof(Type)`, struct-typed **pointers**, struct-pointer casts
-> `(Filter pointer) raw`, `->`/`.` field access to **scalar** fields through a pointer, and
-> `extern struct` forward declarations (mutual pointer types). Deferred to later slices - the
-> multi-word-value rework: struct **values** as locals/params/returns, nested inline field chains
-> (`fp->sub.field`), struct arrays, brace initializers, and by-value passing/return. The remainder
-> of this section is the settled design for those slices.
+> **Implemented**: `struct` definitions, field layout, `sizeof(Type)`, struct-typed pointers and
+> casts (`(Filter pointer) raw`), `->`/`.` field access with nested inline chains
+> (`fp->sub.field`), `extern struct` forward declarations, struct **values** as locals and
+> globals, whole-struct assignment, struct arrays, array fields inside structs, and brace
+> initializers. Not in 2.0: by-value struct passing and returns (parked to 3.0 with multi-return,
+> `E426`-`E429`). Implementation record: `design/impala/Impala2Slices.md`.
 
 A struct is a **named heterogeneous layout over words** - pure naming sugar over the offset
 constants firmware authors hand-roll today (`const int Filter_cutoff = 0` plus casts). It erases to
@@ -472,10 +474,12 @@ readonly Voice array PRESETS[2] = {
 
 Note `next` and the unset `Biquad` fields are simply left out rather than padded with `null`/`0.0`.
 
-The 1.0 **positional** form (`{ 0.5, 0.7, ... }`) is `E455`. It was silently order-dependent: inserting,
-removing or reordering a struct field changed what every existing initializer meant, with nothing in
-those initializers needing to change for it to happen. `--legacy` still maps positionally, so 1.x
-sources keep building.
+A **positional** list (`{ 0.5, 0.7, ... }`) is `E455`. It is silently order-dependent: inserting,
+removing or reordering a struct field changes what every existing initializer means, with nothing in
+those initializers needing to change for it to happen. `--legacy` maps positionally by index, which is
+not a 1.x compatibility path - 1.0 has no structs, so no 1.x source can contain a struct initializer at
+all. What it accommodates is sources written against early 2.0 development, when positional was the only
+form.
 
 **Two shapes cannot be statically initialized in 2.0, and both are errors rather than guesses.** A
 `DATA` row is positional and GAZL 1 has no way to place a word at an offset it only learns at assembly
@@ -521,7 +525,7 @@ machine, with no caret. That is the correct place for it, because with a host-su
 genuinely differs per host.
 
 Uninitialized **global** struct storage is zero-filled - the globals and consts regions are cleared
-once at load (`src/GAZL.cpp:880`). **Locals are not.** A `call` only bumps the frame pointer, so an
+once at load (`src/GAZL.cpp`, in `Assembler::finalize`). **Locals are not.** A `call` only bumps the frame pointer, so an
 uninitialized struct local holds whatever the previous frame left there. Initialize struct locals
 before reading them.
 
@@ -805,8 +809,10 @@ opaque consumers interoperate.
 
 Mirrors structs exactly: **named funcptr types that become base types** - the typedef the language
 never had. *(Implemented: `functype Name(params) [returns ...]` registers a signature usable as a base
-type; funcptr variables carry the type tag, assignments and indirect calls are checked against it, and
-struct/multi-value returns flow through funcptrs. VM-verified in `tests/impala/sources/funcType.impala`.)* Type definitions are introduced by their own keyword, **`functype`** *(decided - an
+type; funcptr variables carry the type tag, and assignments and indirect calls are checked against it.
+A `functype` declares a single scalar return: a second return value (`returns int a, int b`) is `E428`
+and a struct return is `E427`, the same two codes that reject them on a plain function. VM-verified in
+`tests/impala/sources/funcType.impala`.)* Type definitions are introduced by their own keyword, **`functype`** *(decided - an
 earlier draft reused `funcptr`, but `funcptr Name` already means a variable declaration, and a
 keyword that means "variable" in one position and "type" in another is exactly the kind of dual
 reading agents misparse; `functype` has zero identifier collisions in the corpus)*. The signature
@@ -918,7 +924,7 @@ skipped position.
 | Single-return functions | completely unchanged - expressions, chaining, byte-identical output (N=1 *is* today's layout). |
 | Named funcptr types | signatures extend naturally: `functype SplitFn(float in) returns float lo, float hi` (if Step 3 is adopted). |
 | Metadata | the `->` row grows a tuple form: `; signature func polarToRect(float, float) -> (float, float)`; the validator checks return arity and types cross-unit; `unknown` stays the legacy wildcard. |
-| Natives | host natives already write the window via `accessParams`, so multi-out natives are expressible; extend `design/proofs/nativeCallbackSignatures.gazl` when a host wants one. |
+| Natives | host natives already write the window via `accessParams`, so multi-out natives are expressible; extend `impala/natives.impala` when a host wants one. |
 
 ### Compatibility
 
@@ -939,8 +945,8 @@ scalars now, or as a named struct once Step 2 lands.
 ## Step 5: Import (implemented, except cycles)
 
 *(Implemented: `import "path"` + `impala compile root.impala` walks the closure and compiles the
-concatenated units in one pass - cross-unit structs, struct/multi-value returns, and functypes all
-resolve with no header drift (visited-set dedups diamonds and breaks cycles). `export` marks
+concatenated units in one pass - cross-unit structs and functypes resolve with no header drift
+(visited-set dedups diamonds and breaks cycles). `export` marks
 host-visible symbols in the `; signature` metadata, and `--dead-strip` drops any FUNC/data block not
 reachable from an export. VM-verified in `tests/impala/sources/import/` and `tests/impala/sources/deadstrip/`.
 The one deviation from the design below: the builder concatenates and compiles the sources rather than
@@ -1106,20 +1112,20 @@ This is the one piece of Step 5 that was designed and not built, and it is what 
 resolve in both directions. **Deferred to Impala 3.0 on 2026-07-29** (`design/ParkedFeatures.md`):
 `extern` covers the function and global cases, and landing the pre-pass later only *removes* the
 need for those externs, so waiting costs nothing a 2.0 program has to unlearn. The design stands as
-written - the full plan is `design/impala/Impala2Slices.md:143-190`; the essentials:
+written - the full plan is `design/impala/Impala2Slices.md`, under *Step 5: import-as-linking*; the essentials:
 
-**It is NOT gated on the JSPEG rework.** `Impala2Slices.md:155-163` splits two-phase compilation in
+**It is NOT gated on the JSPEG rework.** That same section splits two-phase compilation in
 two, and only the cheap half is needed here:
 
 - *Declaration-level two-phase* - gather declarations across the closure, then resolve names.
   Bounded, and it is all cycles need.
 - *Body-level two-phase* - the AST rework of `design/jspeg/JSPEGFuture.md` Problem 1. Cycles do **not**
-  need it; still deferred. `JSPEGFuture.md:39-46` mentions interface mode as something that rework
+  need it; still deferred. `design/jspeg/JSPEGFuture.md` mentions interface mode as something that rework
   would unlock "as a trivial variant", which is easy to misread as a dependency. It is not one.
 
 **Shape.** `$$parser` already *is* the semantic-handler object the grammar dispatches to, so this
 is a mode on it rather than a second implementation of anything
-(`Impala2Slices.md:147-154`):
+(see the same section):
 
 - **emit mode** - today's codegen.
 - **collect mode** - declarations register in the symbol/struct/type tables **with type references
@@ -1137,9 +1143,8 @@ is a mode on it rather than a second implementation of anything
    today, which is exactly why a backwards struct reference dies with `E413`.
 
 **The shipped shortcut made this cheaper, not harder.** The original plan needed per-unit collect
-parsing, a merge into closure-wide tables, and per-unit random seeds (mandatory, per
-`Impala2Slices.md:174-179`, because two units sharing a seed collide on identical string
-constants). None of that applies now: the builder hands the compiler *one* concatenated source
+parsing, a merge into closure-wide tables, and per-unit random seeds (mandatory, because two units
+sharing a seed collide on identical string constants). None of that applies now: the builder hands the compiler *one* concatenated source
 compiled *once*, so "gather" is a pre-scan of that single source and the seed-collision problem
 cannot arise.
 
@@ -1581,6 +1586,7 @@ foo.impala:12:9: note: use a cast: (int pointer)
 | E201 | pointer element type mismatch in assignment |
 | E202 | pointer element type mismatch in call argument |
 | E203 | element type mismatch with previous declaration |
+| E206 | a subscript names a different number of axes than the array has |
 | E301 | invalid operand types for operator |
 | E302 | invalid operand type for unary operator |
 | E303 | incompatible types for assignment |
@@ -1614,7 +1620,7 @@ foo.impala:12:9: note: use a cast: (int pointer)
 | E427 | returning a struct by value is not supported in Impala 2.0 |
 | E428 | multiple return values are not supported in Impala 2.0 |
 | E429 | destructuring assignment is not supported in Impala 2.0 |
-| E430 | an `extern struct` array field must not state a size |
+| E430 | a host-owned array must not state a size - an `extern struct` field or a standalone `extern array` |
 | E431 | array needs a size |
 | E432 | a host-owned array must state its rank - `[]` for one axis, `[,]` for two (re-allocated 2026-08-05; was inline recursive expansion) |
 | E433 | *retired with `inline function`* - do not reuse |
@@ -1644,9 +1650,12 @@ foo.impala:12:9: note: use a cast: (int pointer)
 | E457 | a struct initializer names the same field twice |
 | E458 | a `field:` name in an array slot, where the index already does the naming |
 | E459 | a non-zero initializer for an `extern struct` - the host owns the layout, so Impala cannot place it |
-| E460 | more initializer values than the array holds (they used to be dropped silently) |
+| E460 | an initializer does not fit its array: more values than it holds, or - where an axis is symbolic - a shape that is not rectangular or not filled exactly |
 | E461 | a constant array index out of bounds: any DEREFERENCE past the end, or ANY use of a negative one (see [Array bounds](#array-bounds)) |
 | E462 | an array extent is negative - a struct field with one runs the layout backwards and aliases its neighbours |
+| E463 | a named return value is assigned nowhere in the body, so the caller receives whatever was in the slot |
+| E464 | the layout of a body-carrying `extern struct` is needed before the definition the import closure emits later; use the opaque form and a pointer |
+| E465 | a funcptr-type cast: only a funcptr can take one, and not between funcptr types of different shape |
 | E466 | `tail` requires `--gazl2` (the `TAIL` instruction it compiles to exists only on GAZL 2 engines) |
 | E467 | `tail` can only target the enclosing function in Impala 2.0 (self-recursion; the cross-function return-contract check is future work) |
 | E468 | `tail` cannot be used in an `inline function` (an inline body runs in its caller's frame) |
@@ -1661,15 +1670,3 @@ rule - `inline` never reached a release, so no artifact carries the old meaning,
 unreleased feature costs more than it protects. (This paragraph used to list **E439** as unallocated - that is now wrong: E439 is the
 live diagnostic that rejects `inline`.)
 
----
-
-## Open questions
-
-- **Adoption of Steps 2-5 themselves.** Structs, typed function pointers, multiple return values,
-  and import are worked proposals, not commitments: their syntax, semantics, lowering, and
-  identity rules are specified above so the adoption decision can be made on a concrete design -
-  but that decision has not been made. The committed scope is Step 1 plus the cross-cutting rules
-  (strict expressions, the compound-assignment rejection, diagnostics).
-- Name of the strictness-lowering compiler argument (`--legacy` is the working name).
-- By-value struct parameters/returns: deferred, revisit if the small-struct performance case
-  materializes in real firmware (see Step 2, *Passing, returning, copying*).

@@ -1232,15 +1232,31 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         rec.oobIndex  = undefined;
         rec.struct    = undefined;
         rec.dynIndex  = undefined;
+        rec.baseMeta  = undefined;
         rec.readonly  = false;        /* pooled slots: never inherit a previous symbol's writability */
         return rec;
     };
 
-    /* release all three operands contained in a meta-record */
+    /* release everything a meta-record owns: its three operands, and - for a PLACE - the base and index
+       it holds instead of them. A discarded statement is the only thing that frees a whole-struct
+       assignment's value, whose base is the address the COPY was emitted against; walking operands alone
+       left that borrowed for the rest of the function. */
     releaseMeta = function (meta) {
         meta = metaSlot(meta);
         for (var i = 2; i >= 0; --i) {
             returnBack(meta.operands[i]);
+        }
+        if (meta.place) {
+            returnBack(meta.base);
+            returnBack(meta.dynIndex);
+            for (var p = 0; meta.offParts !== undefined && p < meta.offParts.length; ++p) {
+                returnBack(meta.offParts[p]);            /* a folded index parks a `<X>` here, and only
+                                                                     foldOffset frees it - a place nobody reads
+                                                                     never reaches a fold */
+            }
+            if (meta.baseMeta !== undefined) {
+                releaseMeta(meta.baseMeta);
+            }
         }
     };
 
@@ -1517,19 +1533,45 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         declare('!', 'globals', ok, undefined, true, undefined, sourceCode, sourceOffset);
     };
 
+    /* An out-of-bounds finding dies the moment the place becomes an ADDRESS - address formation is never
+       bounds-checked, at any index (see checkConstIndex). The guard's OWNED copy goes back to the pool and
+       the `! MOVi` that made it is cancelled; leaving them costs a `<X>` per address and ships an
+       assemble-time line nothing reads (flushMetaCode skips a null operator). */
+    dropIndexFinding = function (expr) {
+        for (var oi = 0; expr.oobIndex !== undefined && oi < expr.oobIndex.length; ++oi) {
+            var oob = expr.oobIndex[oi];
+            if (!oob.own) continue;
+            returnBack(oob.k);
+            metacode[oob.copyAt].operator = null;
+        }
+        expr.oobIndex = undefined;
+    };
+
+    /* A place's address as ONE deferred instruction, keeping the element type the place already carries -
+       `makeMeta` clears `elem` along with the rest of the place state, so it is put back. */
+    addressMeta = function (place) {
+        var elem = place.elem;
+        dropIndexFinding(place);                         /* `makeMeta` below only CLEARS the finding */
+        placeAddressMeta(place);
+        setElem(place, elem);
+    };
+
+    /* Every reader wants the same thing first: this record as ONE deferred instruction, with no destination
+       yet. A place is not an instruction, so an array place used without a subscript decays here - once,
+       rather than in each reader. Asking it separately is how the readers came to disagree: an argument
+       adopted the address while an assignment asked for a finished operand and then copied it. */
+    asValueMeta = function (expr) {
+        if (expr.place && expr.arrayOf !== undefined) {           /* -> a pointer to its element */
+            addressMeta(expr);
+        }
+    };
+
     makeRValue = function (expr, classes) {
         classes = classes || '#<&^$%';
 
         expr = metaSlot(expr);
         checkIndexUse(expr);                              /* reading it - reference() would have cleared the flag */
-
-        if (expr.place && expr.arrayOf) {                         /* array place used without a subscript -> decay to a pointer */
-            var delem = expr.arrayOf;
-            var dt = placeAddress(expr);
-            makeMeta(expr, ':=', 'p', undefined, dt, undefined);
-            setElem(expr, delem);
-            return dt;
-        }
+        asValueMeta(expr);
 
         var op   = expr.operator;
         var op1  = expr.operands[1];
@@ -1572,16 +1614,10 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
 
         /* An ARGUMENT is a reading context like any other, and a place is not an instruction: `g(f.state)`
            handed the writer a raw `@place` record, whose operator is in no opcode table, and the compiler
-           died on `Cannot read properties of undefined` with no code, position or caret. Only this door
-           was missing - `p = f.state` and `&f.state[0]` both decay - because the arg path skips
-           makeRValue on purpose (it emits straight into the call window instead of a temp). Ask it about
-           the place and nothing else: it returns the moment it has decayed one, and it owns what every
-           other reader means by a place, so a new place shape cannot be right for readers and fatal here.
-           checkIndexUse is idempotent (it clears oobIndex on entry), so Argument having already run it is
-           not a double guard. */
-        if (expr.place) {
-            makeRValue(expr);
-        }
+           died on `Cannot read properties of undefined` with no code, position or caret. This path skips
+           makeRValue on purpose - it emits into the call window rather than a temp - so it takes the
+           shared step and nothing else. A struct place cannot reach here: by-value arguments are E426. */
+        asValueMeta(expr);
 
         var op   = expr.operator;
         var tgt  = '%' + number;
@@ -2581,6 +2617,9 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
     foldOffset = function (parts) {
         if (!parts || parts.length === 0) return null;
         if (parts.length === 1) return parts[0];      /* a lone part (symbol or scratch) is returned as-is; its owner frees it */
+        /* Free every part AFTER the folding, never before: a parts array may be folded more than once
+           (a place read twice), and an accumulator that reused a part's slot makes the second fold add
+           the same field offset twice - silently. Freeing early buys one scratch and costs that. */
         var o = borrow('<');
         emit('<> +', 'i', o, '#' + parts[0], '#' + parts[1]);
         for (var k = 2; k < parts.length; ++k) {
@@ -3474,10 +3513,29 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         slot.type     = arrayOf ? 'p' : 'S';
         slot.elem     = arrayOf || (structName !== undefined ? structDesc(structName) : undefined);
         slot.dynIndex = dynIndex;                                 /* frame place + one runtime word-index -> terminal emits GETL/SETL */
+        /* a PENDING base (see baseOperand) survives a re-place that supplies no base of its own:
+           `.field` and a constant `[k]` only grow offParts */
+        if (base !== undefined) {
+            slot.baseMeta = undefined;
+        }
         slot.extent   = undefined;                                /* pooled slot: never inherit another array's extent or
                                                                      another subscript's finding. The two callers that DO
                                                                      have an extent assign it after the call. */
         slot.oobIndex = undefined;
+    };
+
+    /* A place's base as a REGISTER, materializing a pending computation the first time one is actually
+       needed. Impala 1 never allocates a register except here, at the point of use, and always frees the
+       source operands first so the destination can reuse a dying one (`makeRValue`, which this defers to).
+       A place that mints its base eagerly loses both: it picks a register before any consumer has said
+       where the value goes, so the consumer's only remedy is a copy - and it holds a second register while
+       doing it. The pending operands stay borrowed until this runs, which is what keeps them valid. */
+    baseOperand = function (place) {
+        if (place.baseMeta !== undefined) {
+            place.base = makeRValue(place.baseMeta);
+            place.baseMeta = undefined;
+        }
+        return place.base;
     };
 
     /* A place resolved to a terminal SCALAR location (a scalar field, or a scalar array element) becomes a
@@ -3539,6 +3597,10 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
             returnBack(idx);
             return stride;
         }
+        /* `acc` is read only by the first emit and `dst` is written only by it, so freeing `acc` here lets
+           the accumulator run in one register down the axes (`MULi %0 %0 #stride`). `idx` must NOT move up:
+           it is read by the SECOND emit, which `dst === idx` would clobber before the add. */
+        returnBack(acc);
         var dst = borrow(live ? '%' : '<');
         if (one) {                                                /* `1 * stride` IS `stride` - the THIRD degenerate
                                                                      step, and `a[1, x]` is as ordinary as row 0 */
@@ -3549,8 +3611,7 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
                 emit(live ? '+' : '<> +', 'i', dst, dst, idx);
             }
         }
-        returnBack(acc);
-        returnBack(idx);
+        returnBack(idx);                                 /* `acc` was freed before the borrow, above */
         return (live ? dst : '#' + dst);
     };
 
@@ -3640,6 +3701,17 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         var extent = x.extent;
         if (!x.arrayOf) {                                         /* a raw struct pointer: wrap it as an array place */
             var p = makeRValue(x);
+            /* A base is ONE offset deep: the assembler reads `&g:off` and `$v:off`, never a second `:`.
+               `&global s.field` now folds to `&s:.o.S.field`, so wrapping that operand as a base and
+               letting the offsets below append to it would spell `&s:.o.S.field:.z.W` - which this
+               compiler accepts and GAZL refuses ("Invalid identifier"). Materialize instead: a register
+               carries no offset, so everything downstream can fold freely. */
+            if (p.indexOf(':') >= 0) {
+                var flat = borrow('%');
+                emit(':=', 'p', flat, p, undefined);
+                returnBack(p);
+                p = flat;
+            }
             setPlace(x, (p[0] === '&' ? 'globalAddr' : 'pointer'), p, [], undefined, x.elem);
         }
         var elem = x.arrayOf;
@@ -3665,8 +3737,9 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
                 var part = k;                                    /* scalar stride is 1 word -> the offset is just k */
                 if (elemStruct) {                                /* `&p[1]` is the canonical walk, so the fold
                                                                     inside scaleByStride is the common case here */
+                    if (scratch) { returnBack(k); }     /* dead at the multiply: free it BEFORE the scale
+                                                                    borrows, so the scaled result reuses its slot */
                     part = scaleByStride(k, extentSymbol(elemName));
-                    if (scratch) { returnBack(k); }     /* a folded k is a literal, never a scratch */
                 }
                 /* A folded `<X>` cannot key a deferred assertion, so the guard takes its OWN copy while the
                    value is still live - the pushed one is freed by foldOffset long before the use decides
@@ -3681,8 +3754,12 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
                 }
                 x.offParts.push(part);
             }
-            if (elemStruct) setPlace(x, x.baseKind, x.base, x.offParts, elemName, undefined, x.dynIndex);
-            else            emitPlaceValue(x, x.baseKind, x.base, x.offParts, x.dynIndex, eType, eTail);
+            if (elemStruct) {
+                setPlace(x, x.baseKind, x.base, x.offParts, elemName, undefined, x.dynIndex);
+            } else {
+                emitPlaceValue(x, x.baseKind, baseOperand(x), x.offParts,
+                        x.dynIndex, eType, eTail);
+            }
 
         } else if (x.baseKind === 'local' && x.dynIndex === undefined) {
             /* a frame place with a single runtime index: keep it frame-relative so it emits one
@@ -3690,10 +3767,13 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
                scalar is 1). Only a genuinely RUNTIME index reaches here - every assemble-time one, named
                or negative, folded above, because GETL/SETL have no immediate-index form. */
             if (elemStruct) {
+                returnBack(idxRV);                       /* dead at the MULi, and freeing it first lets the
+                                                                     scaled index reuse its slot - the frame index is
+                                                                     then held until the terminal access, so a slot
+                                                                     taken here is one held across the whole statement */
                 var frameIdx = borrow('%');
                 emit('*', 'i', frameIdx, idxRV, '#' + extentSymbol(elemName));
                 emitRangeCheck(frameIdx, extent, sourceCode, sourceOffset);   /* scaled: `.z.` counts words */
-                returnBack(idxRV);
                 setPlace(x, 'local', x.base, x.offParts, elemName, undefined, frameIdx);
             } else {
                 emitRangeCheck(idxRV, extent, sourceCode, sourceOffset);
@@ -3701,18 +3781,28 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
             }
 
         } else {
+            var ro = (x.readonly === true);                       /* placeAddress runs makeMeta, which clears the flag -
+                                                                     but readonly describes the LOCATION, and an element
+                                                                     of a readonly array is readonly too. Without this a
+                                                                     RUNTIME index writes into the const region with no
+                                                                     E404; a constant one folds and never comes here. */
             var arrPtr = placeAddress(x);                /* pointer base or a second runtime index: materialize */
             if (elemStruct) {
-                var elemPtr = borrow('%'), scaled = borrow('%');
+                /* Scale the index, then leave `base + scaled` PENDING rather than minting a register for
+                   it. Nothing here knows where the address is wanted - a following `.field` folds it into
+                   a PEEK, `&` hands the whole computation to an assignment - so choosing a register now
+                   can only be undone by a copy later. baseOperand picks one if and when someone needs it.
+                   `arrPtr` and `scaled` stay borrowed until then; that is what keeps them valid. */
+                returnBack(idxRV);
+                var scaled = borrow('%');
                 emit('*', 'i', scaled, idxRV, '#' + extentSymbol(elemName));
                 emitRangeCheck(scaled, extent, sourceCode, sourceOffset);
-                emit('+', 'p', elemPtr, arrPtr, scaled);
-                returnBack(scaled);
-                returnBack(idxRV);
-                returnBack(arrPtr);
-                setPlace(x, 'pointer', elemPtr, [], elemName);
+                setPlace(x, 'pointer', undefined, [], elemName);
+                x.baseMeta = makeMeta(undefined, '+', 'p', undefined, arrPtr, scaled);
+                x.readonly = ro;
             } else {                                              /* scalar stride 1 -> PEEK/POKE arrPtr idx directly */
                 emitRangeCheck(idxRV, extent, sourceCode, sourceOffset);
+                x.readonly = ro;                                  /* emitPlaceValue reads the FLAG */
                 emitPlaceValue(x, 'pointer', arrPtr, [], idxRV, eType, eTail);
             }
         }
@@ -3722,27 +3812,52 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
                                                                      it. A LIST - see checkIndexUse */
     };
 
-    /* a place's address: fold its offset parts into the base - ADRL for a local, ADDp for a pointer. */
+    /* A place's address as a finished operand, for the sites that feed it to another instruction. Just the
+       deferred form put through the one allocator: `makeRValue` frees the operands before it borrows, so
+       the address reuses a dying register instead of taking a fresh one and stranding the old. Writing the
+       emission out a second time here is what used to strand it - the pointer branch borrowed a new
+       register and never returned the base, so a repeated `bank[i].sub = w` climbed a register a
+       statement. Nothing to keep in step now: there is one description of an address. */
     placeAddress = function (place) {
+        placeAddressMeta(place);
+        return makeRValue(place);
+    };
+
+    /* The same address as ONE DEFERRED instruction on the record itself, for the sites where the address
+       IS the result: an assignment or an argument then emits it straight into its target (`ADDp $p $p
+       #.z.Voice`, `ADRL %3 $v:off`) instead of a temp plus a MOVp. ADRL for a local, ADDp for a
+       pointer/global base carrying an offset, a plain move of the base without one. An offset scratch
+       rides inside the operand (`#<D>`, `$v:<D>`), so whoever consumes the meta frees it on the same
+       path it frees every other operand. A local frame place holding a runtime index is the one address
+       that takes two instructions; only the second is deferred. */
+    placeAddressMeta = function (place) {
         place = metaSlot(place);
-        var off = foldOffset(place.offParts);
-        var a;
-        if (place.baseKind === 'local') {                         /* size hint = the pointed-at sub-object, not the enclosing frame */
-            var sz = '*0';                                        /* ALWAYS `*0` - see the note on ADRL spans above. */
-            a = borrow('%');
-            emit('=&', 'p', a, place.base + (off ? ':' + off : ''), sz);
-            if (place.dynIndex !== undefined) {                   /* fold the frame place's runtime index in (GETL/SETL fallback) */
-                emit('+', 'p', a, a, place.dynIndex);
-                returnBack(place.dynIndex);
-                place.dynIndex = undefined;
-            }
-        } else {                                                  /* pointer / globalAddr */
-            if (!off) return place.base;
-            a = borrow('%');
-            emit('+', 'p', a, place.base, '#' + off);
+        if (place.baseKind === 'local' && place.dynIndex !== undefined) {
+            /* Two instructions, so only the SECOND can be deferred: lift the index out and let
+               placeAddress emit the ADRL alone, then leave the ADDp that folds it back in. Deferring a
+               move of the finished address instead would cost a third instruction whenever the consumer
+               wants it somewhere other than the temp placeAddress happened to borrow. */
+            var idx = place.dynIndex;
+            place.dynIndex = undefined;
+            return makeMeta(place, '+', 'p', undefined, placeAddress(place), idx);
         }
-        if (off && ('' + off).charAt(0) === '<') returnBack(off);
-        return a;
+        var off = foldOffset(place.offParts);
+        var pending = place.baseMeta;
+        if (pending !== undefined && !off) {                       /* the pending base IS the address: adopt it whole, so
+                                                                      the assignment emits that ADDp into its target */
+            return makeMeta(place, pending.operator, pending.type, undefined,
+                    pending.operands[1], pending.operands[2]);
+        }
+        var base = baseOperand(place);
+        if (place.baseKind === 'local') {                          /* `*0` ALWAYS - see the note on ADRL spans below */
+            makeMeta(place, '=&', 'p', undefined, base + (off ? ':' + off : ''), '*0');
+        } else if (off && place.baseKind === 'globalAddr') {       /* `&name:off` resolves at ASSEMBLY time, so a global
+                                                                      base folds its offset instead of adding it - the
+                                                                      same operand emitPlaceValue reads a field through */
+            makeMeta(place, ':=', 'p', undefined, base + ':' + off, undefined);
+        } else {                                                   /* pointer base: add the offset, or just move it */
+            makeMeta(place, (off ? '+' : ':='), 'p', undefined, base, (off ? '#' + off : undefined));
+        }
     };
 
     /* ADRL SPANS: `*0` unless the compiler owns every access through the pointer.
@@ -3841,8 +3956,9 @@ var _sn = strideStruct(field.elem);
             return;
         }
 
-        /* terminal scalar field */
-        emitPlaceValue(x, bk, base, newParts, dynIndex, field.type, field.elem);
+        /* terminal scalar field: a PEEK needs the base in a register, so a pending one lands here */
+        emitPlaceValue(x, bk, (x.place ? baseOperand(x) : base),
+                newParts, dynIndex, field.type, field.elem);
     };
 
     checkPtrAssign = function (leftx, rightx, sourceCode, sourceOffset) {
@@ -4003,7 +4119,18 @@ var _sn = strideStruct(field.elem);
                 var op2 = makeRValue(rightx);
                 xOob = checkSubscript(xt, op2, sourceCode, sourceOffset);
             
-                if (op2[0] === '#' || op2[0] === '<') {          /* assemble-time: fold into `base:offset` */
+                /* A global base is ONE offset deep. `&global s.field` now folds to `&s:.o.S.field`, and
+                   neither form below can take that: the fold would spell `&s:.o.S.field:1` and a PEEK
+                   wants a bare pointer, so GAZL rejects both. Flatten it into a register once, and the
+                   index goes through the ordinary run-time path. */
+                var flattened = (!direct && op1.indexOf(':') >= 0);
+                if (flattened) {
+                    var flatBase = borrow('%');
+                    emit(':=', 'p', flatBase, op1, undefined);
+                    returnBack(op1);
+                    op1 = flatBase;
+                }
+                if (!flattened && (op2[0] === '#' || op2[0] === '<')) {   /* assemble-time: fold into `base:offset` */
                     makeMeta(leftx, (direct ? '=' : '=*'), tp, null,
                                       op1 + ':' + (op2[0] === '#' ? op2.substr(1) : op2), null);
                 } else {
@@ -4180,17 +4307,24 @@ var _sn = strideStruct(field.elem);
                 fail('Cannot assign to a readonly value', sourceCode, sourceOffset, 'E404',
                         'declare it `global` instead of `readonly` if it has to be written');
             }
-            var savedBK = leftx.baseKind, savedBase = leftx.base,
-                savedParts = leftx.offParts, savedStruct = leftx.struct;
+            /* The statement's value is the struct just written, and `dst` is its address - a finished
+               operand. Impala 1 does the same for a chained `a[i] = b[j] = c`: each address is computed
+               ONCE and the register held, so using the value again is a read. Rebuilding this place from
+               the destination's offset PARTS instead would re-run a fold whose `<X>` inputs foldOffset has
+               already returned to the pool; a later fold reissues one and the second read computes a
+               different address - that is how a chained struct assignment came to emit `<B> = <B> + <B>`.
+               So `dst` stays borrowed: it is the place's base, and whoever reads the place releases it as
+               it would any other operand. */
+            var structName = leftx.struct;                        /* placeAddress consumes the place */
             var dst = placeAddress(leftx);
             var src = placeAddress(rightx);
-            makeMeta(x, 'copy', '?', dst, src, structAllocSize(leftx.struct));
-            emitMeta(x);
+            emit('copy', '?', dst, src, structAllocSize(structName));
             returnBack(src);
-            returnBack(dst);
-            setPlace(x, savedBK, savedBase, savedParts, savedStruct);
+            setPlace(x, 'pointer', dst, [], structName);
             return;
         }
+
+        asValueMeta(rightx);                             /* the same first step every reader takes */
 
         if (!leftx || leftx.operator === undefined) {
             throw new Error('JSPEG meta missing for assignment: ' + JSON.stringify(leftx));
@@ -4330,17 +4464,7 @@ var _sn = strideStruct(field.elem);
     reference = function (operator, expr, sourceCode, sourceOffset) {
 
         expr = metaSlot(expr);
-        for (var oi = 0; expr.oobIndex !== undefined && oi < expr.oobIndex.length; ++oi) {
-            var oob = expr.oobIndex[oi];
-            if (!oob.own) continue;
-            returnBack(oob.k);              /* the guard's copy dies with the finding - and so does
-                                                        the `! MOVi` that made it, or an address would ship
-                                                        a line nothing reads (flushMetaCode skips a null) */
-            metacode[oob.copyAt].operator = null;
-        }
-        expr.oobIndex = undefined;                   /* address formation is never bounds-checked, at any
-                                                        index - see checkConstIndex. Cleared before the
-                                                        `=[]$` branch below calls makeRValue. */
+        dropIndexFinding(expr);             /* cleared before the `=[]$` branch below calls makeRValue */
 
         if (expr.operator === '=') {                 // variable
             assert(expr.operands[2] === undefined,
@@ -4481,25 +4605,9 @@ var _sn = strideStruct(field.elem);
         }
 
         /* &structValue -> a typed struct pointer (the place's address); &arrayPlace -> a pointer to its
-           ELEMENT. setPlace leaves `struct` undefined for an array place (it fills `arrayOf` instead), so
-           taking the struct branch unconditionally minted the descriptor `Sundefined` - which
-           `isStructAtom` accepts and renderDesc unwraps to the word "undefined", so `p = &global b.tags`
-           on `struct Body { int array tags[4] }` failed with "expected int elements, got undefined
-           elements". `arrayOf` is already the element descriptor, which is what makeRValue uses for the
-           same decay. */
+           ELEMENT. Both descriptors are already on the record as `elem`, which setPlace computed. */
         if (operator === '&' && expr.place) {
-            var structName = expr.struct, arrayElem = expr.arrayOf;   /* both read BEFORE makeMeta clears the place */
-            if (expr.baseKind === 'local' && (!expr.offParts || expr.offParts.length === 0) && expr.dynIndex === undefined) {
-                /* a whole local's address is a single ADRL with no offset scratch - leave it DEFERRED as
-                   '=&' so an assignment emits ADRL straight into its target ($p) instead of a temp + MOVp,
-                   exactly like &scalar / &array[i] defer in reference() */
-                var sz = '*0';                                /* ALWAYS `*0` - see the note on ADRL spans above. */
-                makeMeta(expr, '=&', 'p', undefined, expr.base, sz);
-            } else {                                          /* offset fold or global/pointer base: materialize now */
-                makeMeta(expr, ':=', 'p', undefined, placeAddress(expr), undefined);
-            }
-            setElem(expr, (arrayElem !== undefined ? arrayElem
-                    : (structName !== undefined ? structDesc(structName) : undefined)));
+            addressMeta(expr);                       /* deferred, so `p = &p[1]` is one ADDp into $p */
             return;
         }
 
@@ -5144,7 +5252,7 @@ function PrePost(){var $op=newMetaSlot(),_sv$op,$cdesc,$ccast,$sid=newMetaSlot()
 function Subscript(){var $idxAt,$subExtra,$subAt,$s=newMetaSlot(),_sv$s,$axisAt,$x=newMetaSlot(),_sv$x;return (function(){var _b=_i;return (_s[_i]==="[")&&(++_i,true)&&_()&&(function(){ $idxAt = _i; $subExtra = []; $subAt = []; ; return true})()&&((_sv$s=_val,_val=$s,(Expr()))&&($s=_val,_val=_sv$s,true)||(_val=_sv$s,false))&&((function(){while((function(){var _b=_i;return (_s[_i]===",")&&(++_i,true)&&_()&&(function(){ $axisAt = _i; ; return true})()&&((_sv$x=_val,_val=$x,(Expr()))&&($x=_val,_val=_sv$x,true)||(_val=_sv$x,false))&&(function(){ if (!dry) { $subExtra.push(makeRValue(metaSlot($x))); $subAt.push($axisAt);   /* each axis carries its OWN position, or every per-axis diagnostic points at the first index */ } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(_s[_i]==="]")&&(++_i,true)&&_()&&(function(){ if (!dry) { var sb = metaSlot(_val); var axisOob = []; checkRank(sb, $subExtra.length + 1, _s, $idxAt); /* ONE index takes the path it took before this rule learned to count - `$s` is handed on untouched, so a 1-D subscript is byte-identical. */ var sIdx = ($subExtra.length === 0 ? $s : foldAxes(sb, $s, $subExtra, $subAt, axisOob, _s, $idxAt)); if ((sb.place && sb.arrayOf) || (sb.type === 'p' && isStructAtom(sb.elem))) subscriptStruct(_val, sIdx, _s, $idxAt); else binaryOp('=[]', _val, sIdx, _s, $idxAt); /* AFTER the lowering, which is the terminal call that assigns `oobIndex`. Axis findings go FIRST: an E461 that can name the axis is the one that should fire, the flat check having nothing to say about `cells[0, 5]`. */ if (axisOob.length > 0) { var sx = metaSlot(_val); sx.oobIndex = axisOob.concat(sx.oobIndex === undefined ? [] : sx.oobIndex); } } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function FieldAccess(){var $f=newMetaSlot(),_sv$f;return (function(){var _b=_i;return (_s.substr(_i,2)==="->")&&(_i+=2,true)&&_()&&((_sv$f=_val,_val=$f,(Identifier()))&&($f=_val,_val=_sv$f,true)||(_val=_sv$f,false))&&(function(){ if (!dry) fieldAccess(_val, $f, true, _s, _i); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||(_s[_i]===".")&&(++_i,true)&&_()&&((_sv$f=_val,_val=$f,(Identifier()))&&($f=_val,_val=_sv$f,true)||(_val=_sv$f,false))&&(function(){ if (!dry) fieldAccess(_val, $f, false, _s, _i); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function FuncCall(){var $type,$;return (function(){var _b=_i;return (_s[_i]==="(")&&(++_i,true)&&_()&&(function(){ if (!dry) { _val.count = 0; /* how many leading output slots the callee expects (>1 = multi-return) */ var _c = metaSlot(_val); var _rs = 1; if (_c.operator === ':=' && _c.operands[1] && (_c.operands[1][0] === '&' || _c.operands[1][0] === '^')) { var _e = symbols.functions[_c.operands[1].substr(1)]; if (_e && _e.signature && _e.signature.returnWords !== undefined && _e.signature.returnWords > 1) _rs = _e.signature.returnWords;   /* multi-scalar OR by-value struct return window */ } else if (_c.type === 't' && isFuncTypeName(_c.elem)) { var _ft = functypes[_c.elem];   /* indirect call through a named funcptr type */ if (_ft.returnWords > 1) _rs = _ft.returnWords; } _val.retSlots = _rs; _val.words = 0;                            /* input words placed so far (struct args span >1) */ _val.base  = borrowForCall(); _val.mark  = metacode.length;     /* first meta of THIS call's arguments */ for (var _os = 1; _os < _rs; ++_os)      /* reserve the extra output slots */ claimSlot(_val.base + _os); _val.types = []; _val.elems = []; _val.opnds = []; _val.svals = [];       /* by-value struct args, checked at the close */ } ; return true})()&&((function(){var _b=_i;return Argument()&&((function(){while((function(){var _b=_i;return (_s[_i]===",")&&(++_i,true)&&_()&&Argument()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&(function(){var _b=_i;return (_s[_i]===")")&&(++_i,true)&&_()||(_im=(_i>_im?_i:_im),_i=_b,false)||(function(){   /* a '(' after a value is always a call, so no valid parse ever backtracks out of one - and the prologue above already borrowed the call window, which a backtrack would leak into whatever diagnostic comes next. Reject here, where the syntax broke. */ if (!dry) fail('Malformed argument list', _s, _i, 'E442', 'expected , or ) here - and note that a comparison or a && / || group is not a value in Impala'); ; return true})()&&(function(){var _l=_i,_lv=_val,_x=_();_i=_l;_val=_lv;return !_x})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&(function(){ if (!dry) { var callee = metaSlot(_val); var callResultType = '?'; var signature = null; var calleeName = null; if (span(callee.type, 'tN') !== 1) { typeError( 'Invalid type for function call ({$type1})', _s, _i, callee.type , undefined, 'E408'); } if (callee.operator === ':=' && callee.operands[1] && (callee.operands[1][0] === '&' || callee.operands[1][0] === '^')) { calleeName = callee.operands[1].substr(1); var entry = symbols.functions[calleeName]; /* an Impala-defined function, or an extern with a DECLARED prototype (name-only externs carry no `params` and stay unchecked - they assert nothing) */ if (entry && entry.signature && (entry.kind === 'FUNC' || entry.signature.params)) { signature = entry.signature; } } else if (callee.type === 't' && isFuncTypeName(callee.elem)) { signature = functypes[callee.elem];   /* indirect call: check against the funcptr type */ } if (signature) { var params = signature.params || []; var actualCount = (_val.types ? _val.types.length : 0); var expectedCount = params.length; var label = (calleeName || 'function'); if (actualCount !== expectedCount) { fail( 'Invalid argument count when calling ' + label + ' (expected ' + expectedCount + ', got ' + actualCount + ')', _s, _i , 'E405'); } for (var argIdx = 0; argIdx < expectedCount; ++argIdx) { var expected = params[argIdx].type; var actual = _val.types[argIdx]; if (actual === undefined) { actual = '?'; } if (actual === '?' || expected === undefined) { continue; } if (actual !== expected) { /* Name the struct when the actual is a struct VALUE, and point at `&`: passing `v` where `V pointer` is wanted is the common slip now that by-value struct params are parked for Impala 3.0. */ var _actualText = (isStructAtom(_val.elems && _val.elems[argIdx]) ? 'struct ' + descName(_val.elems[argIdx]) : '{$type1}'); typeError( 'Argument type mismatch for argument ' + (argIdx + 1) + ' when calling ' + label + ' (' + _actualText + ' vs expected {$type2})', _s, _i, actual, expected , 'E406', ((actual === 'S' && expected === 'p') ? 'pass its address with & (by-value struct params are parked for Impala 3.0)' : undefined)); } if (expected === 'S' && params[argIdx].struct !== undefined && _val.elems[argIdx] !== params[argIdx].struct) { fail('Struct type mismatch for argument ' + (argIdx + 1) + ' when calling ' + label + ' (expected ' + params[argIdx].struct + ', got ' + (_val.elems[argIdx] || 'a non-struct value') + ')', _s, _i, 'E421'); } var expectedElem = params[argIdx].elem;   /* typed pointer param: assume loudly */ if (expected === 'p' && expectedElem !== undefined && _val.opnds[argIdx] !== '&NULL' && _val.elems[argIdx] !== expectedElem) { fail('Pointer element type mismatch for argument ' + (argIdx + 1) + ' when calling ' + label + ' (expected ' + elemVerbose(expectedElem) + ' elements, got ' + elemVerbose(_val.elems[argIdx]) + ' elements)', _s, _i, 'E202', 'use a cast: (' + elemVerbose(expectedElem) + ' pointer)'); } /* Same rule for a named funcptr param as for assignment, so the same check: `expected` is already 't' here, which is what the assign path derives from the r-value's own type. */ if (expected === 't' && isFuncTypeName(expectedElem)) { checkFuncPtrTarget(expectedElem, _val.opnds[argIdx], 't', _val.elems[argIdx], ' for argument ' + (argIdx + 1) + ' when calling ' + label, _s, _i); } } if (signature.returnResolved && signature.returns !== undefined) { callResultType = signature.returns; } else if (signature.expectedReturn !== undefined) { callResultType = signature.expectedReturn; } else if (signature.returns !== undefined) { callResultType = signature.returns; } } /* THE LAST DOOR for a by-value struct. Every declarator is guarded, but a name-only `extern function f` / `extern native f` has no parameter list to guard, so the parked by-value path ran unopposed at the call and baked a COPY size for a struct whose size Impala may not know - `*undefined` operands and a `*NaN` call window reached the artifact. Deliberately runs AFTER the signature loop above: a PROTOTYPED callee wanting a pointer gets the sharper "struct V vs expected pointer" instead of this. */ for (var _sv = 0; _sv < _val.svals.length; ++_sv) { rejectByValueStruct('S', _val.svals[_sv].struct, _val.svals[_sv].name, false, _s, _val.svals[_sv].at, true); } /* Built once: this is both the argument to the row below and the record a later refresh replays it from. The slices matter - `_val.types`/`_val.elems` are pooled and get reused. */ var callArgs = { name: calleeName, signature: signature, actualTypes: (_val.types ? _val.types.slice() : undefined), actualElems: (_val.elems ? _val.elems.slice() : undefined), sourceName: sourceName, sourceCode: _s, sourceOffset: _i           /* the CALL SITE, not the enclosing declaration */ }; var callComment = formatCallExpectationComment(callArgs, callResultType); var commentIndex = -1; if (callComment) { commentIndex = metacode.length; emit(';', undefined, callComment, undefined, undefined); commentIndex = metacode.length - 1; } /* Restored after the Impala 2 merge, which rewrote this region: an inline callee replays its body here instead of being called, and without this hook every use fell through to a normal CALL - which then took the address of a function that emits no symbol. */ var inlineInfo = (entry ? entry.inline : undefined); if (callee.tailCall === true) { /* `tail f(...)`: the arguments were marshalled exactly as for a CALL, but TAIL pushes no frame - the engine slides the window onto the frame base and re-enters, and the callee's RETU returns to OUR caller. TAIL's window is %0 by definition, which a statement-position call gets for free: no transient outlives a statement, so the pool hands out its bottom. */ callee.tailCall = undefined; assert(_val.base === 0, 'a tail statement marshals at the bottom of the transient pool'); emit('tail()', undefined, '&' + calleeName, '*' + (_val.words + _val.retSlots), undefined); } else if (inlineInfo !== undefined) { expandInline(inlineInfo, _val.base, _val.retSlots, _val.words, _val.mark); } else { var func = makeRValue(callee, '&^$%'); emit('()', '?', func, '%' + _val.base, '*' + (_val.words + _val.retSlots)); returnBack(func); } while (_val.words-- > 0) {              /* free the argument words (past the output slots) */ returnBack('%' + (_val.base + _val.retSlots + _val.words)); } makeMeta(callee, ':=', callResultType, undefined, '%' + _val.base, undefined); /* Keep the RETURN's element type: `returns V pointer` must yield a V-pointer, not a bare one, or `*f()` cannot be recognised as a struct and typed-pointer assignment checks go blind. A funcptr type carries returnElem too, so indirect calls work. */ setElem(callee, signature ? signature.returnElem : undefined); /* A by-value struct return placed over the output window, and the multi-return window for destructuring, both lived here. Neither guard can be true in 2.0 - E427 rejects a struct return and E428 a second return value, both at the DECLARATOR - so no call ever reached them. Removed 2026-08-07, which is what design/ParkedFeatures.md had already claimed. `retSlots` itself stays: it is live, sizing the frame and the argument window. */ if (calleeName) { callee.callInfo = { name: calleeName, commentIndex: commentIndex, commentArgs: callArgs }; } else if (callee.callInfo) { callee.callInfo = undefined; } } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
-function Argument(){var $argAt,$a=newMetaSlot(),_sv$a,$type,$;return (function(){var _b=_i;return (function(){ $argAt = _i;   /* the argument itself; end-of-rule has skipped past it */ ; return true})()&&((_sv$a=_val,_val=$a,(Expr()))&&($a=_val,_val=_sv$a,true)||(_val=_sv$a,false))&&(function(){ if (!dry) { ++_val.count; var meta = metaSlot($a); checkIndexUse(meta);   /* a bare arg is placed without makeRValue */ if (meta.type === 'V') { typeError( 'Invalid type ({$type1})', _s, _i, meta.type, undefined, 'E406', 'a function with no `returns` clause produces no value' ); } if (_val.types) { _val.types.push(meta.type); } if (_val.elems) {                       /* element chain + null-ness, captured */ _val.elems.push(meta.elem);         /* before makeArgValue mutates the meta */ _val.opnds.push(bareOperand(meta));  /* `&NULL` marks a null/nullfunc literal */ } var winSlot = _val.base + _val.retSlots + _val.words; if (meta.type === 'S') {              /* by-value struct argument spans sizeof words */ /* Remember it for the LAST-door check at the close of the call. Not rejected here: a PROTOTYPED callee has a sharper message ("struct V vs expected pointer"), and its signature is only resolved once the argument list is complete. */ _val.svals.push({ at: $argAt, struct: meta.struct, name: (typeof meta.base === 'string' && meta.base.charAt(0) === '$' ? meta.base.substr(1) : undefined) }); var w = structWords(meta.struct); copyStructArg($a, winSlot, w); _val.words += w; } else { makeArgValue($a, winSlot); _val.words += 1; } } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
+function Argument(){var $argAt,$a=newMetaSlot(),_sv$a,$type,$;return (function(){var _b=_i;return (function(){ $argAt = _i;   /* the argument itself; end-of-rule has skipped past it */ ; return true})()&&((_sv$a=_val,_val=$a,(Expr()))&&($a=_val,_val=_sv$a,true)||(_val=_sv$a,false))&&(function(){ if (!dry) { ++_val.count; var meta = metaSlot($a); checkIndexUse(meta);   /* a bare arg is placed without makeRValue */ if (meta.type === 'V') { typeError( 'Invalid type ({$type1})', _s, _i, meta.type, undefined, 'E406', 'a function with no `returns` clause produces no value' ); } if (_val.types) { _val.types.push(meta.type); } if (_val.elems) {                       /* element chain + null-ness, captured */ _val.elems.push(meta.elem);         /* before makeArgValue mutates the meta */ _val.opnds.push(bareOperand(meta));  /* `&NULL` marks a null/nullfunc literal */ } var winSlot = _val.base + _val.retSlots + _val.words; if (meta.type === 'S') {              /* by-value struct argument spans sizeof words */ /* Remember it for the LAST-door check at the close of the call. Not rejected here: a PROTOTYPED callee has a sharper message ("struct V vs expected pointer"), and its signature is only resolved once the argument list is complete. */ _val.svals.push({ at: $argAt, struct: meta.struct, name: (typeof meta.base === 'string' && meta.base.charAt(0) === '$' ? meta.base.substr(1) : undefined) }); /* NOT copied into the window: the close of this call always rejects a struct argument (E426), so the COPY would be discarded - and emitting it first hands copyStructArg's claimSlot a window slot the argument's own transients are sitting in, which ABORTS on an assertion before the diagnostic can be reported. */ _val.words += structWords(meta.struct); } else { makeArgValue($a, winSlot); _val.words += 1; } } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function Group(){return (function(){var _b=_i;return (_s[_i]==="(")&&(++_i,true)&&_()&&Expr()&&(_s[_i]===")")&&(++_i,true)&&_()&&(function(){ if (!dry) stampBitwise(_val, false); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function BoolGroup(){var $label;return (function(){var _b=_i;return (_s[_i]==="(")&&(++_i,true)&&_()&&(function(){ $label = undefined; ; return true})()&&And()&&((function(){while((function(){var _b=_i;return (_s.substr(_i,2)==="||")&&(_i+=2,true)&&_()&&(function(){ if ($label === undefined) { $label = newLabel('t'); } emit('?->', true, $label, undefined, undefined); ; return true})()&&And()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(_s[_i]===")")&&(++_i,true)&&_()&&(function(){ if ($label !== undefined) { emit('<-?', true, $label, undefined, undefined); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function And(){var $label;return (function(){var _b=_i;return (function(){ $label = undefined; ; return true})()&&Comp()&&((function(){while((function(){var _b=_i;return (_s.substr(_i,2)==="&&")&&(_i+=2,true)&&_()&&(function(){ if ($label === undefined) { $label = newLabel('f'); } emit('?->', false, $label, undefined, undefined); ; return true})()&&Comp()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(function(){ if ($label !== undefined) { emit('<-?', false, $label, undefined, undefined); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};

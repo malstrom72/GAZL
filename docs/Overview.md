@@ -9,11 +9,11 @@ This document collects notes about the philosophies behind GAZL, how the VM work
 * **Keep it simple.** GAZL has a small instruction set and no registers. All storage is through variables allocated as locals or globals.
 * **Typed words.** Every value is a word of the same size regardless of whether it holds an integer, float or pointer.
 * **Portable text format.** Programs are distributed as assembly text so compile-time decisions can be made while loading code. See `src/UnitTest.gazl` for numerous examples.
-* **Safety.** The runtime is sandboxed and cooperatively multitasked. A host application typically calls `Processor::run()` for a limited amount of cycles and can suspend a VM by returning non‑zero from a native function. Execution resumes by calling `run()` again on the same `Processor` instance.
+* **Safety.** The runtime is sandboxed and cooperatively multitasked. A host application typically calls `Processor::run()` for a limited amount of cycles and can suspend a VM by returning non-zero from a native function. Execution resumes by calling `run()` again on the same `Processor` instance. One non-zero status is not a suspension: `TERMINATED` is how a native says the program finished on purpose, as `GAZLCmd`'s `exit` native does, and a host should accept it alongside `OK`.
 
 ## Assembler
 
-The assembler accepts the textual instruction format shown in `src/UnitTest.gazl`. Data sections are introduced with directives like `CNST` or `GLOB` and code is expressed using instructions such as `MOVi`, `PEEK` and `CALL`. Compile‑time constants (`#NAME`) can be defined with `!` directives. Setting different constant values allows the same text file to compile to code with different behaviour (for example `! DEFi DEBUG #0` or `! DEFi DEBUG #1`).
+The assembler accepts the textual instruction format shown in `src/UnitTest.gazl`. Data sections are introduced with directives like `CNST` or `GLOB` and code is expressed using instructions such as `MOVi`, `PEEK` and `CALL`. Compile-time constants (`#NAME`) can be defined with `!` directives. Setting different constant values allows the same text file to compile to code with different behaviour (for example `! DEFi DEBUG #0` or `! DEFi DEBUG #1`).
 
 Globals are accessed explicitly through memory operations. The VM has no registers so locals are declared with `LOCi`, `LOCf` or `LOCp` and accessed directly in instructions. For global data you must use `PEEK` to read and `POKE` to write or copy ranges via `COPY`.
 
@@ -94,17 +94,17 @@ pmachine.resetTimeOut(0x7FFFFFFF);
 status = pmachine.run();
 ```
 
-`run()` returns `TIME_OUT` when the cycle budget set by `resetTimeOut` runs out; call `resetTimeOut` and `run()` again to continue. The processor exposes helpers to access memory and parameters (`accessMemory`, `accessParams`). Writing your own native functions involves the `Processor*` interface; see the unit tests for examples.
+`run()` returns `TIME_OUT` when the cycle budget set by `resetTimeOut` runs out; call `resetTimeOut` and `run()` again to continue. The processor exposes helpers to access memory and parameters (`accessMemory`, `accessParams`). Writing your own native functions involves the `Processor*` interface; see the unit tests for examples. A native can also push a GAZL call onto the continuation with `pushCall()`, which runs a GAZL function as if the native's caller had called it - `GAZLCmd`'s `--forward` uses this to satisfy a `^native` reference with an ordinary GAZL function.
 
-The full version, with the error handling and stream checks left out above, is in `tools/GAZLCmd.cpp` — the `Assembler` construction, `finalize` call and `Processor` construction in `main`.
+The full version, with the error handling and stream checks left out above, is in `tools/GAZLCmd.cpp` - the `Assembler` construction, `finalize` call and `Processor` construction in `main`.
 
-## Textual Representation and Compile‑Time Constants
+## Textual Representation and Compile-Time Constants
 
-GAZL source is plain text so version control systems can store programs directly. The assembler supports compile‑time instructions introduced by `!`. These operate on special compile‑time variables written as `<A>` through `<Z>`. Instructions such as `! ADDi`, `! MULf` or `! IFDF` are executed when the file is assembled and can define constants, evaluate conditions or skip blocks of code. Changing a compile‑time definition (for example `! DEFi DEBUG #0` versus `! DEFi DEBUG #1`) changes the generated code without altering the original source.
+GAZL source is plain text so version control systems can store programs directly. The assembler supports compile-time instructions introduced by `!`. These operate on special compile-time variables written as `<A>` through `<Z>`. Instructions such as `! ADDi`, `! MULf` or `! IFDF` are executed when the file is assembled and can define constants, evaluate conditions or skip blocks of code. Changing a compile-time definition (for example `! DEFi DEBUG #0` versus `! DEFi DEBUG #1`) changes the generated code without altering the original source.
 
 Note that "compile time" in this section means **assembly time**, which happens on the end user's machine at load. The Impala documentation uses "compile time" for the earlier `.impala` → `.gazl` stage. The two stages, and the rules the split imposes on the Impala compiler, are specified in [Two-Stage Constants](../design/impala/TwoStageConstants.md).
 
-A complete list of compile‑time opcodes is found in [`src/UnitTest.gazl`](../src/UnitTest.gazl) and reproduced below for convenience:
+A complete list of compile-time opcodes is found in [`src/UnitTest.gazl`](../src/UnitTest.gazl) and reproduced below for convenience:
 
 ```
 ! ABSf    <?>             #float

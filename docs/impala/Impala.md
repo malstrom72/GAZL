@@ -36,11 +36,15 @@ int itof locals loop native null nullfunc pointer readonly return returns sizeof
 struct switch temporary to while
 ```
 
-Using any of them as an identifier is `E449 … is a reserved word, not a variable name`.
-Three of them are reserved without being usable everywhere the word suggests: `return;`
-is a bare early exit only (`return expr;` is `E448` — assign to the return variable
-first), and `break;` / `continue;` are `E450 not supported`, with the note pointing at
-`goto` and a label.
+Using any of them as an identifier is an error. `return`, `break` and `continue` report it
+as `E449 … is a reserved word, not a variable name`, because those three are not in the
+keyword grammar and would otherwise have been accepted as names; the rest are keywords, so
+a declaration naming one is a syntax error, `E001`.
+
+Those same three are reserved without being usable everywhere the word suggests: `return;`
+is a bare early exit only (`return expr;` is `E448`, assign to the return variable first),
+and `break;` / `continue;` are `E450 not supported`, with the note pointing at `goto` and a
+label.
 
 ### Integer literals
 
@@ -70,7 +74,7 @@ float from an integer.
 ### String literals
 
 A string literal yields a pointer to a zero-terminated array of word-sized characters
-(words are typically 32-bit). Its type is `int pointer` — assigning one to a
+(words are typically 32-bit). Its type is `int pointer` - assigning one to a
 `float pointer` is `E201`.
 
 ```impala
@@ -81,10 +85,10 @@ The supported escape sequences are `\"`, `\\`, `\b`, `\f`, `\n`, `\r`, `\t`, and
 `\uXXXX` (exactly four hex digits).
 
 **Source must be ASCII.** A byte above 127 in a string or character literal is a syntax
-error — use `\uXXXX` instead. A raw high byte is not a portable way to name a byte
+error - use `\uXXXX` instead. A raw high byte is not a portable way to name a byte
 *value*: what it becomes depends on how the tool reading the file decodes it, so the same
 source can compile to different data under different hosts. The escape names byte 208 and
-nothing else, from a file every tool agrees about. Comments are unrestricted — they never
+nothing else, from a file every tool agrees about. Comments are unrestricted - they never
 reach the output.
 
 ## Types
@@ -165,7 +169,7 @@ function move(Body pointer bp, int dx)
 ```
 
 Use `.` on a value and `->` through a pointer. Getting it the wrong way round is `E416`, in
-both directions — the compiler knows which you have.
+both directions - the compiler knows which you have.
 
 **Dots are free.** Every field offset folds into the addressing at GAZL assembly time, so
 `bp->pos.x` is a single instruction, not a chain of adds. Offsets and sizes are emitted as
@@ -186,14 +190,14 @@ A `const` is a single assemble-time word, so it cannot name a struct *value* (`E
 more than it can name an array (`E001`). It can name a struct **pointer**, because a pointer
 is one word.
 
-Passing or returning a struct **by value** is `E426` / `E427` — parked for Impala 3.0. Pass a
+Passing or returning a struct **by value** is `E426` / `E427` - parked for Impala 3.0. Pass a
 pointer. That is refused wherever it can appear, including at a call to a callee with no
 prototype, where nothing else would catch it.
 
 #### One subscript, which strides by the element
 
-`a[i]` strides by whatever `a`'s element is — one word for a scalar, `sizeof` the struct for
-a struct — so the same spelling works everywhere:
+`a[i]` strides by whatever `a`'s element is - one word for a scalar, `sizeof` the struct for
+a struct - so the same spelling works everywhere:
 
 ```impala
 struct Cell { int v; int w }
@@ -209,7 +213,7 @@ function read(int i) returns int r
 The stride folds at GAZL assembly time whenever the index is constant, so `grid[2]` costs
 exactly what `flat[2]` costs. A runtime index into a struct array pays one `MULi`.
 
-Arithmetic on a struct pointer is `E307` — move one with `&p[i]` instead. Comparison is
+Arithmetic on a struct pointer is `E307` - move one with `&p[i]` instead. Comparison is
 untouched, so the `while (p < end)` walk is the idiom.
 
 #### `extern struct`: the host owns the layout
@@ -220,14 +224,16 @@ extern struct HostFrame { int width; int height }
 
 Impala emits `#.z.HostFrame` and `#.o.HostFrame.width` and the host supplies the values at
 load, so the same `.gazl` runs against any layout with no recompile. An array field in an
-`extern struct` must not state a size (`E430`) — the host decides it.
+`extern struct` states its rank and not its size: `int array cells[]` for one axis, `[,]` for
+two. The size is the host's to decide, so stating one is `E430`; the rank is not, so omitting
+the brackets is `E432`.
 
 The body is a *claim* about someone else's layout, so it is checked against a real definition
 if the build has one (`E438`), and using it before that definition is emitted is `E464`.
 
 That check compares the two layouts field by field: names, types, pointer elements and the
 order they are declared in, since the order is what fixes the offsets. An array field's
-**rank** must agree, but its **extent** is compared only where both sides state one — which
+**rank** must agree, but its **extent** is compared only where both sides state one - which
 is what lets the host-owned `int array v[]` above meet a definition's `int array v[3]`.
 
 ### `functype`
@@ -243,41 +249,41 @@ global Step cb = tick
 ```
 
 Assigning a function whose signature does not match is `E441`, at a declaration or an
-assignment. A bare 1.0 `funcptr` is still unchecked — declaring the type is what buys the
+assignment. A bare 1.0 `funcptr` is still unchecked - declaring the type is what buys the
 check. `nullfunc` suits any of them, and you assign the bare name (`cb = tick`), never
 `&tick`.
 
-Assignment between two *named* types is nominal — same shape is not enough (`E441`), a
+Assignment between two *named* types is nominal - same shape is not enough (`E441`), a
 cast is how you say you checked. The cast is itself shape-checked: `(Other)cb` converts
 freely when `Other` takes the same arguments and returns the same values, and is `E465`
-when it does not — a call through the result would read the wrong frame. Only a funcptr
+when it does not - a call through the result would read the wrong frame. Only a funcptr
 can take a funcptr type at all: `(Other)someInt` is `E465` too. Untyped `funcptr` is the
 escape hatch: `(funcptr)cb` erases the name and a named cast re-stamps it, so a
 deliberate conversion is spelled `(Other)(funcptr)cb`.
 
 ### What you can do with a function pointer
 
-Comparison works, arithmetic does not — for both `funcptr` and named types:
+Comparison works, arithmetic does not - for both `funcptr` and named types:
 
 | | |
 |---|---|
-| `f == g`, `f != g` | yes — do these hold the same function? |
-| `f < g`, `f > g`, `f <= g`, `f >= g` | yes — a total, run-stable order |
-| `f - g` | yes — an `int`, the distance between the two ordinals |
+| `f == g`, `f != g` | yes - do these hold the same function? |
+| `f < g`, `f > g`, `f <= g`, `f >= g` | yes - a total, run-stable order |
+| `f - g` | yes - an `int`, the distance between the two ordinals |
 | `f + 1` | **`E301`** |
-| `f(args)` | yes — that is what it is for |
+| `f(args)` | yes - that is what it is for |
 
 A function pointer is not an address. It is a stable ordinal naming an entry in the
 program's function table, which is what lets one survive being written to a global and
-restored later. So the ordering is *total and stable within a run* — enough to sort a table
-of callbacks and binary-search it — but which function sorts before which follows
+restored later. So the ordering is *total and stable within a run* - enough to sort a table
+of callbacks and binary-search it - but which function sorts before which follows
 declaration order and means nothing beyond that. Do not read significance into it, and do
 not expect it to survive adding a function or reordering a file. The same goes for the
 distance `f - g`.
 
 The rule for what is allowed is the shape of the *result*, not the name of the operation:
 comparison and difference **consume** function pointers and hand back an `int`, so they can
-never name a function. `f + 1` would **produce** one, and is rejected — the function table
+never name a function. `f + 1` would **produce** one, and is rejected - the function table
 is not yours to index, so there is no "the next function". Unlike a data pointer difference,
 `f - g` needs no matching element types: ordinals are not scaled by anything.
 
@@ -395,34 +401,45 @@ unreachable from an `export`:
 node impala/impala.node.js compile --dead-strip main.impala main.gazl
 ```
 
-**Careful:** with no `export` anywhere it has no root and empties the module — you get
+**Careful:** with no `export` anywhere it has no root and empties the module - you get
 `Code size: 0` and a loader that cannot find `main`.
 
 #### Cycles resolve in one direction
 
 Import cycles are legal to write. The builder concatenates the closure dependency-first and
 compiles it in one pass, so a unit can only reference names that appear *earlier* in that
-order — and in a cycle no order satisfies both directions. One of them fails:
+order - and in a cycle no order satisfies both directions. One of them fails:
 
 - a function called backwards across the cycle is `E403`
 - a struct type used backwards across the cycle is `E413`
 
 The diagnostic names the unit the text came from and points at the definition it cannot see
-yet. The answer is a hand-written forward `extern` in whichever unit is emitted first — the
+yet. The answer is a hand-written forward `extern` in whichever unit is emitted first - the
 one place this feature does not remove boilerplate. For a *struct type* use the **opaque**
 form `extern struct Name` and reach it through a pointer; a body-carrying `extern struct`
 needs its layout, which is not there yet, and that is `E464`.
 
 ### Arrays
 
-Only one-dimensional arrays are supported. Elements may hold any mix of values, and the
-size must be a compile-time constant. Array initializers must be compile-time constants.
+An array states its size as a compile-time constant, or a comma-separated **shape**:
+
+```impala
+global int array board[3, 4]
+```
+
+Elements may hold any mix of values, and array initializers must be compile-time constants.
 
 ```impala
 global array initedArray[10] = {
         1, 2.0, &global defaultArray[0], 4
 }
 ```
+
+A subscript on a shaped array names every axis (`board[y, x]`); naming a different number of
+axes is `E206`, and each axis is bounds-checked on its own. An initializer nests one brace
+group per axis, so a flat list for a shaped array is `E422`. Axes may be symbolic, in which
+case they resolve at GAZL assembly time. See
+[Multidimensional arrays](MultidimensionalArrays.md).
 
 ### Function pointers
 
@@ -468,18 +485,18 @@ shapes in comments without changing the generated instructions, so legacy assemb
 continue to accept the files. Casting does not convert between ints and floats; use
 `itof()` or `ftoi()` for that.
 
-Functions cannot be nested. **A name must be declared before it is used** — the compiler is
+Functions cannot be nested. **A name must be declared before it is used** - the compiler is
 single-pass, so calling a function defined later in the same source is `E403 Undeclared
 identifier` (the diagnostic finds the later definition and says so). To call across sources,
 or to break a cycle within one, declare a forward `extern function` above the use.
 
 ## Statements
 
-Every simple statement ends with a mandatory `;` — an assignment, a call, `goto`,
+Every simple statement ends with a mandatory `;` - an assignment, a call, `goto`,
 `copy`, `assert`, and the empty statement. Omitting it is `E001 syntax error`, usually
 reported on the *next* line, since the parser only gives up once it sees something that
-cannot continue the expression. The compound statements — `if`, `for`, `while`,
-`do…while`, `loop`, `switch`, and a `{ … }` block — carry no terminator of their own;
+cannot continue the expression. The compound statements - `if`, `for`, `while`,
+`do…while`, `loop`, `switch`, and a `{ … }` block - carry no terminator of their own;
 the statements inside them do. Declarations (`global`, `const`, `readonly`, `extern`)
 accept a trailing `;` but do not require one.
 
@@ -497,7 +514,7 @@ There are no compound assignment operators (`+=`, `&=`, …) and no `++`/`--`.
 
 The assignable forms (lvalues) are a variable, a pointer dereference `*p`, a subscript
 `a[i]`, and a struct field reached either directly (`s.a`) or through a pointer
-(`p->a`) — see [`struct`](#struct).
+(`p->a`) - see [`struct`](#struct).
 
 ### Conditionals
 
@@ -554,7 +571,7 @@ brace.
 ### `switch`
 
 `switch` tests an integer expression against a range written as `== low to high`. The upper
-bound is **exclusive**, exactly as in `for (i = 0 to N)` — `switch (i == 0 to 10)` covers 0
+bound is **exclusive**, exactly as in `for (i = 0 to N)` - `switch (i == 0 to 10)` covers 0
 through 9, and `case 10:` is `E444`. If the value falls outside the range, the `default` case
 runs. Cases do **not** fall through, so there is no `break`. A case can list several values.
 
@@ -666,7 +683,7 @@ p = (pointer) alloc(16);      // retype only, no conversion
 ```
 
 A cast only applies to a value the compiler has **not** already typed. Casting a typed
-operand to an incompatible type is `E302 Invalid type` — `(pointer) x` where `x` is a
+operand to an incompatible type is `E302 Invalid type` - `(pointer) x` where `x` is a
 declared `int` is rejected, not reinterpreted. The values worth casting are the untyped
 ones: a call result from a name-only `extern`, an element of a bare `array`, and a bare
 `pointer` being narrowed to a typed one.
@@ -685,10 +702,10 @@ p2 = (int pointer) raw;       // untyped -> typed: assuming is loud
 Impala has exactly four built-ins; everything else is either a statement keyword (`copy`, `assert`)
 or a host-supplied `extern native` function.
 
-They are **prefix operators, not functions** — `abs x` is the primitive form, and they join `-`, `~`,
+They are **prefix operators, not functions** - `abs x` is the primitive form, and they join `-`, `~`,
 `&` and `*` in the prefix table. `abs(x)` also works, but only because the parentheses are an ordinary
 parenthesized expression, so it is worth knowing what you are actually writing: both `abs()` and
-`abs(x, 2)` are `E001 syntax error` — with the caret on the `,`, because there is no argument list
+`abs(x, 2)` are `E001 syntax error` - with the caret on the `,`, because there is no argument list
 here to be malformed (`E442` is reserved for a real call's). Precedence is unary-tight, so
 `abs x - 1` means `(abs x) - 1`.
 
@@ -706,7 +723,7 @@ and `pointer - int` yield a pointer, and `pointer - pointer` yields the `int` el
 distance.
 
 Given the declaration `global pointer p = &global defaultArray[0]`, the `global` prefix is
-required at every use of `p` too — `*(p + 3)` on its own is `E403`:
+required at every use of `p` too - `*(p + 3)` on its own is `E403`:
 
 ```impala
 x = *(global p + 3);
@@ -726,10 +743,13 @@ The active compiler is generated by JSPEG and shipped as JavaScript under
 `impala/`:
 
 - `impalaCompiler.js` - generated compiler used by the build and command-line workflow
+- `impala.node.js` - Node command-line front end, with the `compile` and `run` subcommands
 - `impala.nuxjs.js` - NuXJS command-line wrapper around the generated compiler
 - `impalaImportClosure.js` - `import` closure walk and `--dead-strip`, shared by both front ends
-- `impala.jspeg` - grammar source used when regenerating the compiler
-- `runJspegTests.js` - parity test runner for the JSPEG compiler fixtures
+- `impala.jspeg` - grammar source, and the authority on the language
+- `updateJSPEG.js` - regenerates `impalaCompiler.js` from that grammar and runs the regression suite
+- `runJspegTests.js` - the golden gate: compiles `tests/impala/sources` and byte-compares against
+  `tests/impala/golden`; `makegold` rewrites the goldens
 
 The build system compiles the NuXJS command-line runtime from `externals/NuXJS`
 and places it in `output/`. The `BuildImpala` scripts then copy
@@ -807,7 +827,8 @@ Keep that file in sync with the host registration tables in `tools/GAZLCmd.cpp`
 and `src/GAZL.cpp` whenever a native is added or changed.
 
 
-See [Impala JSPEG](../../design/jspeg/ImpalaJS.md) for the CLI, regeneration flow, and
+See [Impala JSPEG](../../design/jspeg/ImpalaJS.md) for the CLI, the regeneration flow, and the
+JavaScript subset the compiler's own actions are held to.
 
 ## Compiling and running
 

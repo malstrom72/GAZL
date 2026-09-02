@@ -1,0 +1,22 @@
+/*
+	`readonly` describes the LOCATION, so an element of a readonly array is readonly whatever the index
+	is. A CONSTANT index folds and never materializes an address; a RUNTIME one goes through
+	placeAddress, which runs makeMeta and clears the flag - so the write below was accepted and emitted
+	a POKE into the const region, with GAZL unable to catch it either because the base is a register.
+	This fixture only READS the readonly data; the rejection itself is asserted in jspegCompilerTests.js,
+	which needs a failing compile.
+	Expected (GAZLCmd structReadonlyIndex.gazl main): 11 22 33
+*/
+struct W { int a }
+struct V { W array sub[3] }
+readonly V RO = { sub: { { a: 11 }, { a: 22 }, { a: 33 } } }
+extern native printInt
+extern native printLF
+function main()
+locals int i
+{
+	for (i = 0 to 3) {
+		printInt(global RO.sub[i].a);
+		printLF();
+	}
+}

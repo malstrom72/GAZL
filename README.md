@@ -48,7 +48,7 @@ Two tools take a `.gazl` and it is easy to assume the wrong one is checking your
 | `output/GAZLCmd` | **The assembler and the VM.** The only thing that can tell you a module assembles and loads. |
 | `impala/gazlAssembleCheck.js` | The test gates' helper that feeds a `.gazl` to `GAZLCmd`. Not something you run directly. |
 
-`GAZLCmd` has **no assemble-only mode** — it enters `main`, which for a fixture that has one means
+`GAZLCmd` has **no assemble-only mode** - it enters `main`, which for a fixture that has one means
 running a whole program you did not ask for (one of them is an interactive chess game). To assemble
 without running, name an entry point that cannot exist: it assembles, prints its banner, and stops.
 
@@ -56,7 +56,7 @@ without running, name an entry point that cannot exist: it assembles, prints its
 ./output/GAZLCmd yourfile.gazl .no-entry-point
 ```
 
-It prints the `Code size:` banner — that line is the proof it assembled — then
+It prints the `Code size:` banner - that line is the proof it assembled - then
 `Could not locate function: .no-entry-point` and exits 1. So read the banner, not the exit code.
 
 ### Getting Started
@@ -72,11 +72,11 @@ It prints the `Code size:` banner — that line is the proof it assembled — th
    ./output/GAZLCmd output/demo.gazl main
    ```
    Step 1 is not optional: `output/` holds a *staged copy* of the compiler, and a stale one fails
-   here as `error[E001]: syntax error` inside `ImpalaDemo.impala` — a diagnosis that points at the
+   here as `error[E001]: syntax error` inside `ImpalaDemo.impala` - a diagnosis that points at the
    demo source when the real cause is the compiler sitting beside it.
 
    The output path is the *second* argument. Passing the random id there instead writes the
-   GAZL to a file literally named `0x4d2` and never creates `demo.gazl` at all — so `GAZLCmd`
+   GAZL to a file literally named `0x4d2` and never creates `demo.gazl` at all - so `GAZLCmd`
    either reports `Could not open input file`, or, worse, silently runs whatever stale
    `demo.gazl` an earlier build left behind.
 3. To compile and run one of your own sources without staging anything, use the Node front end:
@@ -93,6 +93,11 @@ It prints the `Code size:` banner — that line is the proof it assembled — th
 - `tools/BuildNuXJS.sh` / `.cmd` - build the NuXJS command-line JavaScript runtime
 - `tools/BuildImpala.sh` / `.cmd` - build NuXJS and stage the JSPEG Impala compiler into `output/`
 - `tools/buildGazlFuzz.sh` - build libFuzzer harness for `GAZLCmd` (shell only; no `.cmd`)
+- `tools/buildGazlWasm.sh` - build `impala/gazlVm.js`, the wasm VM the browser playground runs on
+- `tools/checkInstructionSet.sh` / `.cmd` - check `docs/gazl/InstructionSet.md` against the assembler
+- `tools/runPermut8Firmware.sh` / `.cmd` - run a Permut8 firmware image against the VM through `tools/permut8Host.js`
+- `tools/buildAndRunGAZLEnterCallTest.sh` / `.cmd` - build and run the `enterCall` / `pushCall` host-API test
+- `tools/gazlCompactor.sh` / `.cmd`, `tools/bench.sh` / `.cmd`, `tools/UpdateUnitTest.sh` / `.cmd` - compact a module, benchmark it, and regenerate `src/UnitTest.gazl`
 
 ## Building the fuzz target
 

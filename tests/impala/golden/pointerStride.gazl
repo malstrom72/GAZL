@@ -32,8 +32,7 @@ main:	FUNC	; signature export func main() -> void @ pointerStride.impala:17:1
 	$i:	LOCi
 ;-----------------------------------------------------------------------------
 		MOVp $p &bank 	; p = &global bank[0]
-		ADDp %0 $p #.z.S	; q = &p[1]
-		MOVp $q %0 
+		ADDp $q $p #.z.S	; q = &p[1]
 		PEEK %1 $q #.o.S.a	; printInt(q->a)
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ pointerStride.impala:22:16
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ pointerStride.impala:22:27
@@ -42,20 +41,18 @@ main:	FUNC	; signature export func main() -> void @ pointerStride.impala:17:1
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ pointerStride.impala:23:18
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ pointerStride.impala:23:29
 		MOVi $i #2 	; i = 2
-		MULi %1 $i #.z.S	; q = &p[i]
-		ADDp %0 $p %1
-		MOVp $q %0 
+		MULi %0 $i #.z.S	; q = &p[i]
+		ADDp $q $p %0
 		PEEK %1 $q #.o.S.a	; printInt(q->a)
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ pointerStride.impala:27:16
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ pointerStride.impala:27:27
-		MULi %2 $i #.z.S	; printInt(p[i].a)
-		ADDp %1 $p %2
+		MULi %1 $i #.z.S	; printInt(p[i].a)
+		ADDp %1 $p %1
 		PEEK %1 %1 #.o.S.a
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ pointerStride.impala:28:18
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ pointerStride.impala:28:29
 		! MULi <A> #3 #.z.S	; q = &global bank[3]
-		ADDp %0 &bank #<A>
-		MOVp $q %0 
+		MOVp $q &bank:<A> 
 		DIFp %0 $q $p	; n = ((pointer) q - (pointer) p) / sizeof(S)
 		DIVi $n %0 #.z.S
 		MOVi %1 $n 	; printInt(n)
@@ -76,13 +73,11 @@ main:	FUNC	; signature export func main() -> void @ pointerStride.impala:17:1
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ pointerStride.impala:40:27
 		MOVp $p &bank 	; p = &global bank[0]
 		! MULi <A> #4 #.z.S	; end = &global bank[4]
-		ADDp %0 &bank #<A>
-		MOVp $end %0 
+		MOVp $end &bank:<A> 
 	.l0:	GEQp $p $end @.e1	; while (p < end) 
 		PEEK %1 $p #.o.S.a	; printInt(p->a)
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ pointerStride.impala:47:17
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ pointerStride.impala:47:28
-		ADDp %0 $p #.z.S	; p = &p[1]
-		MOVp $p %0 
+		ADDp $p $p #.z.S	; p = &p[1]
 		GOTO @.l0  	; }
 	.e1:	RETU   	; }

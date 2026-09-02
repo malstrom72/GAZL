@@ -1,4 +1,4 @@
-# What's new in Impala 2.0
+﻿# What's new in Impala 2.0
 
 This page covers only what changed between Impala 1.0 and 2.0. It assumes you know 1.0 already; if you do
 not, read [`Impala.md`](Impala.md) for the language and come back.
@@ -8,11 +8,14 @@ Impala 1.0 is a minimal "high-level assembler": four word-sized types (`int`, `f
 no hidden passes, no runtime machinery - and spends its additions on letting the type system describe what
 a program is already doing.
 
-**Nine new keywords:** `break` `continue` `export` `functype` `import` `inline` `return` `sizeof` `struct`.
 Two of those are not features: `break` and `continue` are `E450`, reserved so the compiler can refuse them
 with an explanation instead of a syntax error. `inline` IS a feature **on this branch** - an expansion
 declares its locals in a GAZL 2 `SCOP`/`ENDS` scope, which is exactly why the Impala 2 line refuses it and
 this line does not. See [`Inlining.md`](Inlining.md).
+
+**Nine new keywords:** `break` `continue` `export` `functype` `import` `inline` `return` `sizeof` `struct`.
+Three of those are not features: `break` and `continue` are `E450` and `inline` is `E439`. They are
+reserved so the compiler can refuse them with an explanation instead of a syntax error.
 
 For *why* 2.0 is shaped this way, see [`Impala2.md`](Impala2.md). This page is only the what.
 
@@ -76,6 +79,33 @@ The stride folds at GAZL assembly time whenever the index is constant, so `grid[
 Arithmetic on a struct pointer is `E307` - move one with `&p[i]` instead. Comparison is untouched, so the
 `while (p < end)` walk is the idiom.
 
+## Arrays can have a shape
+
+An array states its axes in one bracket clause, separated by commas, and is subscripted the same way:
+
+```impala
+struct Grid { int array cells[3, 4] }
+
+global int array board[3, 4]
+global Grid grid
+
+function at(int y, int x) returns int v
+{
+	v = global board[y, x] + global grid.cells[y, x];
+}
+```
+
+Globals, locals and struct fields all take a shape. The axes become `.d.` constants in the emitted `.gazl`
+(`.d.board.0`, `.d.Grid.cells.0`), and an axis Impala cannot evaluate is deferred to the assembler, so
+`global int array sym[H, W * 2]` is as legal as a literal shape.
+
+Subscripts are rank-checked: naming a number of axes that is not the array's rank is `E206`, whatever the
+indices are. Each axis is bounds-checked on its own, so a constant index past one axis is caught even when
+the flat offset would have landed inside the array. Initializers nest one brace group per axis - a flat
+list for a shaped array is `E422`.
+
+The C spelling `a[y][x]` is not the syntax. `[3][4]` on a declaration is `E001`.
+
 ## Types say what they point at
 
 ```impala
@@ -137,8 +167,9 @@ extern struct HostFrame { int width; int height }
 ```
 
 The host owns that layout. Impala emits `#.z.HostFrame` and `#.o.HostFrame.width` and the host supplies the
-values at load, so the same `.gazl` runs against any layout with no recompile. An array field in an
-`extern struct` must not state a size (`E430`).
+values at load, so the same `.gazl` runs against any layout with no recompile. A host-owned array states its
+rank and not its size: `int array cells[]` for one axis, `[,]` for two. A size is `E430`, and omitting the
+brackets is `E432` - the size is the host's to decide, the rank is not.
 
 `extern function` now takes a full prototype, and call sites are checked against it. The 1.0 name-only form
 still parses and still asserts nothing. When a prototype and a real definition disagree in one build, that
@@ -160,7 +191,7 @@ global int pointer p = &global f[0]
 old.impala:2:24: note: use a cast: (int pointer)
 ```
 
-71 codes, most carrying a note. Some notes are computed rather than canned - an undeclared name that is
+73 codes, most carrying a note. Some notes are computed rather than canned - an undeclared name that is
 defined further down names the definition and its file and line, and tells you to add a forward `extern`.
 
 ## Bounds checking, in three tiers
@@ -221,19 +252,12 @@ Reserved so they can be refused clearly, not because they are coming soon in 2.0
 `inline function` is NOT in that table on this branch. The Impala 2 line refuses it, because it has to run
 on a GAZL 1.0 engine; here the `SCOP`/`ENDS` an expansion needs exist, so the feature does too.
 
-Multidimensional arrays are the exception to that. Every row above has a reserved word or a dedicated
-diagnostic, so the compiler can say the feature was considered and parked - but nothing in the grammar
-mentions multidimensional arrays at all, so `int array a[2][3]` is an ordinary syntax error (`E001`) with
-no hint that it was ever designed.
+[`ParkedFeatures.md`](../../design/ParkedFeatures.md) has the full argument and the branch for every row above.
 
-It was, and the reason it is not here is worth knowing, because it is not "we ran out of time". An array's
-dimensions want to be part of its **type**, so that calls can be checked - but a dimension may be any
-expression, resolved by the assembler rather than by Impala. That leaves only bad options: identity by the
-*form* of the expression (incomplete), or dimensions restricted to numeric literals. A milder revival that
-avoids the question entirely - multidimensional only as a struct field, reached through a struct pointer -
-was designed and rejected on cost: what it adds over writing `y * W + x` is subscript sugar plus shape
-typing, the sugar already works today, and the shape typing *is* the unsolved question.
-[`ParkedFeatures.md`](../../design/ParkedFeatures.md) has the full argument and the branch, for this and every row above.
+One shape-related limit is worth naming: a shape belongs to an array or a struct field, never to a pointer.
+Axes reach a callee when they are keyed to a struct type - `g->cells[y, x]` is checked inside a function
+that received nothing but a `Grid pointer` - but a standalone array passed as a plain pointer arrives as an
+address with no axes and no guard. Shape-carrying pointer types are deferred to 3.0.
 
 ## What is worth rewriting
 
@@ -391,4 +415,8 @@ guessing would reject correct programs. See [`MemorySafetyModel.md`](MemorySafet
 `assert`, `copy`, `loop` / `while` / `do` / `for` / `goto` / labels, `switch` syntax including `case a, b:`
 and `default:`, `abs` / `floor` / `itof` / `ftoi`, `null` / `nullfunc`, every literal form, `global` on
 globals, untyped `array` / `pointer` / `funcptr`, plain `f = somefunc`, and the name-only
-`extern native` / `extern function` / `extern array` forms.
+`extern native` / `extern function` forms.
+
+`extern array` is the one on that list that moved: it now states a rank, `extern array g[]`, which is the
+spelling the 1.0 reference and the corpus already used. A bare `extern array g` is `E432`, and `--legacy`
+does not downgrade it.

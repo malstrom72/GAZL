@@ -1,0 +1,26 @@
+/*
+	A chained whole-struct assignment through a computed index. The middle assignment's value is the
+	place it just wrote, and rebuilding that place re-folds the destination's offset parts - so any fold
+	that consumed one of them makes the OUTER copy read a different element, with no diagnostic. The
+	index is `N + 1` on purpose: a literal folds to a bare number, while this leaves a scratch in the
+	offset parts, which is the only shape that can be clobbered.
+	Expected (GAZLCmd structChainAssign.gazl main): 7 8 7 8
+*/
+const int N = 1
+struct W { int a; int b }
+struct V { W head; W array sub[4]; W tail }
+global V x
+global V y
+global V z
+extern native printInt
+extern native printLF
+function main()
+{
+	global z.tail.a = 7;
+	global z.tail.b = 8;
+	global x.tail = global y.sub[N + 1] = global z.tail;
+	printInt(global y.sub[2].a); printLF();
+	printInt(global y.sub[2].b); printLF();
+	printInt(global x.tail.a); printLF();
+	printInt(global x.tail.b); printLF();
+}
