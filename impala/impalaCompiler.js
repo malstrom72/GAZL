@@ -1454,17 +1454,22 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         declare('!', 'globals', ok, undefined, true, undefined, sourceCode, sourceOffset);
     };
 
+    /* A place's address as ONE deferred instruction, keeping the element type the place already carries -
+       `makeMeta` clears `elem` along with the rest of the place state, so it is put back. */
+    addressMeta = function (place) {
+        var elem = place.elem;
+        placeAddressMeta(place);
+        setElem(place, elem);
+    };
+
     /* Every reader wants the same thing first: this record as ONE deferred instruction, with no destination
        yet. A place is not an instruction, so an array place used without a subscript decays here - once,
        rather than in each reader. Asking it separately is how the readers came to disagree: an argument
        adopted the address while an assignment asked for a finished operand and then copied it. */
     asValueMeta = function (expr) {
         if (expr.place && expr.arrayOf !== undefined) {           /* -> a pointer to its element */
-            var delem = expr.arrayOf;
-            placeAddressMeta(expr);
-            setElem(expr, delem);
+            addressMeta(expr);
         }
-        return expr;
     };
 
     makeRValue = function (expr, classes) {
@@ -2972,11 +2977,9 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         slot.type     = arrayOf ? 'p' : 'S';
         slot.elem     = arrayOf || (structName !== undefined ? structDesc(structName) : undefined);
         slot.dynIndex = dynIndex;                                 /* frame place + one runtime word-index -> terminal emits GETL/SETL */
-        slot.baseMeta = (base === undefined ? slot.baseMeta : undefined);
-                                                                  /* a PENDING base (see baseOperand) survives a re-place
+        if (base !== undefined) { slot.baseMeta = undefined; }     /* a PENDING base (see baseOperand) survives a re-place
                                                                      that supplies no base: `.field` and a constant `[k]`
-                                                                     only grow offParts. `baseMeta` set always implies
-                                                                     `base` undefined, so there is no stale one to keep. */
+                                                                     only grow offParts */
         slot.extent   = undefined;                                /* pooled slot: never inherit another array's extent or
                                                                      another subscript's finding. The two callers that DO
                                                                      have an extent assign it after the call. */
@@ -3267,7 +3270,7 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
        pointer/global base carrying an offset, a plain move of the base without one. An offset scratch
        rides inside the operand (`#<D>`, `$v:<D>`), so whoever consumes the meta frees it on the same
        path it frees every other operand. A local frame place holding a runtime index is the one address
-       that takes two instructions: it materializes, and the deferred meta is a move of the result. */
+       that takes two instructions; only the second is deferred. */
     placeAddressMeta = function (place) {
         place = metaSlot(place);
         if (place.baseKind === 'local' && place.dynIndex !== undefined) {
@@ -3293,10 +3296,8 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
                                                                       base folds its offset instead of adding it - the
                                                                       same operand emitPlaceValue reads a field through */
             makeMeta(place, ':=', 'p', undefined, base + ':' + off, undefined);
-        } else if (off) {
-            makeMeta(place, '+', 'p', undefined, base, '#' + off);
-        } else {
-            makeMeta(place, ':=', 'p', undefined, base, undefined);
+        } else {                                                   /* pointer base: add the offset, or just move it */
+            makeMeta(place, (off ? '+' : ':='), 'p', undefined, base, (off ? '#' + off : undefined));
         }
     };
 
@@ -4041,17 +4042,9 @@ var _sn = strideStruct(field.elem);
         }
 
         /* &structValue -> a typed struct pointer (the place's address); &arrayPlace -> a pointer to its
-           ELEMENT. setPlace leaves `struct` undefined for an array place (it fills `arrayOf` instead), so
-           taking the struct branch unconditionally minted the descriptor `Sundefined` - which
-           `isStructAtom` accepts and renderDesc unwraps to the word "undefined", so `p = &global b.tags`
-           on `struct Body { int array tags[4] }` failed with "expected int elements, got undefined
-           elements". `arrayOf` is already the element descriptor, which is what makeRValue uses for the
-           same decay. */
+           ELEMENT. Both descriptors are already on the record as `elem`, which setPlace computed. */
         if (operator === '&' && expr.place) {
-            var structName = expr.struct, arrayElem = expr.arrayOf;   /* both read BEFORE makeMeta clears the place */
-            placeAddressMeta(expr);                  /* deferred, so `p = &p[1]` is one ADDp into $p */
-            setElem(expr, (arrayElem !== undefined ? arrayElem
-                    : (structName !== undefined ? structDesc(structName) : undefined)));
+            addressMeta(expr);                       /* deferred, so `p = &p[1]` is one ADDp into $p */
             return;
         }
 
