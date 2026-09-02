@@ -29,8 +29,8 @@ two different ways:
 
 1. **The `Comp` `!Group` probe** (deciding whether a parenthesized thing is a boolean group or an
    expression) - a predicate *forces* its sub-parse's actions to run and then discards them. Handled
-   by a hand-rolled transaction flag: **one** site sets `$$parser.dry` and **~16 `if (!$$parser.dry)`
-   guards** spread across the grammar serve it.
+   by a hand-rolled transaction flag: the probe sets `$$parser.dry` and **22 `if (!$$parser.dry)`
+   guards** spread across the grammar serve it, plus one inverse guard in the prelude.
 2. **The `FuncCall` prologue**, which borrows the call window *before* parsing the arguments - a
    mid-sequence effect that cannot sit at the end, so it cannot use `dry` (the borrow must really
    happen for the wet parse). Patched instead by **hard-failing** (E442) rather than allowing a
@@ -117,15 +117,16 @@ is just the node under construction.
 
 ### Mechanics
 
-`jspeg.jspeg`'s own header lists the sins: char classes compile to `indexOf` over expanded strings
-(`[a-z]` becomes a 26-character string scanned linearly per test), locals are threaded through
-closures, and the codegen wraps every expression, prefix, repetition, and action in an IIFE. One
-generated rule as exhibit - 4 IIFEs and 2 holder allocations per invocation:
+Three costs, all in the codegen: char classes compile to `indexOf` over expanded strings (`[a-z]`
+becomes a 26-character string scanned linearly per test), captures allocate a value slot per rule
+invocation whether or not the alternative holding them matches, and every expression, prefix,
+repetition and action is wrapped in an IIFE. One generated rule as exhibit - four IIFEs and two
+slot allocations per invocation, before the body does any work:
 
 ```js
-function Bitwise($){var $op=createParserContext(),$r=createParserContext();
-  return (function(){var _b=_i;return AddSub($)&&((function(){while((function(){...})());})(),true)
-  || (_im=(_i>_im?_i:_im),_i=_b,false)})()};
+function Bitwise(){var $first,$op=newMetaSlot(),_sv$op,$r=newMetaSlot(),_sv$r;
+  return (function(){var _b=_i;return (function(){ $first = undefined; ; return true})()&&AddSub()
+  &&((function(){while((function(){...})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 ```
 
 **Measured reality check:** under Node (V8 JIT), this is already fast - `calc.impala` (676 lines)
@@ -141,9 +142,8 @@ taxes both paths.
   - Statement-style output instead of IIFEs - success flags plus labeled breaks; no closure
     allocation per parse step. Biggest single win on NuXJS.
   - Char classes as range comparisons (`c >= 'a' && c <= 'z'`) or per-class lookup tables.
-  - Allocate a capture's value slot lazily - only when that alternative actually matches. Holder
-    objects themselves are gone (Problem 2, done), but ~57% of the slots a rule allocates per
-    invocation are never seeded by any capture.
+  - Allocate a capture's value slot lazily - only when that alternative actually matches. About 57%
+    of the slots a rule allocates per invocation are never seeded by any capture.
 - **Pragmatic immediately:** bless `impala/impala.node.js` as the development-loop compiler (it
   already exists and is fast); keep NuXJS as the dependency-free distribution path.
 - Packrat memoization is *not* recommended - Impala's grammar is nearly deterministic and the

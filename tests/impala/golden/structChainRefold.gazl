@@ -1,0 +1,153 @@
+; Compiled with Impala version 2.0
+
+; signatures version=1
+N:	! DEFi #1	; signature const N : int @ structChainRefold.impala:9:1
+	! MOVi <a> #0	; layout of struct W
+.o.W.a:	! DEFi #<a>
+	! ADDi <a> #<a> #1
+.o.W.b:	! DEFi #<a>
+	! ADDi <a> #<a> #1
+.z.W:	! DEFi #<a>
+; signature struct W { a : int, b : int } @ structChainRefold.impala:10:1
+	! MOVi <a> #0	; layout of struct Mid
+.o.Mid.sub:	! DEFi #<a>
+	! MULi <t> #4 #.z.W
+.z.Mid.sub:	! DEFi #<t>
+	! ADDi <a> #<a> #.z.Mid.sub
+.o.Mid.tail:	! DEFi #<a>
+	! ADDi <a> #<a> #.z.W
+.z.Mid:	! DEFi #<a>
+; signature struct Mid { sub : W[4], tail : W } @ structChainRefold.impala:11:1
+	! MOVi <a> #0	; layout of struct V
+.o.V.mids:	! DEFi #<a>
+	! MULi <t> #4 #.z.Mid
+.z.V.mids:	! DEFi #<t>
+	! ADDi <a> #<a> #.z.V.mids
+.o.V.tail:	! DEFi #<a>
+	! ADDi <a> #<a> #.z.Mid
+.z.V:	! DEFi #<a>
+; signature struct V { mids : Mid[4], tail : Mid } @ structChainRefold.impala:12:1
+x:	GLOB *.z.V	; signature global x : V @ structChainRefold.impala:13:1
+y:	GLOB *.z.V	; signature global y : V @ structChainRefold.impala:14:1
+z:	GLOB *.z.V	; signature global z : V @ structChainRefold.impala:15:1
+; signature extern native printInt() -> unknown @ structChainRefold.impala:16:1
+; signature extern native printLF() -> unknown @ structChainRefold.impala:17:1
+
+;-----------------------------------------------------------------------------
+main:	FUNC	; signature func main() -> void @ structChainRefold.impala:18:1
+		PARA *1
+;-----------------------------------------------------------------------------
+		! ADDi <A> #N #1	; global y.mids[N + 1].sub[N + 1].a = 3
+		! MULi <A> #<A> #.z.Mid
+		! MOVi <B> #<A> 
+		! LSSi #<B> #0 @.g1
+		! LSSi #<B> #.z.V.mids @.g0
+	.g1:	! FAIL a computed index outside V.mids (resolved only at assembly)  
+	.g0:	! ADDi <B> #N #1
+		! MULi <B> #<B> #.z.W
+		! MOVi <C> #<B> 
+		! LSSi #<C> #0 @.g3
+		! LSSi #<C> #.z.Mid.sub @.g2
+	.g3:	! FAIL a computed index outside Mid.sub (resolved only at assembly)  
+	.g2:	! ADDi <C> #.o.V.mids #<A>
+		! ADDi <C> #<C> #.o.Mid.sub
+		! ADDi <C> #<C> #<B>
+		! ADDi <C> #<C> #.o.W.a
+		POKE &y:<C> #3 
+		! ADDi <C> #N #1	; global y.mids[N + 1].sub[N + 1].b = 4
+		! MULi <C> #<C> #.z.Mid
+		! MOVi <B> #<C> 
+		! LSSi #<B> #0 @.g5
+		! LSSi #<B> #.z.V.mids @.g4
+	.g5:	! FAIL a computed index outside V.mids (resolved only at assembly)  
+	.g4:	! ADDi <B> #N #1
+		! MULi <B> #<B> #.z.W
+		! MOVi <A> #<B> 
+		! LSSi #<A> #0 @.g7
+		! LSSi #<A> #.z.Mid.sub @.g6
+	.g7:	! FAIL a computed index outside Mid.sub (resolved only at assembly)  
+	.g6:	! ADDi <A> #.o.V.mids #<C>
+		! ADDi <A> #<A> #.o.Mid.sub
+		! ADDi <A> #<A> #<B>
+		! ADDi <A> #<A> #.o.W.b
+		POKE &y:<A> #4 
+		! ADDi <A> #N #1	; global z.tail.tail = global x.mids[N + 1].sub[N + 1] = global y.mids[N + 1].sub[N + 1]
+		! MULi <A> #<A> #.z.Mid
+		! MOVi <B> #<A> 
+		! LSSi #<B> #0 @.g9
+		! LSSi #<B> #.z.V.mids @.g8
+	.g9:	! FAIL a computed index outside V.mids (resolved only at assembly)  
+	.g8:	! ADDi <B> #N #1
+		! MULi <B> #<B> #.z.W
+		! MOVi <C> #<B> 
+		! ADDi <D> #N #1
+		! MULi <D> #<D> #.z.Mid
+		! MOVi <E> #<D> 
+		! LSSi #<E> #0 @.g11
+		! LSSi #<E> #.z.V.mids @.g10
+	.g11:	! FAIL a computed index outside V.mids (resolved only at assembly)  
+	.g10:	! ADDi <E> #N #1
+		! MULi <E> #<E> #.z.W
+		! MOVi <F> #<E> 
+		! LSSi #<C> #0 @.g13
+		! LSSi #<C> #.z.Mid.sub @.g12
+	.g13:	! FAIL a computed index outside Mid.sub (resolved only at assembly)  
+	.g12:	! LSSi #<F> #0 @.g15
+		! LSSi #<F> #.z.Mid.sub @.g14
+	.g15:	! FAIL a computed index outside Mid.sub (resolved only at assembly)  
+	.g14:	! ADDi <F> #.o.V.mids #<A>
+		! ADDi <F> #<F> #.o.Mid.sub
+		! ADDi <F> #<F> #<B>
+		! ADDi <B> #.o.V.mids #<D>
+		! ADDi <B> #<B> #.o.Mid.sub
+		! ADDi <B> #<B> #<E>
+		COPY &x:<F> &y:<B> *.z.W
+		! ADDi <B> #.o.V.tail #.o.Mid.tail
+		COPY &z:<B> &x:<F> *.z.W
+		! MULi <B> #2 #.z.Mid	; printInt(global x.mids[2].sub[2].a)
+		! MULi <F> #2 #.z.W
+		! ADDi <E> #.o.V.mids #<B>
+		! ADDi <E> #<E> #.o.Mid.sub
+		! ADDi <E> #<E> #<F>
+		! ADDi <E> #<E> #.o.W.a
+		PEEK %1 &x:<E> 
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ structChainRefold.impala:23:37
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structChainRefold.impala:23:48
+		! MULi <E> #2 #.z.Mid	; printInt(global x.mids[2].sub[2].b)
+		! MULi <F> #2 #.z.W
+		! ADDi <B> #.o.V.mids #<E>
+		! ADDi <B> #<B> #.o.Mid.sub
+		! ADDi <B> #<B> #<F>
+		! ADDi <B> #<B> #.o.W.b
+		PEEK %1 &x:<B> 
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ structChainRefold.impala:24:37
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structChainRefold.impala:24:48
+		! ADDi <B> #.o.V.tail #.o.Mid.tail	; printInt(global z.tail.tail.a)
+		! ADDi <B> #<B> #.o.W.a
+		PEEK %1 &z:<B> 
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ structChainRefold.impala:25:32
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structChainRefold.impala:25:43
+		! ADDi <B> #.o.V.tail #.o.Mid.tail	; printInt(global z.tail.tail.b)
+		! ADDi <B> #<B> #.o.W.b
+		PEEK %1 &z:<B> 
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ structChainRefold.impala:26:32
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structChainRefold.impala:26:43
+		! MULi <B> #2 #.z.Mid	; printInt(global y.mids[2].sub[2].a)
+		! MULi <F> #2 #.z.W
+		! ADDi <E> #.o.V.mids #<B>
+		! ADDi <E> #<E> #.o.Mid.sub
+		! ADDi <E> #<E> #<F>
+		! ADDi <E> #<E> #.o.W.a
+		PEEK %1 &y:<E> 
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ structChainRefold.impala:27:37
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structChainRefold.impala:27:48
+		! MULi <E> #2 #.z.Mid	; printInt(global y.mids[2].sub[2].b)
+		! MULi <F> #2 #.z.W
+		! ADDi <B> #.o.V.mids #<E>
+		! ADDi <B> #<B> #.o.Mid.sub
+		! ADDi <B> #<B> #<F>
+		! ADDi <B> #<B> #.o.W.b
+		PEEK %1 &y:<B> 
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ structChainRefold.impala:28:37
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structChainRefold.impala:28:48
+		RETU   	; }

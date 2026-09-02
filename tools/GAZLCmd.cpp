@@ -890,6 +890,8 @@ int main(int argc, const char* argv[]) {
 					<< std::endl;
 			std::cerr << "        [--no-libm]                  skip the atan2/sqrt/log natives (for self-contained libm)"
 					<< std::endl;
+			std::cerr << "        [--no-native=name,...]       skip the named built-in natives (the program defines its own)"
+					<< std::endl;
 			std::cerr << "        [--forward=nat:func,...]     satisfy ^nat native calls with GAZL functions (interpreter only)"
 					<< std::endl;
 			std::cerr << "        [--emit-cpp=F]               write a standalone C++ translation to F and exit (Tier 0)"

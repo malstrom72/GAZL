@@ -1,18 +1,17 @@
 # Impala JSPEG Return-Style Helper Plan
 
-Status: **LIVE, NOT STARTED - 0 of 8 milestones complete** (checked 2026-08-05).
+Status: **LIVE, NOT STARTED - 0 of 8 milestones complete** (checked 2026-08-31).
 `grep -c "Ret(" impala/impala.jspeg` returns 0: none of `lookupRet` / `unaryRet` / `binaryRet` /
-`assignRet` exists, and every call site is still holder-mutating. The one commit to touch this file since
-it was written swapped a single guardrail bullet. M1's sub-item about the runner-side shim IS done
-(`impalaJsCompilerRunner.js` patches no globals), but M1's own exit criterion - a checked-in audit note -
-is not.
+`assignRet` exists, and every call site still fills a record the caller supplies. M1's sub-item about the
+runner-side shim IS done (`impalaJsCompilerRunner.js` patches no globals), but M1's own exit criterion -
+a checked-in audit note - is not.
 
 Kept because it is wanted, not merely unfinished: [`design/jspeg/JSPEGFuture.md`](JSPEGFuture.md) names it
 the near-term step, and [`Impala2Slices.md`](../impala/Impala2Slices.md) makes it a precondition for collect mode.
 
 Two corrections to fold in when it starts:
 
-- The motivation is sized off "~50 `$$.` sites", which is really **126**.
+- The motivation is sized off "~50 `$$.` sites", which is really **131**.
 - **Re-read "holder" below as "the caller's meta slot".** Helpers like `binaryOp($op, $$, $r)` still fill
   a record the caller supplies and return nothing, which is what this plan is about; the wrapper object
   that used to carry it is gone (see [`ValueModel.md`](ValueModel.md)). The `$$.` escape-hatch motivation
@@ -25,16 +24,16 @@ holder-mutating helpers to return-style helpers.
 Current action style:
 
 ```js
-$$parser.binaryOp($$, "+", $left, $right, $$s, $$i);
+$$parser.binaryOp($op, $$, $r, $$s, $$i);
 ```
 
 Target action style:
 
 ```js
-$$ = $$parser.binaryRet("+", $left, $right, $$s, $$i);
+$$ = $$parser.binaryRet($op, $$, $r, $$s, $$i);
 ```
 
-The goal is readability and fewer holder/value mistakes, not different compiler
+The goal is readability and fewer slot/value mistakes, not different compiler
 output. Every completed step must keep generated `.gazl` output equivalent and
 must keep the compiler runnable in NuXJS.
 
@@ -172,12 +171,11 @@ compiler is still current.
 
 ## Milestone 8 - Update Documentation
 
-Goal: make the final holder/value model clear to future grammar authors.
+Goal: make the final value model clear to future grammar authors.
 
 - Update `design/jspeg/JSPEG.md` with:
   - when `$$` means the value
-  - when `$$.` reaches the holder
-  - when helpers should return values versus mutate holders
+  - when a helper should return its value rather than fill the caller's meta slot
 - Update `design/jspeg/ImpalaJS.md` only if user-facing compiler behavior changed.
 
 Exit criteria: docs describe the final action style without mentioning obsolete

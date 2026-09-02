@@ -30,13 +30,22 @@ and is the usual root of the mistake.
 
 ## Building and testing
 
-To run the test suite use the helper script with up to three minutes allowed for execution:
+For a change that touches only the JavaScript compiler, the fast gate is enough. It needs no C++
+toolchain, and `build.sh` and `build.cmd` both call it, so the two cannot drift apart:
 
 ```bash
-timeout 180 ./build.sh
+timeout 300 bash tools/test-js.sh
 ```
 
-Always execute this command before committing changes to verify that the build and regression tests succeed.
+The full sequence builds the C++ tools as well, and runs the demo end to end:
+
+```bash
+timeout 900 bash build.sh
+```
+
+Always run one of these before committing, and the full one before committing anything outside
+`impala/`. Budget generously: the JS gate alone takes about a minute and a half, most of it a
+3000-program fuzz run.
 
 ## Code style
 
@@ -47,7 +56,8 @@ layout, comments, and formatting. This file holds only the operational notes spe
 ## Repository layout
 The project uses a consistent folder structure. Build output is written to `output/` and no source files live there. Useful locations:
 
-- `tools/` - scripts for building and maintaining the code and documentation.
+- `tools/` - scripts for building and maintaining the code and documentation, plus the C++ sources
+  that are not part of the VM library itself (`GAZLCmd.cpp`, `GAZLWasm.cpp`, `GAZLEnterCallTest.cpp`).
 - `projects/` - Xcode and Visual Studio project files.
 - `docs/` - end-user documentation for GAZL, Impala and the C++ embedding API.
 - `design/` - design notes, audits, proposals and internals, for working ON the toolchain. Start at `design/README.md`.

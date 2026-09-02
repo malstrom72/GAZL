@@ -48,23 +48,20 @@ main:	FUNC	; signature func main() -> void @ structSymbolicFill.impala:39:1
 ;-----------------------------------------------------------------------------
 		MOVi $i #0 	; for (i = 0 to N) 
 		GEQi #0 #N @.e0
-	.l1:	ADDp %1 &s #.o.Scalars.v	; printInt(global s.v[i])
-		PEEK %1 %1 $i
+	.l1:	PEEK %1 &s:.o.Scalars.v $i	; printInt(global s.v[i])
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ structSymbolicFill.impala:43:26
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structSymbolicFill.impala:43:37
 		FORi $i #N @.l1	; }
 	.e0:	MOVi $i #0 	; for (i = 0 to M) 
 		GEQi #0 #M @.e2
-	.l3:	ADDp %1 &e #.o.Elems.p	; printInt(global e.p[i].lo)
-		MULi %3 $i #.z.P
-		ADDp %2 %1 %3
-		PEEK %1 %2 #.o.P.lo
+	.l3:	MULi %1 $i #.z.P	; printInt(global e.p[i].lo)
+		ADDp %1 &e:.o.Elems.p %1
+		PEEK %1 %1 #.o.P.lo
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ structSymbolicFill.impala:46:29
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structSymbolicFill.impala:46:40
-		ADDp %1 &e #.o.Elems.p	; printInt(global e.p[i].hi)
-		MULi %3 $i #.z.P
-		ADDp %2 %1 %3
-		PEEK %1 %2 #.o.P.hi
+		MULi %1 $i #.z.P	; printInt(global e.p[i].hi)
+		ADDp %1 &e:.o.Elems.p %1
+		PEEK %1 %1 #.o.P.hi
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ structSymbolicFill.impala:47:29
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structSymbolicFill.impala:47:40
 		FORi $i #M @.l3	; }

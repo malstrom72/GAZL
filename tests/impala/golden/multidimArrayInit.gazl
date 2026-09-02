@@ -97,13 +97,13 @@ main:	FUNC	; signature export func main() -> void @ multidimArrayInit.impala:37:
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ multidimArrayInit.impala:51:17
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ multidimArrayInit.impala:52:11
 		! ADDi <A> #.d.cube.1 #1	; printInt(global cube[1, 1, 1])
-		! MULi <B> #<A> #.d.cube.0
-		! ADDi <B> <B> #1
-		PEEK %1 &cube:<B> 
+		! MULi <A> #<A> #.d.cube.0
+		! ADDi <A> <A> #1
+		PEEK %1 &cube:<A> 
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ multidimArrayInit.impala:54:32
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ multidimArrayInit.impala:55:11
-		! MULi <B> #.d.cube.1 #.d.cube.0	; printInt(global cube[1, 0, 0])
-		PEEK %1 &cube:<B> 
+		! MULi <A> #.d.cube.1 #.d.cube.0	; printInt(global cube[1, 0, 0])
+		PEEK %1 &cube:<A> 
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ multidimArrayInit.impala:56:32
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ multidimArrayInit.impala:57:11
 		MOVi $total #0 	; total = 0
@@ -127,10 +127,10 @@ main:	FUNC	; signature export func main() -> void @ multidimArrayInit.impala:37:
 		MULi %0 %0 #W
 		SUBi %0 $x %0
 		DIVi %1 $x #W
-		MULi %2 %1 #.d.sym.0
-		ADDi %2 %2 %0
-		PEEK %2 &sym %2
-		ADDi $total $total %2
+		MULi %1 %1 #.d.sym.0
+		ADDi %1 %1 %0
+		PEEK %1 &sym %1
+		ADDi $total $total %1
 		FORi $x #6 @.l9
 	.e8:	MOVi %1 $total 	; printInt(total)
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ multidimArrayInit.impala:68:17
@@ -138,17 +138,17 @@ main:	FUNC	; signature export func main() -> void @ multidimArrayInit.impala:37:
 		PEEK %1 &mat:.o.Mat.tag 	; printInt(global mat.tag)
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ multidimArrayInit.impala:71:26
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ multidimArrayInit.impala:72:11
-		! ADDi <B> #.d.Mat.cells.0 #1	; printInt(global mat.cells[1, 1])
-		! ADDi <A> #.o.Mat.cells #<B>
-		PEEK %1 &mat:<A> 
+		! ADDi <A> #.d.Mat.cells.0 #1	; printInt(global mat.cells[1, 1])
+		! ADDi <B> #.o.Mat.cells #<A>
+		PEEK %1 &mat:<B> 
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ multidimArrayInit.impala:73:34
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ multidimArrayInit.impala:74:11
-		! ADDi <A> #.o.Mat.grid #1	; printInt(global mat.grid[0, 1])
+		! ADDi <B> #.o.Mat.grid #1	; printInt(global mat.grid[0, 1])
 		! LSSi #0 #.d.Mat.grid.1 @.g10
 		! FAIL index 0 outside Mat.grid axis 1 (resolved only at assembly)  
 	.g10:	! LSSi #1 #.d.Mat.grid.0 @.g11
 		! FAIL index 1 outside Mat.grid axis 0 (resolved only at assembly)  
-	.g11:	PEEK %1 &mat:<A> 
+	.g11:	PEEK %1 &mat:<B> 
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ multidimArrayInit.impala:75:33
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ multidimArrayInit.impala:76:11
 		RETU   	; }

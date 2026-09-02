@@ -33,17 +33,17 @@ Baseline for the diff is `main:impala/impala.jspeg` (2938 lines) vs HEAD (6214, 
 ### Breaking changes
 
 1. **Six new reserved words**: `export`, `functype`, `import`, `inline`, `sizeof`, `struct`. Not restored by
-   `--legacy` — all six are a hard `E001` as an identifier, verified 2026-08-04. (`return`, `break` and
+   `--legacy` - all six are a hard `E001` as an identifier, verified 2026-08-04. (`return`, `break` and
    `continue` also became reserved, but through `E449`, which *is* a `--legacy` warning.)
 2. **E101** mixed bitwise operators at one parenthesization level.
 3. **E102** unparenthesized bitwise directly against a comparison.
-4. **E201/E202/E203** element-type mismatches — reachable in old code because `&` became type-producing and
+4. **E201/E202/E203** element-type mismatches - reachable in old code because `&` became type-producing and
    string literals became `int pointer`.
 5. **E437/E438** extern prototypes are now checked against a definition in the same closure.
 
 `--legacy` gates **six** diagnostics, not the two this section originally claimed: E101, E102, E103, E449,
 E452 and E455. `strictError` (`impala/impala.jspeg:1650`) has exactly those six call sites; every other
-diagnostic calls `$$parser.fail` directly. **[V] 2026-08-04** — confirmed behaviourally, not just by
+diagnostic calls `$$parser.fail` directly. **[V] 2026-08-04** - confirmed behaviourally, not just by
 call-site count.
 
 ### Deliberately NOT changed
@@ -57,16 +57,16 @@ unchanged. Four built-ins only (`abs`, `floor`, `itof`, `ftoi`). Casts still rei
 
 ## B. Biggest shortcomings vs the planned Impala 3.0
 
-Ranked by pain. All parked work is *additive* in 3.0 except item 4 — nothing here says "avoid a pattern
+Ranked by pain. All parked work is *additive* in 3.0 except item 4 - nothing here says "avoid a pattern
 today" except that one.
 
 The list originally carried a sixth entry, the diagnostics backlog: five shapes the compiler accepted and
 the assembler then rejected, naming a compiler-minted GAZL symbol instead of the `.impala` line. **CLOSED
-2026-08-03**, verified item by item on 2026-08-04 — E461, E404, E445, E444, E443, and `KNOWN_UNLOADABLE` in
+2026-08-03**, verified item by item on 2026-08-04 - E461, E404, E445, E444, E443, and `KNOWN_UNLOADABLE` in
 `impala/runJspegTests.js:61` is now `{}`. See `design/impala/CompileTimeHardening.md:15`.
 
 1. **No by-value structs, no multi-return, no destructuring** (E426-E429). You write pointer
-   out-parameters: `addVec(&s, &p, &q)` instead of `s = addVec(p, q)`. Cost is inside the callee — the
+   out-parameters: `addVec(&s, &p, &q)` instead of `s = addVec(p, q)`. Cost is inside the callee - the
    golden diff in `e6ad36d` shows `addVec` going from 2 instructions to 8, because by-value fields are free
    window operands and by-pointer fields are a `PEEK`/`POKE` each. Implemented and VM-verified on
    `Impala3-byvalue-multireturn-park` (an ancestor of this branch), then parked by `e6ad36d`; `Impala2` has since
@@ -75,25 +75,25 @@ the assembler then rejected, naming a compiler-minted GAZL symbol instead of the
    cherry-pick. The figure only grows, and with it the argument.
 2. **Import cycles only half-resolve.** A backwards cross-cycle reference needs a forward `extern`, and the
    *same two files* build or fail depending only on which is the root. A cross-cycle **struct type** has no
-   workaround at all — there is no forward-`extern` form for a type. Collect mode (the fix) is designed but
+   workaround at all - there is no forward-`extern` form for a type. Collect mode (the fix) is designed but
    never built; done-when is pinned (`importcycle/odd.impala` builds as root with its `extern` deleted).
 3. ~~**No multidimensional arrays.**~~ **RESOLVED 2026-08-04.** Implemented in all three positions this
    entry called impossible - `global` arrays, locals and struct fields - with per-axis bounds checking in
    all three tiers. The escape-hatch argument fell with it: an `extern struct` field states its RANK
    (`int array cells[,]`), the host supplies each axis as `.d.Grid.cells.<k>`, and `E430` still refuses an
    extent, so nothing had to be relaxed. See `docs/impala/MultidimensionalArrays.md`.
-4. **Implicit array→pointer decay is still live and it is decided to go.** Write `&a[0]` today — it is
+4. **Implicit array→pointer decay is still live and it is decided to go.** Write `&a[0]` today - it is
    correct under both rules and costs nothing now. (An earlier draft of this line said `&a`; that is wrong,
    `&a` is `E404 Invalid lvalue` today, which also means blocking decay is not a pure removal. Recorded in
    `design/ParkedFeatures.md`.) See section C for why this is the only forward-compat item.
-5. Numeric-only by-value call windows (E425 — not a dead diagnostic but a never-written one), the mandatory reserved return
+5. Numeric-only by-value call windows (E425 - not a dead diagnostic but a never-written one), the mandatory reserved return
    transient (an ABI change), and dead-arm elimination after a compile-time branch. None reachable today.
 
-### ~~Undocumented 3.0 direction~~ — FIXED 2026-08-04
+### ~~Undocumented 3.0 direction~~ - FIXED 2026-08-04
 
 *(Was true on 2026-07-29.)* `design/ParkedFeatures.md:294` now carries the decay decision under its own
 heading, "Block implicit array->pointer decay", marked as a decided restriction rather than a parked
-feature — the one item a 2.0 user should act on today, and now reachable from the index.
+feature - the one item a 2.0 user should act on today, and now reachable from the index.
 `design/ParkedFeatures.md` also names the document that survives only on the park branch
 (`docs/Impala2OpenItems.md`), which is what this entry asked for. It used to name
 `docs/impala/MultidimensionalArrays.md` alongside it; that one is a live doc on THIS branch describing the design
@@ -105,7 +105,7 @@ design for an implemented feature.
 
 Ordered by danger. Silent wrong behaviour first. Each heading carries the date its state was last checked.
 
-### C1. ~~`--dead-strip` silently corrupts retained array data~~ — FIXED 2026-08-04
+### C1. ~~`--dead-strip` silently corrupts retained array data~~ - FIXED 2026-08-04
 
 *(Was **[V]** CRITICAL on 2026-07-29.)* Both shapes below now run correctly with and without
 `--dead-strip`, verified on a 5-element and a 24-element array: `KEPT` reads `9 9 0 0 0` either way, and
@@ -122,7 +122,7 @@ readonly int array DEAD[3] = { 1, 2, 3 }  // unreferenced
 `KEPT` read `9 9 0 0 0` normally and **`9 9 1 2 3` under `--dead-strip`**, with no error at any stage. No
 fixture covered it at the time; `tests/impala/sources/deadstrip/stripmain.impala` now carries array data.
 
-### C2. ~~`--dead-strip` breaks the canonical firmware idiom~~ — FIXED 2026-08-04
+### C2. ~~`--dead-strip` breaks the canonical firmware idiom~~ - FIXED 2026-08-04
 
 *(Was **[V]** HIGH on 2026-07-29.)* The program below compiles, strips and runs. Fixed by `2852625`,
 "Dead-strip missed a symbol used as an offset or starting with a dot". Description kept as the record:
@@ -137,7 +137,7 @@ global int array buf[N]      // used to be: --dead-strip: Symbol not previously 
 
 `global int array params[PARAM_COUNT]` is exactly the shape `docs/impala/Impala2.md:207-210` recommends.
 
-### C3. ~~`p + 1` does not stride but `p[1]` does~~ — RESOLVED 2026-07-30, re-verified 2026-08-04
+### C3. ~~`p + 1` does not stride but `p[1]` does~~ - RESOLVED 2026-07-30, re-verified 2026-08-04
 
 *(Was **[V]** CRITICAL on 2026-07-29.)* Resolved not by making the table's rows correct but by making
 every one of them **unwritable**. The rule is that scaling is confined to the SUBSCRIPT - `[[ ]]`, the
@@ -149,12 +149,12 @@ carries it. Re-checked on 2026-08-05:
 | `bank[0]` on a struct array | scales by `.z.` - no diagnostic (`E204` was retired 2026-08-04) |
 | `p = p + 1` on a struct pointer | `E307`, fix-it "a struct pointer moves by scaled subscript only - write `&p[i]`" |
 | `q - p` on two struct pointers | `E308`, fix-it to `((pointer)q - (pointer)p) / sizeof(S)` |
-| `for (p = ... to ...)` on a struct pointer | `E309` — see F2 |
+| `for (p = ... to ...)` on a struct pointer | `E309` - see F2 |
 
 So there is no silently-wrong arithmetic over a struct pointer left; every shape in the original table is
 a diagnostic with a fix-it.
 
-### C4. Shift-vs-additive precedence — INVESTIGATED, NOT A BUG **[V] 2026-07-29**
+### C4. Shift-vs-additive precedence - INVESTIGATED, NOT A BUG **[V] 2026-07-29**
 
 Kept in the list because it looks like one, was reported as one, and cost a round trip to disprove.
 
@@ -184,10 +184,10 @@ is the design goal met rather than missed.
 Lesson worth keeping: the codegen above was verified, and the *conclusion drawn from it* was not. `[V]`
 on an observation does not transfer to the claim built on top of it.
 
-### C5. ~~`E403 Undeclared identifier` on a global that plainly exists~~ — FIXED 2026-08-04
+### C5. ~~`E403 Undeclared identifier` on a global that plainly exists~~ - FIXED 2026-08-04
 
-*(Was **[V]** HIGH FREQUENCY on 2026-07-29.)* `x = G;` for a `global int G` still reports E403 — that part
-is by design, the `global` prefix is mandatory — but it now carries exactly the note this entry asked for:
+*(Was **[V]** HIGH FREQUENCY on 2026-07-29.)* `x = G;` for a `global int G` still reports E403 - that part
+is by design, the `global` prefix is mandatory - but it now carries exactly the note this entry asked for:
 
 ```
 error[E403]: Undeclared identifier: G
@@ -197,14 +197,14 @@ note: G is a global - write `global G`
 The mandatory `global` prefix remains a sound marker-discipline device (one `global` = one `PEEK`); it was
 only ever the message that pointed the wrong way.
 
-### C6. Other silent-wrong shapes — bullet-by-bullet dates below
+### C6. Other silent-wrong shapes - bullet-by-bullet dates below
 
 - ~~**A flat array initializer ignored the declared element type.**~~ FIXED 2026-08-02. `InitList`
-  checked each entry against its OWN type — a comparison no value can fail — so nothing enforced the
+  checked each entry against its OWN type - a comparison no value can fail - so nothing enforced the
   array's element type. `int array A[2] = { 1, "s" }` stored a POINTER in an int slot, and
   `float array F[2] = { 1, 2 }` stored the INTEGER bit pattern, so `F[0]` read back as `1.4013e-45`
   (verified by running it). The assembler cannot catch either: `DATA` is untyped words. The scalar
-  paths were always this strict — `global float f = 1` is E407 — so this was the array path missing a
+  paths were always this strict - `global float f = 1` is E407 - so this was the array path missing a
   check the rest of the language had, not a new rule. Untyped `array A[2]` (Impala 1) states no element
   type and is still unchecked, deliberately.
 - **A declared return value never assigned returns stale frame garbage.** No definite-assignment analysis;
@@ -212,23 +212,23 @@ only ever the message that pointed the wrong way.
 - ~~**`copy` bypasses the pointer ELEMENT type.**~~ FIXED 2026-08-04. `copy(8 from &intSrc[0] to
   &floatDst[0])` compiled silently: the rule checked that both operands are pointers (`E301`) and never
   asked what they point AT, leaving it the one door that reads a typed pointer and enforces nothing. It now
-  runs `checkPtrAssign` — with one deliberate difference from an assignment: **only on a contradiction**,
+  runs `checkPtrAssign` - with one deliberate difference from an assignment: **only on a contradiction**,
   when both sides know their element and disagree. An assignment rejects untyped → typed because the
   VARIABLE must keep that promise for every later deref; a copy consumes both addresses on the spot, so an
   untyped source claims nothing to break, and reading an Impala 1 `array` blob into typed storage is the
   1.0 idiom (one corpus fixture, `patch.impala:234`, does exactly that). The cast is the escape hatch.
   The check exposed a second bug underneath it: `&x` on an element of an untyped `array` stamped
-  `elem = '?'` while a bare untyped array stamped `undefined` — two spellings of the same non-knowledge,
+  `elem = '?'` while a bare untyped array stamped `undefined` - two spellings of the same non-knowledge,
   which made comparing them say "expected untyped elements, got untyped elements". Fixed at the source
   (`&x` now normalizes `'?'` to `undefined`), which also collapsed the emitted `unknown-ptr` metadata token
-  onto `ptr`, the spelling the code already documented as canonical — the only corpus effect, 7 comment
+  onto `ptr`, the spelling the code already documented as canonical - the only corpus effect, 7 comment
   lines across 3 goldens, no instruction changed.
   *The length half of this finding was withdrawn 2026-08-04: it originally also called a 4-word overrun of
   the destination a defect. A pointer has no extent, so past `&a[0]` there is nothing to check against, and
   extents are not tracked through pointer values by design. Only the literal `&arr[const]` spelling could
   ever be caught, which would make the diagnostic a property of how the address was WRITTEN rather than of
-  the program — worse than uniform silence. Length is the programmer's, exactly as with `memcpy`.*
-- **Locals are not zero-filled** **[V] 2026-08-04** — still worth stating, because globals are, so the two
+  the program - worse than uniform silence. Length is the programmer's, exactly as with `memcpy`.*
+- **Locals are not zero-filled** **[V] 2026-08-04** - still worth stating, because globals are, so the two
   storage classes differ. The doc half of this finding is FIXED: `docs/impala/Impala2.md:522` now reads
   "Uninitialized **global** struct storage is zero-filled", qualified exactly as the finding asked.
 - **`&local` returned from a function** points into the next callee's frame. No diagnostic, no trap.
@@ -238,44 +238,43 @@ only ever the message that pointed the wrong way.
   2026-08-04.** (`design/impala/ExternPrototypes.md` used to claim gazl-validate catches drift; it now says plainly
   that the scanner records field names only and spells out what that does and does not catch.
   `design/impala/StructLayoutConstants.md` correctly calls the rest deferred.)
-- ~~**Constant OOB through a pointer** (`p[[9]].a`) is caught nowhere.~~ NOT A DEFECT — filed here in
+- ~~**Constant OOB through a pointer** (`p[[9]].a`) is caught nowhere.~~ NOT A DEFECT - filed here in
   error. A pointer has no extent, so there is nothing to check against, and a language at this level hands
   that to the programmer exactly as C does. Pointer indexing is unchecked at every tier, permanently and by
   design; it is not a gap and not future work. The ARRAY half of this bullet was real and is closed: a
   constant index past a known extent is `E461` at Impala compile time. See `docs/impala/MemorySafetyModel.md`
   for the tiers and what each one covers.
-- **`for`'s upper bound is live or frozen depending on the shape of the bound expression** — a plain local
+- **`for`'s upper bound is live or frozen depending on the shape of the bound expression** - a plain local
   emits `FORi $i $n` (re-read each iteration); anything else is snapshotted into a scratch.
   **[V] 2026-07-29.**
 - ~~**Global initializers bypass checks their in-function twins get.**~~ FIXED 2026-08-04, in three steps
   worth reading together, because the first two each closed one half and left the shape of the bug behind.
   The element-type half (`global int array T[4] = { 1, 2.0, 3, 4 }`) closed first, as `E407`. The funcptr
-  half (`global Fn bp = g` with a mismatched signature) closed next as `E441` (`0682046`) — but through a
+  half (`global Fn bp = g` with a mismatched signature) closed next as `E441` (`0682046`) - but through a
   wrapper calling *half* of `checkPtrAssign`, so `global int pointer p = &global f[0]` off a
   `float array f[4]` still compiled clean. `ed1b879` deleted the wrapper: every FLAT initializer door runs
   `checkPtrAssign` whole, so a check added there cannot be right for an assignment and missing at a
-  declaration. Ordering was the subtlety — `global int pointer p = 1` is not an element mismatch but a
+  declaration. Ordering was the subtlety - `global int pointer p = 1` is not an element mismatch but a
   non-pointer, and stays `E407`, exactly as its assignment twin stays `E303`.
   **Step four, 2026-08-04 (`63bd4ff`): there was a FIFTH door, and it was the one that mattered.** A struct
-  FIELD does not reach the row through those four — it goes through `pushInitScalar`, which was handed the
+  FIELD does not reach the row through those four - it goes through `pushInitScalar`, which was handed the
   field's `type` and not its `elem`, and asked only the coarse question. So `struct P { int pointer p }`
   took `{ p: &global floatArr[0] }` and a funcptr field took a mismatched function, both silently, while
   assigning either to the same field inside a function is `E201`/`E441`. Struct fields are where typed
   pointers and funcptrs actually live in this codebase, so the four doors closed first were the *less*
-  important ones. `BracedItem` now carries the value's `elem`, and `pushInitScalar` runs the same check —
-  a braced entry is already reduced to its operand, so it rebuilds the one-operand shape the check reads,
+  important ones. `BracedItem` now carries the value's `elem`, and `pushInitScalar` runs the same check - a braced entry is already reduced to its operand, so it rebuilds the one-operand shape the check reads,
   which is what keeps `null`/`nullfunc` holes legal. Found by a cleanup review, not by the fix that
   claimed to have closed this; the earlier wording above ("every initializer door") was itself the tell.
 - ~~**A brace initializer over a symbolically-sized struct field emits a short, misaligned DATA row.**~~
   FIXED (`E454`). `struct S { int a; int array v[N]; int z }` with `N` a const gave `DATA #1 #2` where the
-  literal `[3]` gave `DATA #1 #7 #8 #9 #2` — the `2` meant for `z` landed in `v[0]`, with the `GLOB` still
+  literal `[3]` gave `DATA #1 #7 #8 #9 #2` - the `2` meant for `z` landed in `v[0]`, with the `GLOB` still
   correctly sized `*.z.S`. Root cause: `fieldWords` multiplied the extent OPERAND (`'N'`) by a number and
   returned NaN, which flowed unchecked into `s.words`; `buildStructInit`'s `e < f.size` then compared
-  against NaN and ran zero times. Note the *layout* was never wrong — `emitStructLayout` emits
+  against NaN and ran zero times. Note the *layout* was never wrong - `emitStructLayout` emits
   `! ADDi <a> #<a> #N` and the assembler resolves it, so allocation, nesting, struct arrays, locals, field
   access, `COPY` and `sizeof` were all correct throughout. `fieldWords` returns `undefined` rather than
   NaN, and the two checks that read `structWords(...) === undefined` as "incomplete" now ask
-  `structDefined` instead — otherwise a symbolically-sized struct could not be nested by value or passed
+  `structDefined` instead - otherwise a symbolically-sized struct could not be nested by value or passed
   to `sizeof`.
   **A symbolic extent can still be initialized**, and the first fix wrongly rejected that. `DATA` may
   define FEWER words than its region holds, with the remainder zeroed (`docs/gazl/InstructionSet.md:96-99`), so
@@ -284,12 +283,12 @@ only ever the message that pointed the wrong way.
   time is the offset of a field placed *after* the symbolic one. Verified against the assembler, three ways: there is no fill or repeat
   directive in `docs/gazl/InstructionSet.md`; a FORWARD `! GOTO` assembles and can even skip a `DATA` line; a
   BACKWARD one does not assemble at all (`Compile time label not found`), so no assemble-time loop can
-  emit a symbolic number of words. Hence `E454` — but only when a later field is given a NON-ZERO value.
+  emit a symbolic number of words. Hence `E454` - but only when a later field is given a NON-ZERO value.
   Zero costs no words, so `{ a: 1, v: {7,8,9}, z: 0 }` is accepted and simply stops the row early, landing
   exactly where the zero-fill would; omitted fields were always fine. The hint leads with omitting those
-  fields or moving the symbolic array last, NOT with "give it a literal size" — per
+  fields or moving the symbolic array last, NOT with "give it a literal size" - per
   `design/impala/TwoStageConstants.md`, steering a user toward pinning an extent numerically is the anti-pattern,
-  not the fix. Over-filling is left to the assembler, per rule 2 there — Impala does not know `N`, so it
+  not the fix. Over-filling is left to the assembler, per rule 2 there - Impala does not know `N`, so it
   must not guess. Note the assembler does NOT catch it on its own: over-running the whole section is
   named (`Not enough space in data section: s`), but over-running one field INTO the next is a legal,
   in-bounds write it has no notion of. So Impala emits the comparison for it (`! LEQi` + `! FAIL` above
@@ -299,36 +298,36 @@ only ever the message that pointed the wrong way.
   every range as of 2026-08-02) and `E444` (outside a numeric range). A symbolic range leaves the window
   check off deliberately - see S5/S6 in `CompileTimeHardening.md`.
 - ~~**`switch (x == lo to hi)`: `hi` is exclusive**, and `docs/impala/Impala.md` says inclusive.~~ DOC FIXED
-  2026-08-04 — `docs/impala/Impala.md:354` now says "the upper bound is **exclusive**, exactly as in
+  2026-08-04 - `docs/impala/Impala.md:354` now says "the upper bound is **exclusive**, exactly as in
   `for (i = 0 to N)`". The language behaviour never changed; only the doc was wrong.
 
-### C7. C reflexes that are rejected with a bare `E001: syntax error` — **[V] 2026-08-04**
+### C7. C reflexes that are rejected with a bare `E001: syntax error` - **[V] 2026-08-04**
 
 No expected-set, no note. For a language whose stated audience is strangers and AI agents, this is the
 largest DX defect: an agent iterating against diagnostics gets a caret and nothing else. Rows below
 re-checked 2026-08-04 and still accurate; the `return`/`break`/`continue` row came off the list, since
-those are now reserved words with dedicated messages (`E448`/`E450`) — see `design/impala/SyntaxConsistency.md:205-217`.
+those are now reserved words with dedicated messages (`E448`/`E450`) - see `design/impala/SyntaxConsistency.md:205-217`.
 
 | You write | Reality |
 |---|---|
 | `if (x)`, `while (1)`, `if (!x)` | conditions require a `COMP_OP`; write `if (x != 0)` |
 | `flag = (a < b)` | comparisons and `&&`/`\|\|` are not values, anywhere |
 | `int i;` inside a body | no declaration statement; all locals in the `locals` clause |
-| `copy(dst, src, n)` | `copy(N from SRC to DST)` — count first, and src/dst reversed vs `memcpy` |
-| `abs x - 1` read as `abs(x - 1)` | `abs`/`floor`/`itof`/`ftoi` are prefix operators, so this is `(abs x) - 1`. (`abs(x)` does compile — the parens are just a parenthesized expression — but `abs()` and `abs(x, 2)` do not.) |
-| `function f(int array a)` | array parameters do not exist (but `locals` accepts arrays — the two lists differ) |
+| `copy(dst, src, n)` | `copy(N from SRC to DST)` - count first, and src/dst reversed vs `memcpy` |
+| `abs x - 1` read as `abs(x - 1)` | `abs`/`floor`/`itof`/`ftoi` are prefix operators, so this is `(abs x) - 1`. (`abs(x)` does compile - the parens are just a parenthesized expression - but `abs()` and `abs(x, 2)` do not.) |
+| `function f(int array a)` | array parameters do not exist (but `locals` accepts arrays - the two lists differ) |
 | `1e6` | `FloatLiteral` requires `DIGIT+ "." DIGIT+` first |
 | `&arrayName`, `&funcName` | `E404 Invalid lvalue`; write `a` / `&a[0]` and `fp = g` |
-| `(StructName) expr` | `E403 Undeclared identifier: StructName` — write `(S pointer)` |
+| `(StructName) expr` | `E403 Undeclared identifier: StructName` - write `(S pointer)` |
 
 One bright spot worth advertising: `if (x = 1)` is structurally impossible, because assignment is an `Expr`
 and conditions need a `COMP_OP`.
 
-### C8. Internal inconsistencies a reader must simply memorize — re-checked 2026-08-04
+### C8. Internal inconsistencies a reader must simply memorize - re-checked 2026-08-04
 
 - **Three signature grammars.** `function` and `extern function` require parameter names *and* a return name
   (a meaningless dummy for an extern); only `functype` allows types-only. ~~`docs/impala/Impala2.md` claims they
-  mirror each other~~ — DOC FIXED: `docs/impala/Impala2.md:810` now says "The three signature grammars do **not**
+  mirror each other~~ - DOC FIXED: `docs/impala/Impala2.md:810` now says "The three signature grammars do **not**
   mirror each other."
 - **Separators are inverted**: struct fields take `;`, `locals` takes `,`. Neither accepts the other.
 - **Semicolons**: top-level declarations take none, every statement takes one, `do {...} while (c)` takes
@@ -336,30 +335,28 @@ and conditions need a `COMP_OP`.
 - **Three declaration keywords (`global`/`readonly`/`temporary`), one access keyword (`global`).**
 - **Modifier order is rigid and undocumented**: `extern global int X`, `readonly global int X`,
   `function inline g()`, `export struct S` are all `E001`.
-- **`assert` defers its own prerequisites to the assembler** — with no `const int DEBUG` and no `assertFail`
+- **`assert` defers its own prerequisites to the assembler** - with no `const int DEBUG` and no `assertFail`
   in the link set the Impala compile succeeds and the failure surfaces at load.
-- ~~**Initializer errors are anchored on the *next* declaration** **[V]** — `$$i` has already skipped
+- ~~**Initializer errors are anchored on the *next* declaration** **[V]** - `$$i` has already skipped
   whitespace. When the bad declaration is last in the file the caret lands past EOF and no source line
   prints at all.~~ FIXED 2026-08-02. Four scalar paths kept `$$i` while the brace path beside them had
   already moved to a saved start offset: the global initializer (E407/E421), the const initializer
   (E407) and the array extent (E407). Each now saves `$$i` straight after the `'='` or `'['`, before
-  `Expr` (or `']' _`) eats the trailing space — the same one-line pattern `$initStart` and `$cStart`
+  `Expr` (or `']' _`) eats the trailing space - the same one-line pattern `$initStart` and `$cStart`
   already used. Carets are column-accurate, not merely on the right line, and pinned in `caretCases`
   including a deliberately last-in-file case for the past-EOF shape.
-- ~~**`docs/impala/Impala.md` says forward references work.**~~ DOC FIXED 2026-08-04 — `docs/impala/Impala.md:308` now
+- ~~**`docs/impala/Impala.md` says forward references work.**~~ DOC FIXED 2026-08-04 - `docs/impala/Impala.md:308` now
   tells you to "declare a forward `extern function` above the use". The E403 note remains excellent, and
   even finds the later definition.
-- ~~**`docs/impala/Impala.md`'s documented `goto`-out-of-loop idiom does not compile.**~~ DOC FIXED 2026-08-04 —
-  `docs/impala/Impala.md:378-385` now writes `finished: ;` and explains that a bare `finished:` is `E001`.
-- ~~**`docs/impala/Impala.md`'s reserved-word list is missing all six new keywords.**~~ DOC FIXED 2026-08-04 —
-  the list at `docs/impala/Impala.md:32-36` carries all six, plus a note on `return`/`break`/`continue`.
+- ~~**`docs/impala/Impala.md`'s documented `goto`-out-of-loop idiom does not compile.**~~ DOC FIXED 2026-08-04 - `docs/impala/Impala.md:378-385` now writes `finished: ;` and explains that a bare `finished:` is `E001`.
+- ~~**`docs/impala/Impala.md`'s reserved-word list is missing all six new keywords.**~~ DOC FIXED 2026-08-04 - the list at `docs/impala/Impala.md:32-36` carries all six, plus a note on `return`/`break`/`continue`.
 - ~~**Every `.gazl` still says `; Compiled with Impala version 1.0`**~~ FIXED 2026-08-04 (`3d1975e`).
   `IMPALA_VERSION` is `'2.0'`; all 93 recorded artifacts were regolded, and the whole regold diff is that
-  one banner line — `tests/impala/golden/*.gazl` via `runJspegTests --makegold`, `impala/testdata/*.expected.gazl`
+  one banner line - `tests/impala/golden/*.gazl` via `runJspegTests --makegold`, `impala/testdata/*.expected.gazl`
   by replaying the harness's own options, and `importMain.gazl`/`stripped.gazl` via `importBuildTests makegold`
   (a third set `--makegold` does not reach).
 
-### C9. Documented-but-absent, and absent-but-shipped — CLOSED by Batch 5, re-checked 2026-08-04
+### C9. Documented-but-absent, and absent-but-shipped - CLOSED by Batch 5, re-checked 2026-08-04
 
 This section was Batch 5's input list. Every doc-side item below has since been written; what remains is
 the two entries still marked open.
@@ -368,11 +365,11 @@ the two entries still marked open.
   three have zero fail sites.~~ DOC FIXED. That section now carries a "Superseded scope note"
   (`design/impala/StructLayoutConstants.md:268`) saying the three were reserved and never fired;
   `docs/impala/Impala2.md:1573` says the same in the registry.
-- ~~`(funcptr array) table` casts do not parse — the cast grammar has no `array`.~~ DOC FIXED.
+- ~~`(funcptr array) table` casts do not parse - the cast grammar has no `array`.~~ DOC FIXED.
   `docs/impala/Impala2.md:248` now states it: "**`array` is not a cast modifier.** `pointer` is the only one, so
   `(funcptr array) table` is `E001`."
 - ~~`impala build` does not exist; the subcommands are `compile` and `run`, and there is no `impala` binary
-  at all — every doc example that writes `impala compile ...` is aspirational.~~ DOC FIXED 2026-08-04. The
+  at all - every doc example that writes `impala compile ...` is aspirational.~~ DOC FIXED 2026-08-04. The
   last such example (`docs/impala/Impala2.md:967`) now spells the real invocation, `node impala/impala.node.js
   compile`. Packaging a launcher is a separate wish, not a doc defect: no doc promises one now.
 - ~~`--json`, `--emit-metadata`, `--no-metadata` do not exist. The complete flag set is `--legacy` and
@@ -380,49 +377,49 @@ the two entries still marked open.
   `--legacy`, `--dead-strip` and `--range-checks` (corrected 2026-08-04; `--range-checks` shipped with
   E461). A fourth, `--collapse-labels`, existed for one day and was deleted - do not copy this list,
   cite what `impala.node.js` prints with no arguments.
-- ~~`import "x.gazl"` blob imports do not work — the closure walker parses every import as Impala source.~~
+- ~~`import "x.gazl"` blob imports do not work - the closure walker parses every import as Impala source.~~
   RESOLVED 2026-08-04 by **deferring the feature to Impala 3.0**, not by building it: nothing needs it, and
   the builder's concatenate-then-compile shape leaves a blob no seam to enter through. The Step 5 bullet in
   `docs/impala/Impala2.md` is struck through and points at
   [`ParkedFeatures.md`](../ParkedFeatures.md#precompiled-gazl-blob-imports), which records why and what it
-  would cost. Like collect mode it is a pure relaxation — source imports written today keep compiling.
+  would cost. Like collect mode it is a pure relaxation - source imports written today keep compiling.
 - ~~**The legacy manual-concatenation struct model no longer links**~~ DOC FIXED. `docs/impala/Impala2.md:696`
   now opens "the 1.0 copy-paste model ... is dead", shows the collision, and documents the working pattern
   (one unit `struct`, the rest a body-carrying `extern struct`).
 - ~~`design/impala/StructLayoutConstants.md` *understates* the design: it claims nested/array field access costs an
-  `ADDp`/`ADRL` per level.~~ DOC FIXED — it now describes the assemble-time fold and the single `GETL`.
+  `ADDp`/`ADRL` per level.~~ DOC FIXED - it now describes the assemble-time fold and the single `GETL`.
   Dots really are free.
 
 
-## D. Toolchain clarity — Batch 4 closed most of this, re-checked 2026-08-04
+## D. Toolchain clarity - Batch 4 closed most of this, re-checked 2026-08-04
 
-### D1. ~~The README's Getting Started command is wrong and fails silently~~ — FIXED 2026-08-04
+### D1. ~~The README's Getting Started command is wrong and fails silently~~ - FIXED 2026-08-04
 
 *(Was **[V]** on 2026-07-29.)* `README.md` now passes the output path second and spells out the failure
 mode in prose right under the command: "The output path is the *second* argument. Passing the random id
 there instead writes the GAZL to a file named `0x4d2` and leaves `demo.gazl` empty, which `GAZLCmd` then
 reports as `Code size: 0 ... Could not locate function: main`."
 
-### D2. ~~"gazl-validate is not the assembler" is documented only in a source comment~~ — FIXED 2026-08-04
+### D2. ~~"gazl-validate is not the assembler" is documented only in a source comment~~ - FIXED 2026-08-04
 
 `README.md:42` carries a **"Which tool does what"** table naming `output/GAZLCmd` as the only real
 assembler-and-VM, `tools/gazl-validate.sh`/`.cmd` as a `; signature` metadata linter, and
-`impala/gazlAssembleCheck.js` as the gates' helper — plus the no-assemble-only-mode note and the
+`impala/gazlAssembleCheck.js` as the gates' helper - plus the no-assemble-only-mode note and the
 bogus-entry-point workaround, both promoted out of the source comment.
 
-### D3. ~~`build.sh` and `build.cmd` run different gate sets~~ — FIXED 2026-08-04
+### D3. ~~`build.sh` and `build.cmd` run different gate sets~~ - FIXED 2026-08-04
 
 *(Was **[V]** on 2026-07-29.)* Both now call the same script: `build.sh:15` runs `bash tools/test-js.sh`
 and `build.cmd:22` runs `CALL tools\test-js.cmd`. The drift is fixed by construction rather than by
 discipline, which was Batch 4's stated goal.
 
-### D4. ~~There is no way to run only the JS gates~~ — FIXED 2026-08-04
+### D4. ~~There is no way to run only the JS gates~~ - FIXED 2026-08-04
 
 `tools/test-js.sh` / `tools/test-js.cmd` exist and are listed in the README's Helper Scripts section:
 "every gate that needs only node (~1-1.5 min, most of it a 3000-program fuzz run; no C++ toolchain); run this before committing a compiler-only
 change".
 
-### D5. Smaller — re-checked 2026-08-04
+### D5. Smaller - re-checked 2026-08-04
 
 Four of the original bullets are now false and are dropped: `tools/gazl-validate.nuxjs.js` exists with no
 bare `.js` twin; `output/impala.nuxjs.js` is byte-identical to `impala/impala.nuxjs.js`;
@@ -437,7 +434,7 @@ hand. */`; and `impala/README.md` exists. What is left:
 - **Two independent golden-fixture systems with near-identical names**: `tests/impala/{sources,golden}`
   (owned by `runJspegTests --makegold`) and `impala/testdata/*.expected.gazl` (owned by
   `tools/regen-jspeg-fixtures`). Adding a fixture to the wrong one silently gets you no coverage. The split
-  is explained in `jspegCompilerTests.js:677-681` — a source comment.
+  is explained in `jspegCompilerTests.js:677-681` - a source comment.
 
 
 ## Decision: pointer arithmetic scales by element size (2026-07-29) - SUPERSEDED
@@ -499,7 +496,7 @@ Five batches, executed in the order **4 - 1 - 2 - 3 - 5**. Batch 4 goes first be
 later batch cheaper to verify, and the gate drift (D3) means batches 1-3 would otherwise be validated by the
 weaker script. Each batch ends green on all four JS gates plus a commit.
 
-**All five batches are DONE** (last confirmed 2026-08-04). Their input lists — C1, C2, C3, C9 and D — are
+**All five batches are DONE** (last confirmed 2026-08-04). Their input lists - C1, C2, C3, C9 and D - are
 struck above accordingly.
 
 ### Batch 4 - toolchain (DONE)
@@ -583,7 +580,7 @@ lvalue` - so the evidence for a "FIXED" entry did not compile. Respelled and re-
 
 Description kept as the record: the scaling branch keyed on "the left operand is a struct pointer" and
 fired for **every** operator, not just `+` and `-`. A comparison has no unit, so scaling either side was
-meaningless, and the result was `MULi %0 $q #.z.S` — a `MULi` on a pointer operand, which `GAZLCmd`
+meaningless, and the result was `MULi %0 $q #.z.S` - a `MULi` on a pointer operand, which `GAZLCmd`
 refused to load with `Incompatible types: $q`. The JS gates were green only because no fixture compared
 two struct pointers.
 
@@ -661,7 +658,7 @@ Impala needs no carve-out at all.
 > the shipped rule, including the `--range-checks` runtime tier for indices no constant check can see.
 
 
-# ~~Decision: the scaled subscript is spelled `[[ ]]`~~ — REVERSED 2026-08-04
+# ~~Decision: the scaled subscript is spelled `[[ ]]`~~ - REVERSED 2026-08-04
 
 > **REVERSED. `[[ ]]` no longer exists; `a[i]` strides by the declared element size, whatever it is, and
 > `E204`/`E205` are gone.** The section below is kept as the record of why it was adopted and is accurate

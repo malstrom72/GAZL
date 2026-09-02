@@ -3,9 +3,10 @@
 The Impala compiler: a JSPEG grammar with embedded JavaScript actions, plus the front ends, test
 harnesses and fixtures around it. Start here to find out which file you want.
 
-Language reference: [`../docs/impala/Impala.md`](../docs/impala/Impala.md) for 1.0, [`../docs/impala/Impala2.md`](../docs/impala/Impala2.md)
-for what 2.0 adds. CLI and programmatic API detail: [`ImpalaJS.md`](../design/jspeg/ImpalaJS.md). JSPEG itself:
-[`JSPEG.md`](../design/jspeg/JSPEG.md).
+Language reference: [`../docs/impala/Impala.md`](../docs/impala/Impala.md) - one page, and the only
+one needed to write Impala. [`../docs/impala/Impala2.md`](../docs/impala/Impala2.md) is the 2.0 spec and
+design record, for why the language is shaped the way it is. CLI and programmatic API detail:
+[`ImpalaJS.md`](../design/jspeg/ImpalaJS.md). JSPEG itself: [`JSPEG.md`](../design/jspeg/JSPEG.md).
 
 
 ## What is in here
@@ -32,7 +33,7 @@ build if they drift from their grammar.
 |---|---|
 | `impala.node.js` | Node CLI. `compile` / `run` subcommands; run it with no arguments for the flag list. What you use during development. |
 | `impala.nuxjs.js` | The same compiler driven from the NuXJS ES5 runtime, positional args only. This is the production driver; `build.sh` stages it into `output/`. |
-| `playground.html` | Standalone browser playground, no server and no build. Open it from this directory. The run pane executes the emitted GAZL on `gazlVm.js` — the real VM (`src/GAZL.cpp`) compiled to wasm by `tools/buildGazlWasm.sh`; checked in like `impalaCompiler.js`, rebuild only when `src/GAZL.cpp` changes. |
+| `playground.html` | Standalone browser playground, no server and no build. Open it from this directory. The run pane executes the emitted GAZL on `gazlVm.js` - the real VM (`src/GAZL.cpp`) compiled to wasm by `tools/buildGazlWasm.sh`; checked in like `impalaCompiler.js`, rebuild only when `src/GAZL.cpp` changes. |
 | `updateJSPEG.js` | Regenerates the two `*Compiler.js` files, or `--check`-verifies them. |
 
 **Shared libraries.**
@@ -47,16 +48,18 @@ build if they drift from their grammar.
 
 | File | |
 |---|---|
-| `jspegCompilerTests.js` | The main suite: self-host equivalence, grammar regressions, diagnostics, both golden systems, and the `gazl-validate` fixtures. |
+| `jspegCompilerTests.js` | The main suite: self-host equivalence, grammar regressions, diagnostics and both golden systems. |
 | `runJspegTests.js` | The golden gate over `../tests/impala/sources` -> `../tests/impala/golden`. Owns `--makegold`. |
 | `importBuildTests.js` | Import-as-linking, dead-strip and cycle cases. Owns its own two goldens. |
 | `fuzzImpala.js` | Seeded generative fuzzer. A coded `error[Exxx]` is a pass; a raw JS throw is a compiler bug. Every program is also dead-stripped, and `--vm` runs both builds and compares. |
 | `fuzzCampaign.js` | Long-running driver that respawns `fuzzImpala.js` in chunks. |
+| `docSamples.js` | Compiles every code sample in `Impala.md` and `WhatsNewInImpala2.md`, so the prose cannot promise a diagnostic the compiler does not give. |
+| `nuxjsParityTests.js` | Compiles the same programs under Node and NuXJS and byte-compares them. |
 
 **Everything else.** `ImpalaDemo.impala` is the demo and language tour that `build.sh` compiles and
-runs as its end-to-end smoke test. `testdata/` is the second golden system (see below), and
-`testdata/validator/` holds hand-written `.gazl` inputs for the metadata linter — those are inputs, never
-regenerated. `Impala2Slices.md` and `RefactorPlan.md` are design notes.
+runs as its end-to-end smoke test. `testdata/` is the second golden system (see below).
+`natives.impala` declares the host natives `GAZLCmd` registers; `tools/checkPlaygroundPrelude.js` holds
+the playground's hand-copied prelude to it, so a mismatch fails the build.
 
 
 ## Commands
@@ -68,7 +71,8 @@ node impala/impala.node.js compile impala/testdata/smoke.impala out.gazl 42
 node impala/impala.node.js run impala/testdata/smoke.impala
 ```
 
-The fast gate. Every JS-only check, about 15 seconds, no C++ toolchain. Run this before committing a
+The fast gate. Every JS-only check, about a minute and a half, most of it the fuzz run at the end, and
+no C++ toolchain. Run this before committing a
 compiler change; both `build.sh` and `build.cmd` call it, so it cannot drift from them.
 
 ```
@@ -85,7 +89,7 @@ node impala/updateJSPEG.js --check
 node impala/updateJSPEG.js
 ```
 
-Regenerate goldens after an intentional change to compiler output. Three separate owners — all three,
+Regenerate goldens after an intentional change to compiler output. Three separate owners - all three,
 or you get a half-updated corpus.
 
 ```
@@ -105,16 +109,17 @@ currently emits, so it turns a bug into an expected value just as happily as a f
 
 Their names are similar and putting a fixture in the wrong one silently buys you no coverage.
 
-- **`../tests/impala/sources/*.impala` + `../tests/impala/golden/*.gazl`** — the main corpus, 89 files.
+- **`../tests/impala/sources/*.impala` + `../tests/impala/golden/*.gazl`** - the main corpus, 101 files.
   **This is where a new fixture goes** unless you have a specific reason otherwise. Owned by
   `runJspegTests.js`, which also assembles each golden, and *runs* it when the source header carries an
-  `Expected (GAZLCmd <name>.gazl <entry>): <output>` line.
-- **`testdata/*.impala` + `*.expected.gazl`** — ten files, for **cross-unit `; signature` metadata**:
+  `Expected (GAZLCmd <name>.gazl <entry> [<define> <value> ...]): <output>` line - the optional defines
+  supply host-owned symbols, which is how an `extern struct` fixture gets a layout to link against.
+- **`testdata/*.impala` + `*.expected.gazl`** - ten files, for **cross-unit `; signature` metadata**:
   return contracts, extern assignment, caller/provider link sets. Owned by
   `../tools/regen-jspeg-fixtures.*`. Use it only when the point of the fixture is multi-unit linking.
 
-The two also compile with different settings — random id `0x4d2` without retabulation for the goldens,
-`42` with retabulation for `testdata` — so compiling a fixture by hand with the wrong pair produces a
+The two also compile with different settings - random id `0x4d2` without retabulation for the goldens,
+`42` with retabulation for `testdata` - so compiling a fixture by hand with the wrong pair produces a
 diff that means nothing.
 
 
@@ -124,7 +129,7 @@ diff that means nothing.
   edit survives until `updateJSPEG.js --check` runs, which is the first thing `test-js` does.
 - **`output/` holds staged copies.** `BuildImpala` copies `impala.nuxjs.js`, `impalaImportClosure.js`
   and `impalaCompiler.js` there. Edit any of them and `output/` keeps the old behaviour until you
-  rebuild — and all three must be staged together.
+  rebuild - and all three must be staged together.
 - **`--help` is not implemented on the harnesses**, and each fails differently. `runJspegTests.js
   --help` silently runs the whole gate, `importBuildTests.js --help` runs the whole suite, and
   `fuzzImpala.js --help` parses `--help` as the iteration count, prints `NaN programs` and exits 0.
@@ -133,7 +138,7 @@ diff that means nothing.
   as UTF-8 will corrupt high bytes.
 - **A failed `compile` overwrites the output file** with `Error: <message>` rather than leaving the
   previous good `.gazl` in place.
-- **`OK (compile-only)` in the gate output means not link-checked**, not passed — 45 of the 89 goldens
+- **`OK (compile-only)` in the gate output means not link-checked**, not passed - 49 of them
   need a host to link. And `GAZLCmd` stops at the first unresolved symbol, so a host name near the top
   of a module waves the rest of it through.
 - A failing `runJspegTests.js` writes what it actually got to `../tests/impala/erroneous/<name>.gazl`.
