@@ -1,0 +1,29 @@
+/*
+	The harder half of a chained whole-struct assignment: BOTH sides carry two offset parts including a
+	computed index, so both folds borrow a scratch. Rebuilding the statement's value from the destination's
+	offset parts would re-run the first fold after the second had reclaimed one of its inputs, and the
+	outer copy would read a different element - `! ADDi <B> #<B> #<B>`, silently. The value is the address
+	already computed, so there is nothing to re-fold.
+	Expected (GAZLCmd structChainRefold.gazl main): 3 4 3 4 3 4
+*/
+const int N = 1
+struct W { int a; int b }
+struct Mid { W array sub[4]; W tail }
+struct V { Mid array mids[4]; Mid tail }
+global V x
+global V y
+global V z
+extern native printInt
+extern native printLF
+function main()
+{
+	global y.mids[N + 1].sub[N + 1].a = 3;
+	global y.mids[N + 1].sub[N + 1].b = 4;
+	global z.tail.tail = global x.mids[N + 1].sub[N + 1] = global y.mids[N + 1].sub[N + 1];
+	printInt(global x.mids[2].sub[2].a); printLF();
+	printInt(global x.mids[2].sub[2].b); printLF();
+	printInt(global z.tail.tail.a); printLF();
+	printInt(global z.tail.tail.b); printLF();
+	printInt(global y.mids[2].sub[2].a); printLF();
+	printInt(global y.mids[2].sub[2].b); printLF();
+}

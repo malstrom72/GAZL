@@ -1173,11 +1173,19 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         return rec;
     };
 
-    /* release all three operands contained in a meta-record */
+    /* release everything a meta-record owns: its three operands, and - for a PLACE - the base and index
+       it holds instead of them. A discarded statement is the only thing that frees a whole-struct
+       assignment's value, whose base is the address the COPY was emitted against; walking operands alone
+       left that borrowed for the rest of the function. */
     releaseMeta = function (meta) {
         meta = metaSlot(meta);
         for (var i = 2; i >= 0; --i) {
             returnBack(meta.operands[i]);
+        }
+        if (meta.place) {
+            returnBack(meta.base);
+            returnBack(meta.dynIndex);
+            if (meta.baseMeta !== undefined) { releaseMeta(meta.baseMeta); }
         }
     };
 
@@ -3735,19 +3743,20 @@ var _sn = strideStruct(field.elem);
                 fail('Cannot assign to a readonly value', sourceCode, sourceOffset, 'E404',
                         'declare it `global` instead of `readonly` if it has to be written');
             }
-            /* placeAddress leaves a value meta behind, so snapshot the place first - and resolve a pending
-               base while snapshotting, or the statement's own place is rebuilt around a computation that
-               has already been consumed. */
-            baseOperand(leftx);
-            var savedBK = leftx.baseKind, savedBase = leftx.base,
-                savedParts = leftx.offParts, savedStruct = leftx.struct;
+            /* The statement's value is the struct just written, and `dst` is its address - a finished
+               operand. Impala 1 does the same for a chained `a[i] = b[j] = c`: each address is computed
+               ONCE and the register held, so using the value again is a read. Rebuilding this place from
+               the destination's offset PARTS instead would re-run a fold whose `<X>` inputs foldOffset has
+               already returned to the pool; a later fold reissues one and the second read computes a
+               different address - that is how a chained struct assignment came to emit `<B> = <B> + <B>`.
+               So `dst` stays borrowed: it is the place's base, and whoever reads the place releases it as
+               it would any other operand. */
+            var structName = leftx.struct;                        /* placeAddress consumes the place */
             var dst = placeAddress(leftx);
             var src = placeAddress(rightx);
-            makeMeta(x, 'copy', '?', dst, src, structAllocSize(savedStruct));
-            emitMeta(x);
+            emit('copy', '?', dst, src, structAllocSize(structName));
             returnBack(src);
-            returnBack(dst);
-            setPlace(x, savedBK, savedBase, savedParts, savedStruct);
+            setPlace(x, 'pointer', dst, [], structName);
             return;
         }
 

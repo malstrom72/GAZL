@@ -42,7 +42,6 @@ main:	FUNC	; signature func main() -> void @ structChainAssign.impala:17:1
 	.g1:	! FAIL a computed index outside V.sub (resolved only at assembly)  
 	.g0:	! ADDi <B> #.o.V.sub #<A>
 		COPY &y:<B> &z:.o.V.tail *.z.W
-		! ADDi <B> #.o.V.sub #<A>
 		COPY &x:.o.V.tail &y:<B> *.z.W
 		! MULi <B> #2 #.z.W	; printInt(global y.sub[2].a)
 		! ADDi <A> #.o.V.sub #<B>
