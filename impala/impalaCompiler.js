@@ -1232,31 +1232,46 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         rec.oobIndex  = undefined;
         rec.struct    = undefined;
         rec.dynIndex  = undefined;
-        rec.baseMeta  = undefined;
+        dropBaseMeta(rec);   /* a pending base still attached here is ABANDONED, so its registers
+                                         go back; a caller that means to TRANSFER them detaches first */
         rec.readonly  = false;        /* pooled slots: never inherit a previous symbol's writability */
         return rec;
     };
 
-    /* release everything a meta-record owns: its three operands, and - for a PLACE - the base and index
-       it holds instead of them. A discarded statement is the only thing that frees a whole-struct
-       assignment's value, whose base is the address the COPY was emitted against; walking operands alone
-       left that borrowed for the rest of the function. */
+    /* A PENDING base owns the two operands its computation reads, so dropping the field without this
+       strands them. Every site that stops pointing at one calls this, which is what makes "cleared" and
+       "released" the same act - `returnBack` de-dups within a bucket, so a double free would not assert,
+       it would hand a live register out twice. */
+    dropBaseMeta = function (rec) {
+        if (rec.baseMeta !== undefined) {
+            releaseMeta(rec.baseMeta);
+            rec.baseMeta = undefined;
+        }
+    };
+
+    /* Everything a place owns, in the one function that knows the list. `makeMeta` and `setPlace` clear
+       these fields for pooled-slot hygiene; a place that is DISCARDED has to give the registers back. */
+    releasePlace = function (rec) {
+        returnBack(rec.base);
+        returnBack(rec.dynIndex);
+        for (var p = 0; rec.offParts !== undefined && p < rec.offParts.length; ++p) {
+            returnBack(rec.offParts[p]);                 /* a folded index parks a `<X>` here, and only
+                                                                     foldOffset frees it - a place nobody reads
+                                                                     never reaches a fold */
+        }
+        dropBaseMeta(rec);
+    };
+
+    /* Release everything a meta-record owns: its three operands, and - for a PLACE - the base, index and
+       offset parts it holds instead of them. A discarded statement is the only thing that frees a
+       whole-struct assignment's value, whose base is the address the COPY was emitted against. */
     releaseMeta = function (meta) {
         meta = metaSlot(meta);
         for (var i = 2; i >= 0; --i) {
             returnBack(meta.operands[i]);
         }
         if (meta.place) {
-            returnBack(meta.base);
-            returnBack(meta.dynIndex);
-            for (var p = 0; meta.offParts !== undefined && p < meta.offParts.length; ++p) {
-                returnBack(meta.offParts[p]);            /* a folded index parks a `<X>` here, and only
-                                                                     foldOffset frees it - a place nobody reads
-                                                                     never reaches a fold */
-            }
-            if (meta.baseMeta !== undefined) {
-                releaseMeta(meta.baseMeta);
-            }
+            releasePlace(meta);
         }
     };
 
@@ -3514,14 +3529,24 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         slot.elem     = arrayOf || (structName !== undefined ? structDesc(structName) : undefined);
         slot.dynIndex = dynIndex;                                 /* frame place + one runtime word-index -> terminal emits GETL/SETL */
         /* a PENDING base (see baseOperand) survives a re-place that supplies no base of its own:
-           `.field` and a constant `[k]` only grow offParts */
+           `.field` and a constant `[k]` only grow offParts. A re-place that DOES name a base abandons it */
         if (base !== undefined) {
-            slot.baseMeta = undefined;
+            dropBaseMeta(slot);
         }
         slot.extent   = undefined;                                /* pooled slot: never inherit another array's extent or
                                                                      another subscript's finding. The two callers that DO
                                                                      have an extent assign it after the call. */
         slot.oobIndex = undefined;
+    };
+
+    /* `base:offset` is how a local frame slot and a global address carry a compile-time offset. A base is
+       ONE deep - the assembler reads `&g:off` and `$v:off`, never `&g:off:more` - so a base that already
+       carries one has to be flattened into a register by whoever indexes it, not extended here. No offset
+       spells the bare base: `$v:null` was reachable only because every caller happens to push a part
+       first, which nothing stated. */
+    offsetOperand = function (base, off) {
+        assert(('' + base).indexOf(':') < 0, 'a base already carrying an offset cannot take another');
+        return (off ? base + ':' + off : base);
     };
 
     /* A place's base as a REGISTER, materializing a pending computation the first time one is actually
@@ -3533,7 +3558,8 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
     baseOperand = function (place) {
         if (place.baseMeta !== undefined) {
             place.base = makeRValue(place.baseMeta);
-            place.baseMeta = undefined;
+            place.baseMeta = undefined;                           /* DETACHED, not released: makeRValue consumed
+                                                                     the operands - it frees them before it borrows */
         }
         return place.base;
     };
@@ -3548,11 +3574,12 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
            POKE was emitted and only the CNST region caught it, at load. */
         var ro = (x.readonly === true);
         if (bk === 'local' && dynIndex !== undefined) {           /* (dsp + base:off)[dynIndex] */
-            makeMeta(x, '=[]$', type, null, base + (offOp ? ':' + offOp : ''), dynIndex);
+            makeMeta(x, '=[]$', type, null, offsetOperand(base, offOp), dynIndex);
         } else if (bk === 'local') {
-            makeMeta(x, '=', type, undefined, base + ':' + offOp, undefined);
+            makeMeta(x, '=', type, undefined, offsetOperand(base, offOp), undefined);
         } else if (bk === 'globalAddr') {                         /* &name:off in global memory */
-            makeMeta(x, (ro ? ':=*' : '=*'), type, undefined, base + ':' + offOp, undefined);
+            makeMeta(x, (ro ? ':=*' : '=*'), type, undefined,
+                    offsetOperand(base, offOp), undefined);
         } else {                                                  /* pointer base: PEEK/POKE base <runtime index | #offset> */
             makeMeta(x, '=[]', type, null, base, dynIndex !== undefined ? dynIndex : '#' + offOp);
         }
@@ -3845,16 +3872,19 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         var pending = place.baseMeta;
         if (pending !== undefined && !off) {                       /* the pending base IS the address: adopt it whole, so
                                                                       the assignment emits that ADDp into its target */
+            place.baseMeta = undefined;                            /* TRANSFER, not abandon: the operands move to the
+                                                                      meta below, which frees them when consumed. Detach
+                                                                      first or makeMeta releases them out from under it */
             return makeMeta(place, pending.operator, pending.type, undefined,
                     pending.operands[1], pending.operands[2]);
         }
         var base = baseOperand(place);
         if (place.baseKind === 'local') {                          /* `*0` ALWAYS - see the note on ADRL spans below */
-            makeMeta(place, '=&', 'p', undefined, base + (off ? ':' + off : ''), '*0');
+            makeMeta(place, '=&', 'p', undefined, offsetOperand(base, off), '*0');
         } else if (off && place.baseKind === 'globalAddr') {       /* `&name:off` resolves at ASSEMBLY time, so a global
                                                                       base folds its offset instead of adding it - the
                                                                       same operand emitPlaceValue reads a field through */
-            makeMeta(place, ':=', 'p', undefined, base + ':' + off, undefined);
+            makeMeta(place, ':=', 'p', undefined, offsetOperand(base, off), undefined);
         } else {                                                   /* pointer base: add the offset, or just move it */
             makeMeta(place, (off ? '+' : ':='), 'p', undefined, base, (off ? '#' + off : undefined));
         }
