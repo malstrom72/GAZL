@@ -113,7 +113,10 @@ if (canonicalizeTrimmed(impalaSelfExpected) !== canonicalizeTrimmed(impalaExisti
 }
 console.log("impala.jspeg compiles identically under self-hosted compiler");
 
-assert(!impalaExisting.includes("Object.defineProperty"), "impalaCompiler.js must stay inside the NuXJS subset, which has no property descriptors");
+assert(
+	!impalaExisting.includes("Object.defineProperty"),
+	"impalaCompiler.js must stay inside the NuXJS subset, which has no property descriptors",
+);
 
 const compilerContext = loadImpalaCompilerForTests();
 const makeMetaHelper = compilerContext.makeMeta;
@@ -2161,6 +2164,30 @@ console.log("impala.jspeg compiler never bounds-checks ADDRESS formation");
 	assert(!/MOVp \$(p|q|ip|vp) %/.test(out),
 		"place address: copied through a temp instead of landing in the target\n" + out);
 	console.log("impala.jspeg compiler emits a place's address straight into its assignment target");
+}
+
+// `readonly` describes the LOCATION, so it has to survive address formation. A CONSTANT index folds and
+// never materializes an address; a RUNTIME one goes through placeAddress, which runs makeMeta and clears
+// the flag - so these three wrote into the const region with no diagnostic, and GAZL could not catch it
+// either, because the assemble-time check that catches the constant spelling needs a constant base. Every
+// shape that reaches placeAddress, plus the constant twin of each to show the fold path still refuses.
+{
+	const RO = "struct W { int a }\nstruct V { W array sub[4]; int array vals[4] }\n"
+		+ "readonly V gv = { sub: { { a: 1 } }, vals: { 1, 2, 3, 4 } }\n"
+		+ "readonly W array bank[4] = { { a: 1 } }\n";
+	for (const [label, locals, body] of [
+		["a struct-array field, runtime index", "int i", "i = 2; global gv.sub[i].a = 1;"],
+		["a struct-array field, constant index", "", "global gv.sub[1].a = 1;"],
+		["a scalar array field, runtime index", "int i", "i = 2; global gv.vals[i] = 5;"],
+		["a scalar array field, constant index", "", "global gv.vals[1] = 5;"],
+		["a readonly struct array, runtime index", "int i", "i = 2; global bank[i].a = 9;"],
+		["a readonly struct array, constant index", "", "global bank[1].a = 9;"],
+	]) {
+		expectCompileOutcome("readonly through an index", label,
+			RO + "export function main()" + (locals ? " locals " + locals : "") + " { " + body + " }\n",
+			"E404");
+	}
+	console.log("impala.jspeg compiler keeps `readonly` across a runtime index, not just a constant one");
 }
 
 // THE INVARIANT, stated directly rather than through the shapes that violate it. Impala 1 allocates a

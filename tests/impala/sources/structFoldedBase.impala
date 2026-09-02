@@ -1,0 +1,24 @@
+/*
+	A base is ONE offset deep: the assembler reads `&g:off` and `$v:off`, never a second `:`. `&global
+	s.field` folds to `&s:.o.S.field`, so anything that indexes THAT operand has to flatten it into a
+	register first - both the fold (which would spell `&s:.o.S.field:1`) and a PEEK (which wants a bare
+	pointer) are rejected by GAZL, and the compiler used to emit them happily. All three shapes: a write
+	through the indexed address, taking its address, and a read of a scalar element.
+	Expected (GAZLCmd structFoldedBase.gazl main): 5 7 9
+*/
+struct W { int a; int b }
+struct V { W head; W array sub[4]; int array flat[4]; W tail }
+global V x
+extern native printInt
+extern native printLF
+function main()
+locals W pointer wp
+{
+	(&global x.sub)[1].a = 5;
+	wp = &(&global x.sub)[2];
+	wp->a = 7;
+	global x.flat[3] = 9;
+	printInt(global x.sub[1].a); printLF();
+	printInt(global x.sub[2].a); printLF();
+	printInt((&global x.flat)[3]); printLF();
+}

@@ -1185,7 +1185,14 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         if (meta.place) {
             returnBack(meta.base);
             returnBack(meta.dynIndex);
-            if (meta.baseMeta !== undefined) { releaseMeta(meta.baseMeta); }
+            for (var p = 0; meta.offParts !== undefined && p < meta.offParts.length; ++p) {
+                returnBack(meta.offParts[p]);            /* a folded index parks a `<X>` here, and only
+                                                                     foldOffset frees it - a place nobody reads
+                                                                     never reaches a fold */
+            }
+            if (meta.baseMeta !== undefined) {
+                releaseMeta(meta.baseMeta);
+            }
         }
     };
 
@@ -1462,10 +1469,25 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         declare('!', 'globals', ok, undefined, true, undefined, sourceCode, sourceOffset);
     };
 
+    /* An out-of-bounds finding dies the moment the place becomes an ADDRESS - address formation is never
+       bounds-checked, at any index (see checkConstIndex). The guard's OWNED copy goes back to the pool and
+       the `! MOVi` that made it is cancelled; leaving them costs a `<X>` per address and ships an
+       assemble-time line nothing reads (flushMetaCode skips a null operator). */
+    dropIndexFinding = function (expr) {
+        for (var oi = 0; expr.oobIndex !== undefined && oi < expr.oobIndex.length; ++oi) {
+            var oob = expr.oobIndex[oi];
+            if (!oob.own) continue;
+            returnBack(oob.k);
+            metacode[oob.copyAt].operator = null;
+        }
+        expr.oobIndex = undefined;
+    };
+
     /* A place's address as ONE deferred instruction, keeping the element type the place already carries -
        `makeMeta` clears `elem` along with the rest of the place state, so it is put back. */
     addressMeta = function (place) {
         var elem = place.elem;
+        dropIndexFinding(place);                         /* `makeMeta` below only CLEARS the finding */
         placeAddressMeta(place);
         setElem(place, elem);
     };
@@ -2184,11 +2206,9 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
     foldOffset = function (parts) {
         if (!parts || parts.length === 0) return null;
         if (parts.length === 1) return parts[0];      /* a lone part (symbol or scratch) is returned as-is; its owner frees it */
-        /* The accumulator must NOT reuse a part's slot, however dead the part looks here: `assign` keeps
-           the offParts of a whole-struct destination and folds them AGAIN to rebuild the statement's own
-           place, so a part the accumulator has overwritten makes the second fold add the same field
-           offset twice - silently, and only for a chained `a = b = c`. Free every part after the folding
-           is done, never before. */
+        /* Free every part AFTER the folding, never before: a parts array may be folded more than once
+           (a place read twice), and an accumulator that reused a part's slot makes the second fold add
+           the same field offset twice - silently. Freeing early buys one scratch and costs that. */
         var o = borrow('<');
         emit('<> +', 'i', o, '#' + parts[0], '#' + parts[1]);
         for (var k = 2; k < parts.length; ++k) {
@@ -2985,9 +3005,11 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         slot.type     = arrayOf ? 'p' : 'S';
         slot.elem     = arrayOf || (structName !== undefined ? structDesc(structName) : undefined);
         slot.dynIndex = dynIndex;                                 /* frame place + one runtime word-index -> terminal emits GETL/SETL */
-        if (base !== undefined) { slot.baseMeta = undefined; }     /* a PENDING base (see baseOperand) survives a re-place
-                                                                     that supplies no base: `.field` and a constant `[k]`
-                                                                     only grow offParts */
+        /* a PENDING base (see baseOperand) survives a re-place that supplies no base of its own:
+           `.field` and a constant `[k]` only grow offParts */
+        if (base !== undefined) {
+            slot.baseMeta = undefined;
+        }
         slot.extent   = undefined;                                /* pooled slot: never inherit another array's extent or
                                                                      another subscript's finding. The two callers that DO
                                                                      have an extent assign it after the call. */
@@ -3171,6 +3193,17 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         var extent = x.extent;
         if (!x.arrayOf) {                                         /* a raw struct pointer: wrap it as an array place */
             var p = makeRValue(x);
+            /* A base is ONE offset deep: the assembler reads `&g:off` and `$v:off`, never a second `:`.
+               `&global s.field` now folds to `&s:.o.S.field`, so wrapping that operand as a base and
+               letting the offsets below append to it would spell `&s:.o.S.field:.z.W` - which this
+               compiler accepts and GAZL refuses ("Invalid identifier"). Materialize instead: a register
+               carries no offset, so everything downstream can fold freely. */
+            if (p.indexOf(':') >= 0) {
+                var flat = borrow('%');
+                emit(':=', 'p', flat, p, undefined);
+                returnBack(p);
+                p = flat;
+            }
             setPlace(x, (p[0] === '&' ? 'globalAddr' : 'pointer'), p, [], undefined, x.elem);
         }
         var elem = x.arrayOf;
@@ -3213,9 +3246,12 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
                 }
                 x.offParts.push(part);
             }
-            if (elemStruct) setPlace(x, x.baseKind, x.base, x.offParts, elemName, undefined, x.dynIndex);
-            else            emitPlaceValue(x, x.baseKind, baseOperand(x), x.offParts,
-                                    x.dynIndex, eType, eTail);
+            if (elemStruct) {
+                setPlace(x, x.baseKind, x.base, x.offParts, elemName, undefined, x.dynIndex);
+            } else {
+                emitPlaceValue(x, x.baseKind, baseOperand(x), x.offParts,
+                        x.dynIndex, eType, eTail);
+            }
 
         } else if (x.baseKind === 'local' && x.dynIndex === undefined) {
             /* a frame place with a single runtime index: keep it frame-relative so it emits one
@@ -3237,6 +3273,11 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
             }
 
         } else {
+            var ro = (x.readonly === true);                       /* placeAddress runs makeMeta, which clears the flag -
+                                                                     but readonly describes the LOCATION, and an element
+                                                                     of a readonly array is readonly too. Without this a
+                                                                     RUNTIME index writes into the const region with no
+                                                                     E404; a constant one folds and never comes here. */
             var arrPtr = placeAddress(x);                /* pointer base or a second runtime index: materialize */
             if (elemStruct) {
                 /* Scale the index, then leave `base + scaled` PENDING rather than minting a register for
@@ -3250,8 +3291,10 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
                 emitRangeCheck(scaled, extent, sourceCode, sourceOffset);
                 setPlace(x, 'pointer', undefined, [], elemName);
                 x.baseMeta = makeMeta(undefined, '+', 'p', undefined, arrPtr, scaled);
+                x.readonly = ro;
             } else {                                              /* scalar stride 1 -> PEEK/POKE arrPtr idx directly */
                 emitRangeCheck(idxRV, extent, sourceCode, sourceOffset);
+                x.readonly = ro;                                  /* emitPlaceValue reads the FLAG */
                 emitPlaceValue(x, 'pointer', arrPtr, [], idxRV, eType, eTail);
             }
         }
@@ -3568,7 +3611,18 @@ var _sn = strideStruct(field.elem);
                 var op2 = makeRValue(rightx);
                 xOob = checkSubscript(xt, op2, sourceCode, sourceOffset);
             
-                if (op2[0] === '#' || op2[0] === '<') {          /* assemble-time: fold into `base:offset` */
+                /* A global base is ONE offset deep. `&global s.field` now folds to `&s:.o.S.field`, and
+                   neither form below can take that: the fold would spell `&s:.o.S.field:1` and a PEEK
+                   wants a bare pointer, so GAZL rejects both. Flatten it into a register once, and the
+                   index goes through the ordinary run-time path. */
+                var flattened = (!direct && op1.indexOf(':') >= 0);
+                if (flattened) {
+                    var flatBase = borrow('%');
+                    emit(':=', 'p', flatBase, op1, undefined);
+                    returnBack(op1);
+                    op1 = flatBase;
+                }
+                if (!flattened && (op2[0] === '#' || op2[0] === '<')) {   /* assemble-time: fold into `base:offset` */
                     makeMeta(leftx, (direct ? '=' : '=*'), tp, null,
                                       op1 + ':' + (op2[0] === '#' ? op2.substr(1) : op2), null);
                 } else {
@@ -3900,17 +3954,7 @@ var _sn = strideStruct(field.elem);
     reference = function (operator, expr, sourceCode, sourceOffset) {
 
         expr = metaSlot(expr);
-        for (var oi = 0; expr.oobIndex !== undefined && oi < expr.oobIndex.length; ++oi) {
-            var oob = expr.oobIndex[oi];
-            if (!oob.own) continue;
-            returnBack(oob.k);              /* the guard's copy dies with the finding - and so does
-                                                        the `! MOVi` that made it, or an address would ship
-                                                        a line nothing reads (flushMetaCode skips a null) */
-            metacode[oob.copyAt].operator = null;
-        }
-        expr.oobIndex = undefined;                   /* address formation is never bounds-checked, at any
-                                                        index - see checkConstIndex. Cleared before the
-                                                        `=[]$` branch below calls makeRValue. */
+        dropIndexFinding(expr);             /* cleared before the `=[]$` branch below calls makeRValue */
 
         if (expr.operator === '=') {                 // variable
             assert(expr.operands[2] === undefined,
