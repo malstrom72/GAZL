@@ -34,8 +34,8 @@ main:	FUNC	; signature func main() -> void @ structArrays.impala:26:1
 		! ADDi <A> #.z.Voice #.o.Voice.note	; global bank[1].note = 20
 		POKE &bank:<A> #20 
 		! MULi <A> #2 #.z.Voice	; global bank[2].note = 30
-		! ADDi <A> #<A> #.o.Voice.note
-		POKE &bank:<A> #30 
+		! ADDi <B> #<A> #.o.Voice.note
+		POKE &bank:<B> #30 
 		MOVi $i #0 	; for (i = 0 to 3) 
 		GEQi #0 #3 @.e0
 	.l1:	MULi %1 $i #.z.Voice	; printInt(global bank[i].note)
@@ -45,27 +45,27 @@ main:	FUNC	; signature func main() -> void @ structArrays.impala:26:1
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structArrays.impala:33:43
 		FORi $i #3 @.l1	; }
 	.e0:	MOVf $vlocals:.o.Voice.gain #0.5 	; vlocals[0].gain = 0.5
-		! ADDi <A> #.z.Voice #.o.Voice.gain	; vlocals[1].gain = 0.9
-		MOVf $vlocals:<A> #0.9 
-		! ADDi <A> #.z.Voice #.o.Voice.gain	; printFloat(vlocals[1].gain)
-		MOVf %1 $vlocals:<A> 
+		! ADDi <B> #.z.Voice #.o.Voice.gain	; vlocals[1].gain = 0.9
+		MOVf $vlocals:<B> #0.9 
+		! ADDi <B> #.z.Voice #.o.Voice.gain	; printFloat(vlocals[1].gain)
+		MOVf %1 $vlocals:<B> 
 		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ structArrays.impala:38:29
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structArrays.impala:38:40
 		MOVp $vp &bank:.z.Voice 	; vp = &global bank[1]
 		PEEK %1 $vp #.o.Voice.note	; printInt(vp->note)
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ structArrays.impala:41:20
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structArrays.impala:41:31
-		! MULi <A> #2 #.z.Voice	; global bank[0] = global bank[2]
-		COPY &bank &bank:<A> *.z.Voice
+		! MULi <B> #2 #.z.Voice	; global bank[0] = global bank[2]
+		COPY &bank &bank:<B> *.z.Voice
 		PEEK %1 &bank:.o.Voice.note 	; printInt(global bank[0].note)
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ structArrays.impala:44:31
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structArrays.impala:44:42
-		! MULi <A> #3 #.z.Voice	; global pairs[3].note = 7
-		! ADDi <A> #<A> #.o.Voice.note
+		! MULi <B> #3 #.z.Voice	; global pairs[3].note = 7
+		! ADDi <A> #<B> #.o.Voice.note
 		POKE &pairs:<A> #7 
 		! MULi <A> #3 #.z.Voice	; printInt(global pairs[3].note)
-		! ADDi <A> #<A> #.o.Voice.note
-		PEEK %1 &pairs:<A> 
+		! ADDi <B> #<A> #.o.Voice.note
+		PEEK %1 &pairs:<B> 
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ structArrays.impala:47:32
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structArrays.impala:47:43
 		RETU   	; }

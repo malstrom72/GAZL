@@ -69,14 +69,14 @@ main:	FUNC	; signature func main() -> void @ externStructArrayField.impala:43:1
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ externStructArrayField.impala:50:16
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ externStructArrayField.impala:50:27
 		! ADDi <A> #.d.Grid.m.0 #2	; g->m[1, 2] = 77
-		! ADDi <A> #.o.Grid.m #<A>
+		! ADDi <B> #.o.Grid.m #<A>
 		! LSSi #1 #.d.Grid.m.1 @.g0
 		! FAIL index 1 outside Grid.m axis 1 (resolved only at assembly)  
 	.g0:	! LSSi #2 #.d.Grid.m.0 @.g1
 		! FAIL index 2 outside Grid.m axis 0 (resolved only at assembly)  
-	.g1:	POKE $g #<A> #77
-		! ADDi <A> #.d.Grid.m.0 #2	; printInt(g->m[1, 2])
-		! ADDi <A> #.o.Grid.m #<A>
+	.g1:	POKE $g #<B> #77
+		! ADDi <B> #.d.Grid.m.0 #2	; printInt(g->m[1, 2])
+		! ADDi <A> #.o.Grid.m #<B>
 		PEEK %1 $g #<A>
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ externStructArrayField.impala:52:22
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ externStructArrayField.impala:52:33

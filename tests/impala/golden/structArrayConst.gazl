@@ -47,11 +47,11 @@ main:	FUNC	; signature func main() -> void @ structArrayConst.impala:21:1
 	$v:	LOCA *.z.Voice
 ;-----------------------------------------------------------------------------
 		! MULi <A> #2 #.z.Biquad	; v.filters[2].b0 = 0.5
-		! ADDi <A> #.o.Voice.filters #<A>
-		! ADDi <A> #<A> #.o.Biquad.b0
-		MOVf $v:<A> #0.5 
-		! MULi <A> #2 #.z.Biquad	; v.filters[2].z1 = 1.5
-		! ADDi <A> #.o.Voice.filters #<A>
+		! ADDi <B> #.o.Voice.filters #<A>
+		! ADDi <B> #<B> #.o.Biquad.b0
+		MOVf $v:<B> #0.5 
+		! MULi <B> #2 #.z.Biquad	; v.filters[2].z1 = 1.5
+		! ADDi <A> #.o.Voice.filters #<B>
 		! ADDi <A> #<A> #.o.Biquad.z1
 		MOVf $v:<A> #1.5 
 		! ADDi <A> #.o.Voice.filters #.o.Biquad.b0	; v.filters[0].b0 = 0.25
@@ -60,13 +60,13 @@ main:	FUNC	; signature func main() -> void @ structArrayConst.impala:21:1
 		! ADDi <A> #<A> #.o.Biquad.b0
 		MOVf $v:<A> #2.25 
 		! MULi <A> #2 #.z.Biquad	; printFloat(v.filters[2].b0)
-		! ADDi <A> #.o.Voice.filters #<A>
-		! ADDi <A> #<A> #.o.Biquad.b0
-		MOVf %1 $v:<A> 
+		! ADDi <B> #.o.Voice.filters #<A>
+		! ADDi <B> #<B> #.o.Biquad.b0
+		MOVf %1 $v:<B> 
 		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ structArrayConst.impala:28:29
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structArrayConst.impala:28:40
-		! MULi <A> #2 #.z.Biquad	; printFloat(v.filters[2].z1)
-		! ADDi <A> #.o.Voice.filters #<A>
+		! MULi <B> #2 #.z.Biquad	; printFloat(v.filters[2].z1)
+		! ADDi <A> #.o.Voice.filters #<B>
 		! ADDi <A> #<A> #.o.Biquad.z1
 		MOVf %1 $v:<A> 
 		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ structArrayConst.impala:29:29

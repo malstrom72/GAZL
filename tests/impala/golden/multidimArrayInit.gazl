@@ -139,16 +139,16 @@ main:	FUNC	; signature export func main() -> void @ multidimArrayInit.impala:37:
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ multidimArrayInit.impala:71:26
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ multidimArrayInit.impala:72:11
 		! ADDi <A> #.d.Mat.cells.0 #1	; printInt(global mat.cells[1, 1])
-		! ADDi <A> #.o.Mat.cells #<A>
-		PEEK %1 &mat:<A> 
+		! ADDi <B> #.o.Mat.cells #<A>
+		PEEK %1 &mat:<B> 
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ multidimArrayInit.impala:73:34
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ multidimArrayInit.impala:74:11
-		! ADDi <A> #.o.Mat.grid #1	; printInt(global mat.grid[0, 1])
+		! ADDi <B> #.o.Mat.grid #1	; printInt(global mat.grid[0, 1])
 		! LSSi #0 #.d.Mat.grid.1 @.g10
 		! FAIL index 0 outside Mat.grid axis 1 (resolved only at assembly)  
 	.g10:	! LSSi #1 #.d.Mat.grid.0 @.g11
 		! FAIL index 1 outside Mat.grid axis 0 (resolved only at assembly)  
-	.g11:	PEEK %1 &mat:<A> 
+	.g11:	PEEK %1 &mat:<B> 
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ multidimArrayInit.impala:75:33
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ multidimArrayInit.impala:76:11
 		RETU   	; }

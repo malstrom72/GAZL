@@ -2171,20 +2171,17 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
     foldOffset = function (parts) {
         if (!parts || parts.length === 0) return null;
         if (parts.length === 1) return parts[0];      /* a lone part (symbol or scratch) is returned as-is; its owner frees it */
-        /* The first two parts die in the first add, so free them BEFORE borrowing and the accumulator
-           reuses one of their slots. Parts from the third on are read by a later add and must NOT be
-           freed early - which is also why the release loop below starts at 2: returning a part the
-           accumulator is now using would hand a live scratch back to the pool. */
-        var first = '#' + parts[0], second = '#' + parts[1];
-        for (var i = 0; i < 2; ++i) {
-            if (('' + parts[i]).charAt(0) === '<') returnBack(parts[i]);
-        }
+        /* The accumulator must NOT reuse a part's slot, however dead the part looks here: `assign` keeps
+           the offParts of a whole-struct destination and folds them AGAIN to rebuild the statement's own
+           place, so a part the accumulator has overwritten makes the second fold add the same field
+           offset twice - silently, and only for a chained `a = b = c`. Free every part after the folding
+           is done, never before. */
         var o = borrow('<');
-        emit('<> +', 'i', o, first, second);
+        emit('<> +', 'i', o, '#' + parts[0], '#' + parts[1]);
         for (var k = 2; k < parts.length; ++k) {
             emit('<> +', 'i', o, '#' + o, '#' + parts[k]);
         }
-        for (var j = 2; j < parts.length; ++j) {      /* release borrowed stride scratches now folded into o */
+        for (var j = 0; j < parts.length; ++j) {      /* release borrowed stride scratches now folded into o */
             if (('' + parts[j]).charAt(0) === '<') returnBack(parts[j]);
         }
         return o;

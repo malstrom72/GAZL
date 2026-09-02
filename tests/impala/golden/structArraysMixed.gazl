@@ -31,14 +31,14 @@ main:	FUNC	; signature func main() -> void @ structArraysMixed.impala:13:1
 	$i:	LOCi
 ;-----------------------------------------------------------------------------
 		! MULi <A> #2 #.z.Cell	; b.cells[2].hi = 7
-		! ADDi <A> #.o.Bank.cells #<A>
-		! ADDi <A> #<A> #.o.Cell.hi
-		MOVi $b:<A> #7 
+		! ADDi <B> #.o.Bank.cells #<A>
+		! ADDi <B> #<B> #.o.Cell.hi
+		MOVi $b:<B> #7 
 		MOVi $i #0 	; for (i = 0 to 3) 
 		GEQi #0 #3 @.e0
 	.l1:	MULi %0 $i #.z.Cell	; b.cells[i].lo = i
-		! ADDi <A> #.o.Bank.cells #.o.Cell.lo
-		SETL $b:<A> %0 $i
+		! ADDi <B> #.o.Bank.cells #.o.Cell.lo
+		SETL $b:<B> %0 $i
 		FORi $i #3 @.l1	; }
 	.e0:	MOVi $i #0 	; for (i = 0 to 3) 
 		GEQi #0 #3 @.e2
@@ -47,8 +47,8 @@ main:	FUNC	; signature func main() -> void @ structArraysMixed.impala:13:1
 		POKE %0 #.o.Cell.hi $i
 		FORi $i #3 @.l3	; }
 	.e2:	NOOP
-		! MULi <A> #2 #.z.Cell	; printInt(b.cells[2].hi)
-		! ADDi <A> #.o.Bank.cells #<A>
+		! MULi <B> #2 #.z.Cell	; printInt(b.cells[2].hi)
+		! ADDi <A> #.o.Bank.cells #<B>
 		! ADDi <A> #<A> #.o.Cell.hi
 		MOVi %1 $b:<A> 
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ structArraysMixed.impala:19:25
@@ -59,8 +59,8 @@ main:	FUNC	; signature func main() -> void @ structArraysMixed.impala:13:1
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ structArraysMixed.impala:20:25
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structArraysMixed.impala:20:36
 		! MULi <A> #2 #.z.Cell	; printInt(global top[2].hi)
-		! ADDi <A> #<A> #.o.Cell.hi
-		PEEK %1 &top:<A> 
+		! ADDi <B> #<A> #.o.Cell.hi
+		PEEK %1 &top:<B> 
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ structArraysMixed.impala:21:28
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structArraysMixed.impala:21:39
 		RETU   	; }

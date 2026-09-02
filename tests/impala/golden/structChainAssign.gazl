@@ -1,0 +1,67 @@
+; Compiled with Impala version 2.0
+
+; signatures version=1
+N:	! DEFi #1	; signature const N : int @ structChainAssign.impala:9:1
+	! MOVi <a> #0	; layout of struct W
+.o.W.a:	! DEFi #<a>
+	! ADDi <a> #<a> #1
+.o.W.b:	! DEFi #<a>
+	! ADDi <a> #<a> #1
+.z.W:	! DEFi #<a>
+; signature struct W { a : int, b : int } @ structChainAssign.impala:10:1
+	! MOVi <a> #0	; layout of struct V
+.o.V.head:	! DEFi #<a>
+	! ADDi <a> #<a> #.z.W
+.o.V.sub:	! DEFi #<a>
+	! MULi <t> #4 #.z.W
+.z.V.sub:	! DEFi #<t>
+	! ADDi <a> #<a> #.z.V.sub
+.o.V.tail:	! DEFi #<a>
+	! ADDi <a> #<a> #.z.W
+.z.V:	! DEFi #<a>
+; signature struct V { head : W, sub : W[4], tail : W } @ structChainAssign.impala:11:1
+x:	GLOB *.z.V	; signature global x : V @ structChainAssign.impala:12:1
+y:	GLOB *.z.V	; signature global y : V @ structChainAssign.impala:13:1
+z:	GLOB *.z.V	; signature global z : V @ structChainAssign.impala:14:1
+; signature extern native printInt() -> unknown @ structChainAssign.impala:15:1
+; signature extern native printLF() -> unknown @ structChainAssign.impala:16:1
+
+;-----------------------------------------------------------------------------
+main:	FUNC	; signature func main() -> void @ structChainAssign.impala:17:1
+		PARA *1
+;-----------------------------------------------------------------------------
+		! ADDi <A> #.o.V.tail #.o.W.a	; global z.tail.a = 7
+		POKE &z:<A> #7 
+		! ADDi <A> #.o.V.tail #.o.W.b	; global z.tail.b = 8
+		POKE &z:<A> #8 
+		! ADDi <A> #N #1	; global x.tail = global y.sub[N + 1] = global z.tail
+		! MULi <A> #<A> #.z.W
+		! MOVi <B> #<A> 
+		! LSSi #<B> #0 @.g1
+		! LSSi #<B> #.z.V.sub @.g0
+	.g1:	! FAIL a computed index outside V.sub (resolved only at assembly)  
+	.g0:	! ADDi <B> #.o.V.sub #<A>
+		COPY &y:<B> &z:.o.V.tail *.z.W
+		! ADDi <B> #.o.V.sub #<A>
+		COPY &x:.o.V.tail &y:<B> *.z.W
+		! MULi <B> #2 #.z.W	; printInt(global y.sub[2].a)
+		! ADDi <A> #.o.V.sub #<B>
+		! ADDi <A> #<A> #.o.W.a
+		PEEK %1 &y:<A> 
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ structChainAssign.impala:22:29
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structChainAssign.impala:22:40
+		! MULi <A> #2 #.z.W	; printInt(global y.sub[2].b)
+		! ADDi <B> #.o.V.sub #<A>
+		! ADDi <B> #<B> #.o.W.b
+		PEEK %1 &y:<B> 
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ structChainAssign.impala:23:29
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structChainAssign.impala:23:40
+		! ADDi <B> #.o.V.tail #.o.W.a	; printInt(global x.tail.a)
+		PEEK %1 &x:<B> 
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ structChainAssign.impala:24:27
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structChainAssign.impala:24:38
+		! ADDi <B> #.o.V.tail #.o.W.b	; printInt(global x.tail.b)
+		PEEK %1 &x:<B> 
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ structChainAssign.impala:25:27
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ structChainAssign.impala:25:38
+		RETU   	; }
