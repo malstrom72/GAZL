@@ -6046,9 +6046,13 @@ Argument    <-  { $argAt = $$i;   /* the argument itself; end-of-rule has skippe
                                                                    name: (typeof meta.base === 'string'
                                                                                    && meta.base.charAt(0) === '$'
                                                                                ? meta.base.substr(1) : undefined) });
-                                                           var w = $$parser.structWords(meta.struct);
-                                                           $$parser.copyStructArg($a, winSlot, w);
-                                                           $$.words += w;
+                                                           /* NOT copied into the window: the close of this call
+                                                              always rejects a struct argument (E426), so the COPY
+                                                              would be discarded - and emitting it first hands
+                                                              copyStructArg's claimSlot a window slot the argument's
+                                                              own transients are sitting in, which ABORTS on an
+                                                              assertion before the diagnostic can be reported. */
+                                                           $$.words += $$parser.structWords(meta.struct);
                                                        } else {
                                                            $$parser.makeArgValue($a, winSlot);
                                                            $$.words += 1;

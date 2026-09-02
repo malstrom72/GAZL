@@ -2190,6 +2190,30 @@ console.log("impala.jspeg compiler never bounds-checks ADDRESS formation");
 	console.log("impala.jspeg compiler keeps `readonly` across a runtime index, not just a constant one");
 }
 
+// A by-value struct argument is rejected at the CLOSE of the call, so the callee's signature can sharpen
+// the message - which means nothing the argument emitted is ever kept. Emitting the window COPY first
+// handed claimSlot a slot the argument's own transients were sitting in, and the assertion fired before
+// the diagnostic existed: a compiler abort, with no code, position or caret, on a program whose only
+// fault is one E426 already knows how to explain. The callee here must NOT declare a struct parameter,
+// or it is rejected at its own declaration and the argument path is never reached.
+{
+	const decls = "struct W { int a; int b }\nstruct V { W head; W array sub[4] }\n"
+		+ "global V array bank[4]\nglobal V gv\nextern native eat\n";
+	for (const [label, locals, body] of [
+		["a local struct", "V v", "eat(v);"],
+		["a global struct", "", "eat(global gv);"],
+		["a runtime-indexed struct", "int i", "i = 1; eat(global bank[i]);"],
+		["a runtime-indexed struct field", "int i", "i = 1; eat(global bank[i].head);"],
+		["the value of a whole-struct assignment", "V v, V w", "eat(v = w);"],
+		["two struct arguments", "V v, V w", "eat(v, w);"],
+	]) {
+		expectCompileOutcome("by-value struct argument", label,
+			decls + "export function main()" + (locals ? " locals " + locals : "") + " { " + body + " }\n",
+			"E426");
+	}
+	console.log("impala.jspeg compiler reports E426 for every by-value struct argument, never an assertion");
+}
+
 // THE INVARIANT, stated directly rather than through the shapes that violate it. Impala 1 allocates a
 // transient in exactly one place - the consumer, at the moment it emits, after freeing the source
 // operands so the destination can reuse a dying one. A struct place that mints its base eagerly breaks
