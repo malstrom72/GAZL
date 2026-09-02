@@ -8,14 +8,11 @@ Impala 1.0 is a minimal "high-level assembler": four word-sized types (`int`, `f
 no hidden passes, no runtime machinery - and spends its additions on letting the type system describe what
 a program is already doing.
 
+**Nine new keywords:** `break` `continue` `export` `functype` `import` `inline` `return` `sizeof` `struct`.
 Two of those are not features: `break` and `continue` are `E450`, reserved so the compiler can refuse them
 with an explanation instead of a syntax error. `inline` IS a feature **on this branch** - an expansion
 declares its locals in a GAZL 2 `SCOP`/`ENDS` scope, which is exactly why the Impala 2 line refuses it and
 this line does not. See [`Inlining.md`](Inlining.md).
-
-**Nine new keywords:** `break` `continue` `export` `functype` `import` `inline` `return` `sizeof` `struct`.
-Three of those are not features: `break` and `continue` are `E450` and `inline` is `E439`. They are
-reserved so the compiler can refuse them with an explanation instead of a syntax error.
 
 For *why* 2.0 is shaped this way, see [`Impala2.md`](Impala2.md). This page is only the what.
 
