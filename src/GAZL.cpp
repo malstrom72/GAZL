@@ -1038,8 +1038,13 @@ void Assembler::finalize(UInt& codeSize, UInt& globalsSize, UInt& constsSize, UI
 
 	In the future, we may replace this with a true dry-run that does not require any memory allocations.
 */
-ProgramSizes Assembler::measure(const Char* source, const Symbols& globals) {
+ProgramSizes Assembler::measure(const Char* source, const Symbols& globals, const ProgramSizes* seed) {
 	UInt codeMax = 256, memoryMax = 256, functionMax = 64;
+	if (seed != 0) {
+		codeMax = std::max(codeMax, seed->codeSize);
+		memoryMax = std::max(memoryMax, seed->globalsSize + seed->constsSize);
+		functionMax = std::max(functionMax, seed->functionCount);
+	}
 	while (true) {
 		std::vector<Instruction> code(codeMax);
 		std::vector<UInt> functions(functionMax);
