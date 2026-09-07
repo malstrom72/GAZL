@@ -276,7 +276,7 @@ class Assembler {
 	public:		void finalize(ProgramSizes& sizes); 														// Finish assembly and report memory usage. `sizes.functionCount` is the number of entries filled in `functionTable`.
 	public:		void finalize(UInt& codeSize, UInt& globalsSize, UInt& constsSize, UInt& functionCount); 	// Positional form of `finalize`; prefer the `ProgramSizes` overload.
 	public:		void finalize(AssembledProgram& program); 													// Finish assembly and fill `program` (the buffers this Assembler was given + the computed sizes) in one step.
-	public:		static ProgramSizes measure(const Char* source, const Symbols& globals); 					// Dry assembly: report what a real assembly of `source` (whole NUL-terminated text) will need, without the caller sizing or owning any buffer. Seed `globals` exactly as for a real assembly (natives, host defines); it is copied, never touched. Program errors throw exactly as feed() does.
+	public:		static ProgramSizes measure(const Char* source, const Symbols& globals, const ProgramSizes* seed = 0); 					// Dry assembly: report what a real assembly of `source` (whole NUL-terminated text) will need, without the caller sizing or owning any buffer. Seed `globals` exactly as for a real assembly (natives, host defines); it is copied, never touched. Program errors throw exactly as feed() does. `seed`, when given, is what an earlier build of about the same program used (from `finalize`), so the first attempt is sized to fit it and a large program is not re-assembled once per doubling.
 
 	protected:	struct CompileTimeVar {
 					int types;
