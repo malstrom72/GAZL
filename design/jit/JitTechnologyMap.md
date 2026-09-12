@@ -7,6 +7,11 @@ How every mechanism in the JIT works and how they compose. Files: `src/GAZLJit.{
 - The interpreter is the semantic oracle. The JIT must be BIT-IDENTICAL to it: same results, same Status, same
   memory image at every observable point (suspend, trap, return). Every optimization below is shaped by this.
 - The assembler is the trusted gatekeeper: the JIT consumes only finalized `Instruction[]` it produced.
+- One opcode enum, in `src/GAZLOpcodes.h`, shared by the assembler/interpreter and both backends (the JIT's `OP_*`
+  names are compiler-checked aliases, never literal ordinals). Opcode identity is the JIT's deepest assumption, and a
+  hand-copied mirror only holds for one numbering: insert an opcode mid-enum and every opcode above it lowers as its
+  neighbour, silently. `FINALIZED_OPCODE_COUNT` is `static_assert`ed in `GAZLJit.h`, so gaining an opcode breaks the
+  BUILD instead of the output. The two rules that keep this true are at the top of that header.
 - Cooperative scheduling (fuel) and re-entrancy (pushCall/enterCall) are first-class, not afterthoughts.
 
 ## 1. Compilation shape

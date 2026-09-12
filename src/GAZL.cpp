@@ -24,6 +24,7 @@
 // TODO : persistant data storage by creating a new source by feeding the assembler code and replacing all globals with the current data, alternatively just outputting the globals and make it possible to merge them with code... need to think about this....
 
 #include "GAZL.h"
+#include "GAZLOpcodes.h"																					// the ONE opcode enum, shared with the JIT
 #include <math.h>
 #include <string.h>
 #include <stdlib.h>
@@ -222,50 +223,11 @@ static Char* int2string(Int i, int radix, int minLength, Char buffer[33]) {
 	return p;
 }
 
-const Int FIRST_OPCODE_VALUE = 0x2345;
 const Char* NULL_STRING = STR("NULL");
 const Char* GAZL_VERSION_STRING = STR("GAZL_VERSION");
 const Char* GAZL_WORD_SIZE_STRING = STR("GAZL_WORD_SIZE");
 const Char* GAZL_MEMORY_SIZE_STRING = STR("GAZL_MEMORY_SIZE");
 
-enum Opcode {
-	FUNC_CC_ = FIRST_OPCODE_VALUE, CALL_VVC, CALL_CVC, CALL_NVC, RETU_C__
-	, MOVE_VV_, MOVE_VC_
-	, PEEK_VC_, POKE_CV_, POKE_CC_
-	, PEEK_VVV, PEEK_VCV, POKE_VVV, POKE_CVV, POKE_VVC, POKE_CVC
-	, GETL_VVV, SETL_VVV, SETL_VVC, ADRL_VV_
-	, ABSI_VV_
-	, ADDI_VVV, ADDI_VVC, SUBI_VVV, SUBI_VVC, SUBI_VCV
-	, MULI_VVV, MULI_VVC, DIVI_VVV, DIVI_VVC, DIVI_VCV, MODI_VVV, MODI_VVC, MODI_VCV
-	, ANDI_VVV, ANDI_VVC, IORI_VVV, IORI_VVC, XORI_VVV, XORI_VVC
-	, SHLI_VVV, SHLI_VVC, SHLI_VCV, SHRI_VVV, SHRI_VVC, SHRI_VCV, SHRU_VVV, SHRU_VVC, SHRU_VCV
-	, ABSF_VV_
-	, FLOF_VV_
-	, ADDF_VVV, ADDF_VVC, SUBF_VVV, SUBF_VVC, SUBF_VCV, MULF_VVV, MULF_VVC, DIVF_VVV, DIVF_VVC, DIVF_VCV
-	, FTOI_VVC, ITOF_VVC
-	, COPY_VVC, COPY_VCC, COPY_CVC, COPY_CCC
-	, FORi_VVB, FORi_VCB
-	, LSSI_VVB, LSSI_VCB, LSSI_CVB, EQUI_VVB, EQUI_VCB
-	, NLSI_VVB, NLSI_VCB, NLSI_CVB, NEQI_VVB, NEQI_VCB
-	, LSSF_VVB, LSSF_VCB, LSSF_CVB, EQUF_VVB, EQUF_VCB
-	, NLSF_VVB, NLSF_VCB, NLSF_CVB, NEQF_VVB, NEQF_VCB
-	, GOTO_B__, SWCH_VCC
-
-	, NOOP____, GLOB____, CNST____, DATA____, LOCA____, OUTP____, SCOP____, ENDS____
-	
-	, MOVE_CC_
-	, ABSI_CC_
-	, ADDI_CCC, SUBI_CCC, MULI_CCC, DIVI_CCC, MODI_CCC, ANDI_CCC, IORI_CCC, XORI_CCC, SHLI_CCC, SHRI_CCC, SHRU_CCC
-	, ABSF_CC_
-	, FLOF_CC_
-	, ADDF_CCC, SUBF_CCC, MULF_CCC, DIVF_CCC
-	, FTOI_CCC, ITOF_CCC
-	, LSSI_CCB, EQUI_CCB, NLSI_CCB, NEQI_CCB
-	, LSSF_CCB, EQUF_CCB, NLSF_CCB, NEQF_CCB
-	, SKIP_B__, IFDF_CB_, IFND_CB_
-	, DEFI____
-};
-const int FIRST_COMPILE_TIME_OPCODE = MOVE_CC_;
 
 // FIX : sort in some meaningful order?
 const int TRANSIENT			= 0x00001;					// FIX : name ?
