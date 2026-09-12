@@ -5,7 +5,8 @@ set -e -o pipefail -u
 # compiles each through the one shared JitCompiler::compile for the HOST's backend, and checks every JIT run against the
 # interpreter (whole memory image + Status) at full fuel AND at tiny fuel (forcing repeated suspend/resume, §5.7.5).
 # Runs on arm64 and x86-64 - the backend is picked by host arch. Links the shipped VM (src/GAZL.cpp) READ-ONLY.
-# Standalone by design (not wired into build.sh). Override the compiler with CPP_COMPILER. (Windows: use the .cmd.)
+# tools/test-jit.sh runs it, so build.sh does too; it still stands alone. Override the compiler with CPP_COMPILER.
+# (Windows: use the .cmd.)
 
 cd "$(dirname "$0")"/..
 mode=${1:-release}

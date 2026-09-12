@@ -11,6 +11,10 @@ mkdir -p output
 # Build GAZLCmd release
 (cd tools && bash buildGAZLCmd.sh release)
 
+# Every JIT gate, shared with build.cmd. Runs here, straight after the binary that carries the JIT, so a miscompile
+# surfaces before the slower node suite rather than after it.
+bash tools/test-jit.sh
+
 # Every node-only gate, shared with build.cmd so the two cannot run different subsets.
 bash tools/test-js.sh
 
