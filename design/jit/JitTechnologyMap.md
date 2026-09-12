@@ -7,6 +7,11 @@ How every mechanism in the JIT works and how they compose. Files: `src/GAZLJit.{
 - The interpreter is the semantic oracle. The JIT must be BIT-IDENTICAL to it: same results, same Status, same
   memory image at every observable point (suspend, trap, return). Every optimization below is shaped by this.
 - The assembler is the trusted gatekeeper: the JIT consumes only finalized `Instruction[]` it produced.
+- One opcode enum, in `src/GAZLOpcodes.h`, shared by the assembler/interpreter and both backends (the JIT's `OP_*`
+  names are compiler-checked aliases, never literal ordinals). Opcode identity is the JIT's deepest assumption, and a
+  hand-copied mirror only holds for one numbering: insert an opcode mid-enum and every opcode above it lowers as its
+  neighbour, silently. `FINALIZED_OPCODE_COUNT` is `static_assert`ed in `GAZLJit.h`, so gaining an opcode breaks the
+  BUILD instead of the output. The two rules that keep this true are at the top of that header.
 - Cooperative scheduling (fuel) and re-entrancy (pushCall/enterCall) are first-class, not afterthoughts.
 
 ## 1. Compilation shape
@@ -80,6 +85,11 @@ op's own define (the model must equal the trap-path runtime state).
   there (leibniz -64%); arm64's bigger pool gains mostly from flush removal (div cold traps, realms).
 
 ## 5. The safety net (why any of this can be trusted)
+**What runs automatically:** `build.sh` / `build.cmd` call `tools/test-jit.{sh,cmd}`, which runs the lower test, the
+firmware differential and a 2000-program lap of the fuzzer against the host backend - about twenty seconds. It first
+proves `--jit` actually compiles something, because `--jit` otherwise falls back to the interpreter in silence and the
+differential would then compare the interpreter against its own goldens. The byte-golden emitter tests diff against a
+clang-assembled oracle, so they have no MSVC lane and stay manual; so does the 300k-deep soak.
 - **Lockstep lower test** (`tools/GAZLJitLowerTest.cpp`): ~35 kernels through the real `compile()`, JIT vs
   interpreter on WHOLE memory image + Status, at full AND tiny fuel (forcing suspend/resume through every leader).
   Includes realm teeth kernels, multi-RETU, cross-class capture isolation tests (mock backend records every

@@ -47,6 +47,13 @@ Always run one of these before committing, and the full one before committing an
 `impala/`. Budget generously: the JS gate alone takes about a minute and a half, most of it a
 3000-program fuzz run.
 
+The full sequence also calls `tools/test-jit.sh`, every JIT gate: the lockstep lower test, the
+28-firmware interp-vs-JIT differential and a short lap of the differential fuzzer, about twenty
+seconds. `build.cmd` calls the `.cmd` mirror of that one too, so keep each pair in lockstep.
+Changing JIT codegen additionally needs the manual gates in
+[`design/jit/JitTechnologyMap.md`](design/jit/JitTechnologyMap.md) section 5, above all the
+300k-deep fuzz soak.
+
 ## Code style
 
 The canonical coding style and design principles live in [`design/CodingStyle.md`](design/CodingStyle.md) and are

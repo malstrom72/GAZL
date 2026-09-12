@@ -18,6 +18,11 @@ CALL buildGAZLCmd.cmd release
 IF ERRORLEVEL 1 EXIT /B 1
 POPD
 
+REM Every JIT gate, shared with build.sh. Runs here, straight after the binary that carries the JIT, so a miscompile
+REM surfaces before the slower node suite rather than after it.
+CALL tools\test-jit.cmd
+IF ERRORLEVEL 1 EXIT /B 1
+
 REM Every node-only gate, shared with build.sh so the two cannot run different subsets.
 CALL tools\test-js.cmd
 IF ERRORLEVEL 1 EXIT /B 1

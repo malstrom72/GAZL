@@ -46,6 +46,7 @@
 #include <map>
 #include <set>
 #include "GAZL.h"
+#include "GAZLOpcodes.h"			// the ONE opcode enum, shared with the assembler/interpreter
 #include "GAZLJitMem.h"			// makeExecutable() - platform-specific backend, architecture-neutral
 
 namespace GAZL {
@@ -54,43 +55,45 @@ const int TRANSFER = 1;							// segment-to-segment transfer sentinel (no GAZL s
 const int NATIVE_CALL = 2;						// "invoke a native, then continue" sentinel
 const int BLOCK_RETRY = 5;						// a native returns this to suspend-and-retry (host policy; §5.4 blocking retry)
 
-// GAZL finalized opcodes (the enum is internal to GAZL.cpp; base = FIRST_OPCODE_VALUE 0x2345, declaration order).
+/*
+	Finalized opcodes. These are ALIASES for the one enum in GAZLOpcodes.h, never a copy of it: every name
+	below is checked by the compiler against a real enumerator, and every VALUE comes from the engine this
+	JIT is compiled against. The hand-copied mirror this replaced spelled the values out as `0x2345 + N`,
+	which is correct for exactly one numbering - insert an opcode mid-enum and each one lowers as its
+	neighbour, with no compile error and no exception. See the two rules at the top of GAZLOpcodes.h.
+*/
 enum {
-	OP_FUNC = 0x2345 + 0, OP_CALL_VVC = 0x2345 + 1, OP_CALL_CVC = 0x2345 + 2, OP_CALL_NVC = 0x2345 + 3,
-	OP_RETU = 0x2345 + 4, OP_MOVE_VV = 0x2345 + 5, OP_MOVE_VC = 0x2345 + 6, OP_PEEK_VC = 0x2345 + 7,
-	OP_POKE_CV = 0x2345 + 8, OP_POKE_CC = 0x2345 + 9, OP_PEEK_VVV = 0x2345 + 10, OP_PEEK_VCV = 0x2345 + 11,
-	OP_POKE_VVV = 0x2345 + 12, OP_POKE_CVV = 0x2345 + 13, OP_POKE_VVC = 0x2345 + 14, OP_POKE_CVC = 0x2345 + 15,
-	OP_GETL_VVV = 0x2345 + 16, OP_SETL_VVV = 0x2345 + 17, OP_SETL_VVC = 0x2345 + 18, OP_ADRL = 0x2345 + 19,
-	OP_COPY_VVC = 0x2345 + 63, OP_COPY_VCC = 0x2345 + 64, OP_COPY_CVC = 0x2345 + 65, OP_COPY_CCC = 0x2345 + 66,
-	OP_ABSI = 0x2345 + 20,
-	OP_ADDI_VVV = 0x2345 + 21, OP_ADDI_VVC = 0x2345 + 22,
-	OP_SUBI_VVV = 0x2345 + 23, OP_SUBI_VVC = 0x2345 + 24, OP_SUBI_VCV = 0x2345 + 25,
-	OP_MULI_VVV = 0x2345 + 26, OP_MULI_VVC = 0x2345 + 27,
-	OP_DIVI_VVV = 0x2345 + 28, OP_DIVI_VVC = 0x2345 + 29, OP_DIVI_VCV = 0x2345 + 30,
-	OP_MODI_VVV = 0x2345 + 31, OP_MODI_VVC = 0x2345 + 32, OP_MODI_VCV = 0x2345 + 33,
-	OP_ANDI_VVV = 0x2345 + 34, OP_ANDI_VVC = 0x2345 + 35,
-	OP_IORI_VVV = 0x2345 + 36, OP_IORI_VVC = 0x2345 + 37,
-	OP_XORI_VVV = 0x2345 + 38, OP_XORI_VVC = 0x2345 + 39,
-	OP_SHLI_VVV = 0x2345 + 40, OP_SHLI_VVC = 0x2345 + 41, OP_SHLI_VCV = 0x2345 + 42,
-	OP_SHRI_VVV = 0x2345 + 43, OP_SHRI_VVC = 0x2345 + 44, OP_SHRI_VCV = 0x2345 + 45,
-	OP_SHRU_VVV = 0x2345 + 46, OP_SHRU_VVC = 0x2345 + 47, OP_SHRU_VCV = 0x2345 + 48,
-	OP_ABSF = 0x2345 + 49, OP_FLOF = 0x2345 + 50,
-	OP_ADDF_VVV = 0x2345 + 51, OP_ADDF_VVC = 0x2345 + 52,
-	OP_SUBF_VVV = 0x2345 + 53, OP_SUBF_VVC = 0x2345 + 54, OP_SUBF_VCV = 0x2345 + 55,
-	OP_MULF_VVV = 0x2345 + 56, OP_MULF_VVC = 0x2345 + 57,
-	OP_DIVF_VVV = 0x2345 + 58, OP_DIVF_VVC = 0x2345 + 59, OP_DIVF_VCV = 0x2345 + 60,
-	OP_FTOI_VVC = 0x2345 + 61, OP_ITOF_VVC = 0x2345 + 62,
-	OP_FORi_VVB = 0x2345 + 67, OP_FORi_VCB = 0x2345 + 68,
-	OP_LSSI_VVB = 0x2345 + 69, OP_LSSI_VCB = 0x2345 + 70, OP_LSSI_CVB = 0x2345 + 71,
-	OP_EQUI_VVB = 0x2345 + 72, OP_EQUI_VCB = 0x2345 + 73,
-	OP_NLSI_VVB = 0x2345 + 74, OP_NLSI_VCB = 0x2345 + 75, OP_NLSI_CVB = 0x2345 + 76,
-	OP_NEQI_VVB = 0x2345 + 77, OP_NEQI_VCB = 0x2345 + 78,
-	OP_LSSF_VVB = 0x2345 + 79, OP_LSSF_VCB = 0x2345 + 80, OP_LSSF_CVB = 0x2345 + 81,
-	OP_EQUF_VVB = 0x2345 + 82, OP_EQUF_VCB = 0x2345 + 83,
-	OP_NLSF_VVB = 0x2345 + 84, OP_NLSF_VCB = 0x2345 + 85, OP_NLSF_CVB = 0x2345 + 86,
-	OP_NEQF_VVB = 0x2345 + 87, OP_NEQF_VCB = 0x2345 + 88,
-	OP_GOTO = 0x2345 + 89, OP_SWCH = 0x2345 + 90
+	OP_FUNC = FUNC_CC_, OP_CALL_VVC = CALL_VVC, OP_CALL_CVC = CALL_CVC, OP_CALL_NVC = CALL_NVC, OP_RETU = RETU_C__,
+	OP_TAIL_CC = TAIL_CC_, OP_TAIL_VC = TAIL_VC_,									// GAZL 2 tail calls (absent from a v1 stream, but always numbered)
+	OP_MOVE_VV = MOVE_VV_, OP_MOVE_VC = MOVE_VC_, OP_PEEK_VC = PEEK_VC_, OP_POKE_CV = POKE_CV_,
+	OP_POKE_CC = POKE_CC_, OP_PEEK_VVV = PEEK_VVV, OP_PEEK_VCV = PEEK_VCV, OP_POKE_VVV = POKE_VVV,
+	OP_POKE_CVV = POKE_CVV, OP_POKE_VVC = POKE_VVC, OP_POKE_CVC = POKE_CVC, OP_GETL_VVV = GETL_VVV,
+	OP_SETL_VVV = SETL_VVV, OP_SETL_VVC = SETL_VVC, OP_ADRL = ADRL_VV_, OP_ABSI = ABSI_VV_, OP_ADDI_VVV = ADDI_VVV,
+	OP_ADDI_VVC = ADDI_VVC, OP_SUBI_VVV = SUBI_VVV, OP_SUBI_VVC = SUBI_VVC, OP_SUBI_VCV = SUBI_VCV,
+	OP_MULI_VVV = MULI_VVV, OP_MULI_VVC = MULI_VVC, OP_DIVI_VVV = DIVI_VVV, OP_DIVI_VVC = DIVI_VVC,
+	OP_DIVI_VCV = DIVI_VCV, OP_MODI_VVV = MODI_VVV, OP_MODI_VVC = MODI_VVC, OP_MODI_VCV = MODI_VCV,
+	OP_ANDI_VVV = ANDI_VVV, OP_ANDI_VVC = ANDI_VVC, OP_IORI_VVV = IORI_VVV, OP_IORI_VVC = IORI_VVC,
+	OP_XORI_VVV = XORI_VVV, OP_XORI_VVC = XORI_VVC, OP_SHLI_VVV = SHLI_VVV, OP_SHLI_VVC = SHLI_VVC,
+	OP_SHLI_VCV = SHLI_VCV, OP_SHRI_VVV = SHRI_VVV, OP_SHRI_VVC = SHRI_VVC, OP_SHRI_VCV = SHRI_VCV,
+	OP_SHRU_VVV = SHRU_VVV, OP_SHRU_VVC = SHRU_VVC, OP_SHRU_VCV = SHRU_VCV, OP_ABSF = ABSF_VV_, OP_FLOF = FLOF_VV_,
+	OP_ADDF_VVV = ADDF_VVV, OP_ADDF_VVC = ADDF_VVC, OP_SUBF_VVV = SUBF_VVV, OP_SUBF_VVC = SUBF_VVC,
+	OP_SUBF_VCV = SUBF_VCV, OP_MULF_VVV = MULF_VVV, OP_MULF_VVC = MULF_VVC, OP_DIVF_VVV = DIVF_VVV,
+	OP_DIVF_VVC = DIVF_VVC, OP_DIVF_VCV = DIVF_VCV, OP_FTOI_VVC = FTOI_VVC, OP_ITOF_VVC = ITOF_VVC,
+	OP_COPY_VVC = COPY_VVC, OP_COPY_VCC = COPY_VCC, OP_COPY_CVC = COPY_CVC, OP_COPY_CCC = COPY_CCC,
+	OP_FORi_VVB = FORi_VVB, OP_FORi_VCB = FORi_VCB, OP_LSSI_VVB = LSSI_VVB, OP_LSSI_VCB = LSSI_VCB,
+	OP_LSSI_CVB = LSSI_CVB, OP_EQUI_VVB = EQUI_VVB, OP_EQUI_VCB = EQUI_VCB, OP_NLSI_VVB = NLSI_VVB,
+	OP_NLSI_VCB = NLSI_VCB, OP_NLSI_CVB = NLSI_CVB, OP_NEQI_VVB = NEQI_VVB, OP_NEQI_VCB = NEQI_VCB,
+	OP_LSSF_VVB = LSSF_VVB, OP_LSSF_VCB = LSSF_VCB, OP_LSSF_CVB = LSSF_CVB, OP_EQUF_VVB = EQUF_VVB,
+	OP_EQUF_VCB = EQUF_VCB, OP_NLSF_VVB = NLSF_VVB, OP_NLSF_VCB = NLSF_VCB, OP_NLSF_CVB = NLSF_CVB,
+	OP_NEQF_VVB = NEQF_VVB, OP_NEQF_VCB = NEQF_VCB, OP_GOTO = GOTO_B__, OP_SWCH = SWCH_VCC
 };
+
+/*
+	Every finalized opcode must be lowered by BOTH backends, so gaining one has to break the BUILD rather
+	than the generated code. If this fires: add a `case` for the new opcode to GAZLJitX64.cpp and
+	GAZLJitArm64.cpp (and to isCacheLowered / operandRoles if it touches frame slots), then update the count.
+*/
+static_assert(FINALIZED_OPCODE_COUNT == 93, "a finalized opcode was added or removed - both JIT backends need a case for it");
 
 // makeExecutable() is declared in GAZLJitMem.h (platform backend), also in namespace GAZL.
 

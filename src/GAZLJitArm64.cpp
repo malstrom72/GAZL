@@ -426,6 +426,23 @@ static void subImmXBig(Arm64Emitter& e, Reg xd, Reg xn, uint32_t imm) {
 	if (imm < 0x1000) { e.subImmX(xd, xn, imm); } else { matConst(e, W15, static_cast<Int>(imm)); e.subX(xd, xn, W15); }
 }
 /*
+	TAIL's window slide (GAZL 2), the mirror of the x64 emitTailWindow: the %0..%window-1 window moves DOWN onto this
+	frame's base, dsp rewinds to it, and the callee's FUNC re-stacks from OUR base. No return is pushed - the callee's
+	RETU returns to our caller - which is what makes self-recursion run in constant stack. The destination is always
+	below the source (dp = dsp - frame), so an ascending copy is overlap-safe at any size, exactly like the interpreter's
+	loop. Uses X12 for the destination base and W11 for the word in flight, leaving X9 free to carry the resolved target
+	of the indirect form across the slide.
+*/
+static void emitTailWindow(Arm64Emitter& e, UInt window, UInt frame) {
+	subImmXBig(e, X12, X1, frame * 4);
+	for (UInt k = 0; k < window; ++k) {
+		e.ldrW(W11, X1, k * 4);
+		e.strW(W11, X12, k * 4);
+	}
+	if (frame != 0) { subImmXBig(e, X1, X1, frame * 4); }																// dsp = dp
+}
+
+/*
 	Frame slots are Value-indices off dsp (x1). ldur/stur reach ±64 words; far slots (big frames / LOCA arrays) fall back
 	to a register-offset load (index in W13 - kept distinct from the W9..W12 operand scratches). See task #23.
 */
@@ -827,6 +844,23 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 				e.movz(W0, 0); e.b(exitLabel);																			// OK - terminal (return to host)
 				e.bind(notNative);
 				e.br(X9);																								// GAZL return: tail-branch to the continuation (state live)
+				break;
+			}
+			case OP_TAIL_CC: {																							// GAZL 2 tail call, direct target (validated at assembly; the interpreter only asserts)
+				emitTailWindow(e, static_cast<UInt>(in.p1.i), static_cast<UInt>(in.p2.i));
+				e.b(entryLabels[in.p0.p - FUNCTION_OFFSET]);															// the callee's RETU returns to OUR caller
+				break;
+			}
+			case OP_TAIL_VC: {																							// tail call through a target slot: BAD_CALL on a bad ordinal, exactly as the interpreter
+				Label trap = e.newLabel();
+				loadSlot(e, W9, in.p0.i);																				// fn pointer, read BEFORE the slide overwrites the window
+				matConst(e, W10, static_cast<Int>(FUNCTION_OFFSET)); e.sub(W9, W9, W10);									// ordinal
+				matConst(e, W10, static_cast<Int>(functionCount));
+				e.cmp(W9, W10); e.bcond(HS, trap);																		// ordinal >= functionCount -> BAD_CALL
+				e.ldrX(X10, X0, o.funcentries); e.ldrXr(X9, X10, W9);													// x9 = funcEntries[ordinal] - survives the slide
+				emitTailWindow(e, static_cast<UInt>(in.p1.i), static_cast<UInt>(in.p2.i));
+				e.br(X9);
+				e.bind(trap); e.movn(W0, 3); e.b(exitLabel);															// ~3 = -4 = BAD_CALL
 				break;
 			}
 			case OP_CALL_CVC: {

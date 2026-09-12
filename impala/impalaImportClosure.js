@@ -171,10 +171,10 @@ var TOP_LABEL_RE = /^\s*([A-Za-z_]\w*):\s+(\S.*)$/;   // an ORDINARY named defin
 // decides which dotted lines are real blocks (`.s_`/`.a_` storage) and which stay absorbable extent folds
 // (`.z.`/`.o.` `! DEF`), so the layout-swallowing the tag-only match caused does NOT return.
 var DATA_LABEL_RE = /^\s*(\.[\w.]+|[A-Za-z_]\w*):\s+(\S.*)$/;
-var STORAGE_HEAD_RE = /^(?:DAT[ifps]?|DATA|GLOB|CNST|TEMP)\b/;   // a header that ALLOCATES storage and owns the DATA rows under it
+var STORAGE_HEAD_RE = /^(?:DAT[ifpst]?|DATA|GLOB|CNST|TEMP)\b/;  // a header that ALLOCATES storage and owns the DATA rows under it
 var DEF_FOLD_RE = /^!\s*DEF[ifp]?\b/;                            // a `! DEF` compile-time fold: a const value, or a `.z.`/`.o.` extent
 var ANON_ALLOC_RE = /^\s*(?:GLOB|CNST|TEMP)\s+\*/;    // an unlabeled section allocation
-var DATA_ROW_RE = /^\s*(?:DAT[ifps]?|DATA)\s/;        // an unlabeled initializer continuation row
+var DATA_ROW_RE = /^\s*(?:DAT[ifpst]?|DATA)\s/;       // an unlabeled initializer continuation row
 // A compile-time line that computes or names a data definition's extent: an unlabeled `!` fold, or the
 // `.z.<name>: ! DEFi` naming THIS definition's size. The name must match, because `.z.` also labels a
 // struct's own size (`.z.Voice`) and a struct layout block sits immediately above the arrays that use
@@ -222,11 +222,16 @@ function isDataDef(line) {
 			|| (DEF_FOLD_RE.test(m[2]) && m[1].charAt(0) !== ".") ? m[1] : null;
 }
 
-/* A function body ends only at the next named definition or a standalone `; signature` row (extern
-   decls). Internal `;----` separators, `; expects` comments and blank lines stay in the body - the
-   code section of every function is preceded by its own `;----` separator. */
+/* A function body ends only at the next named definition, a standalone `; signature` row (extern
+   decls), or an anonymous allocation. Internal `;----` separators, `; expects` comments and blank lines
+   stay in the body - the code section of every function is preceded by its own `;----` separator.
+   The anonymous `GLOB *1` a scalar global rides ABOVE its labeled DAT row can never be part of a
+   function body, and treating it as one swallowed it into whatever FUNC preceded it - strip that
+   function and the global kept its row but lost its section ("Data section not declared"). Ending the
+   body there leaves the alloc loose, where the data block below absorbs it as designed. */
 function isBoundary(line) {
-	return !!(isFuncDef(line) || isDataDef(line) || /^\s*;\s*signature\b/.test(line));
+	return !!(isFuncDef(line) || isDataDef(line) || /^\s*;\s*signature\b/.test(line)
+			|| ANON_ALLOC_RE.test(line));
 }
 
 function collectRefs(text, into) {

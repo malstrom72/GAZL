@@ -1,11 +1,14 @@
 # Function inlining in Impala (spec)
 
+<<<<<<< HEAD:docs/Inlining.md
+=======
 > **PARKED for Impala 3.0 on this branch.** `inline` is rejected with `E439`; the implementation lives on
 > the `GAZL2` branch. An expansion places its locals with GAZL 2 `SCOP` / `ENDS`, and Impala 2 has to stay
 > usable on GAZL 1.0 engines, which reject `SCOP` outright. See
 > [`design/ParkedFeatures.md`](../ParkedFeatures.md). Everything below describes the design as built and is
 > kept as the spec to restore from - it is not what this branch's compiler does.
 
+>>>>>>> Impala2:design/impala/Inlining.md
 Status: SPEC. Explicit `inline` keyword, no heuristics. Targets FUTURE firmware - see the coverage note at
 the end for what this deliberately does not reach.
 
@@ -15,8 +18,8 @@ Background measurements and the Impala-vs-assembler placement argument live in `
 
 ## 1. Why the compiler and not the assembler
 
-Measured on this machine with the INTERPRETER, one program, three lowerings, all verified to produce the
-same result (2-argument leaf helper `mix(int a, int b) { r = a * 3 + b; }` called 10M times in a loop):
+Measured on this machine, one program, three lowerings, all verified to produce the same result
+(2-argument leaf helper `mix(int a, int b) { r = a * 3 + b; }` called 10M times in a loop):
 
 | lowering | min ms | ns/call saved | share of the prize |
 |----------|--------|---------------|--------------------|
@@ -32,47 +35,6 @@ rather than merely getting cheaper. That last 27% is the whole reason to do this
 Note the practical consequence for the rules below: materialising ONE argument costs about 6% of the
 prize. Materialising is cheap, so the rules should substitute only where it is unarguably safe and
 materialise everywhere else, rather than reach for a clever analysis.
-
-
-### 1.1 The prize on jitted code
-
-The table above is the interpreter. The JIT has already removed most of the call cost by the time
-inlining gets there, so the ABSOLUTE prize is far smaller - but the relative win survives, because the
-JIT shrank everything else too. Measured on real x64 hardware (Windows, MSVC /O2, best-of-5 fresh
-processes, JIT lanes stable to +/-0.3%) with the four `benchmarks/suite/` kernels added for this:
-
-| kernel / engine | call ms | inline ms | speedup | ns saved/call |
-|-----------------|---------|-----------|---------|---------------|
-| `leafcall` / `leafinline`, interpreter   | 162.27 | 59.40 | 2.73x | 5.14 |
-| `leafcall` / `leafinline`, JIT           |  30.51 | 14.97 | 2.04x | 0.78 |
-| `clampcall` / `clampinline`, interpreter |  94.83 | 68.09 | 1.39x | 3.26 |
-| `clampcall` / `clampinline`, JIT         |  15.68 | 11.01 | 1.42x | 0.57 |
-
-`leaf` is the bare 20M-iteration loop (call overhead maximised, an upper bound); `clamp` is a branching
-3-argument helper over a 4096-word global array, 8.19M calls, where memory traffic dilutes the call the
-way real firmware does. **Plan with the clamp figure: about 1.4x on jitted call-heavy code.** That is
-well above the 5-15% `InliningInvestigation.md` estimated for firmware, and it is on top of a JIT that
-is already 6x the interpreter.
-
-The interpreter rows are the control. They reproduce the section-1 table on a different program (5.14 vs
-5.18 ns/call), and they were taken from the same binaries, in the same session, as the JIT rows directly
-above them - so the JIT rows carry the same confidence.
-
-These numbers predate the GAZL 2 rework that places an expansion's locals with `SCOP` / `ENDS`, so they
-were taken on the earlier transient-based lowering. They carry over unchanged: neither kernel's helper has
-a local beyond its return value, so neither emits `SCOP`, and the instructions they lower to are unchanged
-across the rework apart from the named array extent `c978142` introduced. A helper that DOES declare locals
-is not covered by this measurement.
-
-Two things worth keeping in mind:
-
-- **The JIT's lead over the interpreter SHRINKS when the leaf loop is inlined** (5.32x to 3.97x) and is
-  flat on the realistic one (6.05x to 6.18x). Not a regression - it means the JIT was already handling
-  calls better than the interpreter, so inlining takes proportionally more away from its lead.
-- **Do not measure this under Rosetta.** The inlined lanes are stable there to +/-0.2% but the CALL
-  lanes swing 43-83 ms run to run, and Rosetta understates the leaf win as 1.36x against the true 2.04x
-  (it inflates the inlined loop ~2.1x but the call loop only ~1.4x). `tools/bench.sh` already labels its
-  x64 lane "ratios only"; for call-vs-inline even the ratio is wrong.
 
 
 ## 2. Semantics of `inline`
@@ -91,9 +53,7 @@ Two things worth keeping in mind:
   `impala compile` resolves the closure, so this needs no separate step.
 
 Rejected, each with its own diagnostic (section 7): recursion, taking the address, `export`, `extern`,
-and forward declaration. Array and struct locals are **allowed**, and since the extent-naming rework named every
-extent, a NON-literal extent is allowed too - see section 8, which explains why `E433` no longer exists.
-(This paragraph used to say such a local was rejected, contradicting that section.)
+forward declaration, and declaring an array or struct local.
 
 
 ## 3. What gets captured
@@ -333,7 +293,7 @@ already complete, and `B` cannot have inlined `A`.
 
 A callee's declared locals become REAL named locals of the caller, bracketed by `SCOP` / `ENDS`. The
 assembler owns their placement, exactly as it does for an ordinary local - which is the point: it
-resolves `*.z.Struct` and `*.z.f.name` before assigning offsets, so a host-owned size lands correctly,
+resolves `*.z.Struct` and `*.x.f.name` before assigning offsets, so a host-owned size lands correctly,
 where a compile-time slot count could only ever have been Impala's guess at it.
 
 Sibling expansions overlay, so a function's frame cost is its LARGEST expansion, not the sum. That is
@@ -353,12 +313,17 @@ CALL window's base must be a transient, so that block cannot be anything else.
 Nothing but a declaration line repeating the size operand verbatim:
 
     SCOP
-    $buf_i0:	LOCA *.z.sum3.buf
+    $buf_i0:	LOCA *.x.sum3.buf
     $i_i0:	LOCi
     ENDS
 
+<<<<<<< HEAD:docs/Inlining.md
+Both size forms are SYMBOLS the assembler resolves - `*.z.Struct` for a struct local, `*.x.f.name` for
+an array (see `docs/SymbolNamespace.md`). That is what makes the expansion trivial. An extent computed
+=======
 Both size forms are SYMBOLS the assembler resolves - `*.z.Struct` for a struct local, `*.z.f.name` for an array local
 (see `design/gazl/SymbolNamespace.md`). That is what makes the expansion trivial. An extent computed
+>>>>>>> Impala2:design/impala/Inlining.md
 by folding (`t[H * N]`, or `count * .z.Ext` for an extern struct) lives in a recycled `<X>` scratch that
 belongs to wherever it was folded, so it can NOT be repeated at an expansion site - naming it once, at
 the callee's declaration, is what lets every site refer to it.

@@ -1,0 +1,85 @@
+/*
+	REVIEW 5/5 - types, pointers, globals and compile-time scratch.
+
+	What to check:
+
+	  - FLOAT bodies lower to the `f` opcodes with the same substitution rules as int.
+	  - A body that writes a GLOBAL by name is still TRANSPARENT. That is the surprising one:
+	    a callee cannot NAME a caller's local, so a write it can name is either a global or its
+	    own frame object - which is why substituting a caller local past it is still safe.
+	    `bumpG` therefore substitutes its argument even though it POKEs.
+	  - Writing through a POINTER is the opposite: the destination is a VALUE, not a name, so
+	    `store` is opaque and its arguments are materialised.
+	  - A constant expression folds to a `<X>` compile-time scratch. Check the `! ADDi <A> ...`
+	    style fold lines and that each expansion borrows its OWN scratch letter, released after.
+	  - STACKED constants: `stack(15.0, 3.0)` computes `x * y` at ASSEMBLE time into `<X>` rather
+	    than emitting a run-time MOV to park it in a transient, leaving one run-time ADDf.
+	  - A `void` inline (no return value) should leave no output slot behind.
+	  - A funcptr PARAMETER is just a value: an inline body may call through it.
+
+	Expected (GAZLCmd inlineReviewTypes.gazl main): 7.5 25 42 4 99 12 30 60
+*/
+const int DEBUG = 1
+
+const int K = 24
+
+extern native printInt
+extern native printFloat
+extern native printLF
+
+global int g;
+global int touched;
+
+functype Op(int a) returns int r
+
+inline function halfOf(float x) returns float y { y = x * 0.5; }	/* float body */
+
+inline function stack(float x, float y) returns float z { z = x * y + x; }	/* stacked constants */
+
+inline function bumpG(int d)						/* writes a NAMED global -> transparent */
+{
+	global g = global g + d;
+}
+
+inline function store(int pointer p, int v)			/* writes through a POINTER -> opaque */
+{
+	*p = v;
+	global touched = 99;
+}
+
+inline function scaled(int a) returns int r			/* K / 2 folds to a `<X>` scratch */
+{
+	r = a * (K / 2);
+}
+
+inline function callThrough(Op f, int a) returns int r	/* funcptr param, called from the body */
+{
+	r = f(a);
+}
+
+function timesThree(int a) returns int r { r = a * 3; }
+
+function main()
+locals float fv, int w, int array cell[1], Op fp
+{
+	fv = 15.0;
+	printFloat(halfOf(fv)); printLF();			/* 7.5 - float, substituted */
+
+	global g = 5;
+	w = 20;
+	bumpG(w);									/* transparent despite the POKE */
+	printInt(global g); printLF();				/* 25 */
+
+	cell[0] = 0;
+	store(&cell[0], 42);						/* opaque: materialised */
+	printInt(cell[0]); printLF();				/* 42 */
+
+	w = 1;
+	printInt(scaled(w) - 8); printLF();			/* 4  - <X> fold, 1*12-8 */
+	printInt(global touched); printLF();		/* 99 - the opaque body's global write */
+	printInt(scaled(1)); printLF();				/* 12 - second expansion, new scratch */
+
+	fp = timesThree;
+	printInt(callThrough(fp, 10)); printLF();	/* 30 - call through a funcptr param */
+	printFloat(stack(15.0, 3.0)); printLF();	/* 60 - `! MULf <X>` then one run-time ADDf */
+}
