@@ -1,27 +1,79 @@
 # A distinct function-pointer type for GAZL 2 (`t`)
 
-Status: PROPOSAL, researched against `src/GAZL.cpp` and GAZLCmd on 2026-08-02. Nothing here is
-implemented. The conclusion is that GAZL 1 has a real silent-wrong shape that no amount of Impala-side
-checking can close, because Impala has nowhere to encode the distinction.
+Status: IMPLEMENTED 2026-08-25, with the migration REVISED from the hard break decided 2026-08-07 to
+`GAZL #2` REGIONS - see "Migration" below for both the original decision and what replaced it, and
+`docs/gazl/InstructionSet.md` (`GAZL`, `MOVt`, `EQUt`, `DIFt`, `DATt`) for the shipped semantics. The
+mechanism: `GAZL #n` sets the dialect for what follows; inside a `GAZL #2` region, `FUNC` mints a
+`TARGET`-typed address (one conditional - the whole dialect switch) and no ADDRESS-carrying position
+accepts any function constant. The `t` rows accept only targets, so they are gated away from GAZL 1
+code by the type bits alone, with no version check in the operator table. Impala emits the full
+`GAZL #2` ... `GAZL #1` bracket under `--gazl2`, which is what keeps concatenation-linking working in
+every dialect mix. Blast radius of the shipped form: ZERO forced migrations - undeclared files keep
+GAZL 1 meaning forever, and `src/UnitTest.gazl` tests both dialects in one file.
+
+Originally: researched against `src/GAZL.cpp` and GAZLCmd on 2026-08-02, re-verified 2026-08-07. The
+conclusion was that GAZL 1 has a real silent-wrong shape that no amount of Impala-side checking can
+close, because Impala has nowhere to encode the distinction.
 
 ## The problem in one line
 
 GAZL has three storage types - `i`, `f`, `p` - and **`p` is doing double duty**: it is both "data
 pointer" and "function pointer", which are not the same thing and are not interchangeable.
 
-## This is not a new rule - the ISA already states it
+## The rule the ISA states, and one correction to it
 
-`docs/gazl/InstructionSet.md`, under `CALL`, has said so all along:
+`docs/gazl/InstructionSet.md`, under `CALL`, says (as corrected 2026-08-07):
 
 > A function pointer (the value of `&function`) is an opaque handle: a stable ordinal assigned in function
-> declaration order, not a code address. Only equality (`EQUp` / `NEQp`) and calling are defined operations
-> on a function pointer; ordering (`LSSp`, `GEQp` etc.) and arithmetic (`ADDp`, `SUBp`, `DIFp`) applied to
-> a function pointer yield an unspecified (but memory-safe) result.
+> declaration order, not a code address. Equality (`EQUp` / `NEQp`), ordering (`LSSp`, `GEQp` etc.) and
+> calling are defined operations on a function pointer. [...] Arithmetic (`ADDp`, `SUBp`, `DIFp`) applied
+> to a function pointer yields an unspecified (but memory-safe) result.
 
-The defined operation set is therefore already **equality and calling** - exactly the set proposed below.
-This document is not asking for a new rule; it is asking the assembler to ENFORCE the one already written
-down, which a shared `p` type makes impossible. Note too that "unspecified (but memory-safe)" is accurate
-but undersells `ADDp`: the result is not garbage, it is a *different function*, called silently.
+(That paragraph originally put ordering on the undefined side with arithmetic. It was corrected on
+2026-08-07, for the reason set out just below; the quote above is the corrected text.)
+
+This document is asking the assembler to ENFORCE what is written down, which a shared `p` type makes
+impossible. Note too that "unspecified (but memory-safe)" is accurate but undersells `ADDp`: the result is
+not garbage, it is a *different function*, called silently.
+
+**The rule, stated by RESULT TYPE - which is the only thing that decides safety here:**
+
+> An operation on targets is safe if and only if `t` does not appear in its RESULT. A target may be
+> NAMED (`&func`), COPIED (`MOVt`) or LOADED (`DATt` / `LOCt`) - never COMPUTED. Consuming targets is
+> unrestricted.
+
+That one line derives the whole set. `&one + 1` is the defect because it *produces* a `t` naming a
+different function; `f < g`, `f == g` and `f - g` all consume targets and hand back a bool or an int, so
+none of them can name anything at all. Classifying by the NAME of the operation - "arithmetic bad" - gets
+`DIFt` wrong, because `t - t -> int` is arithmetic that cannot manufacture a target.
+
+**GAZL 1 already encodes exactly this distinction in its mnemonics.** From `DIFp` in the instruction set:
+"You cannot use `SUBp` to subtract a pointer from another. `SUBp` is only used for negatively offsetting a
+pointer." `SUBp` is `ptr - int -> ptr`; `DIFp` is `ptr - ptr -> int`. They are separate instructions
+*because the result types differ*. Keeping `DIFt` and dropping `SUBt` is not a new idea - it is applying a
+split the ISA made long ago.
+
+And ordering is *useful*, because a sorted container does not need a MEANINGFUL order - only a TOTAL and
+RUN-STABLE one. Sort a funcptr table at init and binary-search it for membership: the search never depends
+on which order declaration order happens to hand you, only that it stays consistent within the run. This
+is precisely why C++ guarantees `std::less<T*>` is a strict total order where `<` on unrelated pointers is
+not. "Meaningless by construction" is true of a declaration-order ordinal SEMANTICALLY, and irrelevant to
+whether it sorts.
+
+Impala already draws the line in the right place, and always has: `f + 1` and `f - g` are `E301`, while
+`f < g` and `f == g` compile. The compiler is the evidence; this paragraph was the thing that was wrong.
+
+So the defined operation set is **equality, ordering, difference, and calling** - everything that consumes
+a target without naming one - and `t` offers all four.
+
+**Why a target is index-like for CONSUMPTION but never for PRODUCTION.** The ordinal representation exists
+so a funcptr survives freeze/thaw: "Function pointers stored in globals survive re-assembly because they
+are stable ordinals" (`src/GAZL.h`, memory serialization). That makes it an INDEX, not an address - no
+address space, no element size, nothing contiguous. Indexes compare and subtract, which is why ordering
+and `DIFt` need no special pleading. But you may never COMPUTE one, because **the table it indexes is not
+yours**: ordinals are handed out by the assembler in declaration order, so there is no "next function" the
+program has any claim on. An int index into your own array is computable because you know that array's
+layout; `functionTable`'s layout is not yours to know.
 
 ## They are already different things at run time
 
@@ -55,8 +107,8 @@ Verified with GAZLCmd on 2026-08-02:
 | `MOVp $p &target` then `PEEK` through it | accepted; traps on the memory region check |
 | `DATp &target &gdata` (both kinds, one row) | accepted, unchecked |
 | `ADDp $p $p #1` on a function pointer | **accepted - and does NOT trap** |
-| `DIFp $i $funcPtr $dataPtr` | accepted, meaningless result |
-| `LSSp` / `GRTp` ordering two function pointers | accepted, meaningless |
+| `DIFp $i $funcPtr $dataPtr` | accepted, meaningless result - MIXING the two kinds is the defect here, not the difference itself |
+| `LSSp` / `GRTp` ordering two function pointers | accepted - and CORRECTLY so, see the correction above |
 
 The direct call is caught because `CALL_c__` demands the `FUNC` bit (`src/GAZL.cpp:337`). Everything else
 accepts `ANY_FREE = NULL_PTR | FREE_ADDRESS | FUNC` (`:293`), the union - so the kind survives only while
@@ -99,7 +151,7 @@ discarded at the boundary.
 
 `t` for "target" - the call target, which is what the ordinal actually names.
 
-Needed (~14 table entries):
+Needed:
 
 | mnemonic | why |
 |---|---|
@@ -107,14 +159,22 @@ Needed (~14 table entries):
 | `MOVt` (2 forms) | assignment |
 | `DATt` | initializer rows for funcptr arrays and struct fields |
 | `EQUt` / `NEQt` (8 forms) | equality is meaningful - "is this the same function?" |
+| `LSSt` / `GRTt` / `LEQt` / `GEQt` | a TOTAL, run-stable order - sort a target table, binary-search it |
+| `DIFt` | `t - t -> int`: consumes two targets, names none |
 | `INPt` / `OUTt` | if call targets cross the host boundary |
 
 plus `CALL_v__` accepting `t` rather than the generic `VAR_PTR_R`.
 
-**The omissions are the feature.** There would be no `ADDt`, `SUBt`, `DIFt`, `FORt`, `LSSt`, `GRTt`,
-`LEQt`, `GEQt` - roughly 30 of the 44 `p`-suffixed entries. Arithmetic and ordering on a
-declaration-order ordinal are meaningless by construction, so `&one + 1` stops being a wrong answer and
-becomes a line that will not assemble. That is the whole return on the change.
+**The omissions are the feature, and by the result-type rule they are exactly the target-PRODUCING forms:**
+no `ADDt`, no `SUBt`, no `FORt`. Each of those hands back a `t` computed from a `t`, so `&one + 1` stops
+being a wrong answer and becomes a line that will not assemble. That is the whole return on the change.
+
+Two that look like they belong on the wrong side:
+
+- `DIFt` is KEPT though it is arithmetic - it yields an `int`. `SUBt` is dropped though it is the same
+  minus sign, because `t - int` yields a `t`. This is the `SUBp`/`DIFp` split the ISA already makes.
+- `FORt` is DROPPED though it looks like iteration rather than arithmetic - stepping a loop variable
+  through targets is `ADDt` wearing a different hat, and its result is a `t`.
 
 ## Suffix letters ruled out, and why
 
@@ -160,8 +220,71 @@ looks like the expensive half and is.
   hole - but it means `t` is a declaration contract, not a guarantee about memory contents.
 - **Host boundary.** Whether `INPt`/`OUTt` are needed at all depends on whether a host ever hands a call
   target across.
-- **Migration.** `p` currently means "any pointer" in practice. Tightening it to "data pointer" is the
-  breaking half; every existing funcptr use in emitted GAZL would have to move to `t`.
+## Migration: revised 2026-08-25 - `GAZL #2` regions, superseding the 2026-08-07 hard break
+
+The 2026-08-07 decision was: break GAZL 1, no compatibility mode, the loose path deleted. What shipped
+instead is region-scoped: `p` tightens inside a `GAZL #2` region and stays GAZL 1 outside one. The hard
+break failed on a constraint the original analysis missed - **GAZL links by plain concatenation**, and
+any file-level dialect (a sticky mode, a single header directive) either re-interprets headerless GAZL 1
+units after a v2 unit or makes assembly depend on cat order. Regions close over their unit
+(`GAZL #1` at the end restores the default), so bracketed and unbracketed units concatenate in any
+order; per-symbol `TARGET` minting carries the protection across the seams (a v2 function's address is
+rejected from `p` slots in EVERY unit, declared or not). Per-function marking alone (a `FUNt` mnemonic,
+or a head pragma) was designed and rejected on the way: it composes equally well but cannot express the
+region-wide strictness that also refuses GAZL 1 function addresses in the region's own `p` rows. The
+measured blast radius below is now historical - under regions it is zero.
+
+The original decision, kept for the record:
+
+**Measured blast radius (2026-08-07, all 133 `.gazl` in the repo):**
+
+| | files |
+|---|---|
+| unaffected | 125 |
+| need migration | 8 |
+| of those, a plain RECOMPILE | 7 |
+| of those, a HAND edit | 1 - `src/UnitTest.gazl` |
+
+Every real-world example program is untouched: `verber8_code`, `phaser_code`, `trancelvania_code`,
+`specular_code`, `sam`, `buffer`, `chess`, `Priyome`, `BitMaskMod_code`, `FFTTest_code`,
+`startupcrash_code` contain no function pointer at all. The affected set is the funcptr FIXTURES plus the
+ISA unit test.
+
+**Why the cost is this low: Impala cannot emit the hard shape.** The unmigratable case is a POLYMORPHIC
+slot - one that holds a data pointer at one point and a call target at another, so `t` would need a second
+slot and a changed frame layout. `UnitTest.gazl`'s `p0` is exactly that (walks a string, then `MOVp p0
+&StopCar; CALL p0`), and it is the only one in the repo, because it is the only hand-written file.
+Impala provably cannot produce one:
+
+- named variables - `E303` in BOTH directions ("cannot assign funcptr to pointer" / "pointer to funcptr");
+- `%N` transients - UNTYPED storage, the mnemonic suffix carries the type (`%1` in `calc.gazl` holds ints,
+  floats and pointers in one function), so there is no slot type to migrate;
+- static data - Impala emits the deliberately-untyped `DATA` row for mixed structs/arrays and single-kind
+  `DATp` for scalar funcptr globals.
+
+So every Impala-generated `.gazl` is mechanically rewritable even when it cannot be recompiled, and the
+`; signature global fp : funcptr` rows give a rewriter ground truth without dataflow analysis.
+
+**Field exposure, per Magnus:** GAZL 1 has only ever shipped inside Permut8, and the only real-world
+funcptr user he can name is the "easter egg" OS joke that hosts CALC - which is `tests/impala/sources/
+calc.impala:517`, `((funcptr)global FUNCTIONS[i * 2 + 1])(...)` over a `(name, function)` table. Its
+source is in the corpus, so even that one regenerates.
+
+**Do NOT justify this by JIT performance - verified 2026-08-07, the JIT gains NOTHING.** Type suffixes are
+an assembly-time operand check that is ERASED at finalization: `ADDi_vvv` and `ADDp_vvv` both emit
+`ADDI_VVV`, `MOVi`/`MOVp` both emit `MOVE_VC_`, `EQUi`/`EQUp` -> `EQUI_*`, `LSSi`/`LSSp` -> `LSSI_*`. The
+JIT's own plan says it: "There are no dedicated MOVp/ADDp opcodes at the finalized level." A `MOVt` mapping
+to `MOVE_VV_` hands the JIT an identical instruction stream. And it would not help anyway - the realm
+analysis asks "can this reach MY frame", not "might this be a function", and a funcptr constant already
+lands in `REALM_NONFRAME` for free because `FUNCTION_OFFSET` (0x56789ABC) > `MEMORY_OFFSET` (0x12345678),
+so `produced = (p1.p >= MEMORY_OFFSET) ? REALM_NONFRAME : REALM_UNKNOWN` classifies it correctly and
+precisely. Funcptrs are never `PEEK`/`POKE`d, so they never reach the query realms exist to answer.
+
+**The whole return on `t` is therefore assembly-time correctness**, and specifically the SPLIT rather than
+the omissions: `&one + 1` is dangerous because the writer may have believed they held a data pointer, and
+once the types are distinct that confusion is unrepresentable. Note the runtime already catches the
+out-of-table case - `if (ui >= functionCount) { err = BAD_CALL; }` (`GAZL.cpp:1385`) - so a computed target
+only misbehaves silently when it lands on ANOTHER VALID function.
 
 ## See also
 

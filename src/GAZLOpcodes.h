@@ -37,10 +37,13 @@
 	   table in GAZL.cpp) and VERSION instead - that is where engine generations actually differ: an
 	   engine that does not know a word rejects it as unknown, rather than knowing it and refusing.
 
-	2. APPEND new finalized opcodes, before the compile-time block but after SWCH_VCC. Inserting one
-	   mid-enum is legal for the interpreter (it recompiles) but changes the encoding of every opcode
-	   above it. FINALIZED_OPCODE_COUNT below is asserted by the JIT, so an insertion or addition breaks
-	   the build rather than the output - fix it by giving both backends a case for the new opcode.
+	2. A new opcode may go ANYWHERE in the finalized block, mid-enum included - GAZL ships as assembly
+	   TEXT and is assembled on the end user's machine, so this numbering is internal to one build and
+	   never an on-disk format. `TAIL_CC_`/`TAIL_VC_` were inserted at ordinals 5 and 6 by GAZL 2, which
+	   renumbered 86 of the 91 opcodes above them and is harmless precisely because every consumer now
+	   derives from here. What is NOT safe is a consumer that spells the ordinals out for itself.
+	   FINALIZED_OPCODE_COUNT below is asserted by the JIT, so gaining an opcode breaks the build rather
+	   than the output - fix it by giving both backends a case for the new opcode.
 */
 
 #ifndef GAZLOpcodes_h
@@ -51,7 +54,7 @@ namespace GAZL {
 const Int FIRST_OPCODE_VALUE = 0x2345;
 
 enum Opcode {
-	FUNC_CC_ = FIRST_OPCODE_VALUE, CALL_VVC, CALL_CVC, CALL_NVC, RETU_C__
+	FUNC_CC_ = FIRST_OPCODE_VALUE, CALL_VVC, CALL_CVC, CALL_NVC, RETU_C__, TAIL_CC_, TAIL_VC_
 	, MOVE_VV_, MOVE_VC_
 	, PEEK_VC_, POKE_CV_, POKE_CC_
 	, PEEK_VVV, PEEK_VCV, POKE_VVV, POKE_CVV, POKE_VVC, POKE_CVC
@@ -73,7 +76,7 @@ enum Opcode {
 	, NLSF_VVB, NLSF_VCB, NLSF_CVB, NEQF_VVB, NEQF_VCB
 	, GOTO_B__, SWCH_VCC
 
-	, NOOP____, GLOB____, CNST____, DATA____, LOCA____, OUTP____, SCOP____, ENDS____
+	, NOOP____, GLOB____, CNST____, DATA____, LOCA____, OUTP____, SCOP____, ENDS____, SEEK____, GAZL____
 	
 	, MOVE_CC_
 	, ABSI_CC_

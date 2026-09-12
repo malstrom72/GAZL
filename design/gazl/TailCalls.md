@@ -1,7 +1,13 @@
 # Tail calls (design note)
 
-Status: DESIGN NOTE. Nothing here is implemented. Needs a GAZL instruction *and* Impala syntax, so it is
-sized for its own branch and cannot be done from either side alone.
+Status: the `TAIL` instruction is IMPLEMENTED (2026-08-27, GAZL2 branch), and Impala's `tail f(...);`
+terminal statement lowers to it under `--gazl2`. The Impala SURFACE is self-recursion only for now
+(E467) - the instruction itself is general, but the cross-function window/return contract checks in the
+compiler are future work. Diagnostics: E466 (`tail` needs `--gazl2` - the instruction exists only on
+GAZL 2 engines), E467 (target must be the enclosing function), E468 (not in an `inline function`), plus
+the ordinary call checks (E405/E406). Because `tail` is a statement that transfers control, "tail
+position" holds by construction - anything after it on a path is simply unreachable, exactly as after
+`return`.
 
 Related: [`GAZLAssemblerOptimizations.md`](GAZLAssemblerOptimizations.md) covers peepholes that need no
 ISA change; this is the one that does.
@@ -24,8 +30,8 @@ done: ;
 
 `count(100, 0)` returns 5050. `count(100000, 0)` traps - `Exception: run returned status -6`, the
 entry-time frame check in `FUNC` doing its job. It fails cleanly rather than corrupting, but it fails.
-
-There is no `tail call` or `tail recursion` handling anywhere in `src/`, the docs, or the grammar.
+(This is now the self-recursion case `tail` closes; the CROSS-function version of the same trap is what
+remains open below.)
 
 
 ## Why the assembler cannot do it alone
@@ -47,30 +53,46 @@ function reusing this frame", and `CALL f; RETU` cannot be peepholed into a jump
 a missing optimization.
 
 
-## Proposed instruction
+## The instruction (as landed)
 
-A `TAIL` family mirroring `CALL` exactly, which keeps the 3-operand budget (GAZL is a 3-operand ISA -
+A `TAIL` pair mirroring `CALL`'s callee forms, within the 3-operand budget (GAZL is a 3-operand ISA -
 see [`Impala2Review.md`](../impala/Impala2Review.md) on pointer arithmetic for why that matters):
 
 | Form | Operands |
 |---|---|
-| `TAIL_c__` | `FUNC\|FORWARD`, -, - |
-| `TAIL_cvs` | `FUNC\|FORWARD`, `TRANSIENT`, `CONST_INT_P` |
-| `TAIL_v__` / `TAIL_vvs` | `VAR_PTR_R` target |
+| `TAIL_cs_` | `FUNC\|TARGET\|FORWARD`, `CONST_INT_P` (*m), baked |
+| `TAIL_vs_` | `VAR_PTR_R\|VAR_TGT_R` target (a `t` local inside a region), `CONST_INT_P` (*m), baked |
 
-Semantics: move the argument window down onto the current function's own incoming window, do **not**
-push a return address, transfer control. The callee's eventual `RETU` returns directly to our caller.
+Semantics: the argument window is `%0 .. %m-1` **by definition** - fixing the window at the bottom of
+the transient pool is what buys back the operand the 3-slot budget cannot spare, and a tail call sits in
+statement position where nothing else is live, so a compiler gets `%0` for free. The engine slides those
+`m` words down onto the current function's own frame base, rewinds `dsp` to it, and jumps to the target's
+`FUNC`, which re-stacks its locals and re-runs its overflow check from OUR base. No return address is
+pushed, so the target's eventual `RETU` returns directly to our caller, with its outputs in the slots
+that caller already reads. The third operand slot carries the current function's own frame size, baked at
+assembly the way `RETU` carries `localsSize` - that is how the runtime finds the frame base, since `dsp`
+sits at the TOP of the locals and named locals resolve at negative offsets.
 
-**The legality rule is static and cheap.** The current function declares `PARA *n`; the tail target needs
-a window of `*m`. The call is legal exactly when `m <= n`, and both numbers are assembly-time constants,
-so the assembler can reject a bad one outright - no runtime check, no dynamic frame growth. Self-recursion
-satisfies it by construction (`m == n`).
+**There is no window-size rule - this note's original `m <= n` restriction is DEAD.** The slide is
+`base[i] = dsp[i]` ascending with `base = dsp - L <= dsp`: the memmove-safe direction, so overlap is
+harmless at any `m`, and both ends sit inside frame-checked memory because the assembler folds `m` into
+`paramsSize` exactly the way `LOCAL_BOUNDS` folds a `CALL` window. `m > L` just spills the write into
+scratch the function is abandoning (cells the copy already consumed), and a window wider than the
+target's own locals is already legal with `CALL` today - the target's `FUNC` re-checks its frame from
+the base either way, and the original caller reads `base + 0` however wide the window was. So a
+tail call to a BIGGER-arity target needs nothing: no `%w` source operand (which would not fit anyway -
+callee + w + m + the baked frame size is four values in a three-slot cell), no frame padding, no check.
+An `m <= window` check was in fact implemented first, along with two successively weaker justifications
+(the calling contract, then copy overlap-safety); both dissolved under examination and the check was
+removed the same day, per "no diagnostic for a safe shape". The one load-bearing piece is the
+`paramsSize` fold.
 
-`LOCAL_BOUNDS` on the `_cvs` forms does frame-bounds bookkeeping; the `TAIL` forms want the analogous
-check against the `PARA` region rather than against the frame top.
+**Additive, not region-gated.** Like `SCOP`/`SEEK`, `TAIL` is a new mnemonic: dialect-1 text may use it
+on a GAZL 2 engine, and an older engine rejects it as an unknown mnemonic - which is the whole version
+story for additions.
 
-**Natives are deliberately excluded** from the first cut. A `TAIL_n__` would hand our frame to host C++
-code whose return path is not a GAZL `RETU`; the semantics need settling separately and nothing needs it.
+**Natives are deliberately excluded.** A `TAIL_n__` would hand our frame to host C++ code whose return
+path is not a GAZL `RETU`; the semantics need settling separately and nothing needs it.
 
 
 ## Proposed Impala syntax
@@ -95,7 +117,6 @@ Rules, each a real diagnostic rather than a silent decline to optimize:
 |---|---|
 | Must be in tail position (nothing may follow it on that path) | otherwise it is not a tail call |
 | Callee's return type must match this function's exactly | its `RETU` returns to *our* caller |
-| Callee's window must fit our `PARA` | the static `m <= n` rule above |
 | Not allowed in an `inline function` | an inline body is spliced into its caller, so the frame it would reuse is the wrong one - same reasoning that makes `E435` and the `return` design reject inline bodies |
 
 Alternative spellings considered: Rust reserves `become` for precisely this, and `goto f(...)` reads well
@@ -118,27 +139,29 @@ this" into a diagnostic the programmer can act on. Same argument as `inline`: op
 cost is stated rather than inferred.
 
 
-## A cheaper first increment: self-recursion only
+## The no-ISA-change route: tried and REVERTED (2026-08-27)
 
-**Self**-tail-recursion needs no ISA change at all. If a function tail-calls itself, the rewrite is
-entirely function-local: copy the new argument values into the existing parameter slots, then `GOTO` the
-function's own entry label - a plain `GOTO_b__`, which already exists.
+This note originally proposed a cheaper first increment: for SELF-recursion, copy the new argument
+values into the existing parameter slots and `GOTO` the function's own entry label - no new instruction.
+It was built and then reverted the same day, and the reason is worth keeping.
 
-The one hazard is ordering: in `tail count(n - 1, acc + n)`, `acc + n` must be evaluated before `n` is
-overwritten. The existing argument-marshalling window already materializes arguments before the call, so
-copying back from it is natural.
-
-This is worth doing first if `TAIL` looks too big: it covers the accumulator idiom, which is the case that
-actually overflows today, and under the explicit `tail` keyword it is a pure implementation detail - the
-same source keeps working unchanged when the general instruction lands.
+The rewrite needs to WRITE the parameters, and `INP*` locals are read-only - a deliberate contract, not
+an accident. Making them writable inside `GAZL #2` regions made the GOTO route work, but conceded the
+key point: the relaxation was itself a GAZL 2 engine change, unusable on any deployed engine. Once tail
+calls require a new engine anyway, the GOTO lowering has no compatibility advantage left over a real
+instruction - it just spends `n` `MOV`s, an entry label and a weakened `INP` contract to emulate what
+one opcode says outright. So `INP*` stays read-only everywhere, and `TAIL` is an instruction.
 
 
 ## Interactions
 
-- **`--dead-strip`**: a `tail` site is an ordinary reference edge; reachability is unaffected.
-- **Signature metadata**: a `tail` site should emit the same `; expects f(...) -> T` row a call does, so
-  `gazl-validate` keeps checking it across units.
-- **Mutual recursion**: the general `TAIL` form covers it; the self-recursion increment does not. State
+- **`--dead-strip`**: a `tail` site is an ordinary reference edge; reachability is unaffected (and a
+  self-edge changes no closure anyway).
+- **Signature metadata**: a `tail` site emits the same `; expects f(...) -> T` row a call does, so any
+  signature-row consumer keeps checking it across units.
+- **Mutual recursion**: the INSTRUCTION covers it already; Impala's surface does not yet (E467). The
+  missing piece is compiler-side: checking the RETURN contract across two functions - the target's
+  `RETU` fulfils this function's promise to its caller - and the funcptr form (`TAIL_vs_`). State
   machines written as mutually tail-calling handlers are the main thing that unlocks.
 - **Debugging**: a tail call replaces the frame, so it does not appear in a stack trace. Standard for the
   technique, and another reason it should be visible in the source.

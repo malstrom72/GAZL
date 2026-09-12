@@ -1,0 +1,54 @@
+/*
+	`inline function` (docs/Inlining.md): no out-of-line copy is emitted, and every direct call is
+	replaced by the body. Look in the golden for what is NOT there - no `mix:` / `peek:` FUNC label and
+	no signature row for either.
+
+	The three argument outcomes are all exercised:
+	  - a literal (`7`) and a transparent caller local (`i`) are SUBSTITUTED, so the marshalling moves
+	    disappear entirely and `mix(i, 7)` becomes two arithmetic instructions
+	  - a computed argument keeps its window slot, which is already a private transient
+	  - a global argument MATERIALISES: the `PEEK` stays at the call site, before the body's `POKE`.
+	    That is forced by the instruction set, not chosen for safety - GAZL arithmetic rejects an
+	    address operand ("Did not expect address: &g"), so a global must pass through a PEEK anyway.
+
+	`peek` is the aliasing case: it clobbers the same global it is handed. It must still print the
+	value as it was BEFORE the call, exactly as an out-of-line call would. Substituting there would
+	print 99 instead of 1 - see inlineEquivalence.impala for the call-vs-inline oracle.
+
+	Nested inlining works because the inner body is already expanded into the outer's captured body.
+
+	Expected (GAZLCmd inlineFunctions.gazl main): 46 1 99 31 7
+*/
+
+const int DEBUG = 1
+
+extern native printInt
+extern native printLF
+
+global int g;
+
+inline function mix(int a, int b) returns int r { r = a * 3 + b; }
+
+inline function peek(int a) returns int r
+{
+	global g = 99;					// clobbers the global BEFORE reading the parameter
+	r = a;
+}
+
+inline function bump(int a) returns int r { r = mix(a, 1); }		// nested inline
+
+function main()
+locals int i, int acc, int t
+{
+	acc = 0;
+	for (i = 0 to 4) acc = acc + mix(i, 7);
+	printInt(acc); printLF();			// 46 = 3*(0+1+2+3) + 4*7
+
+	global g = 1;
+	printInt(peek(global g)); printLF();	// 1  - the PEEK precedes the body's POKE
+	printInt(global g); printLF();			// 99 - the body did run
+
+	t = 5;
+	printInt(mix(t * 2, 1)); printLF();		// 31 = 10*3+1 - computed argument keeps its window slot
+	printInt(bump(2)); printLF();			// 7  = mix(2, 1) - nested expansion
+}

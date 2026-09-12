@@ -73,25 +73,32 @@ typedef float Float;
 typedef Int Status;																										// Run-time status code
 
 /*
-	SCOP / ENDS local scopes - the GAZL 2 facility Impala's `inline function` expansion is built on.
-	Gated so one source tree can produce either engine, because which of GAZL 2 and the JIT ships first
-	is not decided: define GAZL_LOCAL_SCOPES=0 for a GAZL 1.0-compatible engine, which rejects `SCOP`
-	with `Unknown mnemonic` exactly as a real 1.0 engine does.
+	GAZL 2 features - SCOP / ENDS local scopes, SEEK data regions, the `GAZL #n` dialect directive with
+	its `t` call-target type, and the TAIL instruction. Gated so one source tree produces either engine:
+	define GAZL_2=0 for a GAZL 1.0-compatible engine, which rejects the GAZL 2 words with
+	`Unknown mnemonic` as a real 1.0 engine does. Permut8 ships GAZL 1; Synplant and AudioClay ship
+	GAZL 2 (design/gazl/GAZL2Versioning.md).
 
-	The OPCODE ENUM is deliberately NOT gated. SCOP____ / ENDS____ sit mid-enum with ~100 opcodes after
-	them, so compiling them out would renumber every one of those and silently change the instruction
-	encoding. The gate is on ACCEPTANCE - the mnemonic table - which is where a 1.0 engine differs
-	anyway: a 1.0 engine never knew the words at all, rather than knowing them and refusing.
+	A GAZL 2 engine also runs GAZL 1 sources unchanged - a file without a `GAZL #2` bracket assembles in
+	dialect 1 - so this flag is a GUARANTEE that v2 words cannot be used, not a prerequisite for running
+	v1 code. What it does NOT yet gate is the `t` operand spellings (MOVt, EQUt, DATt, ...), which stay
+	in the mnemonic table either way; without the `GAZL` directive the dialect can never leave 1, so they
+	cannot mint a TARGET-typed address, but a GAZL_2=0 engine does still parse those words.
 
-	The JIT needs nothing here. SCOP / ENDS are resolved entirely by the assembler - they never reach the
-	code stream, they only decide what `FUNC`'s frame size ends up being - so both backends lower the same
-	instructions either way, and the built-in unit test runs on both.
+	The OPCODE ENUM is deliberately NOT gated (src/GAZLOpcodes.h): compiling an opcode out renumbers
+	every opcode after it, which would make the instruction encoding depend on a build flag. The gate is
+	on ACCEPTANCE - the mnemonic table - which is where engine generations actually differ: a 1.0 engine
+	never knew the words at all, rather than knowing them and refusing.
+
+	The JIT needs nothing here beyond TAIL. SCOP / ENDS / SEEK and the dialect directive are resolved
+	entirely by the assembler and never reach the code stream, so both backends lower the same
+	instructions either way and the built-in unit test runs on both.
 */
-#ifndef GAZL_LOCAL_SCOPES
-	#define GAZL_LOCAL_SCOPES 1
+#ifndef GAZL_2
+	#define GAZL_2 1
 #endif
 
-const int VERSION = GAZL_LOCAL_SCOPES ? 2 : 1;				// 2 adds SCOP / ENDS local scopes. Pin an exact version with `! EQUi`; require a minimum with `! GEQi #GAZL_VERSION #2 @label`; skip a version-specific REGION by branching over it, as UnitTest.gazl does for its SCOP block - a taken compile-time branch skips the lines it jumps over without parsing them, so they need not be mnemonics the engine reading them knows.
+const int VERSION = GAZL_2 ? 2 : 1;			// Pin an exact version with `! EQUi`; require a minimum with `! GEQi #GAZL_VERSION #2 @label`; skip a version-specific REGION by branching over it, as UnitTest.gazl does for its SCOP block - a taken compile-time branch skips the lines it jumps over without parsing them, so they need not be mnemonics the engine reading them knows.
 const int WORD_SIZE = 32;
 const Pointer MEMORY_OFFSET = 0x12345678;																				// All memory pointers in GAZL are offsetted by this amount (thus the address of the first memory word is not zero). This makes it easier to detect invalid memory operations (such as writing to a null-pointer).
 const Pointer FUNCTION_OFFSET = 0x56789ABC;																				// All function pointers in GAZL are offsetted by this amount (thus the ordinal of the first function is not zero). This makes it easier to detect an invalid indirect call - through a null pointer, or through a small integer that was never a function pointer at all. A function pointer is an ORDINAL indexing `functionTable`, NOT a code address, which is why this is not an instruction-pointer offset; it was named IP_OFFSET until 2026-08-05.
@@ -146,7 +153,10 @@ enum AssemblerError {
 	, NOT_ENOUGH_FUNCTION_SPACE = 32
 	, LABEL_ON_FUNCTION = 33
 	, UNBALANCED_LOCAL_SCOPE = 34
-	, ASSEMBLER_ERROR_COUNT = 35
+	, OVERLAPPING_DATA_REGIONS = 35
+	, UNSUPPORTED_GAZL_VERSION = 36
+	, UNCLOSED_GAZL_REGION = 37
+	, ASSEMBLER_ERROR_COUNT = 38
 };
 
 extern const char* ASSEMBLER_ERROR_TEXTS[];
@@ -295,6 +305,8 @@ class Assembler {
 	protected:	Value calcConstant(const Operator* op, const Char* op1Begin, const Char* op1End, const Char* op2Begin
 						, const Char* op2End);
 	protected:	void finalizeFunction();
+	protected:	void threadBranches();		// Collapse GOTO chains and turn a GOTO onto a RETU into the RETU. In place: no address moves.
+	protected:	void closeDataRegion();		// Record the closing SEEK region's claim and check it against the section's earlier regions.
 	protected:	Instruction* const codeBase;
 	protected:	Instruction* const codeEnd;
 	protected:	const UInt maxFunctionCount;
@@ -315,7 +327,13 @@ class Assembler {
 	protected:	std::string dataLabel; // Only for error display.
 	protected:	int dataLabelType;
 	protected:	Value* dataPointer;
-	protected:	Value* dataEnd;
+	protected:	Value* dataEnd;						// Fence of the current SEEK region; `sectionEnd` for the implicit / unbounded one.
+	protected:	Value* sectionBegin;				// The current data section's own range; SEEK offsets are relative to `sectionBegin`.
+	protected:	Value* sectionEnd;
+	protected:	Int regionStart;					// Current region as section offsets; extent -1 = unbounded, claims only what it writes.
+	protected:	Int regionExtent;
+	protected:	int dialect;						// `GAZL #n` sets it; 1 outside any region, so every existing file keeps its meaning. Must be 1 again at finalize.
+	protected:	std::vector< std::pair<Int, Int> > dataRegions;	// Closed regions' claims, per section. Disjointness = no word initialized twice.
 	protected:	Symbols& globals;
 	protected:	Symbols locals;
 	protected:	CompileTimeVar compileTimeVars[128];

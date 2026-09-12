@@ -46,12 +46,14 @@ function readStdinLatin1Sync() {
 
 function usageAndExit() {
 	console.error('Usage:');
-	console.error('  node impala/impala.node.js compile [--legacy] [--dead-strip] [--range-checks] [<input.impala>] [<output.gazl>|-] [<random id>]');
-	console.error('  node impala/impala.node.js run [--legacy] [--range-checks] [<input.impala>]');
+	console.error('  node impala/impala.node.js compile [--legacy] [--dead-strip] [--range-checks] [--gazl2] [<input.impala>] [<output.gazl>|-] [<random id>]');
+	console.error('  node impala/impala.node.js run [--legacy] [--range-checks] [--gazl2] [<input.impala>]');
 	console.error('  --legacy downgrades Impala 2 strict-expression errors to warnings');
 	console.error('  --dead-strip drops everything unreachable from an `export`');
 	console.error('  --range-checks emits DEBUG-gated runtime bounds tests (off by default: they stay in the');
 	console.error('                 .gazl TEXT even when DEBUG is 0, and that text is what ships)');
+	console.error('  --gazl2 targets the GAZL 2 assembler: struct initializers are placed with SEEK regions,');
+	console.error('          so they survive a layout re-pack and extern structs become initializable');
 	process.exit(1);
 }
 
@@ -85,6 +87,7 @@ function compileProgram(rootPath, options = {}) {
 		units: spans,
 		legacy: options.legacy,
 		rangeChecks: options.rangeChecks,
+		gazl2: options.gazl2,
 	});
 	if (options.deadStrip) {
 		output = deadStrip(output);
@@ -192,7 +195,7 @@ function main() {
 	// One list for PARSING, so the argv loop never grows. A flag still has to be passed on below and
 	// listed in impalaJsCompilerRunner's, plus usage above. An UNKNOWN `--flag` is rejected
 	// rather than taken for a filename: `--range-cheks` used to be silently dropped and compile anyway.
-	const FLAGS = { '--legacy': 'legacy', '--dead-strip': 'deadStrip', '--range-checks': 'rangeChecks' };
+	const FLAGS = { '--legacy': 'legacy', '--dead-strip': 'deadStrip', '--range-checks': 'rangeChecks', '--gazl2': 'gazl2' };
 	const opts = {};
 	const rest = [];
 	for (const arg of argv) {

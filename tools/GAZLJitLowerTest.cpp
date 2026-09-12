@@ -449,6 +449,19 @@ static const char* const K_DIVFZERO =		// DIVf by a runtime zero divisor -> DIVI
 	" MOVf $g #1000.0\n DIVf $g $g $f\n"					// g = 1000.0 / f  (f == 0 when n == 0 -> trap; else divides)
 	" fTOi $r $g #1.0\n POKE &gOut $r\n RETU\n";
 
+
+static const char* const K_TAIL =		// GAZL 2 TAIL: self tail-recursion in constant stack, then an INDIRECT tail through a target slot
+	"gIn: GLOB *1\n DATi #0\n" "gOut: GLOB *1\n DATi #0\n"
+	"tSum: FUNC\n$acc: OUTi\n$n: INPi\n$run: INPi\n"
+	" NEQi $n #0 @tmore\n MOVi $acc $run\n RETU\n"
+	" tmore: ADDi %2 $run $n\n SUBi %1 $n #1\n TAIL &tSum *3\n"			// slides the window onto our own frame base and re-enters
+	"tHop: FUNC\n$hout: OUTi\n$hfn: INPp\n$hn: INPi\n"
+	" MOVi %1 $hn\n MOVi %2 #0\n TAIL $hfn *3\n"						// indirect form: the target is read before the slide
+	"main: FUNC\n PARA *1\n$k: LOCi\n$r: LOCi\n"
+	" PEEK $k &gIn\n MOVi %1 $k\n MOVi %2 #0\n CALL &tSum %0 *3\n MOVi $r %0\n"
+	" MOVp %1 &tSum\n MOVi %2 $k\n CALL &tHop %0 *3\n ADDi $r $r %0\n"
+	" POKE &gOut $r\n RETU\n";
+
 static const char* const K_FTOISAT =		// fTOi saturation: a huge float clamps to the int range (must match the interpreter)
 	"gIn: GLOB *1\n DATi #0\n" "gOut: GLOB *1\n DATi #0\n"
 	"main: FUNC\n PARA *1\n$n: LOCi\n$f: LOCf\n"
@@ -815,6 +828,9 @@ int main() {
 	runKernel("realm ptrvar [MYFRAME PEEK/POKE_VVV]", K_PTRVAR, counts, sizeof(counts) / sizeof(*counts));
 	runKernel("realm outparm[&local across CALL]", K_PTRPARAM, counts, sizeof(counts) / sizeof(*counts));
 	runKernel("multi-retu    [extent to next FUNC]", K_MULTIRETU, counts, sizeof(counts) / sizeof(*counts));
+#if GAZL_2
+	runKernel("tail          [GAZL 2 TAIL]", K_TAIL, counts, sizeof(counts) / sizeof(*counts));		// a GAZL_2=0 engine rejects the mnemonic, as a real 1.0 engine does
+#endif
 	runKernel("divf zero     [DIVf /0 trap]", K_DIVFZERO, signed_, sizeof(signed_) / sizeof(*signed_));
 
 	std::printf("%s (%d failure%s)\n", failures == 0 ? "ALL PASS" : "FAILED", failures, failures == 1 ? "" : "s");

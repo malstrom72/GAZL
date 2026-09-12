@@ -64,6 +64,7 @@ const int BLOCK_RETRY = 5;						// a native returns this to suspend-and-retry (h
 */
 enum {
 	OP_FUNC = FUNC_CC_, OP_CALL_VVC = CALL_VVC, OP_CALL_CVC = CALL_CVC, OP_CALL_NVC = CALL_NVC, OP_RETU = RETU_C__,
+	OP_TAIL_CC = TAIL_CC_, OP_TAIL_VC = TAIL_VC_,									// GAZL 2 tail calls (absent from a v1 stream, but always numbered)
 	OP_MOVE_VV = MOVE_VV_, OP_MOVE_VC = MOVE_VC_, OP_PEEK_VC = PEEK_VC_, OP_POKE_CV = POKE_CV_,
 	OP_POKE_CC = POKE_CC_, OP_PEEK_VVV = PEEK_VVV, OP_PEEK_VCV = PEEK_VCV, OP_POKE_VVV = POKE_VVV,
 	OP_POKE_CVV = POKE_CVV, OP_POKE_VVC = POKE_VVC, OP_POKE_CVC = POKE_CVC, OP_GETL_VVV = GETL_VVV,
@@ -92,7 +93,7 @@ enum {
 	than the generated code. If this fires: add a `case` for the new opcode to GAZLJitX64.cpp and
 	GAZLJitArm64.cpp (and to isCacheLowered / operandRoles if it touches frame slots), then update the count.
 */
-static_assert(FINALIZED_OPCODE_COUNT == 91, "a finalized opcode was added or removed - both JIT backends need a case for it");
+static_assert(FINALIZED_OPCODE_COUNT == 93, "a finalized opcode was added or removed - both JIT backends need a case for it");
 
 // makeExecutable() is declared in GAZLJitMem.h (platform backend), also in namespace GAZL.
 

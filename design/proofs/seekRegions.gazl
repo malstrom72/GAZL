@@ -1,0 +1,51 @@
+; SEEK regions: initialized data that survives a repack. This is the runnable proof for
+; design/gazl/GAZL2DataRegions.md: every value is PLACED through `.o.`/`.z.` symbols (SEEK), read back
+; through the same symbols, and the twin file seekRegionsRepacked.gazl permutes ONLY the layout header
+; (gain first, a pad word, note last) - every line below the header is byte-identical - yet prints the
+; same answer, with the state array's zero-filled tail included.
+;
+; It models     struct Voice { int note; int state[4]; int gain; }
+;               voice = { note: 60, state: { 1, 2, 3 }, gain: 9 }
+;               print(note * 1000 + state[0..3] + gain * 100)    ; 60906
+;
+;   output/GAZLCmd design/proofs/seekRegions.gazl main           ; 60906
+;   output/GAZLCmd design/proofs/seekRegionsRepacked.gazl main   ; 60906, .z.Voice 6 -> 7
+
+; layout of struct Voice
+.o.Voice.note:  ! DEFi #0
+.o.Voice.state: ! DEFi #1
+.z.Voice.state: ! DEFi #4
+.o.Voice.gain:  ! DEFi #5
+.z.Voice:       ! DEFi #6
+
+voice:          GLOB *.z.Voice
+                SEEK :.o.Voice.note
+                DATi #60
+                SEEK :.o.Voice.state *.z.Voice.state
+                DATi #1 #2 #3
+                SEEK :.o.Voice.gain
+                DATi #9
+
+main:           FUNC
+sum:            LOCi
+tmp:            LOCi
+                PEEK sum &voice:.o.Voice.note
+                MULi sum sum #1000
+                ! MOVi <A> #.o.Voice.state
+                PEEK tmp &voice:<A>
+                ADDi sum sum tmp
+                ! ADDi <A> <A> #1
+                PEEK tmp &voice:<A>
+                ADDi sum sum tmp
+                ! ADDi <A> <A> #1
+                PEEK tmp &voice:<A>
+                ADDi sum sum tmp
+                ! ADDi <A> <A> #1
+                PEEK tmp &voice:<A>
+                ADDi sum sum tmp
+                PEEK tmp &voice:.o.Voice.gain
+                MULi tmp tmp #100
+                ADDi sum sum tmp
+                MOVi %1 sum
+                CALL ^printInt %0 *2
+                RETU

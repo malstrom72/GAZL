@@ -1,0 +1,44 @@
+/*
+	REVIEW 4/5 - composition: inline bodies that meet OTHER calls.
+
+	This is where the call window matters. A CALL reads its arguments from a contiguous run of
+	transients starting at the slot named in the instruction, so anything an expansion borrows
+	must not land in the middle of a window that is still being filled. Things to check:
+
+	  - `wrap` contains a real CALL. Its window inside the expanded body must stay contiguous
+	    and must not overlap the caller's own window.
+	  - `outer` calls another INLINE function: the inner body is expanded into the outer one at
+	    capture time, so at the call site below there is only one, already-flattened body.
+	  - an inline call used as an ARGUMENT to another call means two windows are live at once.
+	  - an inline call on BOTH sides of an operator: two expansions, two sets of transients,
+	    overlapping lifetimes.
+
+	Expected (GAZLCmd inlineReviewCompose.gazl main): 11 25 35 44 200 -1
+*/
+const int DEBUG = 1
+
+extern native printInt
+extern native printLF
+
+function helper(int a) returns int r { r = a * 2; }		/* NOT inline: called for real */
+
+inline function wrap(int a) returns int r { r = helper(a) + 1; }
+
+inline function twice(int a) returns int r { r = a * 2; }
+
+inline function outer(int a) returns int r { r = twice(a) + 5; }	/* inline calling inline */
+
+function takesTwo(int a, int b) returns int r { r = a + b; }
+
+function main()
+locals int w
+{
+	printInt(wrap(5)); printLF();				/* 11 - an inlined body containing a CALL */
+	printInt(outer(10)); printLF();				/* 25 - nested inline, flattened at capture */
+
+	w = 7;
+	printInt(takesTwo(wrap(w), twice(10))); printLF();	/* 35 - two inline args to one real call */
+	printInt(twice(w) + wrap(w) * 2); printLF();		/* 44 - two expansions, one expression */
+	printInt(twice(twice(twice(25)))); printLF();		/* 200 - three deep at one site */
+	printInt(wrap(helper(1)) - 3 * 2); printLF();		/* -1 - a real call feeding an inline */
+}

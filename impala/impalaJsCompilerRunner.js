@@ -258,7 +258,7 @@ function compileWithJsImpala(source, options = {}) {
 	// chain is where a flag goes to die: one that reached here and was not in the chain compiled clean
 	// with the option silently ignored - the failure `impala.node.js`'s FLAGS map prevents one layer
 	// up. Add a flag to this list.
-	for (const flag of [ "rangeChecks" ]) {
+	for (const flag of [ "rangeChecks", "gazl2" ]) {
 		if (options[flag]) {
 			compilerOptions[flag] = true;
 		}

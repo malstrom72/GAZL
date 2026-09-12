@@ -1,0 +1,70 @@
+/*
+	REVIEW 2/5 - callee LOCALS become transients (docs/Inlining.md section 8).
+
+	An inline function has no frame of its own, so every local it declares must live in the
+	caller's transients for the duration of one expansion. What to check:
+
+	  scalar   -> one borrowed transient, a plain `%n`
+	  array    -> a CONTIGUOUS run; a constant index folds INTO the slot number (`%5` not
+	              `%4[1]`), a variable index becomes SETL/GETL with the run's base
+	  struct   -> also a run, but a field offset is a SYMBOL (`.o.P.y`) that only the
+	              assembler can resolve. It is folded at assemble time into `! ADDi <X>
+	              #base #.o.P.y` and the field is then reached as `%<X>` - all compile-time,
+	              nothing at run time.
+
+	Each function is expanded TWICE, so check the second expansion borrows a DIFFERENT run
+	and that the two never overlap.
+
+	Expected (GAZLCmd inlineReviewLocals.gazl main): 60 15 7 9 11 11 3
+*/
+const int DEBUG = 1
+
+extern native printInt
+extern native printLF
+
+struct P { int x; int y }
+
+inline function sum3(int a, int b, int c) returns int r
+locals int array buf[3], int i			/* an ARRAY local: a run of adjacent transients */
+{
+	buf[0] = a; buf[1] = b; buf[2] = c;	/* constant indices -> folded slot numbers */
+	r = 0;
+	for (i = 0 to 3) { r = r + buf[i]; }	/* variable index -> GETL off the run base */
+}
+
+inline function pickOf(int k) returns int v
+locals int array t[4]
+{
+	t[0] = 5; t[1] = 7; t[2] = 9; t[3] = 11;
+	v = t[k];							/* a purely dynamic read */
+}
+
+inline function dot(int ax, int ay, int bx, int by) returns int r
+locals P a, P b							/* STRUCT locals: symbolic field offsets */
+{
+	a.x = ax; a.y = ay;
+	b.x = bx; b.y = by;
+	r = a.x * b.x + a.y * b.y;
+}
+
+inline function counted(int n) returns int c
+locals int i							/* a scalar local: one transient */
+{
+	c = 0;
+	for (i = 0 to n) { c = c + 1; }
+}
+
+function main()
+locals int q
+{
+	printInt(sum3(10, 20, 30)); printLF();			/* 60 - array local */
+	printInt(sum3(sum3(1, 2, 3), 4, 5)); printLF();	/* 15 - NESTED: two runs live at once */
+
+	q = 1;
+	printInt(pickOf(q)); printLF();					/* 7  - dynamic index, GETL */
+	printInt(pickOf(2)); printLF();					/* 9  - second expansion, new run */
+	printInt(pickOf(3)); printLF();					/* 11 */
+
+	printInt(dot(1, 2, 3, 4)); printLF();			/* 11 - struct locals, %<X> fields */
+	printInt(counted(3)); printLF();				/* 3  - scalar local */
+}

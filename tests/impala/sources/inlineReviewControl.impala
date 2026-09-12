@@ -1,0 +1,78 @@
+/*
+	REVIEW 3/5 - control flow inside an inlined body.
+
+	Every label in a captured body is rewritten with a per-expansion suffix (`_i0`, `_i1`, ...)
+	so two expansions of the same function cannot collide. Each function below is expanded
+	TWICE for exactly that reason - check the two copies carry different tags.
+
+	The subtle one is SWITCH. A case label is `<base>#<k>` and SWCH finds its arms by appending
+	`#k` to its own target, so the tag must go BEFORE the `#`:
+	    .s0#0  ->  .s0_i0#0        NOT  .s0#0_i0
+	If it ever reads the second form, SWCH will jump into nothing.
+
+	Also here: `assert` (a branch on TRUE, the inverse of an `if`), a `loop` with a `goto` to a
+	user-written label, and a `do`/`while`.
+
+	COMPARISONS TAKE IMMEDIATES in both source positions, so a literal argument that is only ever
+	compared substitutes: check that `clamp`'s bounds read `#0` / `#6` off the branch rather than
+	being parked in a window slot first, and likewise the loop bound in `sumTo` / `dbl` and the
+	`assert` in `chk`. `bare` goes one better - with no local to route through, BOTH operands of
+	its compares are constant, which GAZL resolves to a GOTO or a NOOP at assemble time (the
+	`YIELDS_GOTO` flag), so the branch costs nothing at run time either.
+
+	Expected (GAZLCmd inlineReviewControl.gazl main): 0 6 3 10 20 99 5 6 3 4 8 0 6 3
+*/
+const int DEBUG = 1
+
+extern native printInt
+extern native printLF
+
+inline function clamp(int v, int lo, int hi) returns int r
+locals int t
+{
+	t = v;
+	if (t < lo) { t = lo; }
+	if (t > hi) { t = hi; }
+	r = t;
+}
+
+inline function bare(int v, int lo, int hi) returns int r	/* no local: the compares go const/const */
+{
+	if (v < lo) { r = lo; }
+	else if (v > hi) { r = hi; }
+	else r = v;
+}
+
+inline function pick(int i) returns int r
+{ switch (i == 0 to 3) { case 0: r = 10; case 1: r = 20; default: r = 99; } }
+
+inline function chk(int a) returns int r { assert(a > 0); r = a; }
+
+inline function sumTo(int n) returns int r		/* loop + goto + a user label */
+locals int i
+{ r = 0; i = 0; loop { r = r + i; i = i + 1; if (i >= n) { goto done; } } done: r = r + 0; }
+
+inline function dbl(int n) returns int r		/* do/while */
+locals int i
+{ r = 0; i = 0; do { r = r + 2; i = i + 1; } while (i < n); }
+
+function main()
+{
+	printInt(clamp(-4, 0, 6)); printLF();	/* 0  - if/else, expansion 1 */
+	printInt(clamp(8, 0, 6)); printLF();	/* 6  - expansion 2, distinct labels */
+	printInt(clamp(3, 0, 6)); printLF();	/* 3 */
+
+	printInt(pick(0)); printLF();			/* 10 - switch, expansion 1 */
+	printInt(pick(1)); printLF();			/* 20 - expansion 2 */
+	printInt(pick(9)); printLF();			/* 99 - default arm, out of range */
+
+	printInt(chk(5)); printLF();			/* 5  - assert */
+	printInt(sumTo(4)); printLF();			/* 6  - loop + goto + label */
+	printInt(sumTo(3)); printLF();			/* 3  - second expansion */
+	printInt(dbl(2)); printLF();			/* 4  - do/while */
+	printInt(dbl(4)); printLF();			/* 8 */
+
+	printInt(bare(-4, 0, 6)); printLF();	/* 0  - both compares fold away at assemble time */
+	printInt(bare(8, 0, 6)); printLF();		/* 6 */
+	printInt(bare(3, 0, 6)); printLF();		/* 3 */
+}

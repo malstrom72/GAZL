@@ -213,10 +213,10 @@ function assert(condition, message) {
 // Compile `source` and require it to fail with `expectError` in the message, or to succeed when
 // `expectError` is null. Every "this construct must be rejected" table goes through here, so the
 // convention (and the diagnostic on an unmet expectation) lives in one place.
-function expectCompileOutcome(group, label, source, expectError) {
+function expectCompileOutcome(group, label, source, expectError, gazl2) {
 	let observed = null;
 	try {
-		compileWithJsImpala(source + "\n", { randomId: 42 });
+		compileWithJsImpala(source + "\n", { randomId: 42, gazl2: gazl2 === true });
 	} catch (err) {
 		observed = err && err.message ? err.message : String(err);
 	}
@@ -779,13 +779,75 @@ console.log("impala.jspeg compiler accepts parenthesized bitwise mixes identical
 compileWithJsImpala(sameOpChainSource, { randomId: 42 });
 console.log("impala.jspeg compiler accepts same-operator bitwise chains without parentheses");
 
-// `inline` is PARKED for Impala 3.0 (design/ParkedFeatures.md): an expansion needs GAZL 2 `SCOP` / `ENDS`
-// to place its locals, and Impala 2 has to stay usable on GAZL 1.0 engines. The keyword stays reserved
-// so the door says why rather than reading as an unknown identifier. One case is the whole surface: the
-// rejection is the first action of FuncDecl, before anything else about the function is looked at.
-expectCompileOutcome("inline", "an inline function",
-	"inline function f(int a) returns int r { r = a * 2; }\n"
-		+ "function main() locals int q { q = f(3); }\n", "not supported in Impala 2.0");
+// `inline function` has no out-of-line copy, so every use that needs one is an error rather than a
+// silent de-optimisation. The behavioural check lives in the inlineEquivalence fixture pair; these are
+// the cases that must not compile at all, plus the shapes that must.
+const inlineCases = [
+	["a recursive inline function",
+		"inline function f(int n) returns int r { if (n > 0) { r = f(n - 1); } else { r = 0; } }\n"
+			+ "function main() locals int q { q = f(3); }\n", "cannot call itself"],
+	["taking the address of an inline function",
+		"inline function f(int a) returns int r { r = a; }\nfunctype Cb(int a) returns int r\n"
+			+ "function main() locals Cb c, int q { c = f; q = c(1); }\n", "address of the inline function"],
+	["exporting an inline function",
+		"export inline function g(int a) returns int r { r = a; }\n"
+			+ "function main() locals int q { q = g(1); }\n", "cannot be exported"],
+	["an inline function that was forward declared",
+		"extern function later\ninline function later(int a) returns int r { r = a; }\n"
+			+ "function main() locals int q { q = later(1); }\n", "was already declared"],
+	["calling an inline function before its definition",
+		"function main() locals int q { q = f(1); }\ninline function f(int a) returns int r { r = a; }\n",
+			"Undeclared identifier"],
+	// and the shapes that must work
+	["an inline body containing a call",
+		"function helper(int a) returns int r { r = a * 2; }\n"
+			+ "inline function wrap(int a) returns int r { r = helper(a) + 1; }\n"
+			+ "function main() locals int q { q = wrap(5); }\n", null],
+	["an inline body containing a switch",
+		"inline function pick(int i) returns int r\n"
+			+ "{ switch (i == 0 to 3) { case 0: r = 10; default: r = 99; } }\n"
+			+ "function main() locals int q { q = pick(0); }\n", null],
+	["an inline body containing an assert",
+		"const int DEBUG = 1\ninline function chk(int a) returns int r { assert(a > 0); r = a; }\n"
+			+ "function main() locals int q { q = chk(5); }\n", null],
+	["an inline body containing a while loop",
+		"inline function count(int n) returns int r\nlocals int i\n"
+			+ "{ r = 0; i = 0; while (i < n) { r = r + i; i = i + 1; } }\n"
+			+ "function main() locals int q { q = count(4); }\n", null],
+	["an inline function with a pointer parameter",
+		"inline function dbl(int pointer p) returns int r { r = *p * 2; }\n"
+			+ "function main() locals int array c[1], int q { c[0] = 21; q = dbl(&c[0]); }\n", null],
+	["an inline function with float parameters",
+		"inline function scale(float v, float k) returns float r { r = v * k; }\n"
+			+ "function main() locals float f { f = scale(2.5, 4.0); }\n", null],
+
+	["an inline function declaring a struct local",
+		"struct P { int x; int y }\ninline function f(int v) returns int r\nlocals P a, P b\n"
+			+ "{ a.x = v; a.y = v; b.x = v; r = a.x + a.y + b.x; }\n"
+			+ "function main() locals int q { q = f(1) + f(2); }\n", null],
+	["an inline function declaring an array of structs",
+		"struct P { int x }\ninline function f(int v) returns int r\nlocals P array a[2]\n"
+			+ "{ a[0].x = v; a[1].x = v; r = a[0].x + a[1].x; }\n"
+			+ "function main() locals int q { q = f(1); }\n", null],
+	["an inline function declaring a scalar local",
+		"inline function f(int a) returns int r\nlocals int t\n{ t = a * 2; r = t + 1; }\n"
+			+ "function main() locals int q { q = f(1); }\n", null],
+	["an inline function declaring an array local",
+		"inline function f(int a) returns int r\nlocals int array t[3], int i\n"
+			+ "{ t[0] = a; t[1] = a; t[2] = a; r = 0; for (i = 0 to 3) r = r + t[i]; }\n"
+			+ "function main() locals int q { q = f(2); }\n", null],
+	["a plain inline call", "inline function f(int a) returns int r { r = a * 2; }\n"
+		+ "function main() locals int q { q = f(3); }\n", null],
+	["nested inline expansion", "inline function f(int a) returns int r { r = a * 2; }\n"
+		+ "inline function g(int a) returns int r { r = f(a) + 1; }\n"
+		+ "function main() locals int q { q = g(2); }\n", null],
+	["a void inline function", "global int s;\ninline function f(int a) { global s = a; }\n"
+		+ "function main() { f(3); }\n", null],
+];
+for (const [label, source, expected] of inlineCases) {
+	expectCompileOutcome("inline", label, source, expected);
+}
+console.log("impala.jspeg compiler enforces the inline-function rules");
 
 // By-value structs are parked, and EVERY door that can introduce one must say so. `functype` was
 // unguarded, so a by-value struct param/return reached the parked window machinery - and against an
@@ -3618,6 +3680,203 @@ for (const name of prototypeNames) {
 }
 console.log("impala.jspeg compiler treats Object.prototype names as ordinary identifiers");
 
+// Write GAZL text to `gazlPath`, run it through GAZLCmd, require it to assemble, return its stdout.
+// The one run protocol for both --gazl2 blocks below.
+function runGazlText(gazlPath, text, cmdArgs, label) {
+	fs.mkdirSync(path.dirname(gazlPath), { recursive: true });
+	fs.writeFileSync(gazlPath, text, IMPALA_ENCODING);
+	const run = runGazlCmd(gazlPath, cmdArgs);
+	assert(run.failure === undefined && run.assembled, `${label} did not assemble: ${run.line}`);
+	return canonicalizeNewlines(run.stdout);
+}
+
+// --- --gazl2: struct initializers are PLACED with SEEK regions ---------------------------------------
+// The flag's contract: (1) default output is untouched - the golden corpus is that gate, so here only
+// "no SEEK without the flag" is pinned; (2) struct data comes out as one SEEK region per leaf field
+// with TYPED rows; (3) E459 and E454 lift, because every word is placed instead of guessed. The
+// semantic proofs run when GAZLCmd is built: the extern case feeds a host layout in REVERSED field
+// order, and the struct case re-runs with two layout-header labels swapped - both are exactly what
+// positional DATA scrambles and placement must not.
+{
+	const placedSrc = "const int DEBUG = 1\n"
+		+ "struct Inner { float b0; float array state[2] }\n"
+		+ "struct Voice { int note; Inner lo; float gain }\n"
+		+ "extern native printInt\nextern native printFloat\nextern native printLF\n"
+		+ "global Voice voice = { note: 60, lo: { b0: 0.5, state: { 1.5 } }, gain: 0.9 }\n"
+		+ "readonly Voice array bank[2] = { { note: 1, gain: 0.25 }, { note: 2, gain: 0.75 } }\n"
+		+ "function main() {\n"
+		+ "\tprintInt(global voice.note); printLF();\n"
+		+ "\tprintFloat(global voice.lo.state[0]); printLF();\n"
+		+ "\tprintFloat(global voice.lo.state[1]); printLF();\n"
+		+ "\tprintFloat(global voice.gain); printLF();\n"
+		+ "\tprintInt((int) global bank[1].note); printLF();\n"
+		+ "\tprintFloat(global bank[1].gain); printLF();\n"
+		+ "}\n";
+	const placed = compileWithJsImpala(placedSrc, { randomId: 42, gazl2: true });
+	assert(placed.includes("SEEK :.o.Voice.note *1") && placed.includes("SEEK :<A> *.z.Inner.state"),
+		"--gazl2: struct data must be placed with SEEK regions - a scalar carries its free *1 fence, "
+			+ "an array field its extent symbol");
+	assert(placed.includes("DATi #60") && placed.includes("DATf #0.5"),
+		"--gazl2: rows must come out TYPED per leaf field, not as one mixed DATA row");
+	assert(!compileWithJsImpala(placedSrc, { randomId: 42 }).includes("SEEK"),
+		"without --gazl2 nothing may emit SEEK - the corpus byte-gate depends on it");
+
+	const externSrc = "const int DEBUG = 1\n"
+		+ "extern struct Host { int mode; float level }\n"
+		+ "extern native printInt\nextern native printFloat\nextern native printLF\n"
+		+ "global Host cfg = { mode: 3, level: 0.5 }\n"
+		+ "function main() { printInt(global cfg.mode); printLF(); printFloat(global cfg.level); printLF(); }\n";
+	expectCompileOutcome("gazl2", "extern-struct init stays E459 by default", externSrc, "E459");
+	const externOut = compileWithJsImpala(externSrc, { randomId: 42, gazl2: true });
+	assert(externOut.includes("SEEK :.o.Host.mode"), "--gazl2 must lift E459 via host-offset SEEKs");
+
+	const symSrc = "const int DEBUG = 1\nconst int N = 3\n"
+		+ "struct Buf { int array data[N * 1]; int tail }\n"
+		+ "global Buf b = { data: { 7, 8 }, tail: 42 }\n"
+		+ "function main() { }\n";
+	expectCompileOutcome("gazl2", "field behind a symbolic extent stays E454 by default", symSrc, "E454");
+	assert(compileWithJsImpala(symSrc, { randomId: 42, gazl2: true }).includes("SEEK :.o.Buf.tail"),
+		"--gazl2 must lift E454: the field behind the symbolic array gets its own region");
+
+	if (haveGazlCmd()) {
+		const gazlPath = path.join(dir, "..", "tests", "impala", "erroneous", "gazl2Seek.gazl");
+		const runOne = (text, cmdArgs) => runGazlText(gazlPath, text, cmdArgs, "gazl2 seek");
+		// `level` at 0 and `mode` at 1 REVERSES declaration order; the values must land right anyway.
+		assert(runOne(externOut, [ "main", ".o.Host.mode", "1", ".o.Host.level", "0", ".z.Host", "2" ])
+				.startsWith("3\n0.5\n"),
+			"gazl2: extern-struct init must place values at the HOST's offsets, not declaration order");
+		const expected = "60\n1.5\n0\n0.9\n2\n0.75\n";   // the 0 is state[1]: a region's zero-filled tail
+		assert(runOne(placed, [ "main" ]).startsWith(expected),
+			"gazl2: placed struct data must read back exactly, zero tails included");
+		// A repack is two header labels trading places (note and gain are both one word). Every line
+		// below the header is untouched, and the program must not notice.
+		const repacked = placed
+			.replace(/^([ \t]*)\.o\.Voice\.note:/m, "$1.o.Voice.__swap__:")
+			.replace(/^([ \t]*)\.o\.Voice\.gain:/m, "$1.o.Voice.note:")
+			.replace(/^([ \t]*)\.o\.Voice\.__swap__:/m, "$1.o.Voice.gain:");
+		assert(repacked !== placed, "gazl2: the repack swap must have found both layout labels");
+		assert(runOne(repacked, [ "main" ]).startsWith(expected),
+			"gazl2: a layout-header repack must re-assemble to the same answers - the whole point of SEEK");
+		// The scalar `*1` fence is what makes a HAND-ADDED surplus row fail at its own line, whether or
+		// not the word it would spill into happens to be initialized.
+		const overrun = placed.replace(/^([ \t]*)(DATi #60)$/m, "$1$2\n$1DATi #99");
+		assert(overrun !== placed, "gazl2: the overrun patch must have found the note row");
+		fs.writeFileSync(gazlPath, overrun, IMPALA_ENCODING);
+		const spill = runGazlCmd(gazlPath, [ "main" ]);
+		assert(!spill.assembled && /Not enough space in data section/.test(spill.report),
+			`gazl2: a surplus row after a scalar's *1 region must be an assembly error, got: ${spill.line}`);
+	}
+	console.log("impala.jspeg compiler places struct initializers with SEEK regions under --gazl2");
+}
+
+// --- GAZL #2 regions and the `t` call-target type ----------------------------------------------------
+// Under --gazl2 the output is BRACKETED (`GAZL #2` after the banner, `GAZL #1` at the end), functions
+// mint target-typed addresses inside it, and every funcptr site renders `t` instead of `p`. The bracket
+// is what keeps concatenation-linking working in every dialect mix, so that is tested literally: cat the
+// units together and run. The raw-text negatives pin the assembler-side contract this rests on.
+{
+	const fpSrc = "const int DEBUG = 1\n"
+		+ "functype BinOp(int a, int b) returns int\n"
+		+ "function add(int a, int b) returns int r { r = a + b; }\n"
+		+ "function mul(int a, int b) returns int r { r = a * b; }\n"
+		+ "readonly BinOp array OPS[2] = { add, mul }\n"
+		+ "global BinOp gop = add\n"
+		+ "extern native printInt\nextern native printLF\n"
+		+ "function main()\nlocals BinOp f\n{\n"
+		+ "\tf = (BinOp) global OPS[1];\n\tprintInt(f(6, 7)); printLF();\n"
+		+ "\tf = (BinOp) global gop;\n\tprintInt(f(2, 3)); printLF();\n}\n";
+	const tOut = compileWithJsImpala(fpSrc, { randomId: 42, gazl2: true });
+	assert(/^[ \t]*GAZL #2$/m.test(tOut) && canonicalizeTrimEnd(tOut).endsWith("GAZL #1"),
+		"--gazl2 output must open with GAZL #2 and close with GAZL #1 - the concatenation bracket");
+	assert(tOut.includes("DATt &add") && tOut.includes("LOCt"),
+		"--gazl2 must emit the t type for funcptrs (DATt rows, LOCt locals)");
+	// Funcptr difference is the one DIF site TYPE_SUFFIXES cannot reach (DIF has no `?` - int minus is
+	// SUBi), so it needs its own meta-op. A `DIFp $diff $t $t` in --gazl2 output does not assemble.
+	const diffSrc = "const int DEBUG = 1\nfunctype F(int a)\nfunction f(int a) { }\n"
+		+ "function main()\nlocals F g, int d\n{\n\tg = f;\n\td = g - g;\n}\n";
+	assert(compileWithJsImpala(diffSrc, { randomId: 42, gazl2: true }).includes("DIFt")
+			&& compileWithJsImpala(diffSrc, { randomId: 42 }).includes("DIFp"),
+		"funcptr difference must render DIFt under --gazl2 and stay DIFp by default");
+	// The remaining funcptr surfaces in one fixture: a struct FIELD (SEEK + DATt through the marker
+	// path), a LOCAL funcptr array (GETL with a t destination), a funcptr PARAMETER (INPt), and the
+	// comparisons (EQUt / NEQt).
+	const kitchenSrc = "const int DEBUG = 1\n"
+		+ "functype UnaryFn(int a) returns int\n"
+		+ "struct Handler { int id; UnaryFn fn }\n"
+		+ "function twice(int a) returns int r { r = a * 2; }\n"
+		+ "function thrice(int a) returns int r { r = a * 3; }\n"
+		+ "readonly Handler H = { id: 7, fn: thrice }\n"
+		+ "extern native printInt\nextern native printLF\n"
+		+ "function apply(UnaryFn f, int x) returns int r { r = f(x); }\n"
+		+ "function main()\nlocals UnaryFn array ops[2], UnaryFn g, int i\n{\n"
+		+ "\tops[0] = twice; ops[1] = thrice;\n\ti = 0;\n"
+		+ "\tprintInt(ops[i](10)); printLF();\n"
+		+ "\tg = (UnaryFn) global H.fn;\n\tprintInt(g(10)); printLF();\n"
+		+ "\tif (g == thrice) { printInt(1); printLF(); }\n"
+		+ "\tif (g != twice) { printInt(2); printLF(); }\n"
+		+ "\tprintInt(apply(twice, 21)); printLF();\n}\n";
+	const kitchen = compileWithJsImpala(kitchenSrc, { randomId: 42, gazl2: true });
+	for (const want of [ "SEEK :.o.Handler.fn *1", "DATt", "INPt", "EQUt", "NEQt" ]) {
+		assert(kitchen.includes(want), `gazl2 t: kitchen fixture must emit ${want}`);
+	}
+	const pOut = compileWithJsImpala(fpSrc, { randomId: 42 });
+	assert(!/^[ \t]*GAZL /m.test(pOut) && pOut.includes("DATp &add") && !pOut.includes("DATt"),
+		"default output must keep funcptrs on p with no GAZL directive");
+
+	if (haveGazlCmd()) {
+		const gazlPath = path.join(dir, "..", "tests", "impala", "erroneous", "gazl2T.gazl");
+		const runText = (text, label) => runGazlText(gazlPath, text, [ "main" ], "gazl2 t: " + label);
+		assert(runText(tOut, "t output").startsWith("42\n5\n"),
+			"gazl2 t: dispatch through t locals and a DATt table must run");
+		assert(runText(kitchen, "kitchen fixture").startsWith("20\n30\n1\n2\n42\n"),
+			"gazl2 t: struct funcptr field, local funcptr array, INPt param and comparisons must run");
+		const v1Unit = "v1f:\tFUNC\n\tPARA *1\n\tRETU\n";
+		assert(runText(tOut + v1Unit, "v2+v1 concat").startsWith("42\n5\n"),
+			"gazl2 t: a GAZL 1 unit concatenated AFTER a bracketed unit must assemble and run");
+		assert(runText(v1Unit + tOut, "v1+v2 concat").startsWith("42\n5\n"),
+			"gazl2 t: a GAZL 1 unit concatenated BEFORE a bracketed unit must assemble and run");
+
+		const rejects = (text, want, label) => {
+			fs.writeFileSync(gazlPath, text, IMPALA_ENCODING);
+			const run = runGazlCmd(gazlPath, [ NO_ENTRY_POINT ]);
+			assert(!run.assembled && run.report.includes(want),
+				`gazl2 t: ${label} must reject with "${want}", got: ${run.line}`);
+		};
+		rejects("GAZL #2\nf:\tFUNC\n\tRETU\nmain:\tFUNC\np0:\tLOCp\n\tPARA *1\n\tMOVp p0 &f\n\tRETU\nGAZL #1\n",
+			"Incompatible types", "a t function's address in a p slot");
+		rejects("f:\tFUNC\n\tRETU\nGAZL #2\ng:\tGLOB *1\n\tDATp &f\nmain:\tFUNC\n\tPARA *1\n\tRETU\nGAZL #1\n",
+			"Incompatible types", "DATp of ANY function inside a region, GAZL 1-minted included");
+		rejects("f:\tFUNC\n\tRETU\nmain:\tFUNC\nt0:\tLOCt\n\tPARA *1\n\tMOVt t0 &f\n\tRETU\n",
+			"Incompatible types", "a GAZL 1 function's address in a t slot - the gate the region provides");
+		rejects("GAZL #2\nmain:\tFUNC\n\tPARA *1\n\tRETU\n",
+			"not closed", "a region left open at end of file");
+		rejects("GAZL #2\nf:\tFUNC\n\tRETU\nmain:\tFUNC\np0:\tLOCp\n\tPARA *1\n\tPEEK p0 &g\n\tCALL p0 %0 *1\n\tRETU\ng:\tGLOB *1\nGAZL #1\n",
+			"Incompatible types", "an indirect call through a p LOCAL inside a region - use LOCt");
+
+		// Dead-strip composes with both dialects. Two stripper bugs were found here: `DATt` was not a
+		// data row (the row was swallowed into the preceding FUNC and stripped with it), and the anon
+		// `GLOB *1` a scalar global rides was FUNC-body filler rather than a boundary (strip that
+		// function and the global kept its row but lost its section). `unused` sits directly before the
+		// scalar global to pin the second shape.
+		const { deadStrip } = require("./impalaImportClosure");
+		const expSrc = "const int DEBUG = 1\n"
+			+ "functype BinOp(int a, int b) returns int\n"
+			+ "function add(int a, int b) returns int r { r = a + b; }\n"
+			+ "function unused(int a) returns int r { r = a; }\n"
+			+ "global BinOp gop = add\n"
+			+ "extern native printInt\nextern native printLF\n"
+			+ "export function main()\nlocals BinOp f\n{\n"
+			+ "\tf = (BinOp) global gop;\n\tprintInt(f(4, 5)); printLF();\n}\n";
+		for (const gazl2 of [ false, true ]) {
+			const stripped = deadStrip(compileWithJsImpala(expSrc, { randomId: 42, gazl2 }));
+			assert(!stripped.includes("unused:"), `dead-strip must drop unused (gazl2: ${gazl2})`);
+			assert(runText(stripped, `dead-stripped funcptr global (gazl2: ${gazl2})`).startsWith("9\n"),
+				`gazl2 t: dead-stripped funcptr global must keep its section and run (gazl2: ${gazl2})`);
+		}
+	}
+	console.log("impala.jspeg compiler emits the t call-target type inside a GAZL #2 region under --gazl2");
+}
+
 // GAZL 1 WORKAROUND (impala.jspeg, pointer-difference 'd'): DIFp's constant forms never took a function
 // address - an error frozen by the engines deployed in the field - so a function NAME in a difference
 // must be materialised into a transient, and only the VARIABLE forms of DIFp ever emitted.
@@ -3640,6 +3899,77 @@ console.log("impala.jspeg compiler treats Object.prototype names as ordinary ide
 			`a funcptr difference must assemble and run on the GAZL 1 assembler, got: ${run.line}`);
 	}
 	console.log("impala.jspeg compiler materialises funcptr constants in a difference (DIFp variable forms only)");
+}
+
+// --- `tail` - the explicit self-recursive tail call under --gazl2 ------------------------------------
+// design/gazl/TailCalls.md: the arguments marshal exactly like a call's, then the GAZL 2 TAIL
+// instruction slides the %0 window onto the frame base and re-enters - no frame push, so the callee's
+// RETU returns to the ORIGINAL caller and recursion depth costs nothing. TAIL is an additive mnemonic
+// (usable in dialect-1 text on a GAZL 2 engine, unknown to older engines), hence E466 outside --gazl2.
+{
+	const countSrc = "const int DEBUG = 1\n"
+		+ "extern native printInt\nextern native printLF\n"
+		+ "function count(int n, int acc) returns int r\n{\n"
+		+ "\tif (n == 0) { r = acc; return; }\n"
+		+ "\ttail count(n - 1, acc + 1);\n}\n"
+		+ "function main()\n{\n\tprintInt(count(100000, 0)); printLF();\n}\n";
+	const out = compileWithJsImpala(countSrc, { randomId: 42, gazl2: true });
+	assert(out.includes("TAIL &count *3")
+			&& out.indexOf("CALL &count") === out.lastIndexOf("CALL &count"),   /* main's call is the only one */
+		"tail must emit one TAIL instruction instead of a CALL");
+	assert(/SUBi %1 \$n #1/.test(out) && /ADDi %2 \$acc #1/.test(out),
+		"tail must marshal the new arguments into the %0 call window TAIL consumes");
+
+	expectCompileOutcome("tail", "outside --gazl2", countSrc, "E466");
+	expectCompileOutcome("tail", "a non-self target",
+		"function other(int n) returns int r { r = n; }\n"
+			+ "function count(int n) returns int r\n{\n\ttail other(n);\n}\nfunction main() { }\n",
+		"E467", true);
+	expectCompileOutcome("tail", "an inline body",
+		"inline function twice(int x) returns int r\n{\n\ttail twice(x);\n}\nfunction main() { }\n",
+		"E468", true);
+	expectCompileOutcome("tail", "a wrong argument count",
+		"function count(int n, int acc) returns int r\n{\n\tif (n == 0) { r = acc; return; }\n"
+			+ "\ttail count(n - 1);\n}\nfunction main() { }\n",
+		"E405", true);
+
+	// `tail` is CONTEXTUAL: until `name(` follows it is two identifiers, which nothing else parses,
+	// so a function (or variable) named tail keeps compiling in both dialects.
+	const ctxSrc = "function tail(int x) returns int r { r = x * 2; }\n"
+		+ "function main()\nlocals int tailSum\n{\n\ttailSum = tail(21);\n}\n";
+	compileWithJsImpala(ctxSrc, { randomId: 42 });
+	compileWithJsImpala(ctxSrc, { randomId: 42, gazl2: true });
+
+	if (haveGazlCmd()) {
+		const gazlPath = path.join(dir, "..", "tests", "impala", "erroneous", "gazl2Tail.gazl");
+		const runText = (text, label) => runGazlText(gazlPath, text, [ "main" ], "tail: " + label);
+		// 100k deep is the depth TailCalls.md opens with: a CALL per step traps the frame check,
+		// a reused frame just loops.
+		assert(runText(out, "count(100000, 0)").startsWith("100000\n"),
+			"tail: 100k self-recursions must complete in one frame");
+		fs.writeFileSync(gazlPath, out.replace("TAIL &count *3", "CALL &count %0 *3\t; regress to a real call"),
+			IMPALA_ENCODING);
+		assert(runGazlCmd(gazlPath, [ "main" ]).report.includes("status -6"),
+			"tail: the same recursion through CALL must trap the frame check - the gap the feature closes");
+		// TAIL is an ADDITIVE mnemonic: plain dialect-1 text may use it on this engine (older engines
+		// reject it as an unknown mnemonic, which is the whole version story for additions).
+		const rawLoop = "loop:\tFUNC\nr0:\tOUTi\nn0:\tINPi\n"
+			+ "\tNEQi n0 #0 @more\n\tMOVi r0 #7\n\tRETU\nmore:\tSUBi %1 n0 #1\n\tTAIL &loop *2\n"
+			+ "main:\tFUNC\n\tPARA *2\n\tMOVi %1 #100000\n\tCALL &loop %0 *2\n\tRETU\n";
+		fs.writeFileSync(gazlPath, rawLoop, IMPALA_ENCODING);
+		const raw = runGazlCmd(gazlPath, [ "main" ]);
+		assert(raw.assembled && raw.report.includes("Status: 0"),
+			`tail: raw dialect-1 TAIL must assemble and run 100k deep in one frame, got: ${raw.line}`);
+		// There is NO window-size rule: the slide copies downward in ascending order (memmove-safe at
+		// any size) and the window words are folded into the frame check, so a window WIDER than the
+		// function's own is fine - here a 1-window function tail-passes a 3-word window.
+		const wideLoop = "sum:\tFUNC\ns0:\tOUTi\na0:\tINPi\nb0:\tINPi\n\tADDi s0 a0 b0\n\tRETU\n"
+			+ "go:\tFUNC\ng0:\tOUTi\n\tMOVi %1 #40\n\tMOVi %2 #2\n\tTAIL &sum *3\n"
+			+ "main:\tFUNC\n\tPARA *1\n\tCALL &go %0 *1\n\tEQUi %0 #42 @ok\n\tCALL ^assertFail\nok:\tRETU\n";
+		assert(runGazlText(gazlPath, wideLoop, [ "main" ], "tail: wider-than-own window") === "",
+			"tail: a TAIL window wider than the function's own must assemble and run");
+	}
+	console.log("impala.jspeg compiler compiles tail self-recursion to the TAIL instruction under --gazl2");
 }
 
 /* Character classes keep Ford's range semantics: '-' binds as a range even before ']'. The

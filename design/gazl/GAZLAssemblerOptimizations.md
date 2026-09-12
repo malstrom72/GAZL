@@ -1,7 +1,7 @@
 # Future optimizations in the GAZL assembler (design note)
 
-Status: DESIGN NOTE. Candidate optimizations that belong in the **assembler**, not in Impala. Nothing
-here is implemented. Sized for its own branch.
+Status: DESIGN NOTE, plus one item now BUILT. Optimizations that belong in the **assembler**, not in
+Impala. Items 1-3 are candidates; item 4 (branch threading and return duplication) shipped 2026-08-04.
 
 The dividing line is what each layer knows. Impala must keep struct sizes and offsets SYMBOLIC
 (`.z.Name`, `.o.Name.field`) because an `extern struct` layout is host-owned and supplied at load - see
@@ -10,9 +10,12 @@ the resolved value, so any transform keyed on it can only happen here. That sing
 
 Related but separate: [`design/FutureOptimizations.md`](../FutureOptimizations.md) covers Impala-side
 candidates (dead-arm elimination after a compile-time branch, and the `expandInline` folding restriction).
+<<<<<<< HEAD:docs/GAZLAssemblerOptimizations.md
+=======
 [`design/gazl/TailCalls.md`](TailCalls.md) covers the one case that needs a NEW instruction rather than a
 peephole - `CALL f; RETU` cannot be collapsed here, because no GAZL form can enter a function without
 pushing a frame.
+>>>>>>> Impala2:design/gazl/GAZLAssemblerOptimizations.md
 
 
 ## What the assembler already does
@@ -27,12 +30,8 @@ From the operator table in `src/GAZL.cpp:299-306`:
 | `LOCAL_BOUNDS` | frame-bounds bookkeeping |
 | `CHECK_DIV_BY_0` | reject a constant zero divisor |
 
-Two gaps follow from that table:
-
-- **Every fold requires ALL sources to be constant.** There is no transform for a variable-plus-constant
-  instruction whose constant happens to be an identity. Items 1-3 below.
-- **There is no control-flow peephole at all.** `GOTO_b__` carries a flag word of `0`, and there is no
-  threading, chaining or collapsing logic anywhere in `src/GAZL.cpp`. Items 4-5 below.
+The gap: **every fold requires ALL sources to be constant.** There is no transform for a
+variable-plus-constant instruction whose constant happens to be an identity.
 
 
 ## 1. Identity folding on `_vvc` forms
@@ -108,32 +107,44 @@ Note also that `SHLi_vvc` / `SHRi_vvc` take `CONST_INT_P` - a POSITIVE constant 
 plain `CONST_INT`, so the rewrite has to respect the narrower operand class, not just the value.
 
 
-## 4. Branch threading
+## 4. Branch threading and return duplication - IMPLEMENTED 2026-08-04
 
-`GOTO @a` where `a:` holds `GOTO @b` becomes `GOTO @b`, applied transitively to a fixpoint.
+Two control-flow peepholes, in `Assembler::threadBranches()`, called from `finalize` once every symbol is
+resolved:
 
-**Every hop is a real dispatch today.** Measured on this tree, 20M iterations of a loop whose body is a
-chain of three `GOTO`s versus one:
+- **Threading.** A branch whose target leads to a `GOTO` adopts that `GOTO`'s target, followed to a
+  fixpoint. Every hop is a real dispatch: measured 20M iterations of a loop body of three chained `GOTO`s
+  against one, 126.4 ms vs 63.9 ms - 1.97x against an instruction ratio of exactly 2. Nothing short-
+  circuits a chain at run time.
+- **Return duplication.** `GOTO @a` where `a:` holds `RETU` becomes `RETU`. Not the same transform - the
+  target is not a branch, so threading cannot reach it. Unconditional: `RETU` takes no operands and does
+  the same frame work wherever it stands.
 
-| Body | Instructions/iteration | Median |
-|---|---|---|
-| `GOTO`->`GOTO`->`GOTO`->`FORi` | 4 | 126.4 ms |
-| `GOTO`->`FORi` | 2 | 63.9 ms |
+**Why it is safe, and why it is cheap.** Both rewrite an opcode or a displacement IN PLACE. No address
+moves, so nothing needs re-patching - which is equally the reason the removal variants (dropping the now-
+dead `GOTO`, or a label left unreferenced) are NOT done: those shift every later address and invalidate
+every resolved branch and the function table.
 
-1.97x against an instruction-count ratio of exactly 2. Nothing is threaded; the cost is linear in the
-chain length and is paid on every execution.
+The branch operand is read from the same `OPERATORS` table the assembler parses with, so a future
+branching opcode is covered by declaring its operand `BRANCH` and nothing else; all 35 carry it in one
+consistent slot. **`SWCH` is excluded by name**: its third operand looks identical to the table but is a
+jump TABLE base in memory (`ip += mb[C2.p + index].i`), not a displacement.
 
-**Population is non-zero and structural.** Impala's `processBranches` does collapse chains, but the alias
-map is resolved at visit time during a single bottom-to-top walk and is NOT transitive, so a chain the
-walk meets in the wrong order survives into the output:
+**Why here rather than in Impala.** Impala tried this twice and failed both times, on the same fixture
+with the same symbol (`Priyome`: `Symbol not found (in expected scope): .f5`). The cause is that
+`! EQUi #DEBUG #0 @L` is not control flow at all - it tells the assembler to stop EMITTING until it
+reaches `L`, so its target delimits a region of text rather than naming a continuation. Threading it
+widens the skipped region and swallows the label definitions inside, which surfaces as a symbol that is
+missing while plainly present in the listing. Down here that hazard cannot arise: those directives are
+consumed while assembling and never reach the code array. The assembler is also the only layer hand-
+written GAZL passes through, and there is no layer after it.
 
-```gazl
-        GOTO @second        ; goto first    <- followed one hop, then stopped
-second: GOTO @done
-first:  GOTO @second
-done:   ...
-```
+**Verified**: 34 branch opcodes recognised (35 less `SWCH`); a hand-written 3-hop chain collapses to two
+threads plus one `GOTO`->`RETU`; goldens 0/94 with 26 fixtures assembled AND run.
 
+<<<<<<< HEAD:docs/GAZLAssemblerOptimizations.md
+## 5. Not candidates
+=======
 `aliases[first] = second` is recorded before `aliases[second] = done` exists, and nothing re-follows.
 
 ## 5. Return duplication
@@ -229,6 +240,7 @@ already been consumed and every remaining target is an instruction index. That i
 to do item 4 here rather than in the compiler.
 
 ## 6. Not candidates
+>>>>>>> Impala2:design/gazl/GAZLAssemblerOptimizations.md
 
 - **Anything requiring the assembler to know Impala's type model.** It sees words.
 - **Reassociation or factoring across instructions.** GAZL is a transliteration target; the instruction
@@ -244,18 +256,3 @@ Before any of this, get a number. `tools/bench.sh` / `.cmd` and `tools/genbench.
 first step is to count how often the affected shapes actually occur in `tests/impala/golden/*.gazl` and in
 real firmware, rather than assuming the multiply matters. Item 1's whole reachable surface is one-word
 structs with runtime indices, which may well be zero programs today.
-
-**Items 4 and 5 are the exception - their populations are counted.** Across the 94 fixtures in
-`tests/impala/golden/*.gazl`:
-
-| | count | share of all `GOTO`s |
-|---|---|---|
-| `GOTO` instructions | 1174 | - |
-| target is another `GOTO` (item 4) | 34 | 2.9% |
-| target is a `RETU` (item 5) | **271** | **23.1%** |
-| **removable** | **305** | **26.0%** |
-
-**A quarter of every `GOTO` in the corpus is removable, and item 5 is almost all of it** - which is the
-forced early-exit idiom showing up exactly as predicted. If only one thing on this page gets built, build
-item 5. It is the simplest transform here, it is unconditionally correct, and it is the only one whose
-benefit is already demonstrated on real programs rather than argued.

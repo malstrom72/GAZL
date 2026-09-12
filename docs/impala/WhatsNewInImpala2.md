@@ -1,4 +1,4 @@
-# What's new in Impala 2.0
+﻿# What's new in Impala 2.0
 
 This page covers only what changed between Impala 1.0 and 2.0. It assumes you know 1.0 already; if you do
 not, read [`Impala.md`](Impala.md) for the language and come back.
@@ -9,8 +9,10 @@ no hidden passes, no runtime machinery - and spends its additions on letting the
 a program is already doing.
 
 **Nine new keywords:** `break` `continue` `export` `functype` `import` `inline` `return` `sizeof` `struct`.
-Three of those are not features: `break` and `continue` are `E450` and `inline` is `E439`. They are
-reserved so the compiler can refuse them with an explanation instead of a syntax error.
+Two of those are not features: `break` and `continue` are `E450`, reserved so the compiler can refuse them
+with an explanation instead of a syntax error. `inline` IS a feature **on this branch** - an expansion
+declares its locals in a GAZL 2 `SCOP`/`ENDS` scope, which is exactly why the Impala 2 line refuses it and
+this line does not. See [`Inlining.md`](Inlining.md).
 
 For *why* 2.0 is shaped this way, see [`Impala2.md`](Impala2.md). This page is only the what.
 
@@ -208,6 +210,30 @@ Typed arrays also emit typed data rows (`DATi`, `DATf`) where 1.0 emitted untype
 check the assembler already had and 1.0 never reached, so initializer data gets a second, independent
 verification for free.
 
+## `tail` - self-recursion in constant stack (`--gazl2` only)
+
+A tail-recursive accumulator no longer has to grow the stack until the frame check traps it:
+
+```impala
+function count(int n, int acc) returns int r
+{
+	if (n == 0) { r = acc; return; }
+	tail count(n - 1, acc + 1);
+}
+```
+
+`tail f(...);` is a terminal statement, like `return;`, that re-enters the current function with new
+arguments in the SAME frame - the arguments marshal like any call's, the parameters are rewritten, and
+control jumps back to the top of the body. `count(100000, 0)` runs where the plain recursive spelling
+traps with `status -6`.
+
+It is explicit on purpose: silent tail-call elimination decides whether byte-identical source works at
+all, which is the opposite of a predictable cost model. And it is deliberately narrow in 2.0: the target
+must be the enclosing function (`E467` - the GAZL `TAIL` instruction is general, but cross-function
+contract checking is future compiler work), it needs `--gazl2` (`E466` - the instruction exists only on
+GAZL 2 engines), and an `inline function` cannot use it (`E468`). `tail` itself stays a legal name for
+anything else.
+
 ## Not available
 
 Reserved so they can be refused clearly, not because they are coming soon in 2.0:
@@ -218,8 +244,10 @@ Reserved so they can be refused clearly, not because they are coming soon in 2.0
 | Returning a struct by value | `E427` - use a pointer out-parameter |
 | Multiple return values | `E428` |
 | Destructuring assignment | `E429` |
-| `inline function` | `E439` - lives on the GAZL 2 line |
 | `break` / `continue` | `E450` - leave a loop with `goto`; a switch arm already does not fall through |
+
+`inline function` is NOT in that table on this branch. The Impala 2 line refuses it, because it has to run
+on a GAZL 1.0 engine; here the `SCOP`/`ENDS` an expansion needs exist, so the feature does too.
 
 [`ParkedFeatures.md`](../../design/ParkedFeatures.md) has the full argument and the branch for every row above.
 

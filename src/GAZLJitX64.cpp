@@ -382,6 +382,35 @@ static Label resolveConditionalEdge(X64Emitter& emitter, RegisterCache& cache, s
 	return labels[target];
 }
 
+/*
+	TAIL's window slide (GAZL 2): the %0..%window-1 window moves DOWN onto this frame's base, dsp rewinds to it, and the
+	callee's FUNC re-stacks from OUR base. No return is pushed - the callee's RETU returns to our caller - which is what
+	makes self-recursion run in constant stack. The destination is always below the source (dp = dsp - frame), so an
+	ascending copy is overlap-safe at any size, exactly like the interpreter's loop. Small windows unroll through RAX;
+	a large one goes through rep movsd. Never touches SCRATCH_B, which carries the resolved target in the indirect form.
+*/
+static void emitTailWindow(X64Emitter& emitter, UInt window, UInt frame) {
+	const int32_t down = 0 - static_cast<int32_t>(frame * 4u);
+	if (window <= 8) {																									// the realistic case: a handful of parameter slots
+		for (UInt k = 0; k < window; ++k) {
+			emitter.load(RAX, DSP, static_cast<int32_t>(k * 4u));
+			emitter.store(DSP, static_cast<int32_t>(k * 4u) + down, RAX);
+		}
+	} else {
+	#if defined(_WIN32)
+		emitter.push(RSI); emitter.push(RDI);																			// Win64: both are callee-saved and rep movsd clobbers them
+	#endif
+		emitter.movQ(RDI, DSP); emitter.addImmQ(RDI, static_cast<uint32_t>(down));
+		emitter.movQ(RSI, DSP);
+		emitter.movImm(SCRATCH_A, window);
+		emitter.cld(); emitter.repMovsd();
+	#if defined(_WIN32)
+		emitter.pop(RDI); emitter.pop(RSI);
+	#endif
+	}
+	if (frame != 0) { emitter.addImmQ(DSP, static_cast<uint32_t>(down)); }												// dsp = dp
+}
+
 // Opcodes whose operands route through the cache; everything else barriers the cache and lowers as v1 (§5.7).
 static bool cacheLowered(Int op) {
 	switch (op) {
@@ -734,6 +763,22 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 				break;
 			}
 
+			case OP_TAIL_CC: {																							// GAZL 2 tail call, direct target (the ordinal is validated at assembly; the interpreter only asserts)
+				emitTailWindow(emitter, static_cast<UInt>(in.p1.i), static_cast<UInt>(in.p2.i));
+				emitter.jmp(entryLabels[in.p0.p - FUNCTION_OFFSET]);
+				break;
+			}
+			case OP_TAIL_VC: {																							// tail call through a target slot: BAD_CALL on a bad ordinal, exactly as the interpreter
+				Label trap = emitter.newLabel();
+				emitter.load(SCRATCH_A, DSP, in.p0.i * 4); emitter.subImm(SCRATCH_A, FUNCTION_OFFSET);					// ordinal, read BEFORE the slide overwrites the window
+				emitter.cmpImm(SCRATCH_A, functionCount); emitter.jcc(CC_AE, trap);
+				emitter.loadQ(RAX, CONTEXT, offsets.funcentries); emitter.shlImm(SCRATCH_A, 3); emitter.addQ(RAX, SCRATCH_A);
+				emitter.loadQ(SCRATCH_B, RAX, 0);																		// funcEntries[ordinal] - survives the slide
+				emitTailWindow(emitter, static_cast<UInt>(in.p1.i), static_cast<UInt>(in.p2.i));
+				emitter.jmpReg(SCRATCH_B);
+				emitter.bind(trap); emitter.movImm(RAX, static_cast<uint32_t>(BAD_CALL)); emitter.jmp(epilogue);
+				break;
+			}
 			case OP_CALL_CVC: {																							// direct GAZL call: push {after, dsp}, tail-branch into the callee entry
 				const UInt callee = in.p0.p - FUNCTION_OFFSET;
 				const UInt window = static_cast<UInt>(in.p1.i);
