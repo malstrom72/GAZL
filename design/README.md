@@ -45,6 +45,7 @@ Nothing here is end-user documentation - the JIT is an implementation detail of 
 | Doc | Kind | What it is |
 |---|---|---|
 | [JitTechnologyMap](jit/JitTechnologyMap.md) | REFERENCE | The lay of the land - start here |
+| [JitArm64TailHandoff](jit/JitArm64TailHandoff.md) | TASK, OPEN | Verify the arm64 `TAIL` lowering on Apple Silicon - it has never been compiled |
 | [JitCompilerResearch](jit/JitCompilerResearch.md) | NOTE | Background research behind the design |
 | [CppBackendSpec](jit/CppBackendSpec.md) | SPEC | The C++ backend |
 | [LeafNativeDesign](jit/LeafNativeDesign.md) | SPEC | Leaf native calls |
