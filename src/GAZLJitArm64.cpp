@@ -431,15 +431,25 @@ static void subImmXBig(Arm64Emitter& e, Reg xd, Reg xn, uint32_t imm) {
 	RETU returns to our caller - which is what makes self-recursion run in constant stack. The destination is always
 	below the source (dp = dsp - frame), so an ascending copy is overlap-safe at any size, exactly like the interpreter's
 	loop. Uses X12 for the destination base and W11 for the word in flight, leaving X9 free to carry the resolved target
-	of the indirect form across the slide.
+	of the indirect form across the slide. Like the x64 side, only a small window unrolls: ldrW/strW's scaled imm12 stops
+	at word 4095 and nothing caps paramsSize, so a big window copies through a register-offset loop (index W13, bound
+	W15 - both fixed scratch, dead here) instead of emitting an out-of-range offset.
 */
 static void emitTailWindow(Arm64Emitter& e, UInt window, UInt frame) {
-	subImmXBig(e, X12, X1, frame * 4);
-	for (UInt k = 0; k < window; ++k) {
-		e.ldrW(W11, X1, k * 4);
-		e.strW(W11, X12, k * 4);
+	subImmXBig(e, X12, X1, frame * 4);																					// x12 = dp = dsp - frame
+	if (window <= 8) {																									// the realistic case: a handful of parameter slots
+		for (UInt k = 0; k < window; ++k) {
+			e.ldrW(W11, X1, k * 4);
+			e.strW(W11, X12, k * 4);
+		}
+	} else {
+		Label loop = e.newLabel();
+		matConst(e, W15, static_cast<Int>(window)); e.movz(W13, 0);
+		e.bind(loop);																									// window > 8, so at least one pass
+		e.ldrWx(W11, X1, W13); e.strWx(W11, X12, W13);
+		e.addImm(W13, W13, 1); e.cmp(W13, W15); e.bcond(LO, loop);														// ascending: overlap-safe
 	}
-	if (frame != 0) { subImmXBig(e, X1, X1, frame * 4); }																// dsp = dp
+	if (frame != 0) { e.addImmX(X1, X12, 0); }																			// dsp = dp (`mov x1, x12`)
 }
 
 /*

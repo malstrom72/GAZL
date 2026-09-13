@@ -1,6 +1,9 @@
 # Handoff: verify the arm64 TAIL lowering on Apple Silicon
 
-Status: TASK, open. The arm64 `TAIL` lowering was written on a Windows x64 box in the GAZL2 merge
+Status: DONE and validated on Apple Silicon (2026-09-13). See Result at the end. Review item 1 was fixed and the
+300k-deep arm64 soak is clean. The text below is the original handoff, kept as written.
+
+The arm64 `TAIL` lowering was written on a Windows x64 box in the GAZL2 merge
 (`6c6161af`) and has **never been compiled, let alone run** - there is no arm64 toolchain there. The x64
 counterpart of the same change is fully verified. This file is the review checklist and the gate.
 
@@ -107,3 +110,76 @@ around `TAIL` differs between backends.
 
 Every gate above green on Apple Silicon, review item 1 resolved, and this file updated to
 `Status: DONE and validated on Apple Silicon` with the soak result recorded.
+
+## Result (Apple Silicon, 2026-09-13)
+
+**It compiled unchanged, and the `K_TAIL` kernel passed on the first build.** Every row `OK` in debug (`-O0`,
+asserts live) and release, with `gOut` and the suspend counts (0 / 1 / 10 / 100) identical to the x64 rows above.
+arm64 emits 210 native words for that kernel.
+
+Review items:
+
+1. **Fixed.** Reproduced first: a new kernel with a 5000-word window aborted in `ldrW` on the imm12 assert. Note
+   that `buildAndRunGAZLJitLowerTest.sh` "release" is `-O2` *without* `-DNDEBUG`, so asserts are live there too; the
+   silent wrong-instruction case is the `BuildCpp.sh` release build (`-Os -DNDEBUG`), which is what ships `GAZLCmd`.
+   `emitTailWindow` now mirrors the x64 structure: a window of 8 words or fewer still unrolls through
+   `ldrW`/`strW`, and anything larger copies through an ascending register-offset loop (`ldr w11, [x1, w13, uxtw
+   #2]` / `str w11, [x12, w13, uxtw #2]`, index `W13`, bound `W15`). No window size can emit an out-of-range offset.
+   Regression kernel `K_TAILBIG` in `tools/GAZLJitLowerTest.cpp`: window 5000 and frame 1504 words, so the
+   `subImmXBig` register form runs too. It covers the direct and indirect forms, with the window overlapping the frame
+   it slides onto, at full and tiny fuel. It passes on arm64 (debug and release) and on x64 (Rosetta cross-build,
+   the `rep movsd` path) with identical `gOut` and suspends (703 at tiny fuel).
+2. **Confirmed.** `X12`/`W11` for the slide and `W13`/`W15` for the loop never collide with `X9`: the indirect
+   big-window form carries the resolved target across a 5000-word loop and lands correctly. None of them is in
+   `ARM64_GENERAL_POOL`.
+3. **Done.** The second `subImmXBig` is now `add x1, x12, #0` (`mov x1, x12`): one word instead of one or three.
+4. **Unchanged.** `frame == 0` still self-copies and skips the rewind, as on x64.
+5. **Confirmed.** The suspend counts match x64 on both TAIL kernels, so safepoint placement around `TAIL` is the
+   same on both backends.
+
+Gates, all run on Apple Silicon:
+
+- `buildAndRunGAZLJitLowerTest.sh`: ALL PASS (debug and release).
+- `buildAndRunGAZLJitTest.sh`: ALL PASS. No new encodings were needed; the loop uses emitter forms already covered
+  by the golden.
+- `buildAndRunGAZLJitExecTest.sh`: ALL PASS.
+- `checkPermut8Firmwares.sh --jit`: all 28 checksums match. It needs `output/GAZLCmd` built first; without the
+  binary it reports all 28 as `GOLDEN!` with empty output rather than saying the binary is missing.
+- `build.sh`: exit 0. It includes `test-jit.sh`: the lower test ALL PASS, all 28 firmware checksums match, and
+  `gen 2000 programs, no divergence`. The node and Impala smoke steps passed too.
+- `GAZLFuzz --gen 300000 1 deep` (arm64, standalone beta build): `gen 300000 programs, no divergence`, in 4m58s.
+  As noted above, the generator does not emit `TAIL`, so this soak covers the renumbering, not `TAIL` itself.
+
+### Rerun on `0779ba9` (after `ce10da6`)
+
+The fix above was built and gated on `f773dcb`, then rebased onto `0779ba9`. That brought in `ce10da6`: no
+fall-through leader after GOTO/SWCH, and block weight stops at the terminator. The change is in the shared
+`src/GAZLJit.cpp`, so every gate ran again:
+
+- Lower test, debug and release: ALL PASS. **All 468 kernel rows are byte-identical to the `f773dcb` run:**
+  status, host calls, tiny-fuel suspends and `gOut`. The per-kernel native-word counts did not change either.
+  No lower-test kernel has unreachable filler after a GOTO, SWCH, RETU or TAIL, so the weight change is a no-op
+  here, as expected. It would still fail loudly rather than hide if it diverged, because each row is diffed
+  against the interpreter.
+- Emitter golden, exec test, engine test, slice test: ALL PASS. The engine and slice tests are new to this run.
+- `checkPermut8Firmwares.sh --jit`: all 28 checksums match.
+- `build.sh`: exit 0. Inside it, `test-jit.sh` ran the lower test (ALL PASS, all 14 `K_TAILBIG` rows `OK`), all
+  28 firmware checksums matched, and the fuzz smoke reported `gen 2000 programs, no divergence`. The NuXJS
+  Impala smoke test passed.
+- `GAZLFuzz --gen 300000 1 deep` (arm64, standalone beta build): `gen 300000 programs, no divergence`, in 4m56s.
+
+x64 reference on `0779ba9`, from the Windows session: lower test ALL PASS, 28/28 firmwares, 2000-program fuzz
+smoke clean, 113/113 Impala programs, `build.cmd` exit 0. `K_TAIL` is 275 native words there and 210 on arm64.
+`K_TAILBIG` has only run on x64 under Rosetta; a run on native x64 is still to come.
+
+### Rebased onto `631c9db` (`K_DEADTAIL`)
+
+`631c9db` added `K_DEADTAIL`: a mid-function RETU on the hot path followed by 64 unreachable instructions, the
+first kernel that actually exercises `ce10da6`'s weight change. On arm64 at the rebased head:
+
+- Lower test, debug and release: ALL PASS. `K_DEADTAIL` suspends 9 times at n=100 and 90 at n=1000, matching the
+  interpreter. `K_TAIL` and `K_TAILBIG` are 14/14 each, and every previously existing kernel row is identical to the
+  `0779ba9` run.
+- **Backout check:** with `ce10da6` reversed in a scratch copy (working tree untouched), arm64 fails exactly as x64
+  did: `FIDELITY n=100 interp_suspends=9 jit_suspends=99 ratio=11.00` and `n=1000 ... ratio=11.10`, 2 failures.
+  The two backends agree on a block's extent; the weight computation is shared, and this confirms it.

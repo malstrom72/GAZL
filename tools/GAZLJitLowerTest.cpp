@@ -462,6 +462,31 @@ static const char* const K_TAIL =		// GAZL 2 TAIL: self tail-recursion in consta
 	" MOVp %1 &tSum\n MOVi %2 $k\n CALL &tHop %0 *3\n ADDi $r $r %0\n"
 	" POKE &gOut $r\n RETU\n";
 
+/*
+	TAIL past every emitter threshold, direct AND indirect. The sizes are chosen to cross limits - do not shrink them:
+	- window 5000 > 4095 words: past arm64 ldrW/strW's scaled imm12, the hazard the register-offset loop replaced
+	  (and far past the 8-word unroll limit on BOTH backends, so arm64's loop and x64's `rep movsd` both run);
+	- frame 1504 > 1023 words (6016 bytes > 0xFFF): subImmXBig's materialized register form, not the imm12 sub;
+	- window > frame: the destination overlaps the source, so a descending (wrong-direction) copy corrupts the sum.
+*/
+static const char* const K_TAILBIG =
+	"gIn: GLOB *1\n DATi #0\n" "gOut: GLOB *1\n DATi #0\n"
+	"bSum: FUNC\n$bs: OUTi\n$bw: PARA *4999\n$bi: LOCi\n$bx: LOCi\n"
+	" MOVi $bs #0\n MOVi $bi #0\n"
+	".s: GETL $bx $bw $bi\n ADDi $bs $bs $bx\n FORi $bi #4999 @.s\n RETU\n"
+	"bHead: FUNC\n$hr: OUTi\n$hn: INPi\n$hpad: LOCA *1500\n$hi: LOCi\n$hv: LOCi\n"
+	" MOVi $hi #1\n"
+	".f: MULi $hv $hi #3\n ADDi $hv $hv $hn\n SETL %0 $hi $hv\n FORi $hi #5000 @.f\n"	// %k = n + 3k for k in 1..4999
+	" TAIL &bSum *5000\n"
+	"bHeadI: FUNC\n$ir: OUTi\n$in: INPi\n$ifn: INPp\n$ipad: LOCA *1500\n$ii: LOCi\n$iv: LOCi\n"
+	" MOVi $ii #1\n"
+	".g: MULi $iv $ii #5\n ADDi $iv $iv $in\n SETL %0 $ii $iv\n FORi $ii #5000 @.g\n"	// %k = n + 5k
+	" TAIL $ifn *5000\n"
+	"main: FUNC\n PARA *1\n$k: LOCi\n$r: LOCi\n"
+	" PEEK $k &gIn\n MOVi %1 $k\n CALL &bHead %0 *2\n MOVi $r %0\n"
+	" MOVi %1 $k\n MOVp %2 &bSum\n CALL &bHeadI %0 *3\n ADDi $r $r %0\n"
+	" POKE &gOut $r\n RETU\n";
+
 static const char* const K_FTOISAT =		// fTOi saturation: a huge float clamps to the int range (must match the interpreter)
 	"gIn: GLOB *1\n DATi #0\n" "gOut: GLOB *1\n DATi #0\n"
 	"main: FUNC\n PARA *1\n$n: LOCi\n$f: LOCf\n"
@@ -860,6 +885,7 @@ int main() {
 	runKernel("dead tail     [filler after RETU]", K_DEADTAIL, counts, sizeof(counts) / sizeof(*counts));
 #if GAZL_2
 	runKernel("tail          [GAZL 2 TAIL]", K_TAIL, counts, sizeof(counts) / sizeof(*counts));		// a GAZL_2=0 engine rejects the mnemonic, as a real 1.0 engine does
+	runKernel("tail big      [window 5000, frame >1023]", K_TAILBIG, counts, sizeof(counts) / sizeof(*counts));
 #endif
 	runKernel("divf zero     [DIVf /0 trap]", K_DIVFZERO, signed_, sizeof(signed_) / sizeof(*signed_));
 
