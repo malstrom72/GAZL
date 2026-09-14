@@ -330,6 +330,10 @@ class X64SlotBackend : public RegisterCacheBackend {
 					if (registerClass == GENERAL_REGISTER) { e.store(DSP, static_cast<int32_t>(slot) * 4, r); }
 					else { e.movssStore(DSP, static_cast<int32_t>(slot) * 4, r); }
 				}
+	public:		virtual void emitCrossMove(int dstRegister, RegisterClass dstClass, int srcRegister) {
+					const Reg d = static_cast<Reg>(dstRegister), s = static_cast<Reg>(srcRegister);
+					if (dstClass == FLOAT_REGISTER) { e.movdToXmm(d, s); } else { e.movdFromXmm(d, s); }				// bit copy either way; a Value is one word
+				}
 	private:	X64Emitter& e;
 };
 
