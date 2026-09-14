@@ -35,7 +35,7 @@ written. PLAN / BACKLOG = not done.
 | [GAZLSymbolicWindows](gazl/GAZLSymbolicWindows.md) | FINDING | GAZL already supports symbolic by-value call windows |
 | [GAZLAssemblerOptimizations](gazl/GAZLAssemblerOptimizations.md) | DESIGN NOTE | Assembler-side optimisation |
 | [GAZL2FunctionPointers](gazl/GAZL2FunctionPointers.md) | PROPOSAL | A distinct function-pointer storage type `t` |
-| [TailCalls](gazl/TailCalls.md) | DESIGN NOTE | Tail-call elimination. Nothing implemented |
+| [TailCalls](gazl/TailCalls.md) | DESIGN NOTE | `TAIL` IMPLEMENTED: engine, Impala `tail`, both backends |
 
 ## The JIT
 
@@ -72,18 +72,18 @@ Nothing here is end-user documentation - the JIT is an implementation detail of 
 
 | Doc | Kind | What it is |
 |---|---|---|
-| [Inlining](impala/Inlining.md) | SPEC | `inline function` - PARKED on this branch, implemented on `GAZL2` |
+| [Inlining](impala/Inlining.md) | SPEC | `inline function` - live on this branch, needs a GAZL 2 engine |
 | [InliningInvestigation](impala/InliningInvestigation.md) | NOTE | Background measurements behind the inlining spec |
 | [GAZLSymbolicWindows](gazl/GAZLSymbolicWindows.md) | FINDING | GAZL already supports symbolic by-value call windows; Impala's transient allocator is the blocker. Proof: [`symbolicWindows.gazl`](proofs/symbolicWindows.gazl) + its re-packed twin |
 | [FutureOptimizations](FutureOptimizations.md) | CANDIDATES | Compiler optimisation ideas, not committed to |
 | [GAZLAssemblerOptimizations](gazl/GAZLAssemblerOptimizations.md) | DESIGN NOTE | Assembler-side optimisation, starting with identity folding |
 | [GAZL2FunctionPointers](gazl/GAZL2FunctionPointers.md) | SPEC | The `t` call-target type: `p` doing double duty was a silent-wrong shape (`&one + 1` calls a different function). IMPLEMENTED 2026-08-25 inside `GAZL #2` regions; migration revised from hard break to regions, zero forced migrations |
-| [TailCalls](gazl/TailCalls.md) | DESIGN NOTE | Tail-call elimination. Nothing implemented; needs a GAZL instruction *and* Impala syntax, so neither side can do it alone |
+| [TailCalls](gazl/TailCalls.md) | DESIGN NOTE | Needed a GAZL instruction *and* Impala syntax; both landed |
 | [GAZL2DataRegions](gazl/GAZL2DataRegions.md) | SPEC | The `SEEK` directive: bounded data regions at symbolic offsets, so initializers survive a repack. IMPLEMENTED END TO END 2026-08-24 - assembler + Impala emission under `--gazl2` (proof: [`seekRegions.gazl`](proofs/seekRegions.gazl)); E454/E459 lift under the flag |
 | [GAZL2Versioning](gazl/GAZL2Versioning.md) | SPEC | `GAZL #n` region directive (IMPLEMENTED 2026-08-25: the `GAZL #2`...`GAZL #1` bracket is the concatenation idiom) + Impala `--gazl2`; per-product defaults (Permut8 = GAZL 1, Synplant 2 / Microtonic 4 = GAZL 2) |
 
-The `GAZL2*` docs and TailCalls belong to the **GAZL 2** line, which ships after Impala 2.0 and is
-independent of it - nothing in Impala 2.0 waits on any of them.
+The `GAZL2*` docs and TailCalls belong to the **GAZL 2** line. It is merged into this branch, so they
+describe what this tree does; a `GAZL_2=0` build is the 1.0 engine, where none of it is accepted.
 
 ## The JSPEG toolchain
 

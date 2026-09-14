@@ -581,11 +581,10 @@ true and was reworded for that reason. Two exceptions:
 
 - **1.0's `p[i]`** PEEKs without a distinct marker, unlike `a[i]`'s local access - grandfathered by
   backward compatibility. New syntax is held to the stricter rule.
-- ~~**An `inline` call site carries no marker at all**~~ - moot in 2.0, since `inline` is parked
-  (`E439`). It is recorded because it is the exception that returns the moment the feature does: an
-  expansion emits an arbitrary number of instructions with no marker at the call site, and argument
-  substitution deletes marshalling moves a normal call would emit. That is why the rule below is worded
-  as *predictable* rather than *countable*. See "Inline functions" below.
+- **An `inline` call site carries no marker at all.** An expansion emits an arbitrary number of
+  instructions with no marker at the call site, and argument substitution deletes marshalling moves a
+  normal call would emit. That is why the rule below is worded as *predictable* rather than *countable*.
+  See "Inline functions" below.
 
 ### One subscript
 
@@ -1228,15 +1227,15 @@ ever needs to exist in the legacy validator path.
 
 ---
 
-## Inline functions (PARKED for 3.0 - not in Impala 2.0)
+## Inline functions (requires a GAZL 2 engine)
 
-> **Status: parked, not available.** `inline function` was implemented, reviewed, and then taken back
-> out; it now lives on the `GAZL2` branch. Writing `inline` is **`E439`**. An expansion has to place its
-> locals with GAZL 2 `SCOP` / `ENDS`, and Impala 2 must keep running on GAZL 1.0 engines, which reject
-> `SCOP` with `Unknown mnemonic`. See [`ParkedFeatures.md`](../../design/ParkedFeatures.md) and
-> [`Inlining.md`](../../design/impala/Inlining.md). **The codes below are retired with the feature and must not be
-> reused - except `E432`, RE-ALLOCATED 2026-08-05 to the host-owned-array rank rule**, and its fixtures (`inlineEquivalence*`, `inlineFunctions`, `inlineReview*`) were
-> removed. What follows is the design record for the parked feature, not 2.0 behaviour.
+> **Status: available.** An expansion places its locals with GAZL 2 `SCOP` / `ENDS`, so `inline` needs a
+> GAZL 2 engine; a 1.0 engine rejects `SCOP` with `Unknown mnemonic`. It was parked while Impala 2 had to
+> keep running on 1.0 engines, and un-parked when this line gained the GAZL 2 engine, so `E439` is no
+> longer emitted. `E432` was RE-ALLOCATED 2026-08-05 to the host-owned-array rank rule while the feature
+> was away and stays there; `E433` was deleted outright by the extent-naming rework. See
+> [`ParkedFeatures.md`](../../design/ParkedFeatures.md) and
+> [`Inlining.md`](../../design/impala/Inlining.md).
 
 `inline` before `function` makes a function expand at each call site instead of being emitted once and
 called:
@@ -1624,12 +1623,12 @@ foo.impala:12:9: note: use a cast: (int pointer)
 | E431 | array needs a size |
 | E432 | a host-owned array must state its rank - `[]` for one axis, `[,]` for two (re-allocated 2026-08-05; was inline recursive expansion) |
 | E433 | *retired with `inline function`* - do not reuse |
-| E434 | *retired with `inline function`* - do not reuse |
-| E435 | *retired with `inline function`* - do not reuse |
-| E436 | *retired with `inline function`* - do not reuse |
+| E434 | an `inline function` cannot be exported - there is no out-of-line copy to link against |
+| E435 | cannot take the address of an `inline function` |
+| E436 | `inline function` redeclared - it emits no symbol, so it cannot be forward declared |
 | E437 | `extern` declaration of a function disagrees with its definition, or with another `extern` |
 | E438 | `extern struct` declarations disagree, or disagree with the definition |
-| E439 | `inline function` is parked for 3.0; it needs GAZL 2 `SCOP`/`ENDS` |
+| E439 | *no longer emitted* - rejected `inline` while it was parked; do not reuse |
 | E440 | `functype` redeclared with a different shape (a name CLASH with a struct is E401) |
 | E441 | function or value does not match the funcptr type |
 | E442 | malformed argument list |

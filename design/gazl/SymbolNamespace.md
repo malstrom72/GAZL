@@ -131,12 +131,12 @@ refer to it. Like `.o.` / `.z.` these are STABLE and predictable, and carry no r
 
 `.noAssertStrings` - guards the assert-message block so it vanishes when `DEBUG` is 0.
 
-## PARKED - restored with `inline` on GAZL2
+## Restored with `inline`
 
-Nothing below is emitted by this branch's compiler. `inline` is rejected with `E439` here and the
-expansion lives on the `GAZL2` branch, a separate line shipping AFTER Impala 2; `grep -c "_i"` over
-`impala/impala.jspeg` returns 0. Kept because the tag rules above have to stay compatible with it, and
-because the suffix comes back when `inline` does. Same caveat as [`design/impala/Inlining.md`](../impala/Inlining.md).
+Live on this branch since the GAZL2 merge: `inline` compiles here, so the suffix below IS emitted and
+`E439` is not. (`grep -c "_i" impala/impala.jspeg` returns 2, not the 0 this section used to cite.) On
+the `Impala2` line, where `inline` stays parked, none of it is emitted - the same split as
+[`design/impala/Inlining.md`](../impala/Inlining.md).
 
 ### Inline expansion suffixes
 

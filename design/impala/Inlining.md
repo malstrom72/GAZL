@@ -1,14 +1,5 @@
 # Function inlining in Impala (spec)
 
-<<<<<<< HEAD:docs/Inlining.md
-=======
-> **PARKED for Impala 3.0 on this branch.** `inline` is rejected with `E439`; the implementation lives on
-> the `GAZL2` branch. An expansion places its locals with GAZL 2 `SCOP` / `ENDS`, and Impala 2 has to stay
-> usable on GAZL 1.0 engines, which reject `SCOP` outright. See
-> [`design/ParkedFeatures.md`](../ParkedFeatures.md). Everything below describes the design as built and is
-> kept as the spec to restore from - it is not what this branch's compiler does.
-
->>>>>>> Impala2:design/impala/Inlining.md
 Status: SPEC. Explicit `inline` keyword, no heuristics. Targets FUTURE firmware - see the coverage note at
 the end for what this deliberately does not reach.
 
@@ -317,13 +308,8 @@ Nothing but a declaration line repeating the size operand verbatim:
     $i_i0:	LOCi
     ENDS
 
-<<<<<<< HEAD:docs/Inlining.md
-Both size forms are SYMBOLS the assembler resolves - `*.z.Struct` for a struct local, `*.x.f.name` for
-an array (see `docs/SymbolNamespace.md`). That is what makes the expansion trivial. An extent computed
-=======
 Both size forms are SYMBOLS the assembler resolves - `*.z.Struct` for a struct local, `*.z.f.name` for an array local
 (see `design/gazl/SymbolNamespace.md`). That is what makes the expansion trivial. An extent computed
->>>>>>> Impala2:design/impala/Inlining.md
 by folding (`t[H * N]`, or `count * .z.Ext` for an extern struct) lives in a recycled `<X>` scratch that
 belongs to wherever it was folded, so it can NOT be repeated at an expansion site - naming it once, at
 the callee's declaration, is what lets every site refer to it.

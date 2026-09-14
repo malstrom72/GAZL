@@ -282,7 +282,7 @@ void JitModule::swap(JitModule& other) {
 }
 
 /*
-	A backend met a finalized opcode it does not cover. That is a programmer error - the backend must lower all 91
+	A backend met a finalized opcode it does not cover. That is a programmer error - the backend must lower every
 	finalized opcodes - so assert first (loud during development). Asserts vanish in release, so also throw: a shipped
 	build then degrades to the interpreter instead of running past a gap in the switch. Never returns.
 */

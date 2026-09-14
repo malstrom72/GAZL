@@ -266,7 +266,7 @@ class JitCompiler {
 						, const Value* memory, std::map<UInt, UInt>& loopExtent);
 
 				/*
-					A backend hit a finalized opcode it does not cover - a programmer error (every backend must lower all 91),
+					A backend hit a finalized opcode it does not cover - a programmer error (every backend must lower every one),
 					not a runtime condition. asserts (loud in debug) and, because asserts vanish in release, also throws
 					GAZL::JitException so a release build degrades to the interpreter rather than emitting wrong code. Never
 					returns; the backends' switch defaults call it.

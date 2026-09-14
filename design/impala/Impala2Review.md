@@ -472,9 +472,9 @@ truncated one. Impala's `DIVi` truncates deterministically inside the sandbox, w
 than C, from pointers that were meaningless anyway.
 
 **Consequence for the docs:** `docs/impala/Impala2.md:472-485` ("instruction count = marker count") is already
-false - struct subscripting broke it. (This line used to add "and `inline function` broke it harder";
-`inline function` is **parked on `Impala2`** (`E439`) and lives on `GAZL2`, so it breaks nothing here -
-noted 2026-08-04.) Reword it to what is actually
+false - struct subscripting broke it. (This line used to add "and `inline function` broke it harder"; that was
+scratched while `inline` was parked on `Impala2` with `E439`, and applies again on this branch, where
+the GAZL2 merge made `inline` live.) Reword it to what is actually
 true and worth defending: *cost is predictable from the declared types*. Scaling satisfies that completely,
 since `p` being an `S pointer` is visible at the declaration. Do not carve further exceptions into the
 language to protect a sentence that is not true.

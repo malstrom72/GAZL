@@ -10,12 +10,9 @@ the resolved value, so any transform keyed on it can only happen here. That sing
 
 Related but separate: [`design/FutureOptimizations.md`](../FutureOptimizations.md) covers Impala-side
 candidates (dead-arm elimination after a compile-time branch, and the `expandInline` folding restriction).
-<<<<<<< HEAD:docs/GAZLAssemblerOptimizations.md
-=======
 [`design/gazl/TailCalls.md`](TailCalls.md) covers the one case that needs a NEW instruction rather than a
 peephole - `CALL f; RETU` cannot be collapsed here, because no GAZL form can enter a function without
 pushing a frame.
->>>>>>> Impala2:design/gazl/GAZLAssemblerOptimizations.md
 
 
 ## What the assembler already does
@@ -142,9 +139,6 @@ written GAZL passes through, and there is no layer after it.
 **Verified**: 34 branch opcodes recognised (35 less `SWCH`); a hand-written 3-hop chain collapses to two
 threads plus one `GOTO`->`RETU`; goldens 0/94 with 26 fixtures assembled AND run.
 
-<<<<<<< HEAD:docs/GAZLAssemblerOptimizations.md
-## 5. Not candidates
-=======
 `aliases[first] = second` is recorded before `aliases[second] = done` exists, and nothing re-follows.
 
 ## 5. Return duplication
@@ -240,7 +234,6 @@ already been consumed and every remaining target is an instruction index. That i
 to do item 4 here rather than in the compiler.
 
 ## 6. Not candidates
->>>>>>> Impala2:design/gazl/GAZLAssemblerOptimizations.md
 
 - **Anything requiring the assembler to know Impala's type model.** It sees words.
 - **Reassociation or factoring across instructions.** GAZL is a transliteration target; the instruction

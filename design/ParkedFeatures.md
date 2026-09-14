@@ -143,7 +143,16 @@ Rejected now with: `E426` by-value struct parameter, `E427` by-value struct retu
 values (function or funcptr type), `E429` destructuring assignment. Each diagnostic carries a fix-it hint.
 
 
-## Parked: `inline function`
+## Un-parked: `inline function`
+
+**LIVE on this branch since the GAZL2 merge.** Parking it rested on one premise - that Impala 2 had to
+stay usable on GAZL 1.0 engines - and this branch now carries the GAZL 2 engine, so the `SCOP` / `ENDS`
+an expansion needs are present. The feature came back with all eight fixtures, the `inlineCases`
+diagnostic table and the fuzzer's inline differential. `E439` is NOT emitted here. A `GAZL_2=0` build
+is a 1.0 ENGINE, which is a separate axis: it does not re-park the compiler-side feature.
+
+Everything below is the record of why it was parked, and still governs the `Impala2` line, where the
+premise holds.
 
     branch:   GAZL2                          (the GAZL 2 line, which is where the rework lives)
     removed:  see the commit naming this file
@@ -164,13 +173,14 @@ assumption keeps failing.
 The park branch is not an ancestor: `GAZL2` forked from the last Impala 2 commit that still had the
 feature and carried it forward rather than freezing it. It is a working line, not an archive.
 
-Rejected now with `E439`, whose hint points at GAZL 2 and at dropping the keyword. The feature's own
+Rejected on `Impala2` with `E439`, whose hint points at GAZL 2 and at dropping the keyword. The feature's own
 codes are retired with it and must not be reused - except `E432`, RE-ALLOCATED 2026-08-05 to the
 host-owned-array rank rule. It was `E432` recursive expansion; still burned are `E433` non-literal local
 extent (which the extent-naming rework deleted outright), `E434` exported inline, `E435` address of an inline
 function, `E436` redeclared inline.
 
-Retired with it: fixtures `inlineEquivalence`, `inlineEquivalenceCall`, `inlineFunctions`,
+Retired with it there, restored here by the merge: fixtures `inlineEquivalence`, `inlineEquivalenceCall`,
+`inlineFunctions`,
 `inlineReviewArgs`, `inlineReviewCompose`, `inlineReviewControl`, `inlineReviewLocals`,
 `inlineReviewTypes`; the `inlineCases` diagnostic table in `jspegCompilerTests.js`; and - the real loss
 - the fuzzer's INLINE DIFFERENTIAL, the only oracle there with a reference build to compare against

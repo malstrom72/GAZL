@@ -327,8 +327,10 @@ in disassembly because it names the block.
 
 ## See also
 
-- [`docs/SymbolNamespace.md`](SymbolNamespace.md) - the tag inventory and the one-kind-per-top-level-name rule
-- [`docs/ParkedFeatures.md`](ParkedFeatures.md) - why `inline` needs GAZL 2, and what went with it
-- [`docs/Inlining.md`](Inlining.md) - the expansion machinery this would simplify, and by how little
-- [`docs/MemorySafetyModel.md`](MemorySafetyModel.md) - why an overlaid slot is stale but never unsafe
-- [`docs/TwoStageConstants.md`](TwoStageConstants.md) - why an extent must stay a symbol
+- [`design/gazl/SymbolNamespace.md`](../design/gazl/SymbolNamespace.md) - the tag inventory and the
+  one-kind-per-top-level-name rule
+- [`design/ParkedFeatures.md`](../design/ParkedFeatures.md) - why `inline` needs GAZL 2, and what went with it
+- [`design/impala/Inlining.md`](../design/impala/Inlining.md) - the expansion machinery this would
+  simplify, and by how little
+- [`docs/impala/MemorySafetyModel.md`](impala/MemorySafetyModel.md) - why an overlaid slot is stale but never unsafe
+- [`design/impala/TwoStageConstants.md`](../design/impala/TwoStageConstants.md) - why an extent must stay a symbol

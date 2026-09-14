@@ -1,9 +1,9 @@
 # Assembler-level function inlining: opportunity probe (2026-07-19)
 
-> **PARKED on this branch.** `inline` is rejected here with `E439`; the implementation lives on branch
-> `GAZL2`, which ships after Impala 2.0. Everything below is a measurement record and a design input, not
-> a description of what this compiler does - the same caveat [`Inlining.md`](Inlining.md) carries, which
-> this file was missing. Nothing in Impala 2.0 waits on it.
+> **`inline` is LIVE on this branch** since the GAZL2 merge; it was parked when this banner was written.
+> Everything below is still a measurement record and a design input rather than a description of what the
+> compiler does - see [`Inlining.md`](Inlining.md) for that. On the `Impala2` line `inline` remains parked
+> with `E439`.
 
 > **Status update 2026-07-27.** The placement question at the bottom of this file ("OPEN DECISION") is
 > RESOLVED for the compiler half: Impala-level inlining was implemented behind an explicit `inline`
