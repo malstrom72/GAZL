@@ -515,6 +515,35 @@ static const char* const K_MULTIRETU =		// callee with TWO RETUs (early return):
 	"main: FUNC\n PARA *2\n$x: LOCi\n"
 	" PEEK $x &gIn\n MOVi %1 $x\n CALL &half %0 *2\n MOVi $x %0\n POKE &gOut $x\n RETU\n";	// gOut = n<10 ? n : 100
 
+/*
+	UNREACHABLE FILLER after a mid-function RETU, on the HOT path, entered once per call. Nothing branches into the
+	filler, so no leader starts it and it falls inside the block that DOES run - whose fuel weight must therefore stop
+	at the RETU rather than run on to the next leader. Charge the filler and the JIT spends fuel the interpreter never
+	spends, so it suspends where the interpreter does not; only tiny fuel sees it, and only if the over-charged block
+	is entered enough times, hence the calling loop. K_MULTIRETU does NOT cover this - its label sits immediately after
+	the first RETU, which makes that instruction a leader and leaves no filler.
+*/
+static const char* const K_DEADTAIL =
+	"gIn: GLOB *1\n DATi #0\n" "gOut: GLOB *1\n DATi #0\n"
+	"f: FUNC\n$r: OUTi\n$v: INPi\n"
+	" LSSi $v #0 @.neg\n"														// never taken: every input here is >= 0
+	" MOVi $r $v\n ADDi $r $r #7\n RETU\n"										// the block that runs - 3 instructions
+	/*
+		The filler. It has to be LONG to be visible: runKernel's fuel-rate check tolerates a 0.5-2.0x JIT/interpreter
+		suspend ratio, so a handful of over-charged instructions stays inside the band. 64 against a 3-instruction
+		block does not. That tolerance is also why this is a FIDELITY defect, not a correctness one - the memory
+		image and status never differ, only how often the JIT yields.
+	*/
+	#define K_DEADTAIL_FILL8 " ADDi $r $r #1\n ADDi $r $r #1\n ADDi $r $r #1\n ADDi $r $r #1\n" \
+			" ADDi $r $r #1\n ADDi $r $r #1\n ADDi $r $r #1\n ADDi $r $r #1\n"
+	K_DEADTAIL_FILL8 K_DEADTAIL_FILL8 K_DEADTAIL_FILL8 K_DEADTAIL_FILL8
+	K_DEADTAIL_FILL8 K_DEADTAIL_FILL8 K_DEADTAIL_FILL8 K_DEADTAIL_FILL8
+	".neg: MOVi $r #111\n RETU\n"
+	"main: FUNC\n PARA *2\n$n: LOCi\n$s: LOCi\n$i: LOCi\n"
+	" PEEK $n &gIn\n MOVi $s #0\n MOVi $i #0\n"
+	".l: MOVi %1 $i\n CALL &f %0 *2\n ADDi $s $s %0\n FORi $i $n @.l\n"			// gOut = sum of (i + 7) for i in 0..n
+	" POKE &gOut $s\n RETU\n";
+
 static const char* const K_PTRPARAM =		// by-ref out-param: callee POKEs through an INPp into the CALLER's frame; the
 	"gIn: GLOB *1\n DATi #0\n" "gOut: GLOB *1\n DATi #0\n"							// caller's copy of that local must reload after the CALL
 	"sub: FUNC\n$r: OUTi\n$pp: INPp\n$t: LOCi\n"
@@ -828,6 +857,7 @@ int main() {
 	runKernel("realm ptrvar [MYFRAME PEEK/POKE_VVV]", K_PTRVAR, counts, sizeof(counts) / sizeof(*counts));
 	runKernel("realm outparm[&local across CALL]", K_PTRPARAM, counts, sizeof(counts) / sizeof(*counts));
 	runKernel("multi-retu    [extent to next FUNC]", K_MULTIRETU, counts, sizeof(counts) / sizeof(*counts));
+	runKernel("dead tail     [filler after RETU]", K_DEADTAIL, counts, sizeof(counts) / sizeof(*counts));
 #if GAZL_2
 	runKernel("tail          [GAZL 2 TAIL]", K_TAIL, counts, sizeof(counts) / sizeof(*counts));		// a GAZL_2=0 engine rejects the mnemonic, as a real 1.0 engine does
 #endif
