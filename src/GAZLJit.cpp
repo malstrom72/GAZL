@@ -565,7 +565,6 @@ void RegisterCache::evictOtherClass(Int slot, RegisterClass wantedClass, bool sp
 }
 
 int RegisterCache::read(Int slot, RegisterClass registerClass) {
-	evictOtherClass(slot, registerClass, true);																			// the value may currently live in the other file
 	size_t count;
 	Line* lines = linesOf(registerClass, count);
 	const int* registers = registersOf(registerClass);
@@ -575,6 +574,46 @@ int RegisterCache::read(Int slot, RegisterClass registerClass) {
 			lines[i].lastUse = ++useClock;
 			lines[i].nextUse = nextReadAfter(slot);
 			return registers[i];																						// hit: no load
+		}
+	}
+	/*
+		Miss here, but the value may be sitting in the OTHER file - the usual way for a float, since PEEK is an untyped
+		word move and lands in the general file. Bridge it register to register instead of storing it and loading it
+		back: one move, and no store-to-load latency inside the dependency chain. The value MOVES rather than copying,
+		because a slot lives in one file at a time, and the dirty flag travels with it - if the home was already stale
+		it still is. The two pools are disjoint register sets, so acquire() below cannot take the source.
+	*/
+	{
+		const RegisterClass other = (registerClass == GENERAL_REGISTER) ? FLOAT_REGISTER : GENERAL_REGISTER;
+		size_t otherCount;
+		Line* otherLines = linesOf(other, otherCount);
+		const int* otherRegisters = registersOf(other);
+		for (size_t k = 0; k < otherCount; ++k) {
+			if (otherLines[k].occupied && !otherLines[k].scratchTemp && otherLines[k].slot == slot) {
+				/*
+					Only worth it when the other copy is DIRTY. Then the old path was a store AND a load, and the bridge
+					replaces both. A CLEAN copy costs only the load - spillLine writes nothing - so bridging it would
+					trade one memory read for one cross-file move, which is not obviously better and on a throughput-
+					bound kernel measured slightly worse (spectralnorm): the int/float transfer port is narrower than
+					the load units, and a clean line's home is already in cache.
+				*/
+				if (!otherLines[k].dirty) { otherLines[k].occupied = false; break; }	// drop it (clean: nothing to write) and fill from the home, as before
+				const int sourceRegister = otherRegisters[k];
+				const bool wasDirty = otherLines[k].dirty;
+				otherLines[k].occupied = false;																			// it moves out of that file
+				const int b = acquire(registerClass);
+				Line& bridged = lines[b];
+				bridged.occupied = true;
+				bridged.scratchTemp = false;
+				bridged.slot = slot;
+				bridged.registerClass = registerClass;
+				bridged.dirty = wasDirty;
+				bridged.pinned = true;
+				bridged.lastUse = ++useClock;
+				bridged.nextUse = nextReadAfter(slot);
+				cacheBackend.emitCrossMove(registers[b], registerClass, sourceRegister);
+				return registers[b];
+			}
 		}
 	}
 	const int i = acquire(registerClass);

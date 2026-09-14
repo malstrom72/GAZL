@@ -294,6 +294,9 @@ void Arm64Emitter::scvtf(Reg sd, Reg wn) {
 void Arm64Emitter::fmovSW(Reg sd, Reg wn) {
 	emit(0x1E270000u | (static_cast<uint32_t>(wn) << 5) | sd);															// bit-copy Wn -> Sd (no conversion)
 }
+void Arm64Emitter::fmovWS(Reg wd, Reg sn) {
+	emit(0x1E260000u | (static_cast<uint32_t>(sn) << 5) | wd);											// bit-copy Sn -> Wd (no conversion); FMOV (general), opcode 110 to fmovSW's 111
+}
 
 void Arm64Emitter::ldrS(Reg st, Reg xn, uint32_t byteOffset) {
 	assert((byteOffset & 3u) == 0 && (byteOffset >> 2) < 0x1000);
@@ -505,6 +508,10 @@ class Arm64SlotBackend : public RegisterCacheBackend {
 	public:		virtual void emitSpill(Int slot, int physicalRegister, RegisterClass registerClass) {
 					const Reg r = static_cast<Reg>(physicalRegister);
 					if (registerClass == GENERAL_REGISTER) { storeSlot(e, r, slot); } else { storeSlotF(e, r, slot); }
+				}
+	public:		virtual void emitCrossMove(int dstRegister, RegisterClass dstClass, int srcRegister) {
+					const Reg d = static_cast<Reg>(dstRegister), s = static_cast<Reg>(srcRegister);
+					if (dstClass == FLOAT_REGISTER) { e.fmovSW(d, s); } else { e.fmovWS(d, s); }						// bit copy either way; a Value is one word
 				}
 	private:	Arm64Emitter& e;
 };

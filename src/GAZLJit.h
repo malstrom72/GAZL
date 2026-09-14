@@ -310,6 +310,15 @@ struct RegisterPool {
 // The cache's one arch-specific service: fill/spill a register from/to a slot's frame home (the backends' loadSlot/storeSlot).
 class RegisterCacheBackend {
 	public:		virtual void emitFill(int physicalRegister, Int slot, RegisterClass registerClass) = 0;
+				/*
+					Move a slot's value straight from one register file to the other, replacing a spill-then-fill pair.
+					GAZL's PEEK/POKE are UNTYPED word moves, so a float that arrives from memory lands in the general
+					file and every float op on it then wanted the other file; `a slot lives in one file at a time`
+					(evictOtherClass) made that a store plus a load, with the store-to-load latency landing inside the
+					dependency chain. A Value is a 32-bit word and this is a bit copy, so the classes are interchangeable
+					here: movd on x64, fmov on arm64.
+				*/
+	public:		virtual void emitCrossMove(int dstRegister, RegisterClass dstClass, int srcRegister) = 0;
 	public:		virtual void emitSpill(Int slot, int physicalRegister, RegisterClass registerClass) = 0;
 	public:		virtual ~RegisterCacheBackend() { }
 };

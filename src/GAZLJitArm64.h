@@ -151,6 +151,7 @@ class Arm64Emitter {
 		void fcvtzs(Reg wd, Reg sn);							// `fcvtzs wd, sn` (FTOI, round toward zero, saturating)
 		void scvtf(Reg sd, Reg wn);								// `scvtf sd, wn` (ITOF)
 		void fmovSW(Reg sd, Reg wn);							// `fmov sd, wn` (bit-copy int→float reg; float const load)
+		void fmovWS(Reg wd, Reg sn);							// `fmov wd, sn` (bit-copy float reg -> int; the cross-file bridge's other direction)
 		void ldrS(Reg st, Reg xn, uint32_t byteOffset);			// `ldr st, [xn, #byteOffset]`
 		void strS(Reg st, Reg xn, uint32_t byteOffset);			// `str st, [xn, #byteOffset]`
 		void ldurS(Reg st, Reg xn, int simm9);					// `ldur st, [xn, #simm9]` (signed offset; float frame slot)

@@ -590,6 +590,11 @@ struct RecordingBackend : public RegisterCacheBackend {
 		std::snprintf(buffer, sizeof buffer, "F%d<-[%d] ", physicalRegister, static_cast<int>(slot));
 		log += buffer;
 	}
+	virtual void emitCrossMove(int dstRegister, RegisterClass, int srcRegister) {
+		char buffer[32];
+		std::snprintf(buffer, sizeof buffer, "X%d<-%d ", dstRegister, srcRegister);			// the cross-file bridge, in place of a spill+fill pair
+		log += buffer;
+	}
 	virtual void emitSpill(Int slot, int physicalRegister, RegisterClass) {
 		char buffer[32];
 		std::snprintf(buffer, sizeof buffer, "[%d]<-S%d ", static_cast<int>(slot), physicalRegister);
@@ -700,15 +705,22 @@ static void runRegisterCacheTests() {
 		cacheExpect("float pool", m.log, "F20<-[1] [2]<-S21 ");
 	}
 
-	// H: a slot cached in one file, then read in the other, spills to the home and reloads (a MOVE-then-float-use word).
+	/*
+		H: a slot cached in one file and then read in the other BRIDGES register to register - one cross-file move, no
+		memory - where it used to spill to the home and reload ("[1]<-S10 F20<-[1] "). This is the PEEK-then-float-use
+		word: PEEK is untyped and lands in the general file, every float op on it wants the other one.
+		The dirty flag travels with the value, which is what keeps it honest: the home is still stale after the bridge,
+		so the barrier below is where it gets written, exactly once and no earlier.
+	*/
 	{
 		RegisterPool pool = { gp2, 2, fp2, 2 };
 		RecordingBackend m;
 		RegisterCache c(pool, m);
 		c.enterBlock();
 		c.define(1, GENERAL_REGISTER); c.endInstruction();		// slot1 dirty in the general file
-		c.read(1, FLOAT_REGISTER); c.endInstruction();			// wants it in the float file -> spill general, reload float
-		cacheExpect("cross-file slot", m.log, "[1]<-S10 F20<-[1] ");
+		c.read(1, FLOAT_REGISTER); c.endInstruction();			// wants it in the float file -> one move, home untouched
+		c.barrier();											// still dirty, just in the other file: written here
+		cacheExpect("cross-file slot", m.log, "X20<-10 [1]<-S20 ");
 	}
 
 	// Read/write sets for the capture tests below: rw(slot) = the loop both reads and writes it.
