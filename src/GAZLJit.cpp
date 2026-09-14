@@ -89,7 +89,10 @@ void JitCompiler::jitFuelSafepoints(const Instruction* code, UInt funcStart, UIn
 			// function branch; decline the function (degrade to the interpreter). Malformed input, not a backend bug - throw, don't assert.
 			if (target < funcStart || target > endIndex) { throw JitException("JIT: branch target outside the function"); }
 			leaders.insert(target);																						// branch/GOTO/FORi target begins a block
-			if (j + 1 <= endIndex) { leaders.insert(j + 1); }															// so does the fall-through after it
+			// ...and so does the fall-through after a CONDITIONAL branch. An unconditional GOTO has none: a leader there
+			// is either unreachable, or already inserted as some other branch's target, so inserting it only mints a
+			// bound label, a fuel check and a cold suspend stub for code that cannot be entered by falling into it.
+			if (op != OP_GOTO && j + 1 <= endIndex) { leaders.insert(j + 1); }
 		} else if (op == OP_SWCH) {
 			const UInt size = static_cast<UInt>(code[j].p1.i) + 1;
 			const UInt table = static_cast<UInt>(code[j].p2.p - MEMORY_OFFSET);
@@ -102,8 +105,7 @@ void JitCompiler::jitFuelSafepoints(const Instruction* code, UInt funcStart, UIn
 				// backend bug.
 				if (t < funcStart || t > endIndex) { throw JitException("JIT: SWCH jump-table target outside the function"); }
 				leaders.insert(t);
-			}
-			if (j + 1 <= endIndex) { leaders.insert(j + 1); }
+			}																												// SWCH always jumps (`ip += table[..]`), so no fall-through leader either
 		} else if (op == OP_CALL_CVC || op == OP_CALL_VVC || op == OP_CALL_NVC) {
 			/*
 				A call ends a block, so the instruction right after it is a leader with its own fuel check. For CALL_NVC
@@ -125,11 +127,25 @@ void JitCompiler::jitFuelSafepoints(const Instruction* code, UInt funcStart, UIn
 			for (UInt p = sorted[i] + MAX_BLOCK_WEIGHT; p < stop; p += MAX_BLOCK_WEIGHT) { leaders.insert(p); }
 		}
 	}
-	// weight[leader] = instruction span to the next leader.
+	/*
+		weight[leader] = what ENTERING this block actually executes: the span to the next leader, but stopping at the
+		block's terminator. Anything after an unconditional terminator and before the next leader cannot be reached by
+		falling into it, so charging it would make the JIT spend fuel the interpreter never spends. That filler used to
+		be impossible for a GOTO/SWCH (a leader was forced right after one) but was always possible after a mid-function
+		RETU or TAIL that nothing branches past.
+	*/
 	std::vector<UInt> all(leaders.begin(), leaders.end());
 	for (size_t i = 0; i < all.size(); ++i) {
 		const UInt stop = (i + 1 < all.size()) ? all[i + 1] : endIndex + 1;
-		weight[all[i]] = stop - all[i];
+		UInt end = stop;
+		for (UInt p = all[i]; p < stop; ++p) {
+			const Int op = code[p].opcode;
+			if (op == OP_GOTO || op == OP_SWCH || op == OP_RETU || op == OP_TAIL_CC || op == OP_TAIL_VC) {
+				end = p + 1;
+				break;
+			}
+		}
+		weight[all[i]] = end - all[i];
 	}
 }
 
