@@ -309,6 +309,18 @@ reservation is no longer needed; it is kept deliberately for now rather than chu
 Once outputs can be 0 to n, insisting on exactly one slot for a function with no outputs makes no sense.
 This touches every call site, so it wants to land with the other ABI work, not before it.
 
+**One input to revisiting this entry - NOT a decision to move it.** The bundling argument above is "do not
+churn the ABI twice". There is a shape that would not churn the HOST ABI at all: let a prototype describe
+its own window, and let a name-only extern keep the 1.0 default. Old hosts would then need no change
+(`GAZLCmd` keeps reading `params[1]` because its prototype says so), every shipped Permut8 firmware keeps
+compiling untouched because it uses name-only externs, and nothing has shipped with Impala 2. So the
+"twice" argument would not apply to this item - whether it still belongs in the 3.0 pass for other reasons
+is open, and this entry stands until someone decides otherwise. It also bears on a gap this entry does NOT
+close: outputs are still FIRST here, so an output in a non-leading slot stays unexpressible, even though
+GAZL itself imposes no order. See [`design/impala/ExternPrototypes.md`](impala/ExternPrototypes.md),
+"Arbitrary call windows", for the analysis, five candidate spellings and the measured blast radius.
+By-value structs, multi-return and destructuring are unaffected and stay parked.
+
 ### Symbolic call windows
 
 See `design/gazl/GAZLSymbolicWindows.md`. GAZL already supports everything needed (symbolically-indexed transients
