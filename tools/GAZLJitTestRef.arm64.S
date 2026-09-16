@@ -100,6 +100,8 @@ ENTRY(ref_fdiv)		fdiv s0, s1, s2
 ENTRY(ref_fcmp)		fcmp s1, s2
 		GLOBL(ref_fmov_sw)
 ENTRY(ref_fmov_sw)	fmov s0, w1
+		GLOBL(ref_fmov_ws)
+ENTRY(ref_fmov_ws)	fmov w0, s1
 		GLOBL(ref_fabs)
 ENTRY(ref_fabs)		fabs s0, s1
 		GLOBL(ref_frintm)
