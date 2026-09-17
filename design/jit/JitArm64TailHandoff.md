@@ -282,8 +282,19 @@ soak. In a verification log that is the one error that matters, so: nothing belo
 - **`73fc9bd` and `51f0162`** - nothing run, and nothing needed: `b1cea19` -> `73fc9bd` adds nine
   comment-only lines to `GAZLJit.h`, and `51f0162` touches no `src/` file at all. `b1cea19`'s results
   transfer to the code at those commits; the GATE LIST does not.
+- **`149f80d`** - the full set, on a clean checkout, nothing skipped. `build.sh` exit 0 (lower test ALL
+  PASS with both cross-file rows, 28/28 firmwares, 2000-program smoke clean, NuXJS Impala smoke passed);
+  `test-jit.sh` exit 0; lower test debug AND release ALL PASS; emitter golden ALL PASS with
+  `fmov(sw)` emit=1E270236 ref=1E270236 and `fmov(ws)` emit=1E2602D1 ref=1E2602D1. Soak:
+  `GAZLFuzz --gen 300000 300001 deep` -> `no divergence`, 5m18s.
 
-**Known gap: no arm64 soak covers the bridge policy.** `b1cea19` is byte-identical to `8971402` on the four
-benchmark kernels, which is strong evidence for that path but is not a soak - it says nothing about the
-shapes the fuzzer reaches and those four do not. The x64 side has a 50000-program deep soak at the policy
-(seed 7, clean); arm64 does not.
+**The bridge policy is soaked on arm64, and the fuzzer really does reach it.** That needed showing rather
+than assuming: `b1cea19` being byte-identical to `8971402` on four benchmark kernels says nothing about
+shapes those kernels do not contain, and the change is in `RegisterCache::read`, which far more of the
+fuzzer's surface reaches than four hand-written programs do. So the soak above used **seed 300001**,
+covering programs 300001..600000 - disjoint from the `8971402` arm64 soak (1..300000), from the x64 policy
+soak (7..50006) and from the x64 `4a4473f` bands (21M-24M), so they are new programs rather than a rerun.
+An instrumented scratch copy then confirmed `bridgeWritesHome()` really is false on this backend and
+counted the emissions: seed 300001's first 3000 programs emit **7354 bridges, 6773 general->float against
+581 float->general**. Both directions of the DEFERRED path are exercised across fuzzer shapes. (Per
+emission, not per program; how many distinct programs bridge was not measured.)
