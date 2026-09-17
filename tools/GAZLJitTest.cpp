@@ -150,8 +150,8 @@ int main() {
 	check("fcmp",      one([](Arm64Emitter& e) { e.fcmpS(S1, S2); }),            ref_fcmp);
 	check("fabs",      one([](Arm64Emitter& e) { e.fabsS(S0, S1); }),            ref_fabs);
 	check("frintm",    one([](Arm64Emitter& e) { e.frintmS(S0, S1); }),          ref_frintm);
-	check("fmov(sw)",  one([](Arm64Emitter& e) { e.fmovSW(S0, W1); }),           ref_fmov_sw);
-	check("fmov(ws)",  one([](Arm64Emitter& e) { e.fmovWS(W0, S1); }),           ref_fmov_ws);
+	check("fmov(sw)",  one([](Arm64Emitter& e) { e.fmovSW(S22, W17); }),         ref_fmov_sw);
+	check("fmov(ws)",  one([](Arm64Emitter& e) { e.fmovWS(W17, S22); }),         ref_fmov_ws);
 	check("ldur(s)",   one([](Arm64Emitter& e) { e.ldurS(S0, X2, -4); }),        ref_ldur_s);
 	check("stur(s)",   one([](Arm64Emitter& e) { e.sturS(S0, X2, -4); }),        ref_stur_s);
 	check("ldr(sxs)",  one([](Arm64Emitter& e) { e.ldrSxs(S0, X1, W2); }),       ref_ldr_sxs);

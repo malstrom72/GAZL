@@ -569,6 +569,40 @@ static const char* const K_DEADTAIL =
 	".l: MOVi %1 $i\n CALL &f %0 *2\n ADDi $s $s %0\n FORi $i $n @.l\n"			// gOut = sum of (i + 7) for i in 0..n
 	" POKE &gOut $s\n RETU\n";
 
+/*
+	A slot that is live in ONE register file and then read as the other class. RegisterCache::read bridges it with
+	emitCrossMove (x64 movd, arm64 fmovSW / fmovWS) instead of spilling and reloading through the frame slot - see
+	89714023. Nothing else here reaches that path: isolation test H below covers it against the MOCK backend, which
+	LOGS a move without encoding one, so before this kernel the lower test would have passed with a wrong fmov.
+
+	`MOVE` is the lever. It is ANY_VAR_W / ANY_VAR_R in the opcode table, so it is the one instruction that can name a
+	float local while lowering through the GENERAL file (`cache.read` / `define` with GENERAL_REGISTER), which is what
+	leaves a slot in the "wrong" file for the next instruction to find. A typed op cannot: `ADDf` will not name a LOCi.
+
+	Both directions, because they are different instructions on arm64 and the fuzzer hits them very unevenly (seed 1's
+	first 3000 programs: 6959 general->float against 521 float->general):
+
+	  MOVE $f $bits   then ADDf   -> $f is GENERAL-dirty, read as FLOAT    -> general->float (fmovSW)
+	  MULf $g ...     then MOVE   -> $g is FLOAT-dirty,   read as GENERAL  -> float->general (fmovWS)
+
+	A bridge only happens while the slot is DIRTY - a clean copy is dropped and refilled from its home - so nothing
+	may force a spill between the define and the cross-class read. Keep these pairs adjacent.
+
+	#1080033280 is 0x40600000, the bits of 3.5f, so the float side works on normal values for every input: 7.0 * n
+	over counts[] is 0.0 to 7000.0. No denormal, no NaN, nothing where a flush-to-zero difference between the JIT and
+	the interpreter could masquerade as a bridge bug.
+*/
+static const char* const K_CROSSFILE =
+	"gIn: GLOB *1\n DATi #0\n" "gOut: GLOB *1\n DATi #0\n"
+	"main: FUNC\n PARA *1\n$n: LOCi\n$bits: LOCi\n$f: LOCf\n$g: LOCf\n$r: LOCi\n"
+	" PEEK $n &gIn\n"
+	" MOVi $bits #1080033280\n"						// 0x40600000 - the bits of 3.5f, in the GENERAL file
+	" MOVE $f $bits\n"								// untyped copy: a FLOAT local, defined GENERAL-dirty
+	" ADDf $g $f $f\n"								// reads $f as FLOAT -> BRIDGE general->float; g = 7.0
+	" iTOf $f $n #1.0\n MULf $g $g $f\n"				// g = 7.0 * n, leaving $g FLOAT-dirty
+	" MOVE $r $g\n"									// reads $g as GENERAL -> BRIDGE float->general
+	" POKE &gOut $r\n RETU\n";						// gOut = the raw bits of 7.0 * n
+
 static const char* const K_PTRPARAM =		// by-ref out-param: callee POKEs through an INPp into the CALLER's frame; the
 	"gIn: GLOB *1\n DATi #0\n" "gOut: GLOB *1\n DATi #0\n"							// caller's copy of that local must reload after the CALL
 	"sub: FUNC\n$r: OUTi\n$pp: INPp\n$t: LOCi\n"
@@ -895,6 +929,7 @@ int main() {
 	runKernel("realm outparm[&local across CALL]", K_PTRPARAM, counts, sizeof(counts) / sizeof(*counts));
 	runKernel("multi-retu    [extent to next FUNC]", K_MULTIRETU, counts, sizeof(counts) / sizeof(*counts));
 	runKernel("dead tail     [filler after RETU]", K_DEADTAIL, counts, sizeof(counts) / sizeof(*counts));
+	runKernel("cross-file    [slot bridged between files]", K_CROSSFILE, counts, sizeof(counts) / sizeof(*counts));
 #if GAZL_2
 	runKernel("tail          [GAZL 2 TAIL]", K_TAIL, counts, sizeof(counts) / sizeof(*counts));		// a GAZL_2=0 engine rejects the mnemonic, as a real 1.0 engine does
 	runKernel("tail big      [window 5000, frame >1023]", K_TAILBIG, counts, sizeof(counts) / sizeof(*counts));
