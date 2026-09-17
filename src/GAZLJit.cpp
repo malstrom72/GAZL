@@ -591,15 +591,23 @@ int RegisterCache::read(Int slot, RegisterClass registerClass) {
 		for (size_t k = 0; k < otherCount; ++k) {
 			if (otherLines[k].occupied && !otherLines[k].scratchTemp && otherLines[k].slot == slot) {
 				/*
-					Only worth it when the other copy is DIRTY. Then the old path was a store AND a load, and the bridge
-					replaces both. A CLEAN copy costs only the load - spillLine writes nothing - so bridging it would
-					trade one memory read for one cross-file move, which is not obviously better and on a throughput-
-					bound kernel measured slightly worse (spectralnorm): the int/float transfer port is narrower than
-					the load units, and a clean line's home is already in cache.
+					Only worth it when the other copy is DIRTY. A CLEAN copy costs only the load - spillLine writes
+					nothing - so bridging it would trade one memory read for one cross-file move, which is not
+					obviously better and on a throughput-bound kernel measured slightly worse (spectralnorm): the
+					int/float transfer port is narrower than the load units, and a clean line's home is already in
+					cache.
+
+					For a dirty copy the bridge replaces the RELOAD, and only the reload: the home is written here
+					from the source register, so the line arrives clean and nothing has to spill it later. Deferring
+					that store instead - carrying the dirty flag across - was measurably worse where the line is
+					spilled anyway, because the store does not disappear, it moves to the block's back edge AND
+					changes domain: an integer `mov [home], r10d` becomes an FP `movss [home], xmm3`, competing with
+					the float work in the loop that made the line hot. See isolation test H in
+					tools/GAZLJitLowerTest.cpp for the numbers.
 				*/
 				if (!otherLines[k].dirty) { otherLines[k].occupied = false; break; }	// drop it (clean: nothing to write) and fill from the home, as before
 				const int sourceRegister = otherRegisters[k];
-				const bool wasDirty = otherLines[k].dirty;
+				cacheBackend.emitSpill(slot, sourceRegister, other);									// EXPERIMENT: launder the dirty bit from the SOURCE file
 				otherLines[k].occupied = false;																			// it moves out of that file
 				const int b = acquire(registerClass);
 				Line& bridged = lines[b];
@@ -607,7 +615,7 @@ int RegisterCache::read(Int slot, RegisterClass registerClass) {
 				bridged.scratchTemp = false;
 				bridged.slot = slot;
 				bridged.registerClass = registerClass;
-				bridged.dirty = wasDirty;
+				bridged.dirty = false;														// home is in sync now, so nothing spills it at the block end
 				bridged.pinned = true;
 				bridged.lastUse = ++useClock;
 				bridged.nextUse = nextReadAfter(slot);

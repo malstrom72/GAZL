@@ -311,7 +311,8 @@ struct RegisterPool {
 class RegisterCacheBackend {
 	public:		virtual void emitFill(int physicalRegister, Int slot, RegisterClass registerClass) = 0;
 				/*
-					Move a slot's value straight from one register file to the other, replacing a spill-then-fill pair.
+					Move a slot's value straight from one register file to the other, replacing the FILL of a spill-then-fill
+					pair. The spill stays: the home is written from the source register first, so the bridged line is clean.
 					GAZL's PEEK/POKE are UNTYPED word moves, so a float that arrives from memory lands in the general
 					file and every float op on it then wanted the other file; `a slot lives in one file at a time`
 					(evictOtherClass) made that a store plus a load, with the store-to-load latency landing inside the
