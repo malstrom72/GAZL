@@ -416,44 +416,19 @@ static void emitTailWindow(X64Emitter& emitter, UInt window, UInt frame) {
 	if (frame != 0) { emitter.addImmQ(DSP, static_cast<uint32_t>(down)); }												// dsp = dp
 }
 
-// Opcodes whose operands route through the cache; everything else barriers the cache and lowers as v1 (§5.7).
-static bool cacheLowered(Int op) {
-	switch (op) {
-		case OP_MOVE_VV: case OP_MOVE_VC:
-		case OP_ADDI_VVV: case OP_ADDI_VVC:
-		case OP_SUBI_VVV: case OP_SUBI_VVC: case OP_SUBI_VCV:
-		case OP_MULI_VVV: case OP_MULI_VVC:
-		case OP_ANDI_VVV: case OP_ANDI_VVC:
-		case OP_IORI_VVV: case OP_IORI_VVC:
-		case OP_XORI_VVV: case OP_XORI_VVC:
-		case OP_ABSI: case OP_ABSF: case OP_FLOF:
-		case OP_ADDF_VVV: case OP_ADDF_VVC:
-		case OP_SUBF_VVV: case OP_SUBF_VVC: case OP_SUBF_VCV:
-		case OP_MULF_VVV: case OP_MULF_VVC:
-		case OP_DIVF_VVV: case OP_DIVF_VVC: case OP_DIVF_VCV:
-		case OP_FTOI_VVC: case OP_ITOF_VVC:
-		case OP_SHLI_VVV: case OP_SHLI_VVC: case OP_SHLI_VCV:
-		case OP_SHRI_VVV: case OP_SHRI_VVC: case OP_SHRI_VCV:
-		case OP_SHRU_VVV: case OP_SHRU_VVC: case OP_SHRU_VCV:
-		case OP_PEEK_VC: case OP_POKE_CV: case OP_POKE_CC: case OP_ADRL:
-		case OP_PEEK_VCV: case OP_PEEK_VVV:
-		case OP_POKE_CVV: case OP_POKE_CVC: case OP_POKE_VVV: case OP_POKE_VVC:
-		case OP_GETL_VVV: case OP_SETL_VVV: case OP_SETL_VVC:
-		case OP_DIVI_VVV: case OP_DIVI_VVC: case OP_DIVI_VCV:
-		case OP_MODI_VVV: case OP_MODI_VVC: case OP_MODI_VCV:
-		case OP_FORi_VVB: case OP_FORi_VCB:
-		case OP_LSSI_VVB: case OP_LSSI_VCB: case OP_LSSI_CVB:
-		case OP_EQUI_VVB: case OP_EQUI_VCB:
-		case OP_NLSI_VVB: case OP_NLSI_VCB: case OP_NLSI_CVB:
-		case OP_NEQI_VVB: case OP_NEQI_VCB:
-		case OP_LSSF_VVB: case OP_LSSF_VCB: case OP_LSSF_CVB:
-		case OP_EQUF_VVB: case OP_EQUF_VCB:
-		case OP_NLSF_VVB: case OP_NLSF_VCB: case OP_NLSF_CVB:
-		case OP_NEQF_VVB: case OP_NEQF_VCB:
-		case OP_GOTO:																									// flushes inside its case: reconcile (backward, qualified) or barrier
-			return true;
-		default:
-			return false;
+// `d = a <op> b` on the two-operand ISA: seed `d` with `a`, then `op d, b`; when `d` aliases `b`, go through a scratch.
+static void emitTwoOperand(X64Emitter& emitter, RegisterCache& cache, BinaryOp copy, BinaryOp op
+		, RegisterClass registerClass, int d, int a, int b) {
+	if (d != b) {
+		if (d != a) {
+			(emitter.*copy)(static_cast<Reg>(d), static_cast<Reg>(a));
+		}
+		(emitter.*op)(static_cast<Reg>(d), static_cast<Reg>(b));
+	} else {
+		const int t = cache.scratch(registerClass);
+		(emitter.*copy)(static_cast<Reg>(t), static_cast<Reg>(a));
+		(emitter.*op)(static_cast<Reg>(t), static_cast<Reg>(b));
+		(emitter.*copy)(static_cast<Reg>(d), static_cast<Reg>(t));
 	}
 }
 
@@ -466,15 +441,7 @@ static void emitBinary(X64Emitter& emitter, RegisterCache& cache, BinaryOp op, c
 	if (source2Const) { b = cache.scratch(GENERAL_REGISTER); emitter.movImm(static_cast<Reg>(b), static_cast<uint32_t>(instruction.p2.i)); }
 	else { b = cache.read(instruction.p2.i, GENERAL_REGISTER); }
 	const int d = cache.define(instruction.p0.i, GENERAL_REGISTER);
-	if (d != b) {																										// normal: dst holds s1, then op dst, s2
-		if (d != a) { emitter.mov(static_cast<Reg>(d), static_cast<Reg>(a)); }
-		(emitter.*op)(static_cast<Reg>(d), static_cast<Reg>(b));
-	} else {																											// dst aliases s2 (p0 == p2): route through a temp so `op` does not read a clobbered s2
-		const int t = cache.scratch(GENERAL_REGISTER);
-		emitter.mov(static_cast<Reg>(t), static_cast<Reg>(a));
-		(emitter.*op)(static_cast<Reg>(t), static_cast<Reg>(b));
-		emitter.mov(static_cast<Reg>(d), static_cast<Reg>(t));
-	}
+	emitTwoOperand(emitter, cache, &X64Emitter::mov, op, GENERAL_REGISTER, d, a, b);
 	cache.endInstruction();
 }
 
@@ -584,15 +551,7 @@ static void emitDivFChecked(X64Emitter& emitter, RegisterCache& cache, const Ins
 	emitter.jcc(CC_E, trap.label);																						// trap arm is cold, after the mainline
 	coldTraps.push_back(trap);
 	const int d = cache.define(instruction.p0.i, FLOAT_REGISTER);
-	if (d != b) {
-		if (d != a) { emitter.movssReg(static_cast<Reg>(d), static_cast<Reg>(a)); }
-		emitter.divss(static_cast<Reg>(d), static_cast<Reg>(b));
-	} else {
-		const int t = cache.scratch(FLOAT_REGISTER);
-		emitter.movssReg(static_cast<Reg>(t), static_cast<Reg>(a));
-		emitter.divss(static_cast<Reg>(t), static_cast<Reg>(b));
-		emitter.movssReg(static_cast<Reg>(d), static_cast<Reg>(t));
-	}
+	emitTwoOperand(emitter, cache, &X64Emitter::movssReg, &X64Emitter::divss, FLOAT_REGISTER, d, a, b);
 	EMIT_CANON_NAN(emitter, d);
 	cache.endInstruction();
 }
@@ -602,15 +561,7 @@ static void emitBinaryFloat(X64Emitter& emitter, RegisterCache& cache, BinaryOp 
 	const int a = loadFloatOperandCached(emitter, cache, instruction.p1, source1Const);
 	const int b = loadFloatOperandCached(emitter, cache, instruction.p2, source2Const);
 	const int d = cache.define(instruction.p0.i, FLOAT_REGISTER);
-	if (d != b) {
-		if (d != a) { emitter.movssReg(static_cast<Reg>(d), static_cast<Reg>(a)); }
-		(emitter.*fop)(static_cast<Reg>(d), static_cast<Reg>(b));
-	} else {
-		const int t = cache.scratch(FLOAT_REGISTER);
-		emitter.movssReg(static_cast<Reg>(t), static_cast<Reg>(a));
-		(emitter.*fop)(static_cast<Reg>(t), static_cast<Reg>(b));
-		emitter.movssReg(static_cast<Reg>(d), static_cast<Reg>(t));
-	}
+	emitTwoOperand(emitter, cache, &X64Emitter::movssReg, fop, FLOAT_REGISTER, d, a, b);
 	EMIT_CANON_NAN(emitter, d);
 	cache.endInstruction();
 }
@@ -708,10 +659,8 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 			if (freshHeader) {
 				std::map<UInt, UInt>::const_iterator w0 = loopWeight.upper_bound(j);
 				const bool multiBlock = (w0 != loopWeight.end() && w0->first <= loopIt->second);
-				std::set<Int> readSlots, writtenSlots;
-				buildLoopSlotSets(code, j, loopIt->second, readSlots, writtenSlots);
-				std::set<Int> generalSlots, floatSlots;
-				buildLoopClassSets(code, j, loopIt->second, generalSlots, floatSlots);
+				std::set<Int> readSlots, writtenSlots, generalSlots, floatSlots;
+				buildLoopSets(code, j, loopIt->second, readSlots, writtenSlots, generalSlots, floatSlots);
 				/*
 					Wanted bindings (v2.2 varying maps): read in the loop AND live-in at the header (a written-first slot
 					like mandelbrot's zx2 burns no binding) AND single-class (a dual-class slot - e.g. a float bounced
@@ -750,7 +699,7 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 		if (weightIt != loopWeight.end()) { emitter.subImm(FUEL, weightIt->second); emitter.jcc(CC_S, suspendL[j]); }
 		const Instruction& in = code[j];
 		const Int op = in.opcode;
-		if (!cacheLowered(op)) { cache.barrier(); }																		// uncached opcode: lower it as v1 over an empty cache
+		if (!isCacheLowered(op)) { cache.barrier(); }																		// uncached opcode: lower it as v1 over an empty cache
 		switch (op) {
 			case OP_FUNC: break;
 			case OP_RETU: {																								// pop the ipStack; tail-branch back to the caller, or OK at the native/top marker
@@ -1158,8 +1107,7 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 			}
 
 			case OP_SWCH: {																								// index = min(unsigned(V0), C1); jump into a table of `jmp case`
-				const UInt size = static_cast<UInt>(in.p1.i) + 1;
-				const UInt table = static_cast<UInt>(in.p2.p - MEMORY_OFFSET);
+				const std::vector<UInt> targets = switchTargets(code, j, memory);
 				emitter.load(SCRATCH_A, DSP, in.p0.i * 4);
 				emitter.cmpImm(SCRATCH_A, static_cast<uint32_t>(in.p1.i));
 				Label keep = emitter.newLabel();
@@ -1170,10 +1118,7 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 				Label tableBase = emitter.newLabel();
 				emitter.leaRip(RAX, tableBase); emitter.addQ(RAX, SCRATCH_B); emitter.jmpReg(RAX);
 				emitter.bind(tableBase);
-				for (UInt k = 0; k < size; ++k) {
-					const UInt target = static_cast<UInt>(static_cast<Int>(j) + memory[table + k].i);
-					emitter.jmp(labels[target]);
-				}
+				for (size_t k = 0; k < targets.size(); ++k) { emitter.jmp(labels[targets[k]]); }
 				break;
 			}
 

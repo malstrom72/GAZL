@@ -2,8 +2,9 @@
 
 Findings from a `/simplify` review pass over the JIT compiler (the `jit-compiler`-vs-`main` diff: `src/GAZLJit*`,
 the JIT parts of `src/GAZL.*`, `tools/GAZLCmd.cpp`). Tier A (dead run-state fields, redundant `operandRoles` decode,
-unconditional `buildLiveIn`, duplicated `keepMax` formula, arm64 double map lookups) is DONE. What follows is what was
-deliberately deferred, with the evidence, so it can be picked up without re-deriving it.
+unconditional `buildLiveIn`, duplicated `keepMax` formula, arm64 double map lookups) is DONE, and so is tier B (its
+section records the outcome). Tier C was deliberately deferred, with the evidence, so it can be picked up without
+re-deriving it.
 
 Line numbers are from the state right after Tier A; treat them as pointers, not gospel.
 
@@ -14,32 +15,34 @@ pass-1 analysis, pass-2 leader/residency bookkeeping, and cold-section phases - 
 That skeleton was COPIED rather than hoisted, so the JIT's subtlest logic exists as two hand-kept-identical copies.
 Tier C is the real fix; tier B are the pieces that can move without restructuring.
 
-## Tier B - contained helpers, low-to-medium risk
+## Tier B - DONE (2026-09-17)
 
-- **Shared `cacheLowered`.** `GAZLJitArm64.cpp:515-553` and `GAZLJitX64.cpp:386-424` list the same opcode set (which
-  opcodes route through the cache is a property of the IR, not the target); the copies differ only in row order and
-  `OP_ABSI` placement. Hoist to one `JitCompiler::isCacheLowered(op)` in `GAZLJit.cpp`, beside `jitResidencySafe`
-  (`GAZLJit.cpp:145`). Verify the two lists are coverage-identical BEFORE merging - a silent drift is possible today.
-- **SWCH jump-table decode helper.** The idiom `size = p1.i + 1; table = p2.p - MEMORY_OFFSET; for k: target = j +
-  memory[table + k].i` recurs at `GAZLJit.cpp:94-97`, `:196-197`, `:215-218`, `:383-385`, plus both backends' `OP_SWCH`
-  - six copies of one nontrivial address computation. Collapse to a `forEachSwitchTarget(code, j, memory, fn)` (or an
-  index-yielding helper).
-- **x64 two-operand alias helper.** `emitBinary` (`GAZLJitX64.cpp:435-443`), `emitDivFChecked` (`:553-561`) and
-  `emitBinaryFloat` (`:571-579`) each spell out the same `if (d != b) { if (d != a) copy(d, a); op(d, b); } else
-  { temp; copy(t, a); op(t, b); copy(d, t); }` dance, differing only in the move/binary op. One
-  `emitTwoOperand(copyOp, binOp, d, a, b, scratchClass)` states the aliasing argument once.
-- **Merge `buildLoopSlotSets` + `buildLoopClassSets`.** Always called back-to-back over the identical
-  `[header, extent]` range (`GAZLJitArm64.cpp:773-775`, `GAZLJitX64.cpp:675-678`), each re-decoding `operandRoles` per
-  instruction. One pass filling all four sets halves the walk.
-- **`RegisterCache` should use its own accessors.** `captureDirtyLines` (`GAZLJit.cpp:651-664`) rebuilds
-  `count`/`lines`/`registers` from `(c == 0) ? GENERAL : FLOAT` by hand instead of calling `linesOf`/`registersOf`; the
-  same manual selection recurs in `capture`, `reconcileTo`, `spillDirtyResident`, `assertNoDirty`. Go through the
-  accessors so the "line `i` holds `registersOf(class)[i]`" invariant is stated once.
-- **FORi's read-modify-write counter belongs in the operand table.** `GAZLJit.cpp:288, 401, 434, 469` each call
-  `operandRoles()` and then hand-override p0 for `OP_FORi_VVB/VCB`. Four consumers re-encode one fact, so the role
-  abstraction lies for FORi and every future consumer must remember the fixup. Express it once - a
-  `OPERAND_SLOT_READ_WRITE` role, or have `operandRoles()` mark it. CAUTION: `operandRoles()` lives in `GAZL.cpp` and
-  has non-JIT callers; audit them all before changing its contract.
+Every item landed as a pure refactor, verified against `f47c379`: the JIT's emitted code (`GAZLCmd --emit-jit`,
+code plus layout sidecar) is byte-identical on BOTH backends over 135 programs - the benchmark suite, the Impala
+goldens, and 40 Permut8 firmwares through the host wrapper - arm64 native and x64 under Rosetta, after each item.
+Gates on the result: `build.sh`, the lower test debug and release on both backends, both emitter byte-golden tests,
+exec/engine/slice tests, `checkPermut8Firmwares.sh` plain and `--jit`, and a 300k-deep arm64 soak (seed 600001, no
+divergence). 61 lines smaller across six files.
+
+- **Shared `cacheLowered`.** `isCacheLowered(op)` in `GAZLJit.cpp`. The two lists held the same 81 opcodes.
+- **SWCH jump-table decode.** `switchTargets(code, j, memory)` returns the absolute targets in table order; the six
+  hand-written decodes are gone.
+- **x64 two-operand alias helper.** `emitTwoOperand(emitter, cache, copy, op, registerClass, d, a, b)` states the
+  aliasing argument once for `emitBinary`, `emitDivFChecked` and `emitBinaryFloat`.
+- **Loop set builders merged.** `buildLoopSets` fills the read/written and general/float sets in one walk.
+- **`RegisterCache` accessors.** Closed without a change. Every site already goes through `linesOf`/`registersOf`
+  except `captureDirtyLines`, which is `const`, and a `const` overload of `linesOf` would add more lines than it
+  removes.
+- **FORi's read-modify-write counter.** `operandRoles` marks it `OPERAND_SLOT_READ_WRITE`; roles are bit flags
+  tested with `&`, and the four JIT overrides are gone. No non-JIT caller exists. The one consumer this was not
+  obviously neutral for is `buildPointerRealms`, whose pass 1 used to see the counter as write-only: a live-in
+  counter now gets an initial NONFRAME stamp. Pass 2 still forces the counter to UNKNOWN and only ever joins upward,
+  so it reaches the same fixed point - which the byte comparison confirms.
+
+Found while merging the loop sets and NOT fixed, because the fix can change codegen: the class sets file `ABSF`
+operands under GENERAL because x64 lowers `ABSF` bitwise in a GP register, but arm64 lowers it with `fabs` in the
+FLOAT file. On arm64 the sets therefore misclassify `ABSF` operands, which feeds the multi-block residency pressure
+gate and the single-class filter on wanted bindings.
 
 ## Tier C - architectural, needs a deliberate decision
 

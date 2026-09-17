@@ -46,8 +46,7 @@ namespace GAZL {
 
 /*
 	Is instruction `instructionIndex` a branch, and if so, to which instruction? GOTO targets via p0; the conditional forms
-	(FORi + the integer/float compare-branches) target via p2. Used only by jitFuelSafepoints below (file-static); SWCH's
-	jump-table targets are read separately from const memory by each backend.
+	(FORi + the integer/float compare-branches) target via p2. SWCH's jump-table targets come from switchTargets.
 */
 static bool jitBranchTarget(const Instruction* code, UInt instructionIndex, UInt& target) {
 	const Int op = code[instructionIndex].opcode;
@@ -66,6 +65,16 @@ static bool jitBranchTarget(const Instruction* code, UInt instructionIndex, UInt
 			target = static_cast<UInt>(j + code[instructionIndex].p2.i); return true;
 		default: return false;
 	}
+}
+
+std::vector<UInt> switchTargets(const Instruction* code, UInt instructionIndex, const Value* memory) {
+	assert(code[instructionIndex].opcode == OP_SWCH && "only a SWCH has a jump table");
+	const UInt table = static_cast<UInt>(code[instructionIndex].p2.p - MEMORY_OFFSET);
+	std::vector<UInt> targets(static_cast<UInt>(code[instructionIndex].p1.i) + 1);
+	for (UInt k = 0; k < targets.size(); ++k) {
+		targets[k] = static_cast<UInt>(static_cast<Int>(instructionIndex) + memory[table + k].i);
+	}
+	return targets;
 }
 
 // Fuel-check granularity: the host must grant at least this per resume, and no basic block is charged more (§5.5).
@@ -94,10 +103,9 @@ void JitCompiler::jitFuelSafepoints(const Instruction* code, UInt funcStart, UIn
 			// bound label, a fuel check and a cold suspend stub for code that cannot be entered by falling into it.
 			if (op != OP_GOTO && j + 1 <= endIndex) { leaders.insert(j + 1); }
 		} else if (op == OP_SWCH) {
-			const UInt size = static_cast<UInt>(code[j].p1.i) + 1;
-			const UInt table = static_cast<UInt>(code[j].p2.p - MEMORY_OFFSET);
-			for (UInt k = 0; k < size; ++k) {
-				const UInt t = static_cast<UInt>(static_cast<Int>(j) + memory[table + k].i);
+			const std::vector<UInt> targets = switchTargets(code, j, memory);
+			for (size_t k = 0; k < targets.size(); ++k) {
+				const UInt t = targets[k];
 				// A well-formed SWCH targets only in-function labels. A corrupt/garbage jump-table entry can point outside
 				// [funcStart, endIndex]; that target is never a bound mainline leader (the emit pass only binds in-range
 				// leaders), so it would finalize to a branch-to-unbound-label. The JIT cannot lower an out-of-function
@@ -191,6 +199,47 @@ static bool jitResidencySafe(Int op) {
 	}
 }
 
+// Opcodes whose operands route through the cache; everything else barriers the cache and lowers as v1 (§5.7).
+bool isCacheLowered(Int op) {
+	switch (op) {
+		case OP_MOVE_VV: case OP_MOVE_VC:
+		case OP_ADDI_VVV: case OP_ADDI_VVC:
+		case OP_SUBI_VVV: case OP_SUBI_VVC: case OP_SUBI_VCV:
+		case OP_MULI_VVV: case OP_MULI_VVC:
+		case OP_ANDI_VVV: case OP_ANDI_VVC:
+		case OP_IORI_VVV: case OP_IORI_VVC:
+		case OP_XORI_VVV: case OP_XORI_VVC:
+		case OP_ABSI: case OP_ABSF: case OP_FLOF:
+		case OP_ADDF_VVV: case OP_ADDF_VVC:
+		case OP_SUBF_VVV: case OP_SUBF_VVC: case OP_SUBF_VCV:
+		case OP_MULF_VVV: case OP_MULF_VVC:
+		case OP_DIVF_VVV: case OP_DIVF_VVC: case OP_DIVF_VCV:
+		case OP_FTOI_VVC: case OP_ITOF_VVC:
+		case OP_SHLI_VVV: case OP_SHLI_VVC: case OP_SHLI_VCV:
+		case OP_SHRI_VVV: case OP_SHRI_VVC: case OP_SHRI_VCV:
+		case OP_SHRU_VVV: case OP_SHRU_VVC: case OP_SHRU_VCV:
+		case OP_PEEK_VC: case OP_POKE_CV: case OP_POKE_CC: case OP_ADRL:
+		case OP_PEEK_VCV: case OP_PEEK_VVV:
+		case OP_POKE_CVV: case OP_POKE_CVC: case OP_POKE_VVV: case OP_POKE_VVC:
+		case OP_GETL_VVV: case OP_SETL_VVV: case OP_SETL_VVC:
+		case OP_DIVI_VVV: case OP_DIVI_VVC: case OP_DIVI_VCV:
+		case OP_MODI_VVV: case OP_MODI_VVC: case OP_MODI_VCV:
+		case OP_FORi_VVB: case OP_FORi_VCB:
+		case OP_LSSI_VVB: case OP_LSSI_VCB: case OP_LSSI_CVB:
+		case OP_EQUI_VVB: case OP_EQUI_VCB:
+		case OP_NLSI_VVB: case OP_NLSI_VCB: case OP_NLSI_CVB:
+		case OP_NEQI_VVB: case OP_NEQI_VCB:
+		case OP_LSSF_VVB: case OP_LSSF_VCB: case OP_LSSF_CVB:
+		case OP_EQUF_VVB: case OP_EQUF_VCB:
+		case OP_NLSF_VVB: case OP_NLSF_VCB: case OP_NLSF_CVB:
+		case OP_NEQF_VVB: case OP_NEQF_VCB:
+		case OP_GOTO:																									// flushes inside its case: reconcile (backward, qualified) or barrier
+			return true;
+		default:
+			return false;
+	}
+}
+
 /*
 	v2.2 residency qualification - see GAZLJit.h. A loop header = a back-edge target no forward branch or SWCH reaches.
 	v2.2-full: a body may contain internal FORWARD branches (early exits / if-joins) - interior leaders share the
@@ -208,9 +257,8 @@ void JitCompiler::jitResidencyLeaders(const Instruction* code, UInt funcStart, U
 			if (target > j) { excluded.insert(target); }																	// a forward edge arrives with an empty cache
 			else { std::map<UInt, UInt>::iterator it = loopExtent.find(target); if (it == loopExtent.end() || it->second < j) { loopExtent[target] = j; } }
 		} else if (code[j].opcode == OP_SWCH) {
-			const UInt size = static_cast<UInt>(code[j].p1.i) + 1;
-			const UInt table = static_cast<UInt>(code[j].p2.p - MEMORY_OFFSET);
-			for (UInt k = 0; k < size; ++k) { excluded.insert(static_cast<UInt>(static_cast<Int>(j) + memory[table + k].i)); }
+			const std::vector<UInt> targets = switchTargets(code, j, memory);
+			excluded.insert(targets.begin(), targets.end());
 		}
 	}
 	for (std::set<UInt>::const_iterator it = excluded.begin(); it != excluded.end(); ++it) { loopExtent.erase(*it); }
@@ -228,11 +276,9 @@ void JitCompiler::jitResidencyLeaders(const Instruction* code, UInt funcStart, U
 			if (jitBranchTarget(code, j, target)) {
 				if (target > header && target <= end) { safe = false; }
 			} else if (code[j].opcode == OP_SWCH) {
-				const UInt size = static_cast<UInt>(code[j].p1.i) + 1;
-				const UInt table = static_cast<UInt>(code[j].p2.p - MEMORY_OFFSET);
-				for (UInt k = 0; k < size && safe; ++k) {
-					const UInt target2 = static_cast<UInt>(static_cast<Int>(j) + memory[table + k].i);
-					if (target2 > header && target2 <= end) { safe = false; }
+				const std::vector<UInt> targets = switchTargets(code, j, memory);
+				for (size_t k = 0; k < targets.size(); ++k) {
+					if (targets[k] > header && targets[k] <= end) { safe = false; }
 				}
 			}
 		}
@@ -301,10 +347,9 @@ void buildUseSchedule(const Instruction* code, UInt from, UInt to, UseSchedule& 
 	for (UInt j = from; j <= to; ++j) {
 		OperandRole roles[3];
 		operandRoles(code[j].opcode, roles);
-		if (code[j].opcode == OP_FORi_VVB || code[j].opcode == OP_FORi_VCB) { roles[0] = OPERAND_SLOT_READ; }	// the counter is read-modify-write
 		const Value* operands[3] = { &code[j].p0, &code[j].p1, &code[j].p2 };
 		for (int k = 0; k < 3; ++k) {
-			if (roles[k] == OPERAND_SLOT_READ) { schedule[operands[k]->i].push_back(j); }				// ascending j -> lists stay sorted
+			if ((roles[k] & OPERAND_SLOT_READ) != 0) { schedule[operands[k]->i].push_back(j); }			// ascending j -> lists stay sorted
 		}
 	}
 }
@@ -328,12 +373,12 @@ void buildPointerRealms(const Instruction* code, UInt from, UInt to, std::map<In
 		operandRoles(code[j].opcode, roles);
 		const Value* operands[3] = { &code[j].p0, &code[j].p1, &code[j].p2 };
 		for (int k = 0; k < 3; ++k) {
-			if (roles[k] == OPERAND_SLOT_READ && written.find(operands[k]->i) == written.end()) {
+			if ((roles[k] & OPERAND_SLOT_READ) != 0 && written.find(operands[k]->i) == written.end()) {
 				realm.insert(std::make_pair(operands[k]->i, static_cast<int>(REALM_NONFRAME)));				// live-in => parameter
 			}
 		}
 		for (int k = 0; k < 3; ++k) {
-			if (roles[k] == OPERAND_SLOT_WRITE) { written.insert(operands[k]->i); }
+			if ((roles[k] & OPERAND_SLOT_WRITE) != 0) { written.insert(operands[k]->i); }
 		}
 	}
 
@@ -349,7 +394,7 @@ void buildPointerRealms(const Instruction* code, UInt from, UInt to, std::map<In
 			const Int op = code[j].opcode;
 			OperandRole roles[3];
 			operandRoles(op, roles);
-			if (roles[0] != OPERAND_SLOT_WRITE) { continue; }											// writes no slot -> nothing to stamp
+			if ((roles[0] & OPERAND_SLOT_WRITE) == 0) { continue; }										// writes no slot -> nothing to stamp
 			int produced;
 			switch (op) {
 				case OP_ADRL: produced = REALM_MYFRAME; break;												// address of a local
@@ -363,7 +408,7 @@ void buildPointerRealms(const Instruction* code, UInt from, UInt to, std::map<In
 					const Value* operands[3] = { &code[j].p0, &code[j].p1, &code[j].p2 };
 					produced = REALM_BOTTOM;																// pointer +/- int keeps the pointer's realm; join the slot reads
 					for (int k = 0; k < 3; ++k) {
-						if (roles[k] == OPERAND_SLOT_READ) {
+						if ((roles[k] & OPERAND_SLOT_READ) != 0) {
 							const std::map<Int, int>::const_iterator it = realm.find(operands[k]->i);
 							produced = joinRealm(produced, (it != realm.end()) ? it->second : REALM_BOTTOM);
 						}
@@ -388,9 +433,8 @@ static void jitSuccessors(const Instruction* code, UInt from, UInt to, const Val
 	UInt target;
 	if (jitBranchTarget(code, j, target)) { succ.push_back(target); }													// conditional branch target
 	else if (op == OP_SWCH) {
-		const UInt size = static_cast<UInt>(code[j].p1.i) + 1;
-		const UInt table = static_cast<UInt>(code[j].p2.p - MEMORY_OFFSET);
-		for (UInt k = 0; k < size; ++k) { succ.push_back(static_cast<UInt>(static_cast<Int>(j) + memory[table + k].i)); }
+		const std::vector<UInt> targets = switchTargets(code, j, memory);
+		succ.insert(succ.end(), targets.begin(), targets.end());
 	}
 	if (j + 1 <= to) { succ.push_back(j + 1); }																			// fall-through (also after a conditional branch / SWCH)
 }
@@ -403,10 +447,9 @@ void buildLiveIn(const Instruction* code, UInt from, UInt to, const Value* memor
 		operandRoles(code[j].opcode, roles);
 		const Value* operands[3] = { &code[j].p0, &code[j].p1, &code[j].p2 };
 		for (int k = 0; k < 3; ++k) {
-			if (roles[k] == OPERAND_SLOT_READ) { gen[j].insert(operands[k]->i); }
-			else if (roles[k] == OPERAND_SLOT_WRITE) { kill[j].insert(operands[k]->i); }
+			if ((roles[k] & OPERAND_SLOT_READ) != 0) { gen[j].insert(operands[k]->i); }
+			if ((roles[k] & OPERAND_SLOT_WRITE) != 0) { kill[j].insert(operands[k]->i); }
 		}
-		if (code[j].opcode == OP_FORi_VVB || code[j].opcode == OP_FORi_VCB) { gen[j].insert(code[j].p0.i); kill[j].insert(code[j].p0.i); }
 	}
 	// Backward fixed point: liveIn[j] = gen[j] U (liveOut[j] - kill[j]); liveOut[j] = U liveIn[succ]. Reverse sweeps converge fast.
 	bool changed = true;
@@ -430,25 +473,14 @@ void buildLiveIn(const Instruction* code, UInt from, UInt to, const Value* memor
 	}
 }
 
-void buildLoopSlotSets(const Instruction* code, UInt from, UInt to, std::set<Int>& readSlots, std::set<Int>& writtenSlots) {
-	for (UInt j = from; j <= to; ++j) {
-		OperandRole roles[3];
-		operandRoles(code[j].opcode, roles);
-		const Value* operands[3] = { &code[j].p0, &code[j].p1, &code[j].p2 };
-		for (int k = 0; k < 3; ++k) {
-			if (roles[k] == OPERAND_SLOT_READ) { readSlots.insert(operands[k]->i); }
-			else if (roles[k] == OPERAND_SLOT_WRITE) { writtenSlots.insert(operands[k]->i); }
-		}
-		if (code[j].opcode == OP_FORi_VVB || code[j].opcode == OP_FORi_VCB) { readSlots.insert(code[j].p0.i); }	// the counter is read-modify-write
-	}
-}
-
 /*
-	Per-class slot working sets (see GAZLJit.h). Class-by-opcode mirrors the shared lowering: float ops keep their VALUE
-	operands in FLOAT_REGISTER; FTOI reads float / writes general, ITOF the reverse; MOVE and all integer/pointer ops
-	(and ABSF, lowered bitwise in GP on x64) use GENERAL. A slot used both ways lands in both sets.
+	Loop-body working sets (see GAZLJit.h): the slots read / written, and the same slots by register class.
+	Class-by-opcode mirrors the shared lowering: float ops keep their VALUE operands in FLOAT_REGISTER; FTOI reads
+	float / writes general, ITOF the reverse; MOVE and all integer/pointer ops (and ABSF, lowered bitwise in GP on x64)
+	use GENERAL. A slot used both ways lands in both class sets.
 */
-void buildLoopClassSets(const Instruction* code, UInt from, UInt to, std::set<Int>& generalSlots, std::set<Int>& floatSlots) {
+void buildLoopSets(const Instruction* code, UInt from, UInt to, std::set<Int>& readSlots, std::set<Int>& writtenSlots
+		, std::set<Int>& generalSlots, std::set<Int>& floatSlots) {
 	for (UInt j = from; j <= to; ++j) {
 		const Int op = code[j].opcode;
 		OperandRole roles[3];
@@ -470,11 +502,12 @@ void buildLoopClassSets(const Instruction* code, UInt from, UInt to, std::set<In
 			default: break;
 		}
 		for (int k = 0; k < 3; ++k) {
-			if (roles[k] == OPERAND_SLOT_READ || roles[k] == OPERAND_SLOT_WRITE) {
+			if ((roles[k] & OPERAND_SLOT_READ) != 0) { readSlots.insert(operands[k]->i); }
+			if ((roles[k] & OPERAND_SLOT_WRITE) != 0) { writtenSlots.insert(operands[k]->i); }
+			if (roles[k] != OPERAND_OTHER) {
 				if (isFloat[k]) { floatSlots.insert(operands[k]->i); } else { generalSlots.insert(operands[k]->i); }
 			}
 		}
-		if (op == OP_FORi_VVB || op == OP_FORi_VCB) { generalSlots.insert(code[j].p0.i); }
 	}
 }
 
