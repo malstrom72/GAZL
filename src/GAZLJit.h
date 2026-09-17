@@ -335,6 +335,15 @@ class RegisterCacheBackend {
 					  arm64 (Apple Si)     eager 53.22 (+6.9%)    eager 95.24 (+5.1%)
 					                       deferred 49.79         deferred 90.64
 
+					READ EACH ROW ON ITS OWN. The two rows come from different machines and different sessions, so
+					only the WITHIN-ROW comparison is meaningful - nothing follows from x64's sor being faster than
+					arm64's, or the reverse. Absolute numbers drift: the same arm64 build measured sor at 90.6 ms one
+					day and 83.7 ms the next. And best-of-N min is noisier than it looks on a loaded machine -
+					byte-identical arm64 code measured 3.4% apart across two builds of one kernel, drifting upward
+					through the run. Treat anything under about 3% there as nothing unless the PER-ROUND ranges
+					separate, which is how both decisions above were actually settled (eager 53.22-54.56 against
+					deferred 49.79-50.95 on spectralnorm; 95.24-95.93 against 90.64-91.74 on sor).
+
 					x64 wants it eager: the deferred store lands on the block's back edge AND changes domain, an
 					integer `mov [home], r10d` becoming an FP `movss [home], xmm3`, competing with the mulss/addss the
 					loop is already issuing. arm64 wants it deferred: grouping the store with the other tail stores in
