@@ -1,0 +1,26 @@
+ ; Compiled with Impala version 2.0
+
+ ; signatures version=1
+ ; signature extern native printInt() -> unknown @ absloop.impala:6:1
+ N:					! DEFi #20000000 ; signature const N : int @ absloop.impala:8:1
+
+ ;-----------------------------------------------------------------------------
+ main:				FUNC		; signature func main() -> void @ absloop.impala:10:1
+ 								PARA *1
+ 					$k:			LOCi
+ 					$x:			LOCf
+ 					$acc:		LOCf
+ ;-----------------------------------------------------------------------------
+ 								MOVi $k #0 						; k = 0
+ 								iTOf $x $k #1.0					; x = itof(k)
+ 								iTOf $acc $k #1.0				; acc = itof(k)
+ 								MOVi $k #0 						; for (k = 0 to N) 
+ 								GEQi #0 #N @.e0
+ 					.l1:		SUBf %0 $x #0.75				; x = abs(x - 0.75)
+ 								ABSf $x %0 
+ 								ADDf $acc $acc $x				; acc = acc + x
+ 								FORi $k #N @.l1					; }
+ 					.e0:		fTOi %1 $acc #1.0				; printInt(ftoi(acc))
+ 								CALL ^printInt %0 *2			; expects printInt(int) -> unknown @ absloop.impala:20:21
+ 								RETU   							; }
+

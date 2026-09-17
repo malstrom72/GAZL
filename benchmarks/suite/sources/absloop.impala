@@ -1,0 +1,21 @@
+// ABSf in a hot float loop: x = |x - 0.75|, acc += x. `x` is float-only, so the v2.2 loop residency should keep it in a
+// FLOAT register for the whole loop. The shared loop class sets once filed ABSF as GENERAL (x64 used to lower it in a GP
+// register), which made `x` look dual-class and cost a store and a reload every iteration on both backends - see
+// design/jit/JitSimplifyPlan.md. The checksum is ftoi(acc): deterministic and bit-exact between the interpreter and the
+// JIT (single-precision throughout, evaluated in the same order).
+extern native printInt;
+
+const int N = 20000000;
+
+function main()
+locals int k, float x, float acc
+{
+	k = 0;
+	x = itof(k);					// itof of a VARIABLE, not a 0.0 literal: a constant init defines the slot in a GENERAL
+	acc = itof(k);					// register, and loop residency would then pin it there (see leibniz.impala)
+	for (k = 0 to N) {
+		x = abs(x - 0.75);
+		acc = acc + x;
+	}
+	printInt(ftoi(acc));
+}
