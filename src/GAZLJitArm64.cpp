@@ -517,33 +517,8 @@ class Arm64SlotBackend : public RegisterCacheBackend {
 	private:	Arm64Emitter& e;
 };
 
-// Store every entry of a captured dirty snapshot to its home (terminal trap arms; see RegisterCache::captureDirtyLines).
-static void emitDirtyStores(Arm64Emitter& e, const ResidencyMap& map) {
-	for (size_t k = 0; k < map.entries.size(); ++k) {
-		const ResidencyMap::Entry& entry = map.entries[k];
-		const Reg r = static_cast<Reg>(entry.physicalRegister);
-		if (entry.registerClass == GENERAL_REGISTER) { storeSlot(e, r, entry.slot); } else { storeSlotF(e, r, entry.slot); }
-	}
-}
-
-// A checked op's terminal trap, deferred to the function's cold section so the hot path stays branch-and-continue.
-struct ColdTrap {
-	Label label;
-	ResidencyMap dirty;								// the captureDirtyLines snapshot to store before exiting
-	unsigned statusComplement;						// movn immediate: ~1 = BAD_PEEK, ~2 = BAD_POKE, ~6 = DIVISION_BY_ZERO
-};
-
-/*
-	A conditional loop-EXIT branch from a register-resident body (v2.2-full): the spill of the resident dirty state is
-	deferred to a cold stub on the TAKEN path, so the fall-through (stay-in-loop) path keeps the map with no per-iteration
-	cost. The stub stores the captureDirtyLines snapshot and enters the exit leader, which assumes an empty cache -
-	memory is current, registers are ignored there.
-*/
-struct ColdEdge {
-	Label label;
-	ResidencyMap dirty;								// dirty state at the branch point, stored only if the exit is taken
-	UInt target;									// the exit leader (mainline label key)
-};
+typedef BasicColdTrap<Label> ColdTrap;
+typedef BasicColdEdge<Label> ColdEdge;
 }
 
 // Emit a conditional branch through the shared edge policy (planConditionalEdge); its loads/stores leave NZCV intact.
@@ -610,7 +585,7 @@ static void emitBinaryF(Arm64Emitter& e, RegisterCache& cache, void (Arm64Emitte
 static void emitDivFChecked(Arm64Emitter& e, RegisterCache& cache, const Instruction& in, bool s1Const, std::vector<ColdTrap>& coldTraps) {
 	const int a = loadFloatOperand(e, cache, in.p1, s1Const);
 	const int b = loadFloatOperand(e, cache, in.p2, false);
-	ColdTrap trap; trap.label = e.newLabel(); trap.statusComplement = 6;												// ~6 = -7 = DIVISION_BY_ZERO
+	ColdTrap trap; trap.label = e.newLabel(); trap.status = DIVISION_BY_ZERO;
 	const int zero = cache.scratch(FLOAT_REGISTER);
 	e.fmovSW(static_cast<Reg>(zero), WZR);																				// 0.0f
 	e.fcmpS(static_cast<Reg>(b), static_cast<Reg>(zero));
@@ -659,7 +634,7 @@ static void emitDivMod(Arm64Emitter& e, RegisterCache& cache, bool rem, const In
 	if (form == 1) { divisor = cache.scratch(GENERAL_REGISTER); matConst(e, static_cast<Reg>(divisor), in.p2.i); }
 	else { divisor = cache.read(in.p2.i, GENERAL_REGISTER); }
 	if (form != 1) {																									// variable divisor → divide-by-zero guard
-		ColdTrap trap; trap.label = e.newLabel(); trap.statusComplement = 6;											// ~6 = -7 = DIVISION_BY_ZERO
+		ColdTrap trap; trap.label = e.newLabel(); trap.status = DIVISION_BY_ZERO;
 		cache.captureDirtyLines(trap.dirty);																			// the trap exit must leave memory interpreter-identical
 		e.cbz(static_cast<Reg>(divisor), trap.label);																	// trap arm is cold, after the mainline
 		coldTraps.push_back(trap);
@@ -865,7 +840,7 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 			*/
 			case OP_PEEK_VCV: {																							// dst = memory[C1 + index]
 				const bool constAddrBase = (in.p1.p >= MEMORY_OFFSET);
-				ColdTrap trap; trap.label = e.newLabel(); trap.statusComplement = 1;									// ~1 = -2 = BAD_PEEK
+				ColdTrap trap; trap.label = e.newLabel(); trap.status = BAD_PEEK;
 				const int idx = cache.read(in.p2.i, GENERAL_REGISTER);
 				if (!constAddrBase) { cache.spillDirtyResident(); }														// pointer-in-variable form: flush so the read sees dirty frame lines
 				const int addr = cache.scratch(GENERAL_REGISTER);
@@ -888,7 +863,7 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 			case OP_PEEK_VVV: {																							// dst = memory[base + index]; pointer read
 				const std::map<Int, int>::const_iterator baseRealm = pointerRealm.find(in.p1.i);
 				const bool nonFrame = (baseRealm != realmEnd && baseRealm->second == REALM_NONFRAME);
-				ColdTrap trap; trap.label = e.newLabel(); trap.statusComplement = 1;									// ~1 = -2 = BAD_PEEK
+				ColdTrap trap; trap.label = e.newLabel(); trap.status = BAD_PEEK;
 				const int base = cache.read(in.p1.i, GENERAL_REGISTER);
 				const int idx = cache.read(in.p2.i, GENERAL_REGISTER);
 				if (!nonFrame) { cache.spillDirtyResident(); }
@@ -907,7 +882,7 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 			}
 			case OP_POKE_CVV: case OP_POKE_CVC: {																		// memory[C0 + index] = value
 				const bool constAddrBase = (in.p0.p >= MEMORY_OFFSET);
-				ColdTrap trap; trap.label = e.newLabel(); trap.statusComplement = 2;									// ~2 = -3 = BAD_POKE
+				ColdTrap trap; trap.label = e.newLabel(); trap.status = BAD_POKE;
 				const int idx = cache.read(in.p1.i, GENERAL_REGISTER);
 				int val;
 				if (op == OP_POKE_CVC) { val = cache.scratch(GENERAL_REGISTER); matConst(e, static_cast<Reg>(val), in.p2.i); }
@@ -928,7 +903,7 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 			case OP_POKE_VVV: case OP_POKE_VVC: {																		// memory[base + index] = value; pointer write
 				const std::map<Int, int>::const_iterator baseRealm = pointerRealm.find(in.p0.i);
 				const bool nonFrame = (baseRealm != realmEnd && baseRealm->second == REALM_NONFRAME);
-				ColdTrap trap; trap.label = e.newLabel(); trap.statusComplement = 2;									// ~2 = -3 = BAD_POKE
+				ColdTrap trap; trap.label = e.newLabel(); trap.status = BAD_POKE;
 				const int base = cache.read(in.p0.i, GENERAL_REGISTER);
 				const int idx = cache.read(in.p1.i, GENERAL_REGISTER);
 				int val;
@@ -1184,14 +1159,14 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 	// Cold section: checked-op trap arms (see ColdTrap) - store the dirty snapshot, set the status, exit.
 	for (size_t k = 0; k < coldTraps.size(); ++k) {
 		e.bind(coldTraps[k].label);
-		emitDirtyStores(e, coldTraps[k].dirty);
-		e.movn(W0, coldTraps[k].statusComplement); e.b(exitLabel);
+		spillResidencyMap(slotBackend, coldTraps[k].dirty);
+		e.movn(W0, static_cast<uint16_t>(~coldTraps[k].status)); e.b(exitLabel);
 	}
 
 	// Cold section: loop-exit edge stubs (v2.2-full, see ColdEdge) - store the dirty snapshot, enter the exit leader.
 	for (size_t k = 0; k < coldEdges.size(); ++k) {
 		e.bind(coldEdges[k].label);
-		emitDirtyStores(e, coldEdges[k].dirty);
+		spillResidencyMap(slotBackend, coldEdges[k].dirty);
 		e.b(mainline[coldEdges[k].target]);
 	}
 
@@ -1205,25 +1180,14 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 		e.bind(suspendL[it->first]);
 		const std::map<UInt, ResidencyMap>::const_iterator m = entryMaps.find(it->first);
 		const bool resident = (m != entryMaps.end() && !m->second.entries.empty());
-		if (resident) {
-			for (size_t k = 0; k < m->second.entries.size(); ++k) {
-				const ResidencyMap::Entry& entry = m->second.entries[k];
-				if (!entry.expectDirty) { continue; }																	// read-only in the loop: register==home already
-				const Reg r = static_cast<Reg>(entry.physicalRegister);
-				if (entry.registerClass == GENERAL_REGISTER) { storeSlot(e, r, entry.slot); } else { storeSlotF(e, r, entry.slot); }
-			}
-		}
+		if (resident) { spillResidencyMap(slotBackend, m->second); }
 		writebackState(e, o);
 		if (resident) {
 			Label reload = e.newLabel();
 			e.adr(X9, reload); e.strX(X9, X0, o.resume);																// RESUME = reload stub (below)
 			e.movn(W0, 0); e.b(exitLabel);																				// TIME_OUT
 			e.bind(reload);
-			for (size_t k = 0; k < m->second.entries.size(); ++k) {
-				const ResidencyMap::Entry& entry = m->second.entries[k];
-				const Reg r = static_cast<Reg>(entry.physicalRegister);
-				if (entry.registerClass == GENERAL_REGISTER) { loadSlot(e, r, entry.slot); } else { loadSlotF(e, r, entry.slot); }
-			}
+			fillResidencyMap(slotBackend, m->second);
 			e.b(mainline[it->first]);
 		} else {
 			e.adr(X9, mainline[it->first]); e.strX(X9, X0, o.resume);													// RESUME = this block's hot mainline

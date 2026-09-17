@@ -339,34 +339,8 @@ class X64SlotBackend : public RegisterCacheBackend {
 	private:	X64Emitter& e;
 };
 
-// Store every entry of a captured dirty snapshot to its home (terminal trap arms; see RegisterCache::captureDirtyLines).
-static void emitDirtyStores(X64Emitter& e, const ResidencyMap& map) {
-	for (size_t k = 0; k < map.entries.size(); ++k) {
-		const ResidencyMap::Entry& entry = map.entries[k];
-		const Reg r = static_cast<Reg>(entry.physicalRegister);
-		if (entry.registerClass == GENERAL_REGISTER) { e.store(DSP, static_cast<int32_t>(entry.slot) * 4, r); }
-		else { e.movssStore(DSP, static_cast<int32_t>(entry.slot) * 4, r); }
-	}
-}
-
-// A checked op's terminal trap, deferred to the function's cold section so the hot path stays branch-and-continue.
-struct ColdTrap {
-	Label label;
-	ResidencyMap dirty;								// the captureDirtyLines snapshot to store before exiting
-	Status status;									// BAD_PEEK / BAD_POKE / DIVISION_BY_ZERO
-};
-
-/*
-	A conditional loop-EXIT branch from a register-resident body (v2.2-full): the spill of the resident dirty state is
-	deferred to a cold stub on the TAKEN path, so the fall-through (stay-in-loop) path keeps the map with no per-iteration
-	cost. The stub stores the captureDirtyLines snapshot and enters the exit leader, which assumes an empty cache -
-	memory is current, registers are ignored there.
-*/
-struct ColdEdge {
-	Label label;
-	ResidencyMap dirty;								// dirty state at the branch point, stored only if the exit is taken
-	UInt target;									// the exit leader (mainline label key)
-};
+typedef BasicColdTrap<Label> ColdTrap;
+typedef BasicColdEdge<Label> ColdEdge;
 
 // Resolve a conditional branch's destination through the shared edge policy (planConditionalEdge).
 static Label resolveConditionalEdge(X64Emitter& emitter, RegisterCache& cache, std::map<UInt, ResidencyMap>& entryMaps
@@ -1087,14 +1061,14 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 	// Cold section: checked-op trap arms (see ColdTrap) - store the dirty snapshot, set the status, exit.
 	for (size_t k = 0; k < coldTraps.size(); ++k) {
 		emitter.bind(coldTraps[k].label);
-		emitDirtyStores(emitter, coldTraps[k].dirty);
+		spillResidencyMap(slotBackend, coldTraps[k].dirty);
 		emitter.movImm(RAX, static_cast<uint32_t>(coldTraps[k].status)); emitter.jmp(epilogue);
 	}
 
 	// Cold section: loop-exit edge stubs (v2.2-full, see ColdEdge) - store the dirty snapshot, enter the exit leader.
 	for (size_t k = 0; k < coldEdges.size(); ++k) {
 		emitter.bind(coldEdges[k].label);
-		emitDirtyStores(emitter, coldEdges[k].dirty);
+		spillResidencyMap(slotBackend, coldEdges[k].dirty);
 		emitter.jmp(labels[coldEdges[k].target]);
 	}
 
@@ -1110,27 +1084,14 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 		emitter.bind(suspendL[head]);
 		const std::map<UInt, ResidencyMap>::const_iterator m = entryMaps.find(head);
 		const bool resident = (m != entryMaps.end() && !m->second.entries.empty());
-		if (resident) {
-			for (size_t k = 0; k < m->second.entries.size(); ++k) {
-				const ResidencyMap::Entry& entry = m->second.entries[k];
-				if (!entry.expectDirty) { continue; }																	// read-only in the loop: register==home already
-				const Reg r = static_cast<Reg>(entry.physicalRegister);
-				if (entry.registerClass == GENERAL_REGISTER) { emitter.store(DSP, static_cast<int32_t>(entry.slot) * 4, r); }
-				else { emitter.movssStore(DSP, static_cast<int32_t>(entry.slot) * 4, r); }
-			}
-		}
+		if (resident) { spillResidencyMap(slotBackend, m->second); }
 		writebackState(emitter, offsets);
 		if (resident) {
 			Label reload = emitter.newLabel();
 			emitter.leaRip(RAX, reload); emitter.storeQ(CONTEXT, offsets.resume, RAX);									// RESUME = reload stub (below)
 			emitter.movImm(RAX, static_cast<uint32_t>(TIME_OUT)); emitter.jmp(epilogue);
 			emitter.bind(reload);
-			for (size_t k = 0; k < m->second.entries.size(); ++k) {
-				const ResidencyMap::Entry& entry = m->second.entries[k];
-				const Reg r = static_cast<Reg>(entry.physicalRegister);
-				if (entry.registerClass == GENERAL_REGISTER) { emitter.load(r, DSP, static_cast<int32_t>(entry.slot) * 4); }
-				else { emitter.movssLoad(r, DSP, static_cast<int32_t>(entry.slot) * 4); }
-			}
+			fillResidencyMap(slotBackend, m->second);
 			emitter.jmp(labels[head]);
 		} else {
 			emitter.leaRip(RAX, labels[head]); emitter.storeQ(CONTEXT, offsets.resume, RAX);							// RESUME = this block's mainline head
