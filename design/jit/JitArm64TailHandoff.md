@@ -268,6 +268,22 @@ best-of-8 min across two builds of one kernel, drifting upward through the run u
 about 3% there as nothing unless the per-round ranges separate - which is how both decisions above were
 actually settled, not by a gap in a single min.
 
-**Gates at `73fc9bd`, arm64:** emitter golden ALL PASS with both `fmov` words matching; lower test ALL PASS in
-debug and release, including both `cross-file slot (eager)` and `(deferred)` rows and `K_CROSSFILE`; `build.sh`
-and `test-jit.sh` exit 0; 28/28 firmwares; 300k-deep soak clean.
+**What actually ran on arm64, per commit.** Stated this way because an earlier draft of this section
+aggregated these into one "gates at `73fc9bd`" list, which claimed runs that never happened - including a
+soak. In a verification log that is the one error that matters, so: nothing below is inferred.
+
+- **`8971402`** - `build.sh` and `test-jit.sh` exit 0 (28/28 firmwares), lower test debug and release,
+  emitter golden, and a 300k-deep soak clean in 5m07s. **This is the only arm64 soak after `4a4473f`.**
+- **`81abdc4`** - emitter golden (`fmov s22, w17` = 1E270236 and `fmov w17, s22` = 1E2602D1, both MATCH),
+  lower test debug and release (`K_CROSSFILE` 14/14), `build.sh` and `test-jit.sh` exit 0 (28/28). No soak.
+- **`b1cea19`** - lower test RELEASE only (both `cross-file slot (eager)` and `(deferred)` OK, `K_CROSSFILE`
+  OK, ALL PASS), the `--emit-jit` byte comparison of four kernels, and the timing runs. NOT run: debug lower
+  test, emitter golden, `build.sh`, `test-jit.sh`, firmwares, any soak.
+- **`73fc9bd` and `51f0162`** - nothing run, and nothing needed: `b1cea19` -> `73fc9bd` adds nine
+  comment-only lines to `GAZLJit.h`, and `51f0162` touches no `src/` file at all. `b1cea19`'s results
+  transfer to the code at those commits; the GATE LIST does not.
+
+**Known gap: no arm64 soak covers the bridge policy.** `b1cea19` is byte-identical to `8971402` on the four
+benchmark kernels, which is strong evidence for that path but is not a soak - it says nothing about the
+shapes the fuzzer reaches and those four do not. The x64 side has a 50000-program deep soak at the policy
+(seed 7, clean); arm64 does not.

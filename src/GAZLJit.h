@@ -337,8 +337,8 @@ class RegisterCacheBackend {
 
 					READ EACH ROW ON ITS OWN. The two rows come from different machines and different sessions, so
 					only the WITHIN-ROW comparison is meaningful - nothing follows from x64's sor being faster than
-					arm64's, or the reverse. Absolute numbers drift: the same arm64 build measured sor at 90.6 ms one
-					day and 83.7 ms the next. And best-of-N min is noisier than it looks on a loaded machine -
+					arm64's, or the reverse. Absolute numbers drift: two fresh builds of ONE arm64 commit, hours apart the same
+					day, measured sor at 90.6 ms and 83.7 ms. And best-of-N min is noisier than it looks on a loaded machine -
 					byte-identical arm64 code measured 3.4% apart across two builds of one kernel, drifting upward
 					through the run. Treat anything under about 3% there as nothing unless the PER-ROUND ranges
 					separate, which is how both decisions above were actually settled (eager 53.22-54.56 against
