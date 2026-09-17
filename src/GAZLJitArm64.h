@@ -59,6 +59,7 @@ const Reg X19 = static_cast<Reg>(19), X20 = static_cast<Reg>(20), X21 = static_c
 const Reg X30 = static_cast<Reg>(30), XZR = static_cast<Reg>(31), SP = static_cast<Reg>(31);
 
 const Reg S0 = static_cast<Reg>(0), S1 = static_cast<Reg>(1), S2 = static_cast<Reg>(2), S3 = static_cast<Reg>(3);
+const Reg S22 = static_cast<Reg>(22);															// in ARM64_FLOAT_POOL (V16-V23); the emitter oracle uses it so both register fields exceed 15
 
 /*
 	AArch64 condition codes (the 4-bit field of `B.cond`). Only the ones the first kernel and its bounds/fuel checks use
