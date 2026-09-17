@@ -757,11 +757,29 @@ static void runRegisterCacheTests() {
 	}
 
 	/*
-		H: a slot cached in one file and then read in the other BRIDGES register to register - one cross-file move, no
-		memory - where it used to spill to the home and reload ("[1]<-S10 F20<-[1] "). This is the PEEK-then-float-use
-		word: PEEK is untyped and lands in the general file, every float op on it wants the other one.
-		The dirty flag travels with the value, which is what keeps it honest: the home is still stale after the bridge,
-		so the barrier below is where it gets written, exactly once and no earlier.
+		H: a slot cached in one file and then read in the other BRIDGES register to register - where it used to spill
+		to the home and RELOAD ("[1]<-S10 F20<-[1] "). This is the PEEK-then-float-use word: PEEK is untyped and lands
+		in the general file, and every float op on it wants the other one.
+
+		The home is still written, from the SOURCE register, before the move - so the bridge replaces the reload but
+		not the store, and the line arrives CLEAN. That looks like giving half the saving back, and it is; it was
+		measured, on an AMD 7950X (Zen 4):
+
+		                        spectralnorm      sor
+		  pre-bridge              89.412 ms     96.111 ms
+		  dirty flag carried      90.393 (+1.1%)  68.017 (-29.2%)
+		  home written here       89.352 (-0.1%)  68.100 (-29.1%)
+
+		Carrying the dirty flag instead leaves the home stale, so SOMETHING has to spill the line later - and in
+		spectralnorm's inner loop that lands on the block's back edge, once per iteration. The store never went away;
+		it moved, and changed domain with it. The old `mov [home], r10d` was an integer store that also happened to
+		clean the line; the deferred one is `movss [home], xmm3`, which needs an FP pipe in a loop already issuing
+		mulss/addss/movss. Instruction counts are identical either way - 20 in that loop, both versions - which is why
+		this cost nothing that an instruction count could see.
+
+		So: bridging is worth it when it removes the RELOAD, which it always does. Deferring the store is worth it
+		only when the line is never spilled at all, and nothing here can know that in advance. sor pays 0.08 ms of a
+		28 ms win for the certainty.
 	*/
 	{
 		RegisterPool pool = { gp2, 2, fp2, 2 };
@@ -769,9 +787,9 @@ static void runRegisterCacheTests() {
 		RegisterCache c(pool, m);
 		c.enterBlock();
 		c.define(1, GENERAL_REGISTER); c.endInstruction();		// slot1 dirty in the general file
-		c.read(1, FLOAT_REGISTER); c.endInstruction();			// wants it in the float file -> one move, home untouched
-		c.barrier();											// still dirty, just in the other file: written here
-		cacheExpect("cross-file slot", m.log, "X20<-10 [1]<-S20 ");
+		c.read(1, FLOAT_REGISTER); c.endInstruction();			// home written from the source, then one cross-file move
+		c.barrier();											// nothing to do: the line is clean
+		cacheExpect("cross-file slot", m.log, "[1]<-S10 X20<-10 ");
 	}
 
 	// Read/write sets for the capture tests below: rw(slot) = the loop both reads and writes it.
