@@ -37,7 +37,7 @@
 #include "../src/GAZL.h"
 #include "../src/GAZLCpp.h"			// translateToCpp - portable GAZL->C++ source (--emit-cpp)
 #ifdef GAZL_JIT
-	#include "../src/GAZLJit.h"		// JitProcessor + JitCompiler - arm64 only; enabled by the build on AArch64 hosts
+	#include "../src/GAZLJit.h"		// JitProcessor + JitCompiler - arm64 and x64; enabled by the build on those hosts
 #endif
 
 // --- Deterministic FP runtime environment (ported from Numbstrict) --------------------------------------------
@@ -892,7 +892,7 @@ int main(int argc, const char* argv[]) {
 					<< std::endl;
 			std::cerr << "        [--no-native=name,...]       skip the named built-in natives (the program defines its own)"
 					<< std::endl;
-			std::cerr << "        [--forward=nat:func,...]     satisfy ^nat native calls with GAZL functions (interpreter only)"
+			std::cerr << "        [--forward=nat:func,...]     satisfy ^nat native calls with GAZL functions"
 					<< std::endl;
 			std::cerr << "        [--emit-cpp=F]               write a standalone C++ translation to F and exit (Tier 0)"
 					<< std::endl;
@@ -1028,7 +1028,7 @@ int main(int argc, const char* argv[]) {
 
 		{
 			/*
-				Pick the engine: the native JIT (--jit, arm64) if it can compile the whole program, else the interpreter.
+				Pick the engine: the native JIT (--jit) if it can compile the whole program, else the interpreter.
 				Both are Processor subclasses, so the run loop below is identical (§5.1).
 			*/
 		#ifdef GAZL_JIT
@@ -1059,7 +1059,7 @@ int main(int argc, const char* argv[]) {
 		#else
 			(void)jitStats;
 			if (useJit) {
-				std::cerr << "JIT: this build has no JIT support (needs an AArch64 GAZL_JIT build); using the interpreter."
+				std::cerr << "JIT: this build has no JIT support (needs a GAZL_JIT build); using the interpreter."
 						<< std::endl;
 			}
 		#endif

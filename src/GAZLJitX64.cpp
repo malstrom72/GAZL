@@ -255,12 +255,12 @@ void X64Emitter::finalize() {
 // per-platform GAZLJitMem*.cpp backend. This is the x86-64 counterpart of GAZLJitArm64.cpp's lowering; it reuses the
 // verified per-instruction lowering from tools/GAZLJitX64SliceTest.cpp, re-hosted onto the JitProcessor field ABI.
 //
-// Execution model: §5.4 dispatcher/TRANSFER, identical to GAZLJitArm64.cpp (and interoperating with the shared
+// Execution model: §5.4 dispatcher, identical to GAZLJitArm64.cpp (and interoperating with the shared
 // JitProcessor / ipStack). Each GAZL function is a `Status segment(JitProcessor* ctx)` - ctx in ARG_0, no frame of its
 // own. It reloads the pins from ctx (rbx=dsp, r14=memoryBase, r13=fuel, r15=ipsp; dataStackEnd on demand; r12=ctx),
-// runs, and hands control back by returning a Status: TRANSFER (the dispatcher threads the next segment - GAZL calls and
-// returns push/pop the ipStack, never a host frame), NATIVE_CALL (the dispatcher makes the one host call), or a terminal
-// OK / TIME_OUT / trap. Because the C stack is only ever the dispatcher's single frame, a fuel timeout can suspend and
+// runs, and returns only a TERMINAL Status (OK / TIME_OUT / BLOCK_RETRY / a trap): GAZL calls and returns tail-branch
+// within the segment and push/pop the ipStack, never a host frame, and a `^native` is called inline from the segment.
+// Because the C stack is only the dispatcher's frame plus that native call, a fuel timeout can suspend and
 // resume from ANY point, including inside nested GAZL calls. Scratch is rax + rcx/rdx + xmm0/xmm1. The pins are
 // callee-saved and the scratch caller-saved on both SysV AMD64 and Win64, so the file is ABI-neutral except the
 // dispatcher's frame, which flows through the ARG_0 / CALL_FRAME constants below.
@@ -269,9 +269,9 @@ void X64Emitter::finalize() {
 // --- pinned registers + scratch roles ---
 
 /*
-	§5.4 dispatcher/TRANSFER model - the per-segment pins mirror arm64's (x1=dsp, x2=membase, w3=fuel, x4=ipsp, x0=ctx).
+	§5.4 dispatcher model - the per-segment pins mirror arm64's (x1=dsp, x2=membase, w3=fuel, x4=ipsp, x0=ctx).
 	dataStackEnd is NOT pinned (only bounds checks want it) - it is loaded from ctx on demand. Every segment reloads these
-	from ctx at entry and writes them back before any TRANSFER, so the C stack stays a single frame (the dispatcher) and a
+	from ctx at entry and writes them back before returning, so the C stack stays the dispatcher's frame and a
 	timeout/suspend can return to the host and resume from any point - including inside nested GAZL calls.
 */
 static const Reg DSP = RBX, MEMORY_BASE = R14, FUEL = R13, IP_STACK_PTR = R15, CONTEXT = R12;
@@ -279,13 +279,13 @@ static const Reg SCRATCH_A = RCX, SCRATCH_B = RDX;																		// general s
 static const Reg FLOAT_0 = static_cast<Reg>(0), FLOAT_1 = static_cast<Reg>(1);											// xmm0 / xmm1 (a separate register file from GP)
 
 /*
-	Calling convention. In the dispatcher/TRANSFER model only the dispatcher makes host-ABI calls (into each segment and
-	into natives); segments are leaf code entered as `Status segment(JitProcessor* ctx)` with ctx in ARG_0 and never call
-	out, so they need no frame of their own. ARG_0 is the one arg register that differs by ABI. CALL_FRAME is the stack the
+	Calling convention. The dispatcher makes the host-ABI call into each segment; a segment is entered as
+	`Status segment(JitProcessor* ctx)` with ctx in ARG_0 and calls out only to a `^native`, on the frame the dispatcher
+	reserved for it. ARG_0 is the one arg register that differs by ABI. CALL_FRAME is the stack the
 	*dispatcher* reserves for its calls: SysV needs only the 16-align pad; Win64 also reserves the 32-byte shadow space a
 	callee may spill its register args into. The pins (rbx/r12/r13/r14/r15) are callee-saved on both ABIs and the dispatcher
-	saves them once; rbp holds ctx across the loop. Win64's callee-saved rsi/rdi bite only in the rep-movsd COPY (guarded
-	there); xmm6-15 are untouched (segments use xmm0/1).
+	saves them once; ctx lives in r12, and rbp is pushed only to keep the push count even. Win64's callee-saved rsi/rdi
+	bite only in the rep-movsd COPY (guarded there); xmm6-15 are untouched (segments use xmm0/1).
 */
 #if defined(_WIN32)
 static const Reg ARG_0 = RCX;
@@ -297,7 +297,7 @@ static const uint32_t CALL_FRAME = 8u;																					// just the 16-align 
 
 /*
 	Segment state lives in ctx between transfers. reloadState loads the pins from ctx (ctx must already be in CONTEXT);
-	enterSegment is a fresh dispatcher entry (ctx arrives in ARG_0); writebackState flushes before a TRANSFER. Mirrors the
+	enterSegment is a fresh dispatcher entry (ctx arrives in ARG_0); writebackState flushes before returning. Mirrors
 	arm64 reloadState/writebackState. dataStackEnd is loaded on demand, not pinned.
 */
 static void reloadState(X64Emitter& e, const Offsets& o) {
@@ -397,14 +397,18 @@ static void emitTwoOperand(X64Emitter& emitter, RegisterCache& cache, BinaryOp c
 	}
 }
 
+// Load an integer operand into a cache register: a slot (read), or a constant materialized into a scratch.
+static int loadIntOperand(X64Emitter& emitter, RegisterCache& cache, const Value& p, bool isConst) {
+	if (!isConst) { return cache.read(p.i, GENERAL_REGISTER); }
+	const int r = cache.scratch(GENERAL_REGISTER);
+	emitter.movImm(static_cast<Reg>(r), static_cast<uint32_t>(p.i));
+	return r;
+}
+
 // destination = source1 <op> source2 through the cache. Two-operand ISA: seed dst with s1, then `op dst, s2` in place.
 static void emitBinary(X64Emitter& emitter, RegisterCache& cache, BinaryOp op, const Instruction& instruction, bool source1Const, bool source2Const) {
-	int a;
-	if (source1Const) { a = cache.scratch(GENERAL_REGISTER); emitter.movImm(static_cast<Reg>(a), static_cast<uint32_t>(instruction.p1.i)); }
-	else { a = cache.read(instruction.p1.i, GENERAL_REGISTER); }
-	int b;
-	if (source2Const) { b = cache.scratch(GENERAL_REGISTER); emitter.movImm(static_cast<Reg>(b), static_cast<uint32_t>(instruction.p2.i)); }
-	else { b = cache.read(instruction.p2.i, GENERAL_REGISTER); }
+	const int a = loadIntOperand(emitter, cache, instruction.p1, source1Const);
+	const int b = loadIntOperand(emitter, cache, instruction.p2, source2Const);
 	const int d = cache.define(instruction.p0.i, GENERAL_REGISTER);
 	emitTwoOperand(emitter, cache, &X64Emitter::mov, op, GENERAL_REGISTER, d, a, b);
 	cache.endInstruction();
@@ -468,12 +472,8 @@ static void emitShift(X64Emitter& emitter, RegisterCache& cache, const Instructi
 static void emitBranch(X64Emitter& emitter, RegisterCache& cache, Cond condition, const Instruction& instruction, UInt instructionIndex,
 		bool operand0Const, bool operand1Const, std::map<UInt, Label>& labels, std::map<UInt, ResidencyMap>& entryMaps,
 		bool resident, std::vector<ColdEdge>& coldEdges) {
-	int a;
-	if (operand0Const) { a = cache.scratch(GENERAL_REGISTER); emitter.movImm(static_cast<Reg>(a), static_cast<uint32_t>(instruction.p0.i)); }
-	else { a = cache.read(instruction.p0.i, GENERAL_REGISTER); }
-	int b;
-	if (operand1Const) { b = cache.scratch(GENERAL_REGISTER); emitter.movImm(static_cast<Reg>(b), static_cast<uint32_t>(instruction.p1.i)); }
-	else { b = cache.read(instruction.p1.i, GENERAL_REGISTER); }
+	const int a = loadIntOperand(emitter, cache, instruction.p0, operand0Const);
+	const int b = loadIntOperand(emitter, cache, instruction.p1, operand1Const);
 	emitter.cmp(static_cast<Reg>(a), static_cast<Reg>(b));
 	cache.endInstruction();
 	const UInt target = static_cast<UInt>(static_cast<Int>(instructionIndex) + instruction.p2.i);

@@ -496,7 +496,7 @@ static void storeMemConst(Arm64Emitter& e, Reg r, uint32_t wordIndex) {
 	W9-W15 fixed scratch of uncached opcodes. General entries are X-registers, float entries V-registers.
 */
 static const int ARM64_GENERAL_POOL[] = { W5, W6, W7, W8, W16, W17 };
-static const int ARM64_FLOAT_POOL[] = { 16, 17, 18, 19, 20, 21, 22, 23 };												// V16-V23 (caller-saved; unused until floats are cached)
+static const int ARM64_FLOAT_POOL[] = { 16, 17, 18, 19, 20, 21, 22, 23 };												// V16-V23 (caller-saved)
 
 namespace {
 class Arm64SlotBackend : public RegisterCacheBackend {
@@ -531,14 +531,18 @@ static void emitConditionalEdge(Arm64Emitter& e, RegisterCache& cache, std::map<
 	e.bcond(c, edge.label);
 }
 
+// Load an integer operand into a cache register: a slot (read), or a constant materialized into a scratch.
+static int loadIntOperand(Arm64Emitter& e, RegisterCache& cache, const Value& p, bool isConst) {
+	if (!isConst) { return cache.read(p.i, GENERAL_REGISTER); }
+	const int r = cache.scratch(GENERAL_REGISTER);
+	matConst(e, static_cast<Reg>(r), p.i);
+	return r;
+}
+
 // `dst = s1 <op> s2` through the register cache; s1 is a slot (VVV/VVC) or a const (VCV), s2 a const (VVC) or a slot.
 static void emitBinary(Arm64Emitter& e, RegisterCache& cache, void (Arm64Emitter::*op)(Reg, Reg, Reg), const Instruction& in, bool s1Const, bool s2Const) {
-	int a;
-	if (s1Const) { a = cache.scratch(GENERAL_REGISTER); matConst(e, static_cast<Reg>(a), in.p1.i); }
-	else { a = cache.read(in.p1.i, GENERAL_REGISTER); }
-	int b;
-	if (s2Const) { b = cache.scratch(GENERAL_REGISTER); matConst(e, static_cast<Reg>(b), in.p2.i); }
-	else { b = cache.read(in.p2.i, GENERAL_REGISTER); }
+	const int a = loadIntOperand(e, cache, in.p1, s1Const);
+	const int b = loadIntOperand(e, cache, in.p2, s2Const);
 	const int d = cache.define(in.p0.i, GENERAL_REGISTER);
 	(e.*op)(static_cast<Reg>(d), static_cast<Reg>(a), static_cast<Reg>(b));
 	cache.endInstruction();
@@ -652,13 +656,13 @@ static void emitDivMod(Arm64Emitter& e, RegisterCache& cache, bool rem, const In
 }
 
 /*
-	Lower one function at `funcIndex` into `e` (appended). Emits an entry reload + FUNC prologue, a mainline per block,
+	Lower one function at `funcIndex` into `e` (appended). Emits the FUNC prologue, a mainline per block,
 	cold reload trampolines + §5.7.5 suspend stubs for loop heads, and the §5.4 call/return transfers. `entryLabels[ord]`
-	are pre-created (for direct calls); `entryOffset[selfOrdinal]` is set to this function's native word offset. Returns
+	are pre-created (for direct calls); the entry label records this function's native word offset. Returns
 	false on an unsupported opcode.
 */
 void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, const Value* memory, UInt funcIndex, UInt funcEnd, const Offsets& o,
-		std::vector<Label>& entryLabels, std::vector<size_t>& entryOffset, UInt selfOrdinal, UInt functionCount, Label exitLabel) {
+		std::vector<Label>& entryLabels, UInt selfOrdinal, UInt functionCount, Label exitLabel) {
 	const UInt retIndex = funcEnd;																						// a function extends to the next FUNC (functionTable order), NOT to its first RETU: multi-RETU and GOTO-ending functions are legal
 
 	/*
@@ -678,7 +682,6 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 		Function entry (hot - reached by a tail-branch from a caller or by the dispatcher after it reloaded the pins, so
 		state is already live). FUNC prologue: dsp += localsSize.
 	*/
-	entryOffset[selfOrdinal] = e.wordCount();
 	e.bind(entryLabels[selfOrdinal]);
 	const UInt localsSize = static_cast<UInt>(code[funcIndex].p0.i);
 	if (localsSize != 0) {																								// dsp += localsSize (in bytes); register add if beyond the imm12 range
@@ -689,7 +692,7 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 		const UInt paramsSize = static_cast<UInt>(code[funcIndex].p1.i);
 		Label sok = e.newLabel();
 		e.ldrX(X9, X0, o.dsend); addImmXBig(e, X10, X1, paramsSize * 4); e.cmpX(X10, X9);
-		e.bcond(LS, sok); e.movn(W0, 4); e.b(exitLabel);																// > end → ~4 = -5 = DATA_STACK_OVERFLOW
+		e.bcond(LS, sok); e.movn(W0, static_cast<uint16_t>(~DATA_STACK_OVERFLOW)); e.b(exitLabel);
 		e.bind(sok);
 	}
 
@@ -730,7 +733,7 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 		const Int op = in.opcode;
 		if (!isCacheLowered(op)) { cache.barrier(); }																		// uncached opcode: lower it as v1 over an empty cache
 		switch (op) {
-			case OP_FUNC: continue;																						// prologue stack/fuel check omitted for the prototype
+			case OP_FUNC: continue;																						// the prologue (frame + stack check) is emitted above
 			case OP_RETU: {
 				Label notNative = e.newLabel();
 				e.subImmX(X4, X4, 16);																					// ipsp-- ; pop {cont, dsp}
@@ -757,7 +760,7 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 				e.ldrX(X10, X0, o.funcentries); e.ldrXr(X9, X10, W9);													// x9 = funcEntries[ordinal] - survives the slide
 				emitTailWindow(e, static_cast<UInt>(in.p1.i), static_cast<UInt>(in.p2.i));
 				e.br(X9);
-				e.bind(trap); e.movn(W0, 3); e.b(exitLabel);															// ~3 = -4 = BAD_CALL
+				e.bind(trap); e.movn(W0, static_cast<uint16_t>(~BAD_CALL)); e.b(exitLabel);
 				break;
 			}
 			case OP_CALL_CVC: {
@@ -765,7 +768,7 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 				const UInt window = static_cast<UInt>(in.p1.i);
 				Label after = e.newLabel(), iok = e.newLabel();
 				e.ldrX(X9, X0, o.ipsend); e.cmpX(X4, X9); e.bcond(LO, iok);												// ipsp >= ipStackEnd → IP_STACK_OVERFLOW
-				e.movn(W0, 5); e.b(exitLabel); e.bind(iok);																// ~5 = -6
+				e.movn(W0, static_cast<uint16_t>(~IP_STACK_OVERFLOW)); e.b(exitLabel); e.bind(iok);
 				e.adr(X9, after); e.strX(X9, X4, 0); e.strX(X1, X4, 8); e.addImmX(X4, X4, 16);							// push {after, dsp}
 				if (window != 0) { addImmXBig(e, X1, X1, window * 4); }														// dsp += arg window
 				e.b(entryLabels[callee]);																				// tail-branch to the callee entry (state stays live)
@@ -776,7 +779,7 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 				const UInt window = static_cast<UInt>(in.p1.i);															// ordinal from a slot at runtime → resolve + bounds-check
 				Label after = e.newLabel(), trap = e.newLabel(), iok = e.newLabel();
 				e.ldrX(X9, X0, o.ipsend); e.cmpX(X4, X9); e.bcond(LO, iok);												// ipsp >= ipStackEnd → IP_STACK_OVERFLOW
-				e.movn(W0, 5); e.b(exitLabel); e.bind(iok);
+				e.movn(W0, static_cast<uint16_t>(~IP_STACK_OVERFLOW)); e.b(exitLabel); e.bind(iok);
 				loadSlot(e, W9, in.p0.i);																				// fn pointer = FUNCTION_OFFSET + ordinal
 				matConst(e, W10, static_cast<Int>(FUNCTION_OFFSET)); e.sub(W9, W9, W10);										// ordinal
 				matConst(e, W10, static_cast<Int>(functionCount));
@@ -785,7 +788,7 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 				e.adr(X10, after); e.strX(X10, X4, 0); e.strX(X1, X4, 8); e.addImmX(X4, X4, 16);						// push {after, dsp}
 				if (window != 0) { addImmXBig(e, X1, X1, window * 4); }
 				e.br(X9);																								// tail-branch to the callee entry (state stays live)
-				e.bind(trap); e.movn(W0, 3); e.b(exitLabel);															// ~3 = -4 = BAD_CALL
+				e.bind(trap); e.movn(W0, static_cast<uint16_t>(~BAD_CALL)); e.b(exitLabel);
 				e.bind(after);
 				break;
 			}
@@ -936,7 +939,7 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 				const int d = cache.define(in.p0.i, GENERAL_REGISTER);
 				e.ldrWxs(static_cast<Reg>(d), X1, static_cast<Reg>(c));
 				cache.endInstruction();
-				e.b(cont); e.bind(trap); e.movn(W0, 1); e.b(exitLabel);
+				e.b(cont); e.bind(trap); e.movn(W0, static_cast<uint16_t>(~BAD_PEEK)); e.b(exitLabel);
 				e.bind(cont);
 				break;
 			}
@@ -956,7 +959,7 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 				e.strWxs(static_cast<Reg>(val), X1, static_cast<Reg>(c));
 				cache.endInstruction();
 				cache.invalidateAll();
-				e.b(cont); e.bind(trap); e.movn(W0, 2); e.b(exitLabel);
+				e.b(cont); e.bind(trap); e.movn(W0, static_cast<uint16_t>(~BAD_POKE)); e.b(exitLabel);
 				e.bind(cont);
 				break;
 			}
@@ -980,7 +983,7 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 				e.add(W14, W9, W11); e.strWx(W12, X2, W14);																// memoryBase[destIdx+i] = val
 				e.addImm(W11, W11, 1); e.b(lp);
 				e.bind(ldone); e.b(cont);
-				e.bind(trap); e.movn(W0, 7); e.b(exitLabel);															// ~7 = -8 = ACCESS_VIOLATION
+				e.bind(trap); e.movn(W0, static_cast<uint16_t>(~ACCESS_VIOLATION)); e.b(exitLabel);
 				e.bind(cont);
 				break;
 			}
@@ -1141,12 +1144,8 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 					case OP_NEQI_VCB: c = NE; c0const = false; c1const = true; break;
 					default: throwUnlowerableOpcode(in.opcode);															// unreachable: the outer case only enters here for these
 				}
-				int a;
-				if (c0const) { a = cache.scratch(GENERAL_REGISTER); matConst(e, static_cast<Reg>(a), in.p0.i); }
-				else { a = cache.read(in.p0.i, GENERAL_REGISTER); }
-				int b;
-				if (c1const) { b = cache.scratch(GENERAL_REGISTER); matConst(e, static_cast<Reg>(b), in.p1.i); }
-				else { b = cache.read(in.p1.i, GENERAL_REGISTER); }
+				const int a = loadIntOperand(e, cache, in.p0, c0const);
+				const int b = loadIntOperand(e, cache, in.p1, c1const);
 				e.cmp(static_cast<Reg>(a), static_cast<Reg>(b));
 				cache.endInstruction();
 				emitConditionalEdge(e, cache, entryMaps, mainline, static_cast<UInt>(static_cast<Int>(j) + in.p2.i), c, resident, coldEdges);
@@ -1185,13 +1184,13 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 		if (resident) {
 			Label reload = e.newLabel();
 			e.adr(X9, reload); e.strX(X9, X0, o.resume);																// RESUME = reload stub (below)
-			e.movn(W0, 0); e.b(exitLabel);																				// TIME_OUT
+			e.movn(W0, static_cast<uint16_t>(~TIME_OUT)); e.b(exitLabel);																				// TIME_OUT
 			e.bind(reload);
 			fillResidencyMap(slotBackend, m->second);
 			e.b(mainline[it->first]);
 		} else {
 			e.adr(X9, mainline[it->first]); e.strX(X9, X0, o.resume);													// RESUME = this block's hot mainline
-			e.movn(W0, 0); e.b(exitLabel);																				// TIME_OUT
+			e.movn(W0, static_cast<uint16_t>(~TIME_OUT)); e.b(exitLabel);																				// TIME_OUT
 		}
 	}
 }
@@ -1224,12 +1223,11 @@ void JitCompilerArm64::compile(const AssembledProgram& program, JitModule& out) 
 	const Offsets o = JitProcessor::layout();																			// the run-state ABI, obtained without an engine
 	Arm64Emitter e;
 	std::vector<Label> entryLabels(program.functionCount);
-	std::vector<size_t> entryOffset(program.functionCount, 0);
 	for (UInt k = 0; k < program.functionCount; ++k) { entryLabels[k] = e.newLabel(); }
 	Label exitLabel = e.newLabel();																						// the one dispatcher EXIT; every segment terminal branches here (§5.4 (b))
 	for (UInt ord = 0; ord < program.functionCount; ++ord) {
 		const UInt funcEnd = ((ord + 1 < program.functionCount) ? program.functionTable[ord + 1] : program.codeSize) - 1;
-		lowerFunction(e, program.code, program.memory, program.functionTable[ord], funcEnd, o, entryLabels, entryOffset, ord
+		lowerFunction(e, program.code, program.memory, program.functionTable[ord], funcEnd, o, entryLabels, ord
 				, program.functionCount, exitLabel);
 	}
 	const size_t dispatchOffset = emitDispatcher(e, o, exitLabel);
@@ -1238,7 +1236,9 @@ void JitCompilerArm64::compile(const AssembledProgram& program, JitModule& out) 
 	const size_t words = e.wordCount();
 	emitted.code.assign(e.code(), e.code() + words);
 	emitted.entryByteOffsets.resize(program.functionCount);
-	for (UInt ord = 0; ord < program.functionCount; ++ord) { emitted.entryByteOffsets[ord] = entryOffset[ord] * 4; }
+	for (UInt ord = 0; ord < program.functionCount; ++ord) {
+		emitted.entryByteOffsets[ord] = static_cast<size_t>(e.labelOffset(entryLabels[ord])) * 4;
+	}
 	emitted.dispatchByteOffset = dispatchOffset * 4;
 	JitModule built(emitted);																							// makes the code executable (throws JitException on host denial)
 	out.swap(built);
