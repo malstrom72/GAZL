@@ -311,16 +311,43 @@ struct RegisterPool {
 class RegisterCacheBackend {
 	public:		virtual void emitFill(int physicalRegister, Int slot, RegisterClass registerClass) = 0;
 				/*
-					Move a slot's value straight from one register file to the other, replacing the FILL of a spill-then-fill
-					pair. The spill stays: the home is written from the source register first, so the bridged line is clean.
-					GAZL's PEEK/POKE are UNTYPED word moves, so a float that arrives from memory lands in the general
-					file and every float op on it then wanted the other file; `a slot lives in one file at a time`
-					(evictOtherClass) made that a store plus a load, with the store-to-load latency landing inside the
-					dependency chain. A Value is a 32-bit word and this is a bit copy, so the classes are interchangeable
-					here: movd on x64, fmov on arm64.
+					Move a slot's value straight from one register file to the other, replacing the FILL of a
+					spill-then-fill pair. GAZL's PEEK/POKE are UNTYPED word moves, so a float that arrives from memory
+					lands in the general file and every float op on it then wanted the other file; `a slot lives in one
+					file at a time` (evictOtherClass) made that a store plus a load, with the store-to-load latency
+					landing inside the dependency chain. A Value is a 32-bit word and this is a bit copy, so the classes
+					are interchangeable here: movd on x64, fmov on arm64.
 				*/
 	public:		virtual void emitCrossMove(int dstRegister, RegisterClass dstClass, int srcRegister) = 0;
 	public:		virtual void emitSpill(Int slot, int physicalRegister, RegisterClass registerClass) = 0;
+				/*
+					Whether the SPILL half of that pair should stay, written from the source register before the move so
+					the bridged line arrives clean.
+
+					This is a genuine per-backend split, not a tuning knob anyone should collapse. The store happens
+					either way - eagerly here, or later wherever the dirty line is spilled - and the ONLY difference is
+					where it sits and which domain it issues in. The two backends measured OPPOSITE signs on the same
+					kernels, so one rule cannot serve both (min_ms, --bench=10 --warmup=3, JIT against JIT):
+
+					                       spectralnorm            sor
+					  x64 (Zen 4 7950X)    eager 89.35            eager 68.10
+					                       deferred 90.39 (+1.2%) deferred 68.02 (-0.1%)
+					  arm64 (Apple Si)     eager 53.22 (+6.9%)    eager 95.24 (+5.1%)
+					                       deferred 49.79         deferred 90.64
+
+					x64 wants it eager: the deferred store lands on the block's back edge AND changes domain, an
+					integer `mov [home], r10d` becoming an FP `movss [home], xmm3`, competing with the mulss/addss the
+					loop is already issuing. arm64 wants it deferred: grouping the store with the other tail stores in
+					the float domain beats an eager integer store sitting mid-loop between the load and the fmov. No
+					microarchitectural explanation is offered for the arm64 side - it is measured, and the obvious
+					hypothesis (that the store-to-load pair at one address was the expensive part) was tested and
+					refuted, since writing the home eagerly removes that pair and still loses.
+
+					Static counts do not predict this. In sor the eager form has FEWER stores in total than the
+					deferred one (62 against 64) and is still 5% slower on arm64, so where the stores execute matters
+					more than how many exist. Re-measure rather than reason if this is ever revisited.
+				*/
+	public:		virtual bool bridgeWritesHome() const = 0;
 	public:		virtual ~RegisterCacheBackend() { }
 };
 

@@ -597,17 +597,15 @@ int RegisterCache::read(Int slot, RegisterClass registerClass) {
 					int/float transfer port is narrower than the load units, and a clean line's home is already in
 					cache.
 
-					For a dirty copy the bridge replaces the RELOAD, and only the reload: the home is written here
-					from the source register, so the line arrives clean and nothing has to spill it later. Deferring
-					that store instead - carrying the dirty flag across - was measurably worse where the line is
-					spilled anyway, because the store does not disappear, it moves to the block's back edge AND
-					changes domain: an integer `mov [home], r10d` becomes an FP `movss [home], xmm3`, competing with
-					the float work in the loop that made the line hot. See isolation test H in
-					tools/GAZLJitLowerTest.cpp for the numbers.
+					For a dirty copy the bridge always replaces the RELOAD. Whether it also keeps the SPILL - writing
+					the home here from the source so the line arrives clean, rather than leaving it dirty for the block
+					end - is the backend's call, because the two measured OPPOSITE signs on the same kernels. See
+					RegisterCacheBackend::bridgeWritesHome for the numbers and isolation test H, which covers both.
 				*/
 				if (!otherLines[k].dirty) { otherLines[k].occupied = false; break; }	// drop it (clean: nothing to write) and fill from the home, as before
 				const int sourceRegister = otherRegisters[k];
-				cacheBackend.emitSpill(slot, sourceRegister, other);									// EXPERIMENT: launder the dirty bit from the SOURCE file
+				const bool writeHome = cacheBackend.bridgeWritesHome();
+				if (writeHome) { cacheBackend.emitSpill(slot, sourceRegister, other); }				// clean the line here, or leave it dirty and let the block end do it
 				otherLines[k].occupied = false;																			// it moves out of that file
 				const int b = acquire(registerClass);
 				Line& bridged = lines[b];
@@ -615,7 +613,7 @@ int RegisterCache::read(Int slot, RegisterClass registerClass) {
 				bridged.scratchTemp = false;
 				bridged.slot = slot;
 				bridged.registerClass = registerClass;
-				bridged.dirty = false;														// home is in sync now, so nothing spills it at the block end
+				bridged.dirty = !writeHome;												// in sync if we just wrote it; otherwise it still owes a store
 				bridged.pinned = true;
 				bridged.lastUse = ++useClock;
 				bridged.nextUse = nextReadAfter(slot);

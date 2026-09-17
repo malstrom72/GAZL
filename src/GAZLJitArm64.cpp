@@ -509,6 +509,7 @@ class Arm64SlotBackend : public RegisterCacheBackend {
 					const Reg r = static_cast<Reg>(physicalRegister);
 					if (registerClass == GENERAL_REGISTER) { storeSlot(e, r, slot); } else { storeSlotF(e, r, slot); }
 				}
+	public:		virtual bool bridgeWritesHome() const { return false; }							// measured: deferred wins here, see RegisterCacheBackend
 	public:		virtual void emitCrossMove(int dstRegister, RegisterClass dstClass, int srcRegister) {
 					const Reg d = static_cast<Reg>(dstRegister), s = static_cast<Reg>(srcRegister);
 					if (dstClass == FLOAT_REGISTER) { e.fmovSW(d, s); } else { e.fmovWS(d, s); }						// bit copy either way; a Value is one word
