@@ -47,7 +47,7 @@ extern "C" {
 	extern const uint8_t ref_push_rbx, ref_push_r12, ref_pop_rbx, ref_ret;
 	extern const uint8_t ref_seq, ref_seq_end;
 	extern const uint8_t ref_movss_load, ref_movss_store, ref_movaps_rr, ref_movaps_ext;
-	extern const uint8_t ref_addss, ref_subss, ref_mulss, ref_divss, ref_ucomiss, ref_xorps;
+	extern const uint8_t ref_addss, ref_subss, ref_mulss, ref_divss, ref_ucomiss, ref_xorps, ref_andps;
 	extern const uint8_t ref_cvtsi2ss, ref_cvttss2si, ref_movd_to_xmm, ref_movd_from_xmm, ref_roundss, ref_float_end;
 	extern const uint8_t ref_pool_seq, ref_pool_seq_end;
 }
@@ -127,7 +127,8 @@ int main() {
 	{ X64Emitter e; e.mulss(X1, X2); check("mulss", e, &ref_mulss, &ref_divss); }
 	{ X64Emitter e; e.divss(X1, X2); check("divss", e, &ref_divss, &ref_ucomiss); }
 	{ X64Emitter e; e.ucomiss(X1, X2); check("ucomiss", e, &ref_ucomiss, &ref_xorps); }
-	{ X64Emitter e; e.xorps(X1, X1); check("xorps", e, &ref_xorps, &ref_cvtsi2ss); }
+	{ X64Emitter e; e.xorps(X1, X1); check("xorps", e, &ref_xorps, &ref_andps); }
+	{ X64Emitter e; e.andps(X1, X2); check("andps", e, &ref_andps, &ref_cvtsi2ss); }
 	{ X64Emitter e; e.cvtsi2ss(X1, RCX); check("cvtsi2ss", e, &ref_cvtsi2ss, &ref_cvttss2si); }
 	{ X64Emitter e; e.cvttss2si(RAX, X1); check("cvttss2si", e, &ref_cvttss2si, &ref_movd_to_xmm); }
 	{ X64Emitter e; e.movdToXmm(X1, RCX); check("movd_to_xmm", e, &ref_movd_to_xmm, &ref_movd_from_xmm); }

@@ -117,6 +117,8 @@ ENTRY(ref_divss)			divss xmm1, xmm2
 ENTRY(ref_ucomiss)			ucomiss xmm1, xmm2
 		GLOBL(ref_xorps)
 ENTRY(ref_xorps)			xorps xmm1, xmm1
+		GLOBL(ref_andps)
+ENTRY(ref_andps)			andps xmm1, xmm2
 		GLOBL(ref_cvtsi2ss)
 ENTRY(ref_cvtsi2ss)			cvtsi2ss xmm1, ecx
 		GLOBL(ref_cvttss2si)

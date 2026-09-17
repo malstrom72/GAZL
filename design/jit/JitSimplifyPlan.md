@@ -39,10 +39,20 @@ divergence). 61 lines smaller across six files.
   counter now gets an initial NONFRAME stamp. Pass 2 still forces the counter to UNKNOWN and only ever joins upward,
   so it reaches the same fixed point - which the byte comparison confirms.
 
-Found while merging the loop sets and NOT fixed, because the fix can change codegen: the class sets file `ABSF`
-operands under GENERAL because x64 lowers `ABSF` bitwise in a GP register, but arm64 lowers it with `fabs` in the
-FLOAT file. On arm64 the sets therefore misclassify `ABSF` operands, which feeds the multi-block residency pressure
-gate and the single-class filter on wanted bindings.
+Found while merging the loop sets, then FIXED: the class sets filed `ABSF` operands under GENERAL, which matched x64
+(it cleared the sign bit in a GP register) but not arm64 (`fabs` in the FLOAT file). On arm64 a float slot touched
+by `ABSF` therefore looked dual-class and was never kept resident across a loop. Rather than a per-backend hook, x64
+now lowers `ABSF` in the float file too - `andps` against a pooled 0x7FFFFFFF, bit-identical to the interpreter's
+`fabsf`, NaN payload included - and the shared class sets call `ABSF` float for both backends.
+
+- arm64, a 20M-iteration `x = abs(x - 0.75); acc += x` loop: 53.82 -> 22.44 ms, min of 6 alternating rounds, same
+  output as the interpreter. The store and reload of `x` every iteration is gone.
+- Corpus (`--emit-jit`, 135 programs): no arm64 code changed; x64 code changed in the 24 programs that use `ABSF`,
+  and disassembly of two of them (`bender`, `phaser`) shows the change confined to the `ABSF` sites.
+- Gates: `build.sh`, both emitter byte-golden tests (new `andps` entry), lower test on both backends, exec/engine/slice,
+  firmwares plain and `--jit` on arm64 and `--jit` on x64 under Rosetta, 300k-deep soaks on both backends (seed
+  900001; x64 under Rosetta).
+- NOT measured yet: x64 speed. It needs native hardware; Rosetta timings are noise.
 
 ## Tier C - architectural, needs a deliberate decision
 

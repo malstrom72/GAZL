@@ -475,8 +475,8 @@ void buildLiveIn(const Instruction* code, UInt from, UInt to, const Value* memor
 
 /*
 	Loop-body working sets (see GAZLJit.h): the slots read / written, and the same slots by register class.
-	Class-by-opcode mirrors the shared lowering: float ops keep their VALUE operands in FLOAT_REGISTER; FTOI reads
-	float / writes general, ITOF the reverse; MOVE and all integer/pointer ops (and ABSF, lowered bitwise in GP on x64)
+	Class-by-opcode mirrors the shared lowering, which BOTH backends follow: float ops (ABSF included) keep their VALUE
+	operands in FLOAT_REGISTER; FTOI reads float / writes general, ITOF the reverse; MOVE and all integer/pointer ops
 	use GENERAL. A slot used both ways lands in both class sets.
 */
 void buildLoopSets(const Instruction* code, UInt from, UInt to, std::set<Int>& readSlots, std::set<Int>& writtenSlots
@@ -491,7 +491,7 @@ void buildLoopSets(const Instruction* code, UInt from, UInt to, std::set<Int>& r
 			case OP_ADDF_VVV: case OP_ADDF_VVC: case OP_SUBF_VVV: case OP_SUBF_VVC: case OP_SUBF_VCV:
 			case OP_MULF_VVV: case OP_MULF_VVC:
 			case OP_DIVF_VVV: case OP_DIVF_VVC: case OP_DIVF_VCV:
-			case OP_FLOF:
+			case OP_ABSF: case OP_FLOF:
 			case OP_LSSF_VVB: case OP_LSSF_VCB: case OP_LSSF_CVB:
 			case OP_EQUF_VVB: case OP_EQUF_VCB:
 			case OP_NLSF_VVB: case OP_NLSF_VCB: case OP_NLSF_CVB:

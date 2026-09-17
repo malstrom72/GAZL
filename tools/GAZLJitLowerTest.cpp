@@ -575,22 +575,17 @@ static const char* const K_DEADTAIL =
 	89714023. Nothing else here reaches that path: isolation test H below covers it against the MOCK backend, which
 	LOGS a move without encoding one, so before this kernel the lower test would have passed with a wrong fmov.
 
-	DO NOT DELETE THIS AS REDUNDANT, whatever an x64 bridge count suggests. Measured per-kernel (instrumented
-	emitCrossMove, 2026-09-17):
+	DO NOT DELETE THIS AS REDUNDANT. Measured per-kernel (instrumented emitCrossMove, probe on stdout, 2026-09-17):
 
 	                        x64            arm64
 	  cross-file            1 g2f 1 f2g    1 g2f 1 f2g
 	  divf zero             1 g2f          1 g2f
-	  float abs/flr         1 g2f 1 f2g    none
 
-	`float abs/flr` covers both directions on x64 and nothing on arm64, because the two backends put ABSf in
-	different register files: x64 clears the sign bit bitwise in a GP register (`cache.read(p1, GENERAL_REGISTER)`,
-	GAZLJitX64.cpp) while arm64 uses `fabsS` and stays in the float file (GAZLJitArm64.cpp). In K_FLOATABS, `FLOf`
-	leaves $a float-dirty; on x64 the following `ABSf` reads it GENERAL and the `fTOi` reads it FLOAT again, so it
-	bridges twice by accident. On arm64 $a never leaves the float file. So ON arm64 THIS KERNEL IS THE ONLY
-	LOWER-TEST COVERAGE OF float->general (fmovWS) - `divf zero` reaches only general->float - and fmovWS is the
-	direction the fuzzer hits roughly 13x less often. Delete this and the fast gate loses that instruction entirely
-	on the architecture that has it.
+	No other kernel bridges on either backend, so THIS KERNEL IS THE ONLY LOWER-TEST COVERAGE OF float->general
+	(x64 movd xmm->GP, arm64 fmovWS) - `divf zero` reaches only general->float - and float->general is the
+	direction the fuzzer hits roughly 13x less often. `float abs/flr` used to bridge both ways on x64, by accident:
+	x64 lowered ABSf in a GP register. Both backends now lower ABSf in the float file, so it bridges on neither.
+	Delete this and the fast gate loses that instruction entirely.
 
 	`MOVE` is the lever. It is ANY_VAR_W / ANY_VAR_R in the opcode table, so it is the one instruction that can name a
 	float local while lowering through the GENERAL file (`cache.read` / `define` with GENERAL_REGISTER), which is what

@@ -164,6 +164,7 @@ void X64Emitter::divss(Reg xd, Reg xs) { sseRR(0xF3, 0x5E, xd, xs); }
 void X64Emitter::ucomiss(Reg xa, Reg xb) { sseRR(0x00, 0x2E, xa, xb); }
 void X64Emitter::cvttss2si(Reg rd, Reg xs) { sseRR(0xF3, 0x2C, rd, xs); }
 void X64Emitter::xorps(Reg xd, Reg xs) { sseRR(0x00, 0x57, xd, xs); }													// xorps xd, xs (0F 57 /r); xd == xs is the recognized zero idiom, breaking dependencies on xd
+void X64Emitter::andps(Reg xd, Reg xs) { sseRR(0x00, 0x54, xd, xs); }													// andps xd, xs (0F 54 /r)
 void X64Emitter::cvtsi2ss(Reg xd, Reg rs) { sseRR(0xF3, 0x2A, xd, rs); }
 void X64Emitter::movdToXmm(Reg xd, Reg rs) { sseRR(0x66, 0x6E, xd, rs); }
 void X64Emitter::movdFromXmm(Reg rd, Reg xs) { sseRR(0x66, 0x7E, xs, rd); }												// 66 0F 7E /r: ModRM.reg = xmm source
@@ -1072,13 +1073,12 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 				cache.endInstruction();
 				break;
 			}
-			case OP_ABSF: {																								// clear the float word's sign bit (bitwise, in a GP register)
-				const int s = cache.read(in.p1.i, GENERAL_REGISTER);
-				const int m = cache.scratch(GENERAL_REGISTER);
-				emitter.movImm(static_cast<Reg>(m), 0x7FFFFFFFu);
-				const int d = cache.define(in.p0.i, GENERAL_REGISTER);
-				if (d != s) { emitter.mov(static_cast<Reg>(d), static_cast<Reg>(s)); }
-				emitter.and_(static_cast<Reg>(d), static_cast<Reg>(m));
+			case OP_ABSF: {																								// clear the sign bit in the float file (same bits as fabsf, NaN payload kept)
+				const int s = cache.read(in.p1.i, FLOAT_REGISTER);
+				const int d = cache.define(in.p0.i, FLOAT_REGISTER);
+				if (d != s) { emitter.movssReg(static_cast<Reg>(d), static_cast<Reg>(s)); }
+				emitter.movssRip(FLOAT_1, emitter.floatLiteral(0x7FFFFFFFu));
+				emitter.andps(static_cast<Reg>(d), FLOAT_1);
 				cache.endInstruction();
 				break;
 			}
