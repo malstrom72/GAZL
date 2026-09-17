@@ -651,6 +651,9 @@ struct RecordingBackend : public RegisterCacheBackend {
 		std::snprintf(buffer, sizeof buffer, "[%d]<-S%d ", static_cast<int>(slot), physicalRegister);
 		log += buffer;
 	}
+	bool writesHome;																// both policies are live in the shipped backends, so both are tested
+	RecordingBackend(bool writesHome = true) : writesHome(writesHome) { }
+	virtual bool bridgeWritesHome() const { return writesHome; }
 };
 }
 
@@ -761,35 +764,44 @@ static void runRegisterCacheTests() {
 		to the home and RELOAD ("[1]<-S10 F20<-[1] "). This is the PEEK-then-float-use word: PEEK is untyped and lands
 		in the general file, and every float op on it wants the other one.
 
-		The home is still written, from the SOURCE register, before the move - so the bridge replaces the reload but
-		not the store, and the line arrives CLEAN. That looks like giving half the saving back, and it is; it was
-		measured, on an AMD 7950X (Zen 4):
+		The RELOAD always goes; the SPILL is a per-backend policy (RegisterCacheBackend::bridgeWritesHome), so both
+		shapes ship and both are tested here. Write the home eagerly from the source and the bridged line is clean;
+		leave it dirty and the block end writes it instead. The store happens either way - only its position and
+		domain change - and the two backends measured OPPOSITE signs on the same kernels, which is why this is a
+		policy and not a preference (min_ms, --bench=10 --warmup=3, JIT against JIT):
 
-		                        spectralnorm      sor
-		  pre-bridge              89.412 ms     96.111 ms
-		  dirty flag carried      90.393 (+1.1%)  68.017 (-29.2%)
-		  home written here       89.352 (-0.1%)  68.100 (-29.1%)
+		                       spectralnorm            sor
+		  x64 (Zen 4 7950X)    eager 89.35            eager 68.10
+		                       deferred 90.39 (+1.2%) deferred 68.02 (-0.1%)
+		  arm64 (Apple Si)     eager 53.22 (+6.9%)    eager 95.24 (+5.1%)
+		                       deferred 49.79         deferred 90.64
 
-		Carrying the dirty flag instead leaves the home stale, so SOMETHING has to spill the line later - and in
-		spectralnorm's inner loop that lands on the block's back edge, once per iteration. The store never went away;
-		it moved, and changed domain with it. The old `mov [home], r10d` was an integer store that also happened to
-		clean the line; the deferred one is `movss [home], xmm3`, which needs an FP pipe in a loop already issuing
-		mulss/addss/movss. Instruction counts are identical either way - 20 in that loop, both versions - which is why
-		this cost nothing that an instruction count could see.
-
-		So: bridging is worth it when it removes the RELOAD, which it always does. Deferring the store is worth it
-		only when the line is never spilled at all, and nothing here can know that in advance. sor pays 0.08 ms of a
-		28 ms win for the certainty.
+		Instruction counts do not see any of this. spectralnorm's inner loop is the same length under all three
+		shapes, and in sor the eager form has FEWER stores in total than the deferred one (62 against 64) and is
+		still 5% slower on arm64. Where the stores execute matters more than how many exist, so re-measure rather
+		than reason if this is ever revisited - the obvious hypothesis for the arm64 side (that the store-to-load
+		pair at one address was the expensive part) was tested and refuted: writing the home eagerly removes that
+		pair and still loses there.
 	*/
 	{
 		RegisterPool pool = { gp2, 2, fp2, 2 };
-		RecordingBackend m;
+		RecordingBackend m(true);								// eager: the x64 policy
 		RegisterCache c(pool, m);
 		c.enterBlock();
 		c.define(1, GENERAL_REGISTER); c.endInstruction();		// slot1 dirty in the general file
 		c.read(1, FLOAT_REGISTER); c.endInstruction();			// home written from the source, then one cross-file move
 		c.barrier();											// nothing to do: the line is clean
-		cacheExpect("cross-file slot", m.log, "[1]<-S10 X20<-10 ");
+		cacheExpect("cross-file slot (eager)", m.log, "[1]<-S10 X20<-10 ");
+	}
+	{
+		RegisterPool pool = { gp2, 2, fp2, 2 };
+		RecordingBackend m(false);								// deferred: the arm64 policy
+		RegisterCache c(pool, m);
+		c.enterBlock();
+		c.define(1, GENERAL_REGISTER); c.endInstruction();		// slot1 dirty in the general file
+		c.read(1, FLOAT_REGISTER); c.endInstruction();			// one cross-file move, home untouched
+		c.barrier();											// still dirty, just in the other file: written here
+		cacheExpect("cross-file slot (deferred)", m.log, "X20<-10 [1]<-S20 ");
 	}
 
 	// Read/write sets for the capture tests below: rw(slot) = the loop both reads and writes it.
