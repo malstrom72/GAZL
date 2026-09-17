@@ -118,6 +118,63 @@ Because `Reg`/`Cond`/`Label` are per-backend types with matching member names, t
 orchestration, the structs, the edge policy) move to `GAZLJit.cpp` with no templating; the emitter-touching pieces
 (cold sections, prologue) need the skeleton templated on the emitter type.
 
+## Second /simplify pass, 2026-09-17 (after tier C)
+
+Four review agents (reuse / simplification / efficiency / altitude) over the whole JIT. Everything below is verified
+the same way as the tiers: `--emit-jit` byte-identical to `5542b3d` on BOTH backends over 136 programs, lower test
+debug and release on both, then `build.sh`, both emitter goldens, exec/engine/slice, firmwares plain and `--jit` on
+arm64 and `--jit` on x64 under Rosetta, and 300k-deep soaks (seed 1800001, both backends, no divergence). The
+cleanups remove 29 lines; the two measured optimizations add 30, so the pass is line-neutral and emits the same code.
+
+Applied:
+
+- **`jitResidencySafe` is `isCacheLowered` minus ten frame-touching opcodes** (-22 lines). The 71-opcode list was a
+  hand-kept subset of the 81-opcode one; a new cache-lowered opcode used to fall out of residency silently. The
+  `static_assert` message now names every list a new opcode must join.
+- **`loadIntOperand`** beside each backend's `loadFloatOperand` (-14): seven copies of the const-or-slot preamble.
+- **arm64 entry offsets come from the bound label** (`Arm64Emitter::labelOffset`, as x64 already did): the
+  `entryOffset` vector and two `lowerFunction` parameters are gone (-6).
+- **arm64 exit statuses are symbolic** - `movn(W0, ~BAD_PEEK)` rather than `movn(W0, 1)` with a decoding comment, at
+  ten sites. Same instruction; the Status enum is no longer re-derived by hand.
+- **`std::swap` in `JitModule::swap`** (-8), and the dead `TRANSFER` / `NATIVE_CALL` sentinels are gone.
+- **Stale comments fixed**, including two user-visible ones in `tools/GAZLCmd.cpp` (`--forward` is not interpreter-
+  only; the JIT is not arm64-only) and x64's execution-model prose, which still described segments returning
+  TRANSFER / NATIVE_CALL sentinels when they return only terminal statuses and call `^native` inline.
+
+Measured optimizations (compile time only - emitted code is byte-identical):
+
+- **`buildLiveIn` accumulates in place.** The fixed point built two `std::set` trees per instruction per sweep; it
+  now adds into `liveIn[j]` directly (monotone, so the same least fixed point) with the successor vector hoisted.
+- **`operandRoles` is a table built once at load** instead of a linear scan of 294 operator rows per call - the JIT
+  asks per instruction, per analysis, per sweep.
+- Together, whole-program compile (min of 15, arm64): flakes 4.50 -> 1.41 ms (3.2x), pongdev 1.86x, phaser 1.74x,
+  vortex 1.52x, mozaik 1.43x. The 300k-deep soak, which is mostly compilation, went 310 s -> 138 s on arm64 and
+  640 s -> 300 s on x64 under Rosetta.
+
+Identified and NOT applied (all still open):
+
+- **Per-opcode const flags from `operandRoles`.** Both backends hand-encode `(s1Const, s2Const)` / `form` ~100
+  times; the roles table already answers it (`OPERAND_OTHER` == a constant), verified for every form. -15 to -25
+  lines, but a wide mechanical edit to bit-exact lowering; gate it on an opcode-by-opcode dump of the derivation.
+- **`planColdTrap`.** The four-step trap protocol (label, status, `captureDirtyLines` AT the branch point, push) is
+  hand-written at 12 sites. A helper called at the capture point keeps emission identical; the capture must not move.
+- **The indexed PEEK/POKE and GETL/SETL cases** are four variants of one sequence per backend (~-45 and ~-18): the
+  cache acquisition order is the whole risk, so it needs the byte comparison on both backends.
+- **One `Label` type.** The two backends define `GAZL::Label` differently (arm64 POD, x64 defaults to -1); merging
+  them retires the `BasicColdTrap` / `BasicColdEdge` templates (-10) and makes a missing label fail loudly.
+- **A shared frame-aliasing predicate** for the eight `constAddrBase` / realm sites (~-10).
+
+Changes emitted code, so measurement-gated (not applied):
+
+- **Immediate compares.** Both backends materialize a constant compare operand into a pool register instead of using
+  `cmpImm`, which also burns a pool acquisition inside loops. Prototyped on arm64: spectralnorm 49.6-52.4 ms ->
+  44.8-46.8 (~9%), everything else flat, emitted code smaller everywhere. Needs a native x64 measurement.
+- **Tighter successors.** `jitSuccessors` gives SWCH a fall-through edge and TAIL both a fall-through and no target;
+  it is deliberately conservative (its comment says so) and only widens liveness. Tightening it shrinks residency
+  maps, so it is a benchmark question, not a cleanup.
+- **Route every terminal trap through `ColdTrap`.** GETL/SETL/COPY and the inline FUNC/CALL traps predate it.
+
+
 ## Looked at and deliberately NOT recommended
 
 - **The LRU fallback path** (`Line::lastUse`, the `useSchedule == 0` branches at `GAZLJit.cpp:509, 532-533`) is never
@@ -129,4 +186,5 @@ orchestration, the structs, the edge policy) move to `GAZLJit.cpp` with no templ
   behaviour-preserving - needs its own analysis.
 - **`jitResidencyLeaders` side-entry check is O(headers x functionLength)** (`GAZLJit.cpp:201-224`), re-reading SWCH
   tables per candidate. Real only for large functions with several loop candidates; do not restructure without a
-  measured need (CodingStyle section 2: optimize only for a proven win).
+  measured need (CodingStyle section 2: optimize only for a proven win). MEASURED 2026-09-17 and CLOSED: 0.003-0.006
+  ms, under 1% of a whole-program compile and the smallest of the five analysis phases. Do not restructure it.

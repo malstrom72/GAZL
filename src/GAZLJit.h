@@ -32,9 +32,9 @@
 	    the two virtual overrides, `JitProcessor::layout`, and (per backend) `lowerFunction`, `emitDispatcher`,
 	    `JitCompiler::compile` - lives in a .cpp.
 
-	The arm64 backend lives beside this in GAZLJitArm64.h / GAZLJitArm64.cpp: the `Arm64Emitter` assembler plus the v1
-	lowering pass + native dispatcher that drive it. The x64 emitter and the v2 register allocator (§5.7) are later
-	steps.
+	The arm64 backend lives beside this in GAZLJitArm64.h / GAZLJitArm64.cpp: the `Arm64Emitter` assembler plus the
+	lowering pass + native dispatcher that drive it. GAZLJitX64.h / GAZLJitX64.cpp mirror it for x86-64; the v2
+	register allocator (§5.7) is `RegisterCache` below.
 */
 
 #ifndef GAZLJit_h
@@ -51,8 +51,6 @@
 
 namespace GAZL {
 
-const int TRANSFER = 1;							// segment-to-segment transfer sentinel (no GAZL status is +1)
-const int NATIVE_CALL = 2;						// "invoke a native, then continue" sentinel
 const int BLOCK_RETRY = 5;						// a native returns this to suspend-and-retry (host policy; §5.4 blocking retry)
 
 /*
@@ -91,7 +89,8 @@ enum {
 /*
 	Every finalized opcode must be lowered by BOTH backends, so gaining one has to break the BUILD rather
 	than the generated code. If this fires: add a `case` for the new opcode to GAZLJitX64.cpp and
-	GAZLJitArm64.cpp (and to isCacheLowered / operandRoles if it touches frame slots), then update the count.
+	GAZLJitArm64.cpp; if it touches frame slots also to isCacheLowered, jitResidencySafe's exclusions, operandRoles
+	and buildLoopSets' class switch; then update the count.
 */
 static_assert(FINALIZED_OPCODE_COUNT == 93, "a finalized opcode was added or removed - both JIT backends need a case for it");
 
@@ -473,7 +472,7 @@ class RegisterCache {
 	public:		void invalidateAll();			// after a pointer WRITE: flush dirty + drop all
 	public:		void barrier();					// branch / fall-through to leader / CALL / RETU: flush dirty + drop all
 
-	public:		void evict(int physicalRegister);	// x64 fixed-register ops (idiv/shift/rep); no-op on arm64
+	public:		void evict(int physicalRegister);	// drop a fixed register; no backend needs it today (see the x64 pool note)
 	public:		bool isResident(Int slot) const;
 
 	// v2.2 loop-header residency: establish the header's entry state (varying maps: wanted = read-in-loop, live-in at

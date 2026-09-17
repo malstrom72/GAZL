@@ -177,6 +177,7 @@ class Arm64Emitter {
 		// --- buffer access ---
 		const uint32_t* code() const { return words.empty() ? 0 : &words[0]; }
 		size_t wordCount() const { return words.size(); }		// number of 32-bit instruction words emitted
+		ptrdiff_t labelOffset(Label l) const { return labelTargets[l.id]; }	// bound word index (after bind); for entry tables
 
 	private:
 		enum FixupKind { FIXUP_IMM26, FIXUP_IMM19, FIXUP_ADR };	// `b`→imm26; `b.cond`/`cbz`/`cbnz`→imm19; `adr`→imm21
@@ -202,8 +203,8 @@ class Arm64Emitter {
 class JitCompilerArm64 : public JitCompiler {
 	public:		virtual void compile(const AssembledProgram& program, JitModule& out);
 	private:	static void lowerFunction(Arm64Emitter& e, const Instruction* code, const Value* memory, UInt funcIndex
-						, UInt funcEnd, const Offsets& o, std::vector<Label>& entryLabels, std::vector<size_t>& entryOffset
-						, UInt selfOrdinal, UInt functionCount, Label exitLabel);	// calls the inherited fuel/opcode helpers
+						, UInt funcEnd, const Offsets& o, std::vector<Label>& entryLabels, UInt selfOrdinal
+						, UInt functionCount, Label exitLabel);				// calls the inherited fuel/opcode helpers
 };
 
 } // namespace GAZL

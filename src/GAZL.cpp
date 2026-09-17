@@ -616,7 +616,7 @@ static const Operator OPERATORS[] = {
 };
 const Int OPERATOR_COUNT = sizeof (OPERATORS) / sizeof (*OPERATORS);
 
-void operandRoles(Int opcode, OperandRole roles[3]) {
+static void scanOperandRoles(Int opcode, OperandRole roles[3]) {
 	roles[0] = roles[1] = roles[2] = OPERAND_OTHER;
 	const int READ = (VAR_INT_R | VAR_FLOAT_R | VAR_PTR_R) & ~TRANSIENT;			// the read bits alone (drop the shared TRANSIENT)
 	const int WRITE = (VAR_INT_W | VAR_FLOAT_W | VAR_PTR_W) & ~TRANSIENT;
@@ -632,6 +632,28 @@ void operandRoles(Int opcode, OperandRole roles[3]) {
 		if (opcode == FORi_VVB || opcode == FORi_VCB) { roles[0] = OPERAND_SLOT_READ_WRITE; }							// the counter is read-modify-write
 		return;
 	}
+}
+
+/*
+	The finalized opcodes are a dense block, so the scan above runs once per opcode at load instead of once per call:
+	the JIT asks for roles per instruction, per analysis pass, per fixed-point sweep. File scope, not a function-local
+	static: JitCompiler makes no thread promises.
+*/
+namespace {
+struct OperandRoleTable {
+	OperandRoleTable() {
+		for (int i = 0; i < FINALIZED_OPCODE_COUNT; ++i) { scanOperandRoles(FIRST_OPCODE_VALUE + i, roles[i]); }
+	}
+	OperandRole roles[FINALIZED_OPCODE_COUNT][3];
+};
+}
+static const OperandRoleTable OPERAND_ROLE_TABLE;
+
+void operandRoles(Int opcode, OperandRole roles[3]) {
+	const Int index = opcode - FIRST_OPCODE_VALUE;
+	if (index < 0 || index >= FINALIZED_OPCODE_COUNT) { scanOperandRoles(opcode, roles); return; }
+	const OperandRole* const cached = OPERAND_ROLE_TABLE.roles[index];
+	roles[0] = cached[0]; roles[1] = cached[1]; roles[2] = cached[2];
 }
 
 static bool isValidIdentifierChar(Char c) {

@@ -168,34 +168,12 @@ void JitCompiler::jitFuelSafepoints(const Instruction* code, UInt funcStart, UIn
 */
 static bool jitResidencySafe(Int op) {
 	switch (op) {
-		case OP_MOVE_VV: case OP_MOVE_VC:
-		case OP_PEEK_VC: case OP_POKE_CV: case OP_POKE_CC:
-		case OP_ABSI: case OP_ABSF: case OP_FLOF:
-		case OP_ADDI_VVV: case OP_ADDI_VVC: case OP_SUBI_VVV: case OP_SUBI_VVC: case OP_SUBI_VCV:
-		case OP_MULI_VVV: case OP_MULI_VVC:
-		case OP_DIVI_VVV: case OP_DIVI_VVC: case OP_DIVI_VCV:
-		case OP_MODI_VVV: case OP_MODI_VVC: case OP_MODI_VCV:
-		case OP_ANDI_VVV: case OP_ANDI_VVC: case OP_IORI_VVV: case OP_IORI_VVC: case OP_XORI_VVV: case OP_XORI_VVC:
-		case OP_SHLI_VVV: case OP_SHLI_VVC: case OP_SHLI_VCV:
-		case OP_SHRI_VVV: case OP_SHRI_VVC: case OP_SHRI_VCV:
-		case OP_SHRU_VVV: case OP_SHRU_VVC: case OP_SHRU_VCV:
-		case OP_ADDF_VVV: case OP_ADDF_VVC: case OP_SUBF_VVV: case OP_SUBF_VVC: case OP_SUBF_VCV:
-		case OP_MULF_VVV: case OP_MULF_VVC:
-		case OP_DIVF_VVV: case OP_DIVF_VVC: case OP_DIVF_VCV:
-		case OP_FTOI_VVC: case OP_ITOF_VVC:
-		case OP_FORi_VVB: case OP_FORi_VCB:
-		case OP_LSSI_VVB: case OP_LSSI_VCB: case OP_LSSI_CVB:
-		case OP_EQUI_VVB: case OP_EQUI_VCB:
-		case OP_NLSI_VVB: case OP_NLSI_VCB: case OP_NLSI_CVB:
-		case OP_NEQI_VVB: case OP_NEQI_VCB:
-		case OP_LSSF_VVB: case OP_LSSF_VCB: case OP_LSSF_CVB:
-		case OP_EQUF_VVB: case OP_EQUF_VCB:
-		case OP_NLSF_VVB: case OP_NLSF_VCB: case OP_NLSF_CVB:
-		case OP_NEQF_VVB: case OP_NEQF_VCB:
-		case OP_GOTO:
-			return true;
-		default:
+		case OP_ADRL: case OP_GETL_VVV: case OP_SETL_VVV: case OP_SETL_VVC:
+		case OP_PEEK_VCV: case OP_PEEK_VVV:
+		case OP_POKE_CVV: case OP_POKE_CVC: case OP_POKE_VVV: case OP_POKE_VVC:
 			return false;
+		default:
+			return isCacheLowered(op);
 	}
 }
 
@@ -313,18 +291,10 @@ JitModule::~JitModule() {
 }
 
 void JitModule::swap(JitModule& other) {
-	void* const tmpPage = ownedPage;
-	ownedPage = other.ownedPage;
-	other.ownedPage = tmpPage;
-
-	const size_t tmpWords = ownedWords;
-	ownedWords = other.ownedWords;
-	other.ownedWords = tmpWords;
+	std::swap(ownedPage, other.ownedPage);
+	std::swap(ownedWords, other.ownedWords);
 	entries.swap(other.entries);
-	
-	void* const tmpDispatch = dispatch;
-	dispatch = other.dispatch;
-	other.dispatch = tmpDispatch;
+	std::swap(dispatch, other.dispatch);
 }
 
 /*
@@ -451,24 +421,32 @@ void buildLiveIn(const Instruction* code, UInt from, UInt to, const Value* memor
 			if ((roles[k] & OPERAND_SLOT_WRITE) != 0) { kill[j].insert(operands[k]->i); }
 		}
 	}
-	// Backward fixed point: liveIn[j] = gen[j] U (liveOut[j] - kill[j]); liveOut[j] = U liveIn[succ]. Reverse sweeps converge fast.
+	/*
+		Backward fixed point: liveIn[j] = gen[j] U (liveOut[j] - kill[j]); liveOut[j] = U liveIn[succ]. Accumulated IN
+		PLACE - the transfer only ever adds, so a reverse Gauss-Seidel sweep reaches the same least fixed point without
+		building a live-out set per instruction per sweep. A self-looping GOTO/FORi makes j its own successor, so the
+		inner loop can insert into the set it is reading: safe, because every such element is already in it.
+	*/
+	std::vector<UInt> succ;
 	bool changed = true;
 	while (changed) {
 		changed = false;
 		for (UInt jj = to + 1; jj > from; --jj) {
 			const UInt j = jj - 1;
-			std::set<Int> out;
-			std::vector<UInt> succ;
+			std::set<Int>& in = liveIn[j];
+			const size_t before = in.size();
+			in.insert(gen[j].begin(), gen[j].end());
+			const std::set<Int>& killed = kill[j];
+			succ.clear();
 			jitSuccessors(code, from, to, memory, j, succ);
 			for (size_t s = 0; s < succ.size(); ++s) {
 				const std::map<UInt, std::set<Int> >::const_iterator it = liveIn.find(succ[s]);
-				if (it != liveIn.end()) { out.insert(it->second.begin(), it->second.end()); }
+				if (it == liveIn.end()) { continue; }
+				for (std::set<Int>::const_iterator live = it->second.begin(); live != it->second.end(); ++live) {
+					if (killed.find(*live) == killed.end()) { in.insert(*live); }
+				}
 			}
-			std::set<Int> in = gen[j];																					// gen U (out - kill)
-			for (std::set<Int>::const_iterator it = out.begin(); it != out.end(); ++it) {
-				if (kill[j].find(*it) == kill[j].end()) { in.insert(*it); }
-			}
-			if (in != liveIn[j]) { liveIn[j].swap(in); changed = true; }
+			if (in.size() != before) { changed = true; }
 		}
 	}
 }
@@ -886,12 +864,13 @@ void establishLeader(RegisterCache& cache, const Instruction* code, UInt j, cons
 			gated = true;
 			cache.barrier();
 		} else {
-			cache.capture(entryMaps[j], wantedGeneral, wantedFloat, writtenSlots);										// keep + PRELOAD the wanted bindings
+			ResidencyMap& headerMap = entryMaps[j];
+			cache.capture(headerMap, wantedGeneral, wantedFloat, writtenSlots);											// keep + PRELOAD the wanted bindings
 			for (std::map<UInt, UInt>::const_iterator w = w0; w != loopWeight.end() && w->first <= loopIt->second
 					; ++w) {
-				filterResidencyMap(entryMaps[j], liveIn[w->first], entryMaps[w->first]);								// interior leader: the bindings live there
+				filterResidencyMap(headerMap, liveIn[w->first], entryMaps[w->first]);									// interior leader: the bindings live there
 			}
-			resident = !entryMaps[j].entries.empty(); residentEnd = loopIt->second;
+			resident = !headerMap.entries.empty(); residentEnd = loopIt->second;
 		}
 	}
 	if (!freshHeader || gated) {
