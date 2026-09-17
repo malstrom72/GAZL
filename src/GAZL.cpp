@@ -629,6 +629,7 @@ void operandRoles(Int opcode, OperandRole roles[3]) {
 			if ((a & WRITE) != 0) { roles[j] = OPERAND_SLOT_WRITE; }
 			else if ((a & READ) != 0) { roles[j] = OPERAND_SLOT_READ; }
 		}
+		if (opcode == FORi_VVB || opcode == FORi_VCB) { roles[0] = OPERAND_SLOT_READ_WRITE; }							// the counter is read-modify-write
 		return;
 	}
 }

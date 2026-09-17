@@ -546,47 +546,6 @@ struct ColdEdge {
 };
 }
 
-// Opcodes whose operands route through the RegisterCache; everything else barriers the cache and lowers as v1 (§5.7).
-static bool cacheLowered(Int op) {
-	switch (op) {
-		case OP_MOVE_VV: case OP_MOVE_VC: case OP_ABSI:
-		case OP_ADDI_VVV: case OP_ADDI_VVC:
-		case OP_SUBI_VVV: case OP_SUBI_VVC: case OP_SUBI_VCV:
-		case OP_MULI_VVV: case OP_MULI_VVC:
-		case OP_ANDI_VVV: case OP_ANDI_VVC:
-		case OP_IORI_VVV: case OP_IORI_VVC:
-		case OP_XORI_VVV: case OP_XORI_VVC:
-		case OP_SHLI_VVV: case OP_SHLI_VVC: case OP_SHLI_VCV:
-		case OP_SHRI_VVV: case OP_SHRI_VVC: case OP_SHRI_VCV:
-		case OP_SHRU_VVV: case OP_SHRU_VVC: case OP_SHRU_VCV:
-		case OP_ABSF: case OP_FLOF:
-		case OP_ADDF_VVV: case OP_ADDF_VVC:
-		case OP_SUBF_VVV: case OP_SUBF_VVC: case OP_SUBF_VCV:
-		case OP_MULF_VVV: case OP_MULF_VVC:
-		case OP_DIVF_VVV: case OP_DIVF_VVC: case OP_DIVF_VCV:
-		case OP_FTOI_VVC: case OP_ITOF_VVC:
-		case OP_PEEK_VC: case OP_POKE_CV: case OP_POKE_CC: case OP_ADRL:
-		case OP_PEEK_VCV: case OP_PEEK_VVV:
-		case OP_POKE_CVV: case OP_POKE_CVC: case OP_POKE_VVV: case OP_POKE_VVC:
-		case OP_GETL_VVV: case OP_SETL_VVV: case OP_SETL_VVC:
-		case OP_DIVI_VVV: case OP_DIVI_VVC: case OP_DIVI_VCV:
-		case OP_MODI_VVV: case OP_MODI_VVC: case OP_MODI_VCV:
-		case OP_FORi_VVB: case OP_FORi_VCB:
-		case OP_LSSI_VVB: case OP_LSSI_VCB: case OP_LSSI_CVB:
-		case OP_EQUI_VVB: case OP_EQUI_VCB:
-		case OP_NLSI_VVB: case OP_NLSI_VCB: case OP_NLSI_CVB:
-		case OP_NEQI_VVB: case OP_NEQI_VCB:
-		case OP_LSSF_VVB: case OP_LSSF_VCB: case OP_LSSF_CVB:
-		case OP_EQUF_VVB: case OP_EQUF_VCB:
-		case OP_NLSF_VVB: case OP_NLSF_VCB: case OP_NLSF_CVB:
-		case OP_NEQF_VVB: case OP_NEQF_VCB:
-		case OP_GOTO:																									// flushes inside its case: reconcile (backward, qualified) or barrier
-			return true;
-		default:
-			return false;
-	}
-}
-
 // `dst = s1 <op> s2` through the register cache; s1 is a slot (VVV/VVC) or a const (VCV), s2 a const (VVC) or a slot.
 /*
 	Emit a conditional branch's cache transition + the branch itself (v2.2-full edge handling). Target has an entry
@@ -807,10 +766,8 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 			if (freshHeader) {
 				std::map<UInt, UInt>::const_iterator w0 = loopWeight.upper_bound(j);
 				const bool multiBlock = (w0 != loopWeight.end() && w0->first <= loopIt->second);
-				std::set<Int> readSlots, writtenSlots;
-				buildLoopSlotSets(code, j, loopIt->second, readSlots, writtenSlots);
-				std::set<Int> generalSlots, floatSlots;
-				buildLoopClassSets(code, j, loopIt->second, generalSlots, floatSlots);
+				std::set<Int> readSlots, writtenSlots, generalSlots, floatSlots;
+				buildLoopSets(code, j, loopIt->second, readSlots, writtenSlots, generalSlots, floatSlots);
 				/*
 					Wanted bindings (v2.2 varying maps): read in the loop AND live-in at the header (a written-first slot
 					like mandelbrot's zx2 burns no binding) AND single-class (a dual-class slot - e.g. a float bounced
@@ -849,7 +806,7 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 		if (weightIt != loopWeight.end()) { e.subsImm(W3, W3, weightIt->second); e.bcond(MI, suspendL[j]); }
 		const Instruction& in = code[j];
 		const Int op = in.opcode;
-		if (!cacheLowered(op)) { cache.barrier(); }																		// uncached opcode: lower it as v1 over an empty cache
+		if (!isCacheLowered(op)) { cache.barrier(); }																		// uncached opcode: lower it as v1 over an empty cache
 		switch (op) {
 			case OP_FUNC: continue;																						// prologue stack/fuel check omitted for the prototype
 			case OP_RETU: {
@@ -1207,10 +1164,9 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 				break;
 			}
 			case OP_SWCH: {																								// index = min(unsigned(V0), C1); br into a table of `b target`
-				const UInt sz = static_cast<UInt>(in.p1.i) + 1;
-				const UInt tbl = static_cast<UInt>(in.p2.p - MEMORY_OFFSET);
+				const std::vector<UInt> targets = switchTargets(code, j, memory);
 				loadSlot(e, W9, in.p0.i);																				// switch value
-				matConst(e, W10, in.p1.i);																				// clamp max = C1 = sz-1
+				matConst(e, W10, in.p1.i);																				// clamp max = C1 = targets.size() - 1
 				e.cmp(W9, W10);
 				Label useVal = e.newLabel();
 				e.bcond(LS, useVal);																					// (unsigned) val <= C1 → keep; else clamp to C1
@@ -1221,10 +1177,7 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 				e.lslImm(W11, W9, 2); e.addX(X10, X10, X11);															// += index * 4  (W-write zero-extends into X11)
 				e.br(X10);
 				e.bind(caseBase);																						// sz consecutive `b target` - br lands on the index'th
-				for (UInt k = 0; k < sz; ++k) {
-					const UInt t = static_cast<UInt>(static_cast<Int>(j) + memory[tbl + k].i);
-					e.b(mainline[t]);
-				}
+				for (size_t k = 0; k < targets.size(); ++k) { e.b(mainline[targets[k]]); }
 				break;
 			}
 			case OP_LSSF_VVB: case OP_LSSF_VCB: case OP_LSSF_CVB: case OP_EQUF_VVB: case OP_EQUF_VCB:

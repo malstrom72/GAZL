@@ -383,20 +383,26 @@ struct ResidencyMap {
 	std::vector<Entry> entries;
 };
 
+// Opcodes whose operands route through the cache; everything else barriers the cache and lowers as v1 (§5.7).
+bool isCacheLowered(Int op);
+
+// SWCH `instructionIndex`'s jump-table targets: absolute instruction indices, in table order.
+std::vector<UInt> switchTargets(const Instruction* code, UInt instructionIndex, const Value* memory);
+
 // Scan code[from..to] and record every slot READ per instruction (uses GAZL::operandRoles) into `schedule` (Belady input).
 void buildUseSchedule(const Instruction* code, UInt from, UInt to, UseSchedule& schedule);
 
-// Scan a loop body code[from..to] for the slots it reads / writes (residency pruning + expectDirty; see ResidencyMap).
-void buildLoopSlotSets(const Instruction* code, UInt from, UInt to, std::set<Int>& readSlots, std::set<Int>& writtenSlots);
+// Scan a loop body code[from..to] once for the slots it reads / writes (residency pruning + expectDirty; see
+// ResidencyMap) and for the same slots split by REGISTER CLASS, mirroring the backends' lowering choices (float
+// arithmetic / compares / FLOF and the float halves of FTOI/ITOF use FLOAT_REGISTER; everything else, incl MOVE, uses
+// GENERAL). The class sets feed the multi-block residency pressure gate: a per-class overflow of capture()'s keepMax
+// thrashes the map.
+void buildLoopSets(const Instruction* code, UInt from, UInt to, std::set<Int>& readSlots, std::set<Int>& writtenSlots
+		, std::set<Int>& generalSlots, std::set<Int>& floatSlots);
 
 // A leader's residency map = the loop's fixed bindings FILTERED to the slots LIVE-IN at that leader (v2.2 varying maps:
 // dead bindings free their registers for body temps; same slot -> same register everywhere, so edges never need moves).
 void filterResidencyMap(const ResidencyMap& full, const std::set<Int>& liveIn, ResidencyMap& out);
-
-// Split a loop body's slot working set by REGISTER CLASS, mirroring the backends' lowering choices (float arithmetic /
-// compares / FLOF and the float halves of FTOI/ITOF use FLOAT_REGISTER; everything else, incl MOVE, uses GENERAL).
-// Input to the multi-block residency pressure gate: a per-class overflow of capture()'s keepMax thrashes the map.
-void buildLoopClassSets(const Instruction* code, UInt from, UInt to, std::set<Int>& generalSlots, std::set<Int>& floatSlots);
 
 /*
 	Pointer-realm stamp (§1.1, v2.3a): the coarse realm of the pointer VALUE a slot holds, w.r.t. THIS frame's cached
