@@ -4,7 +4,7 @@ Findings from a `/simplify` review pass over the JIT compiler (the `jit-compiler
 the JIT parts of `src/GAZL.*`, `tools/GAZLCmd.cpp`). Tier A (dead run-state fields, redundant `operandRoles` decode,
 unconditional `buildLiveIn`, duplicated `keepMax` formula, arm64 double map lookups) is DONE, and so is tier B (its
 section records the outcome). Tier C was deliberately deferred, with the evidence, so it can be picked up without
-re-deriving it.
+re-deriving it; its section records what has landed since.
 
 Line numbers are from the state right after Tier A; treat them as pointers, not gospel.
 
@@ -52,13 +52,33 @@ now lowers `ABSF` in the float file too - `andps` against a pooled 0x7FFFFFFF, b
 - Gates: `build.sh`, both emitter byte-golden tests (new `andps` entry), lower test on both backends, exec/engine/slice,
   firmwares plain and `--jit` on arm64 and `--jit` on x64 under Rosetta, 300k-deep soaks on both backends (seed
   900001; x64 under Rosetta).
-- NOT measured yet: x64 speed. It needs native hardware; Rosetta timings are noise.
+- Native x64 (AMD 7950X, Windows session), same kernel, JIT vs JIT, 6 alternating rounds: `8bbbf3e` 54.86 ms best
+  (54.86-55.06) -> `b89e919` 14.73 ms best (14.73-14.77), 3.7x; both JITs and the interpreter print 8601898. At
+  `b89e919` natively: `build.cmd` exit 0 with "28/28 firmware checksums match" and "gen 2000 programs, no divergence"
+  observed - the lower test and emitter goldens it runs are covered by that exit code, not quoted - and
+  `GAZLFuzz --gen 300000 900001 deep` "no divergence". Seed 900001 repeats the Rosetta band on purpose: no new
+  programs, but it shows native x64 agrees with Rosetta on the same ones.
+- The kernel is now `benchmarks/suite/absloop` (Impala source, golden, checksum): the suite had no ABSf coverage.
 
 ## Tier C - architectural, needs a deliberate decision
 
 This is a real refactor of a bit-exact JIT. High value (it removes the two-copies-of-everything problem), but it must
 be done in verifiable steps: after each step run the lower/exec/engine/slice tests, both emitter byte-golden tests, and
 `checkPermut8Firmwares.sh` both plain and `--jit`, plus a fuzz soak.
+
+**Status 2026-09-17: C1 and C3 DONE, C2 set aside, C4 open.** Both landed as pure refactors: `--emit-jit` output is
+byte-identical to `b89e919` on both backends over the 135-program corpus, lower test green on both backends after each
+step, then `build.sh`, both emitter goldens, exec/engine/slice, firmwares plain and `--jit` on arm64 and `--jit` on x64
+under Rosetta, and 300k-deep soaks (seed 1200001: arm64 310 s, x64 under Rosetta 640 s, no divergence). 28 lines
+smaller.
+
+- **C1:** `establishLeader` in `GAZLJit.cpp`; each backend keeps only its label bind.
+- **C3:** `planConditionalEdge` makes the decision (reconcile, ColdEdge stub, or barrier). The note below that the
+  edge policy needs no templating is only half right: `Label`, `ColdEdge` and the emitter are distinct per-backend
+  types, so the decision is shared and each backend keeps label allocation and branch emission (a few lines each).
+- **C2, set aside:** the duplicated setup is about 17 lines per backend, but pass 2 uses what it builds some 40 times,
+  so a shared context object comes out size-neutral or larger (an estimate, not a prototype). It belongs with C4,
+  where the whole front half of `lowerFunction` could become one skeleton templated on the emitter.
 
 - **Hoist the loop-header residency orchestration.** `GAZLJitArm64.cpp:762-809` and `GAZLJitX64.cpp:664-712` are the
   same ~48 lines, comment for comment: `freshHeader` detection, `multiBlock` gate, the loop slot/class sets, the
