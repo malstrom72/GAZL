@@ -500,6 +500,25 @@ inline void reconcileOrBarrier(RegisterCache& cache, std::map<UInt, ResidencyMap
 	if (it != entryMaps.end()) { cache.reconcileTo(it->second); } else { cache.barrier(); }
 }
 
+/*
+	Leader entry, shared by both backends at every block leader before its label is bound. A FRESH loop header (not
+	already an interior leader of an enclosing resident loop) captures its residency map - wanted bindings, per-class
+	pressure gate, the filtered maps of its interior leaders - and marks [header, extent] resident. Any other leader, or
+	a gated header, reconciles to its entry map if it has one, else barriers. `j` is the leader's instruction index.
+*/
+void establishLeader(RegisterCache& cache, const Instruction* code, UInt j, const std::map<UInt, UInt>& loopExtent
+		, const std::map<UInt, UInt>& loopWeight, std::map<UInt, std::set<Int> >& liveIn
+		, std::map<UInt, ResidencyMap>& entryMaps, bool& resident, UInt& residentEnd);
+
+/*
+	A conditional branch's cache transition, shared by both backends. An in-loop edge (the target has an entry map)
+	reconciles inline - loads/stores leave the flags, so this may sit between compare and branch. A loop exit from a
+	resident map captures the dirty lines into `dirty` and returns true: the caller branches to a ColdEdge stub that
+	spills on the TAKEN path only. Anything else barriers. False means: branch straight to the target's label.
+*/
+bool planConditionalEdge(RegisterCache& cache, std::map<UInt, ResidencyMap>& entryMaps, UInt target, bool resident
+		, ResidencyMap& dirty);
+
 } // namespace GAZL
 
 #endif

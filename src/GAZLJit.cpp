@@ -852,6 +852,64 @@ void filterResidencyMap(const ResidencyMap& full, const std::set<Int>& liveIn, R
 	}
 }
 
+void establishLeader(RegisterCache& cache, const Instruction* code, UInt j, const std::map<UInt, UInt>& loopExtent
+		, const std::map<UInt, UInt>& loopWeight, std::map<UInt, std::set<Int> >& liveIn
+		, std::map<UInt, ResidencyMap>& entryMaps, bool& resident, UInt& residentEnd) {
+	std::map<UInt, UInt>::const_iterator loopIt = loopExtent.find(j);
+	bool gated = false;
+	// A loop header can also be an interior leader of an ENCLOSING resident loop, which already pre-populated its
+	// entry map via filterResidencyMap. Re-capturing it would assert (capture-once) and double-establish the
+	// residency; instead inherit that map like any interior leader (reconcile). Only a FRESH header captures.
+	const bool freshHeader = (loopIt != loopExtent.end() && entryMaps.count(j) == 0);
+	if (freshHeader) {
+		std::map<UInt, UInt>::const_iterator w0 = loopWeight.upper_bound(j);
+		const bool multiBlock = (w0 != loopWeight.end() && w0->first <= loopIt->second);
+		std::set<Int> readSlots, writtenSlots, generalSlots, floatSlots;
+		buildLoopSets(code, j, loopIt->second, readSlots, writtenSlots, generalSlots, floatSlots);
+		/*
+			Wanted bindings (v2.2 varying maps): read in the loop AND live-in at the header (a written-first slot
+			like mandelbrot's zx2 burns no binding) AND single-class (a dual-class slot - e.g. a float bounced
+			through MOVE's general line - gets cross-class evicted mid-loop; never pin it). The per-class pressure
+			gate applies to THIS set: what capture would actually pin.
+		*/
+		std::set<Int> wantedGeneral, wantedFloat;
+		const std::set<Int>& liveHeader = liveIn[j];
+		for (std::set<Int>::const_iterator si = readSlots.begin(); si != readSlots.end(); ++si) {
+			if (liveHeader.count(*si) == 0) { continue; }
+			const bool g = (generalSlots.count(*si) != 0), f = (floatSlots.count(*si) != 0);
+			if (g && f) { continue; }
+			if (f) { wantedFloat.insert(*si); } else { wantedGeneral.insert(*si); }
+		}
+		size_t generalMax, floatMax;
+		cache.residencyCapacity(generalMax, floatMax);
+		if (multiBlock && (wantedGeneral.size() > generalMax || wantedFloat.size() > floatMax)) {						// pressure gate: a strangling map loses to fill-on-use
+			gated = true;
+			cache.barrier();
+		} else {
+			cache.capture(entryMaps[j], wantedGeneral, wantedFloat, writtenSlots);										// keep + PRELOAD the wanted bindings
+			for (std::map<UInt, UInt>::const_iterator w = w0; w != loopWeight.end() && w->first <= loopIt->second
+					; ++w) {
+				filterResidencyMap(entryMaps[j], liveIn[w->first], entryMaps[w->first]);								// interior leader: the bindings live there
+			}
+			resident = !entryMaps[j].entries.empty(); residentEnd = loopIt->second;
+		}
+	}
+	if (!freshHeader || gated) {
+		std::map<UInt, ResidencyMap>::const_iterator m = entryMaps.find(j);
+		if (m != entryMaps.end()) { cache.reconcileTo(m->second); }													// interior leader (incl. a header inherited from an enclosing loop): re-establish its entry state
+		else { cache.barrier(); }																						// any other leader: starts empty as in v2.0
+	}
+}
+
+bool planConditionalEdge(RegisterCache& cache, std::map<UInt, ResidencyMap>& entryMaps, UInt target, bool resident
+		, ResidencyMap& dirty) {
+	std::map<UInt, ResidencyMap>::iterator it = entryMaps.find(target);
+	if (it != entryMaps.end()) { cache.reconcileTo(it->second); return false; }
+	if (resident) { cache.captureDirtyLines(dirty); return true; }
+	cache.barrier();
+	return false;
+}
+
 /*
 	Re-establish a header's entry state at a back-edge, from spill/fill primitives alone: spill-and-drop every line the
 	map does not want (including a wanted slot sitting in the wrong register - its refill below reads the home the spill
