@@ -394,9 +394,9 @@ void buildUseSchedule(const Instruction* code, UInt from, UInt to, UseSchedule& 
 
 // Scan a loop body code[from..to] once for the slots it reads / writes (residency pruning + expectDirty; see
 // ResidencyMap) and for the same slots split by REGISTER CLASS, mirroring the backends' lowering choices (float
-// arithmetic / compares / FLOF and the float halves of FTOI/ITOF use FLOAT_REGISTER; everything else, incl MOVE, uses
-// GENERAL). The class sets feed the multi-block residency pressure gate: a per-class overflow of capture()'s keepMax
-// thrashes the map.
+// arithmetic / compares / ABSF / FLOF and the float halves of FTOI/ITOF use FLOAT_REGISTER; everything else, incl
+// MOVE, uses GENERAL). The class sets feed the multi-block residency pressure gate: a per-class overflow of
+// capture()'s keepMax thrashes the map.
 void buildLoopSets(const Instruction* code, UInt from, UInt to, std::set<Int>& readSlots, std::set<Int>& writtenSlots
 		, std::set<Int>& generalSlots, std::set<Int>& floatSlots);
 
