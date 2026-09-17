@@ -3,6 +3,10 @@
 Status: DONE and validated on Apple Silicon (2026-09-13). See Result at the end. Review item 1 was fixed and the
 300k-deep arm64 soak is clean. The text below is the original handoff, kept as written.
 
+Since then this file has served as the running arm64 VERIFICATION LOG rather than a TAIL document: the dated
+sections at the end cover `ce10da6`, `K_DEADTAIL`, and most recently the cross-register-file bridge and the
+per-backend bridge policy (2026-09-17).
+
 The arm64 `TAIL` lowering was written on a Windows x64 box in the GAZL2 merge
 (`6c6161af`) and has **never been compiled, let alone run** - there is no arm64 toolchain there. The x64
 counterpart of the same change is fully verified. This file is the review checklist and the gate.
@@ -183,3 +187,87 @@ first kernel that actually exercises `ce10da6`'s weight change. On arm64 at the 
 - **Backout check:** with `ce10da6` reversed in a scratch copy (working tree untouched), arm64 fails exactly as x64
   did: `FIDELITY n=100 interp_suspends=9 jit_suspends=99 ratio=11.00` and `n=1000 ... ratio=11.10`, 2 failures.
   The two backends agree on a block's extent; the weight computation is shared, and this confirms it.
+
+### The cross-register-file bridge, `8971402` through `73fc9bd` (2026-09-16/17)
+
+Not TAIL. This file has been the running arm64 verification log since the `ce10da6` and `K_DEADTAIL` sections
+above, and this continues that rather than starting a fourth handoff document.
+
+`89714023` made `RegisterCache::read` bridge a slot register-to-register when it is resident in the other
+register file, instead of spilling and reloading through the frame slot. On arm64 that is `fmovSW` / `fmovWS`.
+Two things were unverified when it was pushed, and a third turned up during the work.
+
+**1. `fmovWS` had never been assembled.** It was read out of the ARM ARM, and `emitCrossMove` was the only
+emitter in that commit with no reference entry. Verified three ways on Apple Silicon:
+
+    llvm-mc -triple=arm64    fmov w0, s1    -> [0x20,0x00,0x26,0x1e]  = 0x1E260020
+    clang + otool            fmov w0, s1    -> 1e260020
+    non-trivial registers    fmov w13, s22  -> 1e2602cd = 0x1E260000 | (22 << 5) | 13
+
+The third is the one that counts. A `w0`/`s1` check passes even with the register fields misplaced or
+mis-masked, since both indices are small and one is zero. That was not a hypothetical: `fb4178ae` added an
+oracle entry and used exactly that weak pair, for both directions. `81abdc4f` moved both to registers drawn
+from the real pools (`ARM64_GENERAL_POOL` has `W17`, `ARM64_FLOAT_POOL` has `V22`), confirmed on arm64 as
+`fmov s22, w17` = 0x1E270236 and `fmov w17, s22` = 0x1E2602D1.
+
+**2. The bridge had never EXECUTED on arm64.** `4a4473fa`'s 300k soak predates it. On `89714023`: the 300k-deep
+soak is clean in 5m07s, `build.sh` and `test-jit.sh` exit 0, 28/28 firmwares, all 482 lower-test rows identical
+to the `4a4473f` run. What makes that evidence rather than a green tick is the instrumented count - seed 1's
+first 3000 programs emit **7480 bridges, 6959 general->float against 521 float->general** - and the benchmark
+suite is 13/13 byte-identical with `--jit` against without.
+
+**3. No lower-test kernel emitted a bridge at all.** The cross-file row was isolation test H against
+`RecordingBackend`, which LOGS a move without encoding one, so the fast gate could not have caught a wrong
+`fmov` however the oracle was written. `81abdc4f` adds `K_CROSSFILE`. `MOVE` is the lever: it is
+`ANY_VAR_W`/`ANY_VAR_R`, the one instruction that can name a float local while lowering through the GENERAL
+file, so it leaves a slot in the wrong file for the next instruction to find. A typed op cannot - `ADDf` will
+not name a `LOCi`.
+
+An asymmetry fell out of that. The backends put `ABSf` in different register files - x64 clears the sign bit
+bitwise in a GP register, arm64 uses `fabsS` and stays in the float file - so `float abs/flr` bridges twice by
+accident on x64 and zero times on arm64. **On arm64 `K_CROSSFILE` is therefore the only lower-test coverage of
+`fmovWS`**, the direction the fuzzer hits about 13x less often; `divf zero` reaches only `fmovSW`. That is
+recorded at the kernel so nobody retires it after looking at an x64 bridge count.
+
+A measurement caveat worth carrying forward, because it cost a wrong conclusion in both directions: an
+instrumented probe writing to `stderr` while the kernel headers go to `stdout` will mis-attribute or lose
+tokens, since block-buffered `stdout` flushes mid-line into a pipe. That produced a false "0 bridges in every
+kernel" here and a false per-kernel attribution on the x64 side, within an hour of each other. Put the probe on
+`stdout`, or `stderr` alone to a file.
+
+### The spectralnorm regression, and why the bridge policy is per-backend
+
+`89714023` was reproducibly ~1-2% SLOWER on spectralnorm on x64, instruction-count neutral, and unexplained.
+The cause: **the bridge did not remove a store, it relocated it and changed its domain.** The old spill wrote
+the home, which left the line clean; the bridge carried the dirty flag, so the line had to spill later - on the
+block's back edge, once per iteration, as an FP `movss` where it had been an integer `mov`.
+
+`cc69dd03` fixed that on x64 by writing the home from the source register and marking the line clean. **On
+arm64 the same change is a LOSS** - spectralnorm +6.9%, sor +5.1% - so it was a live regression there, and one
+rule cannot serve both. `b1cea191` makes it `RegisterCacheBackend::bridgeWritesHome()`: true on x64, false on
+arm64, which restores this backend to exactly the `89714023` path. Confirmed: the emitted code is
+**byte-identical** to `89714023` for spectralnorm, sor, mandelbrot and leibniz, layout sidecars included.
+
+                       spectralnorm            sor
+  x64 (Zen 4 7950X)    eager 89.35            eager 68.10
+                       deferred 90.39 (+1.2%) deferred 68.02 (-0.1%)
+  arm64 (Apple Si)     eager 53.22 (+6.9%)    eager 95.24 (+5.1%)
+                       deferred 49.79         deferred 90.64
+
+Two explanations died here, each killed by the other machine's data: that the fix would be x64-local (arm64
+showed the identical relocation), and that arm64's win came from removing a store-to-load pair at one address
+(writing the home eagerly removes that pair and still loses there). The comment in `GAZLJit.h` therefore says
+the arm64 side is measured and unexplained rather than offering a story.
+
+Static counts predict none of it. The predicted whole-function counts held EXACTLY on arm64 - spectralnorm's
+int stores back to 90, float stores back to 22, float loads staying at 8 - and the timing still went the other
+way. In sor the eager form has fewer stores in total than the deferred one, 62 against 64, and is 5% slower.
+
+Finally, a noise calibration nobody went looking for: byte-identical arm64 code measured **3.4% apart** on
+best-of-8 min across two builds of one kernel, drifting upward through the run under load. Treat anything under
+about 3% there as nothing unless the per-round ranges separate - which is how both decisions above were
+actually settled, not by a gap in a single min.
+
+**Gates at `73fc9bd`, arm64:** emitter golden ALL PASS with both `fmov` words matching; lower test ALL PASS in
+debug and release, including both `cross-file slot (eager)` and `(deferred)` rows and `K_CROSSFILE`; `build.sh`
+and `test-jit.sh` exit 0; 28/28 firmwares; 300k-deep soak clean.
