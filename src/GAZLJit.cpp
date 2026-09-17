@@ -910,6 +910,20 @@ bool planConditionalEdge(RegisterCache& cache, std::map<UInt, ResidencyMap>& ent
 	return false;
 }
 
+void spillResidencyMap(RegisterCacheBackend& backend, const ResidencyMap& map) {
+	for (size_t k = 0; k < map.entries.size(); ++k) {
+		const ResidencyMap::Entry& entry = map.entries[k];
+		if (entry.expectDirty) { backend.emitSpill(entry.slot, entry.physicalRegister, entry.registerClass); }
+	}
+}
+
+void fillResidencyMap(RegisterCacheBackend& backend, const ResidencyMap& map) {
+	for (size_t k = 0; k < map.entries.size(); ++k) {
+		const ResidencyMap::Entry& entry = map.entries[k];
+		backend.emitFill(entry.physicalRegister, entry.slot, entry.registerClass);
+	}
+}
+
 /*
 	Re-establish a header's entry state at a back-edge, from spill/fill primitives alone: spill-and-drop every line the
 	map does not want (including a wanted slot sitting in the wrong register - its refill below reads the home the spill

@@ -383,6 +383,25 @@ struct ResidencyMap {
 	std::vector<Entry> entries;
 };
 
+/*
+	Cold-section records, instantiated per backend `Label` type. A ColdTrap is a checked op's terminal trap, deferred to
+	the cold section so the hot path stays branch-and-continue. A ColdEdge is a conditional loop-EXIT branch from a
+	register-resident body (v2.2-full): the spill of the resident dirty state is deferred to a cold stub on the TAKEN
+	path, so the fall-through (stay-in-loop) path keeps the map with no per-iteration cost. The stub stores the
+	captureDirtyLines snapshot and enters the exit leader, which assumes an empty cache - memory is current, registers
+	are ignored there.
+*/
+template <class LabelType> struct BasicColdTrap {
+	LabelType label;
+	ResidencyMap dirty;								// the captureDirtyLines snapshot to store before exiting
+	Status status;									// BAD_PEEK / BAD_POKE / DIVISION_BY_ZERO
+};
+template <class LabelType> struct BasicColdEdge {
+	LabelType label;
+	ResidencyMap dirty;								// dirty state at the branch point, stored only if the exit is taken
+	UInt target;									// the exit leader (mainline label key)
+};
+
 // Opcodes whose operands route through the cache; everything else barriers the cache and lowers as v1 (§5.7).
 bool isCacheLowered(Int op);
 
@@ -518,6 +537,14 @@ void establishLeader(RegisterCache& cache, const Instruction* code, UInt j, cons
 */
 bool planConditionalEdge(RegisterCache& cache, std::map<UInt, ResidencyMap>& entryMaps, UInt target, bool resident
 		, ResidencyMap& dirty);
+
+/*
+	Cold-section stores and reloads, through the backend's own spill/fill encodings. `spillResidencyMap` stores the
+	entries marked `expectDirty` - every entry of a captureDirtyLines snapshot (a trap arm or loop-exit stub), or a loop
+	map's loop-written bindings (a suspend stub). `fillResidencyMap` reloads every entry (a resume trampoline).
+*/
+void spillResidencyMap(RegisterCacheBackend& backend, const ResidencyMap& map);
+void fillResidencyMap(RegisterCacheBackend& backend, const ResidencyMap& map);
 
 } // namespace GAZL
 

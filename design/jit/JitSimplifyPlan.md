@@ -66,7 +66,7 @@ This is a real refactor of a bit-exact JIT. High value (it removes the two-copie
 be done in verifiable steps: after each step run the lower/exec/engine/slice tests, both emitter byte-golden tests, and
 `checkPermut8Firmwares.sh` both plain and `--jit`, plus a fuzz soak.
 
-**Status 2026-09-17: C1 and C3 DONE, C2 set aside, C4 open.** Both landed as pure refactors: `--emit-jit` output is
+**Status 2026-09-17: C1, C3 and C4 DONE; C2 set aside.** C1 and C3 landed as pure refactors: `--emit-jit` output is
 byte-identical to `b89e919` on both backends over the 135-program corpus, lower test green on both backends after each
 step, then `build.sh`, both emitter goldens, exec/engine/slice, firmwares plain and `--jit` on arm64 and `--jit` on x64
 under Rosetta, and 300k-deep soaks (seed 1200001: arm64 310 s, x64 under Rosetta 640 s, no divergence). 28 lines
@@ -76,9 +76,17 @@ smaller.
 - **C3:** `planConditionalEdge` makes the decision (reconcile, ColdEdge stub, or barrier). The note below that the
   edge policy needs no templating is only half right: `Label`, `ColdEdge` and the emitter are distinct per-backend
   types, so the decision is shared and each backend keeps label allocation and branch emission (a few lines each).
+- **C4:** a pure refactor too, verified the same way against `ce3c9cb` (136 programs, now including absloop; soaks
+  at seed 1500001: arm64 306 s, x64 under Rosetta 625 s, no divergence); 34 lines smaller. `spillResidencyMap` and
+  `fillResidencyMap` route the cold-section stores and reloads through the backend's own `emitSpill` / `emitFill`,
+  replacing `emitDirtyStores` and the suspend-stub loops - byte-identical, because those encodings were already the
+  same, so the worry below about routing through `emitSpill` did not materialize. arm64's ColdTrap carries a
+  `Status` (the `movn` immediate is its complement at emit time), and ColdTrap / ColdEdge are one template each in
+  `GAZLJit.h`, typedef'd per backend `Label`. The cold loops stay per backend: what is left in them is
+  emitter-specific, and templating them would add an abstraction, not remove code.
 - **C2, set aside:** the duplicated setup is about 17 lines per backend, but pass 2 uses what it builds some 40 times,
-  so a shared context object comes out size-neutral or larger (an estimate, not a prototype). It belongs with C4,
-  where the whole front half of `lowerFunction` could become one skeleton templated on the emitter.
+  so a shared context object comes out size-neutral or larger (an estimate, not a prototype). C4 did not need a
+  shared skeleton either, so nothing currently pulls it in.
 
 - **Hoist the loop-header residency orchestration.** `GAZLJitArm64.cpp:762-809` and `GAZLJitX64.cpp:664-712` are the
   same ~48 lines, comment for comment: `freshHeader` detection, `multiBlock` gate, the loop slot/class sets, the
