@@ -226,6 +226,7 @@ class Symbols {
 	protected:	void link(const Char* labelBegin, const Char* labelEnd, Value* storage, int accepts, Int offset = 0); // FIX : name?
 	protected:	void registerSwitch(const Char* labelBegin, const Char* labelEnd, UInt switchSize, Value* storage, Int offset = 0);
 	protected:	void resolveForwardRefs();
+	public:		void swap(Symbols& other) { symbols.swap(other.symbols); forwardRefs.swap(other.forwardRefs); }		// preAssemble hands its table out with this, so nothing is copied on success
 	protected:	void clear() { symbols.clear(); forwardRefs.clear(); }
 	protected:	void resolve(const Reference& ref, const Symbol& symbol);
 	protected:	SymbolMap symbols;						// TODO : try a C variation with a sorted array (fixed size strings) and bsearch or alternatively a hash table (nick the one from NuXScript)
@@ -287,7 +288,9 @@ class Assembler {
 	public:		void finalize(ProgramSizes& sizes); 														// Finish assembly and report memory usage. `sizes.functionCount` is the number of entries filled in `functionTable`.
 	public:		void finalize(UInt& codeSize, UInt& globalsSize, UInt& constsSize, UInt& functionCount); 	// Positional form of `finalize`; prefer the `ProgramSizes` overload.
 	public:		void finalize(AssembledProgram& program); 													// Finish assembly and fill `program` (the buffers this Assembler was given + the computed sizes) in one step.
-	public:		static ProgramSizes measure(const Char* source, const Symbols& globals, const ProgramSizes* seed = 0); 					// Dry assembly: report what a real assembly of `source` (whole NUL-terminated text) will need, without the caller sizing or owning any buffer. Seed `globals` exactly as for a real assembly (natives, host defines); it is copied, never touched. Program errors throw exactly as feed() does. `seed`, when given, is what an earlier build of about the same program used (from `finalize`), so the first attempt is sized to fit it and a large program is not re-assembled once per doubling.
+	public:		static ProgramSizes preAssemble(const Char* source, Symbols& symbols, const ProgramSizes* seed = 0); 					/* The assembly that precedes the real one: report what a real assembly of `source` (whole NUL-terminated text) will need, without the caller sizing or owning any buffer, AND hand back the symbol table it computed on the way. Seed `symbols` exactly as for a real assembly (natives, host defines); on SUCCESS it is replaced by the full table, so a host can read back any constant the program defined (`lookupConstant`) instead of parsing it out of a comment. A caller wanting the old isolation copies its table first. Program errors throw exactly as feed() does, and `symbols` is then UNTOUCHED - the retry loop keeps a fresh internal table per attempt precisely so a space exception cannot leave half an assembly behind, and so attempt two does not trip "symbol already defined" on attempt one's work. `seed`, when given, is what an earlier build of about the same program used (from `finalize`), so the first attempt is sized to fit it and a large program is not re-assembled once per doubling.
+
+					What makes handing the table out safe, since it is not obvious: the buffers this assembles into are local and die on return, but nothing in the table points into them. Forward references DO hold raw `Value*` into the code array - and `finalize` resolves them and clears the list, so a successful return leaves none. Symbol values are `MEMORY_OFFSET`-relative offsets rather than addresses. Both properties are load-bearing here; a future forward-ref that outlives `finalize` would make this unsafe. */
 
 	protected:	struct CompileTimeVar {
 					int types;

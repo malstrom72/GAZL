@@ -1070,7 +1070,7 @@ void Assembler::finalize(AssembledProgram& program) {												// fill the who
 
 	In the future, we may replace this with a true dry-run that does not require any memory allocations.
 */
-ProgramSizes Assembler::measure(const Char* source, const Symbols& globals, const ProgramSizes* seed) {
+ProgramSizes Assembler::preAssemble(const Char* source, Symbols& symbols, const ProgramSizes* seed) {
 	UInt codeMax = 256, memoryMax = 256, functionMax = 64;
 	if (seed != 0) {
 		codeMax = std::max(codeMax, seed->codeSize);
@@ -1081,13 +1081,15 @@ ProgramSizes Assembler::measure(const Char* source, const Symbols& globals, cons
 		std::vector<Instruction> code(codeMax);
 		std::vector<UInt> functions(functionMax);
 		std::vector<Value> memory(memoryMax);
-		Symbols scratch(globals);
+		Symbols scratch(symbols);						// FRESH per attempt: a retry re-assembles the whole source, so feeding the
+														// caller's table directly would trip "symbol already defined" on attempt two
 		Assembler assem(codeMax, &code[0], functionMax, &functions[0], memoryMax, &memory[0], scratch);
 		assem.newUnit(0);
 		try {
 			for (const Char* p = source; *p != 0; ) p = assem.feed(p);
 			ProgramSizes sizes;
-			assem.finalize(sizes);
+			assem.finalize(sizes);						// resolves and CLEARS the forward refs, so no Value* into `code` survives
+			scratch.swap(symbols);						// success only: a throw leaves the caller's table untouched
 			return sizes;
 		}
 		catch (const Exception& x) {
@@ -2062,14 +2064,15 @@ bool unitTest() {
 			}
 		}
 
-		// measure() must agree with the real assembly above exactly - and the deliberately tiny
-		// starting arenas mean this very test exercises its retry-and-double path.
+		// preAssemble() must agree with the real assembly above exactly - and the deliberately tiny
+		// starting arenas mean this very test exercises its retry-and-double path. It must also hand
+		// BACK the table it built, which is the whole point of it over the old measure().
 		{
 			Symbols seed;
 			seedTestNatives(seed);
 			ProgramSizes measured = { 0, 0, 0, 0 };
 			try {
-				measured = Assembler::measure(UNITTEST, seed);
+				measured = Assembler::preAssemble(UNITTEST, seed);
 			}
 			catch (const Exception& e) {
 				(void)e;
@@ -2077,6 +2080,14 @@ bool unitTest() {
 			}
 			assert(measured.codeSize == sizes.codeSize && measured.globalsSize == sizes.globalsSize
 					&& measured.constsSize == sizes.constsSize && measured.functionCount == sizes.functionCount);
+			{
+				bool isFloat = true;
+				Value constant;
+				constant.i = 0;
+				const bool found = seed.lookupConstant("CR", &isFloat, &constant);		// `CR: ! DEFi #13` in UnitTest.gazl
+				assert(found && !isFloat && constant.i == 13);							// the table really came back, not just the four sizes
+				(void)found;
+			}
 		}
 			
 		TestCallbackData callbackData;
