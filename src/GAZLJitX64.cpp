@@ -599,9 +599,9 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 	const std::map<Int, int>::const_iterator realmEnd = pointerRealm.end();
 	std::map<UInt, UInt> loopExtent;
 	jitResidencyLeaders(code, funcStart, endIndex, memory, loopExtent);													// v2.2: loop headers whose entry state stays register-resident
-	std::map<UInt, std::set<Int> > liveIn;
+	LiveSets liveIn;
 	if (!loopExtent.empty()) {																							// only the resident-header path reads it
-		buildLiveIn(code, funcStart, endIndex, memory, liveIn);															// v2.2 varying maps: leader maps sized by liveness
+		liveIn.build(code, funcStart, endIndex, memory);																// v2.2 varying maps: leader maps sized by liveness
 	}
 	std::map<UInt, ResidencyMap> entryMaps;
 	std::vector<ColdTrap> coldTraps;																					// checked-op trap arms, emitted after the mainline

@@ -418,9 +418,33 @@ void buildUseSchedule(const Instruction* code, UInt from, UInt to, UseSchedule& 
 void buildLoopSets(const Instruction* code, UInt from, UInt to, std::set<Int>& readSlots, std::set<Int>& writtenSlots
 		, std::set<Int>& generalSlots, std::set<Int>& floatSlots);
 
+/*
+	Per-instruction live-in sets over code[from..to] (one function): slot s is live-in at j iff some path from j reads s
+	before writing it. Standard backward dataflow over the successor graph (fall-through + branch/SWCH targets from the
+	same successor model jitFuelSafepoints uses); gen = slots read, kill = slots written (a FORi counter is both).
+	Foundation for v2.2-full cross-block residency: a leader's entry-residency candidates are its live-in slots.
+
+	One bit per (instruction, slot) in a single flat array - the sets are only ever membership-tested (never iterated
+	into emitted code), so nothing outside depends on their order. Slots are frame-relative and can be far apart
+	(specular: 38 slots spanning -20509..4), so a row is indexed by the slot's position in the sorted `slots` table,
+	not by its value: 1.6 KB for that function instead of 584 KB. Queries take the ABSOLUTE instruction index.
+*/
+class LiveSets {
+	public:		LiveSets() : firstIndex(0) { }
+	public:		bool isLive(UInt at, Int slot) const;
+	public:		bool empty(UInt at) const;
+	public:		void build(const Instruction* code, UInt from, UInt to, const Value* memory);
+	private:	size_t rowWords() const { return (slots.size() + 31) / 32; }
+	private:	const UInt* row(UInt at) const { return &bits[(at - firstIndex) * rowWords()]; }
+	private:	int slotIndex(Int slot) const;											// -1 when the function never touches it
+	private:	std::vector<Int> slots;													// sorted, distinct: the row's bit order
+	private:	std::vector<UInt> bits;													// rowWords() words per instruction
+	private:	UInt firstIndex;														// `from`: row 0 is this instruction
+};
+
 // A leader's residency map = the loop's fixed bindings FILTERED to the slots LIVE-IN at that leader (v2.2 varying maps:
 // dead bindings free their registers for body temps; same slot -> same register everywhere, so edges never need moves).
-void filterResidencyMap(const ResidencyMap& full, const std::set<Int>& liveIn, ResidencyMap& out);
+void filterResidencyMap(const ResidencyMap& full, const LiveSets& liveIn, UInt at, ResidencyMap& out);
 
 /*
 	Pointer-realm stamp (§1.1, v2.3a): the coarse realm of the pointer VALUE a slot holds, w.r.t. THIS frame's cached
@@ -435,15 +459,6 @@ enum PointerRealm { REALM_BOTTOM = 0, REALM_NONFRAME = 1, REALM_MYFRAME = 2, REA
 // Stamp each slot's pointer realm over code[from..to] (one function): live-in pointer slots (params) = NONFRAME, ADRL =
 // MYFRAME, propagated through MOVp/ADDp/SUBp, joined to a fixed point. Absent key => REALM_BOTTOM (treat as must-flush).
 void buildPointerRealms(const Instruction* code, UInt from, UInt to, std::map<Int, int>& realm);
-
-/*
-	Per-instruction live-in sets over code[from..to] (one function): slot s is live-in at j iff some path from j reads s
-	before writing it. Standard backward dataflow over the successor graph (fall-through + branch/SWCH targets from the
-	same successor model jitFuelSafepoints uses); gen = slots read, kill = slots written (a FORi counter is both). Foundation
-	for v2.2-full cross-block residency: a leader's entry-residency candidates are its live-in slots. `memory` supplies the
-	SWCH jump table. liveIn[j] holds the set for instruction j.
-*/
-void buildLiveIn(const Instruction* code, UInt from, UInt to, const Value* memory, std::map<UInt, std::set<Int> >& liveIn);
 
 /*
 	v2.0 floating register cache (§5.7.1): a per-function write-back cache of frame slots. The opcode switch routes
@@ -525,7 +540,7 @@ inline void reconcileOrBarrier(RegisterCache& cache, std::map<UInt, ResidencyMap
 	a gated header, reconciles to its entry map if it has one, else barriers. `j` is the leader's instruction index.
 */
 void establishLeader(RegisterCache& cache, const Instruction* code, UInt j, const std::map<UInt, UInt>& loopExtent
-		, const std::map<UInt, UInt>& loopWeight, std::map<UInt, std::set<Int> >& liveIn
+		, const std::map<UInt, UInt>& loopWeight, const LiveSets& liveIn
 		, std::map<UInt, ResidencyMap>& entryMaps, bool& resident, UInt& residentEnd);
 
 /*

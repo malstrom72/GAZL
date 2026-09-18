@@ -409,44 +409,85 @@ static void jitSuccessors(const Instruction* code, UInt from, UInt to, const Val
 	if (j + 1 <= to) { succ.push_back(j + 1); }																			// fall-through (also after a conditional branch / SWCH)
 }
 
-void buildLiveIn(const Instruction* code, UInt from, UInt to, const Value* memory, std::map<UInt, std::set<Int> >& liveIn) {
+int LiveSets::slotIndex(Int slot) const {
+	const std::vector<Int>::const_iterator it = std::lower_bound(slots.begin(), slots.end(), slot);
+	if (it == slots.end() || *it != slot) { return -1; }
+	return static_cast<int>(it - slots.begin());
+}
+
+bool LiveSets::isLive(UInt at, Int slot) const {
+	const int bit = slotIndex(slot);																					// a slot this function never touches is never live
+	if (bit < 0 || bits.empty()) { return false; }
+	assert(at >= firstIndex && (at - firstIndex) * rowWords() < bits.size());
+	return (row(at)[bit / 32] & (1u << (bit % 32))) != 0;
+}
+
+bool LiveSets::empty(UInt at) const {
+	if (bits.empty()) { return true; }																					// never built: the caller's loopExtent was empty
+	assert(at >= firstIndex && (at - firstIndex) * rowWords() < bits.size());
+	const UInt* r = row(at);
+	for (size_t w = 0; w < rowWords(); ++w) { if (r[w] != 0) { return false; } }
+	return true;
+}
+
+void LiveSets::build(const Instruction* code, UInt from, UInt to, const Value* memory) {
+	firstIndex = from;
+	const size_t rowCount = to - from + 1;
+	for (UInt j = from; j <= to; ++j) {																					// the row's bit order: every slot this function touches, sorted
+		OperandRole roles[3];
+		operandRoles(code[j].opcode, roles);
+		const Value* operands[3] = { &code[j].p0, &code[j].p1, &code[j].p2 };
+		for (int k = 0; k < 3; ++k) {
+			if ((roles[k] & (OPERAND_SLOT_READ | OPERAND_SLOT_WRITE)) != 0) { slots.push_back(operands[k]->i); }
+		}
+	}
+	std::sort(slots.begin(), slots.end());
+	slots.erase(std::unique(slots.begin(), slots.end()), slots.end());
+	if (slots.empty()) { return; }
+	const size_t words = rowWords();
 	// gen (reads) / kill (writes) per instruction; a FORi counter is read-modify-write, so it is both.
-	std::map<UInt, std::set<Int> > gen, kill;
+	std::vector<UInt> gen(rowCount * words, 0), kill(rowCount * words, 0);
 	for (UInt j = from; j <= to; ++j) {
 		OperandRole roles[3];
 		operandRoles(code[j].opcode, roles);
 		const Value* operands[3] = { &code[j].p0, &code[j].p1, &code[j].p2 };
 		for (int k = 0; k < 3; ++k) {
-			if ((roles[k] & OPERAND_SLOT_READ) != 0) { gen[j].insert(operands[k]->i); }
-			if ((roles[k] & OPERAND_SLOT_WRITE) != 0) { kill[j].insert(operands[k]->i); }
+			if ((roles[k] & (OPERAND_SLOT_READ | OPERAND_SLOT_WRITE)) == 0) { continue; }
+			const int bit = slotIndex(operands[k]->i);
+			assert(bit >= 0);
+			const size_t at = (j - from) * words + bit / 32;
+			const UInt mask = (1u << (bit % 32));
+			if ((roles[k] & OPERAND_SLOT_READ) != 0) { gen[at] |= mask; }
+			if ((roles[k] & OPERAND_SLOT_WRITE) != 0) { kill[at] |= mask; }
 		}
 	}
 	/*
 		Backward fixed point: liveIn[j] = gen[j] U (liveOut[j] - kill[j]); liveOut[j] = U liveIn[succ]. Accumulated IN
 		PLACE - the transfer only ever adds, so a reverse Gauss-Seidel sweep reaches the same least fixed point without
 		building a live-out set per instruction per sweep. A self-looping GOTO/FORi makes j its own successor, so the
-		inner loop can insert into the set it is reading: safe, because every such element is already in it.
+		inner loop can read the row it is writing: safe, because every such bit is already set in it.
 	*/
+	bits.assign(rowCount * words, 0);
 	std::vector<UInt> succ;
 	bool changed = true;
 	while (changed) {
 		changed = false;
 		for (UInt jj = to + 1; jj > from; --jj) {
 			const UInt j = jj - 1;
-			std::set<Int>& in = liveIn[j];
-			const size_t before = in.size();
-			in.insert(gen[j].begin(), gen[j].end());
-			const std::set<Int>& killed = kill[j];
+			UInt* in = &bits[(j - from) * words];
+			const UInt* killed = &kill[(j - from) * words];
+			const UInt* generated = &gen[(j - from) * words];
 			succ.clear();
 			jitSuccessors(code, from, to, memory, j, succ);
-			for (size_t s = 0; s < succ.size(); ++s) {
-				const std::map<UInt, std::set<Int> >::const_iterator it = liveIn.find(succ[s]);
-				if (it == liveIn.end()) { continue; }
-				for (std::set<Int>::const_iterator live = it->second.begin(); live != it->second.end(); ++live) {
-					if (killed.find(*live) == killed.end()) { in.insert(*live); }
+			for (size_t w = 0; w < words; ++w) {
+				UInt live = in[w] | generated[w];
+				for (size_t sIndex = 0; sIndex < succ.size(); ++sIndex) {
+					const UInt t = succ[sIndex];
+					if (t < from || t > to) { continue; }																// an edge out of this function contributes nothing
+					live |= (bits[(t - from) * words + w] & ~killed[w]);
 				}
+				if (live != in[w]) { in[w] = live; changed = true; }
 			}
-			if (in.size() != before) { changed = true; }
 		}
 	}
 }
@@ -824,14 +865,14 @@ void RegisterCache::capture(ResidencyMap& map, const std::set<Int>& wantedGenera
 	}
 }
 
-void filterResidencyMap(const ResidencyMap& full, const std::set<Int>& liveIn, ResidencyMap& out) {
+void filterResidencyMap(const ResidencyMap& full, const LiveSets& liveIn, UInt at, ResidencyMap& out) {
 	for (size_t k = 0; k < full.entries.size(); ++k) {
-		if (liveIn.count(full.entries[k].slot) != 0) { out.entries.push_back(full.entries[k]); }
+		if (liveIn.isLive(at, full.entries[k].slot)) { out.entries.push_back(full.entries[k]); }
 	}
 }
 
 void establishLeader(RegisterCache& cache, const Instruction* code, UInt j, const std::map<UInt, UInt>& loopExtent
-		, const std::map<UInt, UInt>& loopWeight, std::map<UInt, std::set<Int> >& liveIn
+		, const std::map<UInt, UInt>& loopWeight, const LiveSets& liveIn
 		, std::map<UInt, ResidencyMap>& entryMaps, bool& resident, UInt& residentEnd) {
 	std::map<UInt, UInt>::const_iterator loopIt = loopExtent.find(j);
 	bool gated = false;
@@ -851,9 +892,8 @@ void establishLeader(RegisterCache& cache, const Instruction* code, UInt j, cons
 			gate applies to THIS set: what capture would actually pin.
 		*/
 		std::set<Int> wantedGeneral, wantedFloat;
-		const std::set<Int>& liveHeader = liveIn[j];
 		for (std::set<Int>::const_iterator si = readSlots.begin(); si != readSlots.end(); ++si) {
-			if (liveHeader.count(*si) == 0) { continue; }
+			if (!liveIn.isLive(j, *si)) { continue; }
 			const bool g = (generalSlots.count(*si) != 0), f = (floatSlots.count(*si) != 0);
 			if (g && f) { continue; }
 			if (f) { wantedFloat.insert(*si); } else { wantedGeneral.insert(*si); }
@@ -868,7 +908,7 @@ void establishLeader(RegisterCache& cache, const Instruction* code, UInt j, cons
 			cache.capture(headerMap, wantedGeneral, wantedFloat, writtenSlots);											// keep + PRELOAD the wanted bindings
 			for (std::map<UInt, UInt>::const_iterator w = w0; w != loopWeight.end() && w->first <= loopIt->second
 					; ++w) {
-				filterResidencyMap(headerMap, liveIn[w->first], entryMaps[w->first]);									// interior leader: the bindings live there
+				filterResidencyMap(headerMap, liveIn, w->first, entryMaps[w->first]);									// interior leader: the bindings live there
 			}
 			resident = !headerMap.entries.empty(); residentEnd = loopIt->second;
 		}
