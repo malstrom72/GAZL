@@ -175,6 +175,45 @@ Changes emitted code, so measurement-gated (not applied):
 - **Route every terminal trap through `ColdTrap`.** GETL/SETL/COPY and the inline FUNC/CALL traps predate it.
 
 
+## Flat liveness sets (`LiveSets`), 2026-09-18
+
+A real sampling profile (`/usr/bin/sample`, 1 ms, 10 s, 7761 main-thread samples, arm64, compiling the wrapped flakes
+firmware in a loop) said the tier-C work had moved the cost but not removed it: `compile()` was 99% of the process,
+`buildLiveIn` ~64% of it, and DESTROYING the `std::map<UInt, std::set<Int> >` another 21% - the map's `__tree_deleter`
+was the second-heaviest branch in the whole program. 37% of all samples sat in `libsystem_malloc` / `libc++abi` /
+`__bzero` and a further 9% in `std::__tree_balance_after_insert`. The fixed point itself no longer showed up: what
+remained was the container, one red-black node per live slot per instruction, allocated and then freed.
+
+`LiveSets` replaces it with one bit per (instruction, slot) in a single flat `std::vector<UInt>`, and the transfer
+becomes word ops (`live |= succ & ~kill`). The sets are only ever membership-tested - nothing outside the builder
+iterates one into emitted code - so the representation is unobservable; the orderings that reach codegen come from
+`readSlots` and `ResidencyMap::entries`, which are untouched. Slots are frame-relative and NOT reliably dense
+(specular has a function with 38 slots spanning -20509..4), so a row is indexed by the slot's position in a sorted
+table, not by its value: 1.6 KB for that function instead of 584 KB, and 7.1 KB is the worst whole program in the
+corpus.
+
+- Compile time, best-of-1500, arm64: flakes 0.997 -> 0.127 ms (7.9x), specular 0.272 -> 0.124 (2.2x),
+  crashesPermut8 0.191 -> 0.134 (1.4x). The liveness phase alone: flakes 0.823 -> 0.022 ms (38x), specular 13x,
+  crashesPermut8 9.6x.
+- The 300k-deep soak, which is mostly compilation: arm64 138 -> 93 s, x64 under Rosetta 300 -> 218 s.
+- Re-profiled after: no dominator left. `LiveSets::build` 16%, `buildPointerRealms` 15%, the rest spread over
+  emission and the other three analyses; allocator traffic 37% -> 30%, `std::__tree_` 9% -> 3%. The next
+  container of the same shape is `buildPointerRealms`' `std::map<Int, int>`, if a future profile still wants it.
+
+Verification: 272 `--emit-jit` dumps (136 programs x 2 backends) byte-identical, 0 differ; all gates (build.sh, the
+five JIT test binaries, both firmware checks) pass; 300k-deep differential soaks on both backends, no divergence.
+Because byte-identity only exercises liveness where a function HAS resident loops and only through
+`filterResidencyMap`, the old and new implementations were ALSO compared set-for-set directly (scratch `livecheck`,
+which `#include`s GAZLJit.cpp so the reference uses the real file-static `jitSuccessors`): 622 functions, 16316
+instructions, 158942 live slot-bits, 0 mismatches.
+
+Net +55 lines. This is an optimization, not a refactor, so CodingStyle section 2's "a refactor must REDUCE size" is
+not the test it has to pass - the profile is. Two process notes, both caught by checking an anomaly rather than by
+the tests: the first `livecheck` reported mismatches because its hand-copied successor model was wrong (GOTO targets
+are RELATIVE, and branch targets come from the file-static `jitBranchTarget`) - hence the `#include`; and the first
+x64 soak silently re-ran the arm64 binary, because the x64 build writes `output/GAZLFuzzX64` while the script ran
+`output/GAZLFuzz`. Both soak runs now assert the architecture of the binary they actually executed.
+
 ## Looked at and deliberately NOT recommended
 
 - **The LRU fallback path** (`Line::lastUse`, the `useSchedule == 0` branches at `GAZLJit.cpp:509, 532-533`) is never

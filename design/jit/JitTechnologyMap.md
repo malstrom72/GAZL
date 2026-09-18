@@ -45,7 +45,7 @@ from reloading a loop-carried value each iteration. FAQ "is Belady enough?": no 
 BETWEEN the flushes; the next two layers REMOVE flushes.
 
 **v2.2 - loop residency (entry maps).** At a qualified loop header, `capture()` fixes a slot->register binding
-(ResidencyMap) for that loop: wanted = read-in-loop AND live-in at the header (`buildLiveIn` backward liveness)
+(ResidencyMap) for that loop: wanted = read-in-loop AND live-in at the header (`LiveSets` backward liveness)
 AND single-class; absent wanted slots are PRELOADED (residency by need). Every in-edge (branch, fall-through,
 back-edge, resume) `reconcileTo()`s the target leader's map; interior leaders carry the header bindings FILTERED
 to their own live-in (dead bindings free registers). Loop exits spill on the TAKEN path only (ColdEdge stubs).
