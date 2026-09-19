@@ -924,6 +924,112 @@ static void runLivenessTest() {
 	if (!entryEmpty || !anyNonEmpty) { std::printf("  FAIL\n"); ++failures; }
 }
 
+/*
+	Encoding reach (2d873b2a). A displacement or offset that does not fit its arm64 field must make compile() THROW -
+	the host then runs the whole program interpreted - never be masked into a valid-looking wrong encoding. Before that
+	fix both cases below compiled and ran wrong code: a SIGBUS, or with a large function in front a silent wrong status;
+	and a call to native (ordinal % 4096). The generative fuzzer cannot reach either (its functions are ~100 ops and it
+	registers 10 natives), so they are pinned here.
+	  - imm19: each DIVi leaves ~2 words in the mainline and ~3 in its cold trap stub, and the per-block fuel checks
+	    `b.mi` to a timeout stub at the END of the function. 60000 DIVi put that stub ~300K words out, past the
+	    +-262144-word reach; 36000 stay inside it and must compile and match at tiny fuel, where those branches are
+	    taken.
+	  - imm12: CALL_NVC loads natives[ordinal] through a scaled 12-bit offset, so 4096 must throw and 4095 must call
+	    the RIGHT native - every other slot of the table aborts.
+	x64 has neither limit, so there the out-of-reach cases must compile and match the interpreter (LIMITED_REACH).
+*/
+static std::string divChainKernel(int count) {
+	std::string s = "gIn: GLOB *1\n DATi #0\n" "gOut: GLOB *1\n DATi #0\n"
+			"main: FUNC\n PARA *1\n$z: LOCi\n$b: LOCi\n PEEK $z &gIn\n MOVi $b #3\n";
+	for (int i = 0; i < count; ++i) { s += " DIVi $z $z $b\n"; }
+	return s + " POKE &gOut $z\n RETU\n";
+}
+
+static const char* const K_FARNATIVE =		// one call through the native registered as `far` (ordinal set per test)
+	"gIn: GLOB *1\n DATi #0\n" "gOut: GLOB *1\n DATi #0\n"
+	"main: FUNC\n PARA *2\n$n: LOCi\n PEEK $n &gIn\n MOVi %1 $n\n CALL ^far %0 *2\n POKE &gOut %0\n RETU\n";
+
+static Status nativeWrongSlot(Processor*) { return ABORTED; }
+
+#if defined(__aarch64__) || defined(_M_ARM64)
+	static const bool LIMITED_REACH = true;			// arm64: imm19 conditional branches, scaled-imm12 native offsets
+#else
+	static const bool LIMITED_REACH = false;		// x64: rel32 everywhere and no offset field on the native load, so the
+#endif												// same programs must compile AND match the interpreter instead
+
+static AssembledProgram assembledProgram() {
+	const AssembledProgram program = { gCode, gCodeSize, gFunctionTable, gFunctionCount, gMemory, DATA_SIZE
+			, gGlobalsSize, gConstsSize };
+	return program;
+}
+
+static bool compileThrows(Symbols& globals, const std::string& source, JitModule& module) {
+	if (!assemble(source.c_str(), globals)) { ++failures; return false; }
+	const AssembledProgram program = assembledProgram();
+	try {
+		NativeJitCompiler compiler;
+		compiler.compile(program, module);
+	} catch (const JitException& x) {
+		std::printf("  JitException: %s\n", x.what());
+		return true;
+	}
+	return false;
+}
+
+// Call natives[ordinal] on both engines (every other table slot aborts). False when compile() threw instead.
+static bool runFarNative(int ordinal) {
+	Symbols globals; JitModule module;
+	globals.registerNative("far", ordinal);
+	if (compileThrows(globals, K_FARNATIVE, module)) { return false; }
+	std::vector<NativeFunc> table(ordinal + 1, nativeWrongSlot);
+	table[ordinal] = nativeSquare;
+	const Pointer mainPtr = globals.findFunction("main");
+	UInt sz = 0;
+	const Pointer gInPtr = globals.findGlobal("gIn", sz), gOutPtr = globals.findGlobal("gOut", sz);
+	const AssembledProgram program = assembledProgram();
+	Status statuses[2];
+	Int outs[2];
+	for (int engine = 0; engine < 2; ++engine) {								// 0 interpreter, 1 JIT - same table, same clean image
+		restoreClean();
+		Processor* proc = (engine == 0)
+				? new Processor(CODE_SIZE, gCode, gFunctionCount, gFunctionTable, DATA_SIZE, gMemory, gGlobalsSize
+						, gConstsSize, CALL_STACK_SIZE, gCallStack, table.data(), nullptr)
+				: new JitProcessor(module, program, CALL_STACK_SIZE, gCallStack, table.data());
+		proc->accessMemory(gInPtr, 1)->i = 12;
+		Status s = proc->enterCall(mainPtr);
+		do { proc->resetTimeOut(0x7FFFFFFF); s = proc->run(); } while (s == TIME_OUT);
+		statuses[engine] = s; outs[engine] = gMemory[gOutPtr - MEMORY_OFFSET].i;
+		delete proc;
+	}
+	const bool good = statuses[0] == OK && statuses[1] == OK && outs[0] == 144 && outs[1] == 144;
+	std::printf("  interp status=%d gOut=%d, jit status=%d gOut=%d %s\n", statuses[0], outs[0], statuses[1], outs[1]
+			, good ? "OK" : "MISMATCH (want OK and 12*12 = 144 from natives[ordinal] on both)");
+	if (!good) { ++failures; }
+	return true;
+}
+
+static void runReachTests() {
+	const int inputs[] = { 0, 1000000, -1000000 };
+	const std::string inReach = divChainKernel(36000), outOfReach = divChainKernel(60000);
+	runKernel("reach imm19   [36000 DIVi: in reach]", inReach.c_str(), inputs, sizeof(inputs) / sizeof(*inputs));
+	if (LIMITED_REACH) {
+		std::printf("Reach \"imm19 [60000 DIVi: fuel-check b.mi out of reach]\":\n");
+		Symbols globals; JitModule module;
+		if (compileThrows(globals, outOfReach, module)) { std::printf("  OK (the host runs it interpreted)\n\n"); }
+		else { std::printf("  COMPILED - an out-of-reach branch was encoded\n\n"); ++failures; }
+	} else {
+		runKernel("reach rel32   [60000 DIVi]", outOfReach.c_str(), inputs, sizeof(inputs) / sizeof(*inputs));
+	}
+	std::printf("Reach \"native ordinal 4095 [the last in arm64's imm12 reach]\":\n");
+	if (!runFarNative(4095)) { std::printf("  THREW - ordinal 4095 is in reach\n"); ++failures; }
+	std::printf("\nReach \"native ordinal 4096 [past arm64's imm12 reach]\":\n");
+	const bool compiled = runFarNative(4096);
+	if (LIMITED_REACH && compiled) { std::printf("  COMPILED - natives[4096] was encoded\n"); ++failures; }
+	else if (LIMITED_REACH) { std::printf("  OK (the host runs it interpreted)\n"); }
+	else if (!compiled) { std::printf("  THREW - x64 has no such limit\n"); ++failures; }
+	std::printf("\n");
+}
+
 int main() {
 	std::printf("GAZLJit consolidated lowering test: JIT (compiled from Instruction[]) vs interpreter (arm64)\n\n");
 	runRegisterCacheTests();
@@ -977,6 +1083,7 @@ int main() {
 	runKernel("tail big      [window 5000, frame >1023]", K_TAILBIG, counts, sizeof(counts) / sizeof(*counts));
 #endif
 	runKernel("divf zero     [DIVf /0 trap]", K_DIVFZERO, signed_, sizeof(signed_) / sizeof(*signed_));
+	runReachTests();
 
 	std::printf("%s (%d failure%s)\n", failures == 0 ? "ALL PASS" : "FAILED", failures, failures == 1 ? "" : "s");
 	return failures == 0 ? 0 : 1;

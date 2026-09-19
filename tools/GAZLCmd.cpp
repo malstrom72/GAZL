@@ -349,7 +349,8 @@ static void requireMatch(const char* which, const uint8_t* data, size_t size, St
 	diff compares, so a miscompiled value is caught without an explicit store. G1 = straight-line int/float value ops (VVV
 	and VVC). G2 adds memory ops interleaved so the pointer coherence gets stressed: const-address globals, a LOCA array
 	via an ADRL pointer (PEEK/POKE_VVV), and GETL/SETL - indices masked in-bounds so the ops execute (store/load +
-	invalidate). G3 adds control flow (nested FORi + if-skips), G4 calls (helpers, native math, recursion).
+	invalidate). G3 adds control flow (nested FORi + if-skips, int AND float compares), G4 calls (helpers, native math,
+	recursion). Non-finite floats and negative in-range indices close two blind spots (design/jit/JitFuzzPlan.md).
 
 	The stream is either an LCG seeded by a number (`--gen`, reproducible) or the raw libFuzzer input bytes (coverage-
 	guided). Same 32-bit-word interface for both, so seed-mode output is unchanged and libFuzzer mutations map to choices.
@@ -386,8 +387,26 @@ static void emitSimpleOp(std::string& p, Rng& r, std::string& pending) {
 	static const char* const IOPS[] = { "ADDi", "SUBi", "MULi", "ANDi", "IORi", "XORi" };
 	static const char* const FOPS[] = { "ADDf", "SUBf", "MULf", "DIVf" };
 	char buf[64];
-	const unsigned choice = pick(r, 18);
-	if (choice < 5) {
+	const unsigned choice = pick(r, 19);
+	if (choice == 18) {
+		/*
+			Non-finite floats, so the float branches below see Inf and NaN operands (the x64 GEQf/LEQf NaN miscompile,
+			fixed in 2d873b2a, needed exactly that). Built ONLY through MULf/SUBf, which the fuzz build canonicalizes in
+			both engines (GAZL_CANONICAL_NAN), so every NaN has the same bits in both and the image diff stays exact.
+			Half the time the slot gets a fresh finite value instead, so NaN does not swallow every float in the
+			program.
+		*/
+		const unsigned f = pick(r, NF);
+		const unsigned kind = pick(r, 6);
+		if (kind >= 3) {
+			std::snprintf(buf, sizeof buf, " MOVf $f%u #%d.%u\n", f, static_cast<int>(pick(r, 2000)) - 1000
+					, pick(r, 1000));
+		} else {
+			std::snprintf(buf, sizeof buf, " MOVf $f%u #1e30\n", f); putLine(p, pending, buf);
+			std::snprintf(buf, sizeof buf, " MULf $f%u $f%u #%s\n", f, f, kind == 1 ? "-1e30" : "1e30");	// overflow: +Inf / -Inf
+			if (kind == 2) { p += buf; std::snprintf(buf, sizeof buf, " SUBf $f%u $f%u $f%u\n", f, f, f); }	// Inf - Inf: NaN
+		}
+	} else if (choice < 5) {
 		const char* op = IOPS[pick(r, 6)];
 		if (pick(r, 2)) { std::snprintf(buf, sizeof buf, " %s $i%u $i%u #%d\n", op, pick(r, NI), pick(r, NI), static_cast<int>(r.word())); }
 		else { std::snprintf(buf, sizeof buf, " %s $i%u $i%u $i%u\n", op, pick(r, NI), pick(r, NI), pick(r, NI)); }
@@ -419,8 +438,21 @@ static void emitSimpleOp(std::string& p, Rng& r, std::string& pending) {
 		std::snprintf(buf, sizeof buf, " ANDi $idx $i%u #7\n", pick(r, NI)); putLine(p, pending, buf);	// in-bounds index (size 8)
 		const unsigned a = pick(r, NI);
 		switch (pick(r, 8)) {
-			case 0: std::snprintf(buf, sizeof buf, " POKE &buf $idx $i%u\n", a); break;		// POKE_CVV
-			case 1: std::snprintf(buf, sizeof buf, " PEEK $i%u &buf $idx\n", a); break;		// PEEK_VCV
+			/*
+				Const-base forms. Half the time the index is shifted to [-8, -1]: the sum stays inside `pad` (the global
+				before `buf`), so the access is legal, but the index word itself is negative. That is the case a 64-bit
+				zero-extended index mis-addresses by ~16 GiB while a 32-bit bound check on the sum passes (x64, fixed in
+				2d873b2a) - an in-range [0, 7] index can never show it, and `buf` alone is word 0, where any negative
+				index traps correctly in both engines.
+			*/
+			case 0:
+				if (pick(r, 2)) { putLine(p, pending, " SUBi $idx $idx #8\n"); }
+				if (pick(r, 2)) { std::snprintf(buf, sizeof buf, " POKE &buf $idx $i%u\n", a); }	// POKE_CVV
+				else { std::snprintf(buf, sizeof buf, " POKE &buf $idx #%d\n", static_cast<int>(r.word())); }	// POKE_CVC
+				break;
+			case 1:
+				if (pick(r, 2)) { putLine(p, pending, " SUBi $idx $idx #8\n"); }
+				std::snprintf(buf, sizeof buf, " PEEK $i%u &buf $idx\n", a); break;		// PEEK_VCV
 			case 2: std::snprintf(buf, sizeof buf, " POKE $p $idx $i%u\n", a); break;		// POKE_VVV (frame pointer)
 			case 3: std::snprintf(buf, sizeof buf, " PEEK $i%u $p $idx\n", a); break;		// PEEK_VVV
 			case 4: std::snprintf(buf, sizeof buf, " SETL $arr $idx $i%u\n", a); break;		// SETL
@@ -451,6 +483,7 @@ static bool g_deepRecursion = false;	// when set, some rec calls take a raw (pos
 
 static void emitBody(std::string& p, Rng& r, std::string& pending, int stmts, int depth, int& label) {
 	static const char* const CMP[] = { "LSSi", "LEQi", "GEQi", "EQUi", "NEQi" };
+	static const char* const FCMP[] = { "LSSf", "LEQf", "GEQf", "GRTf", "EQUf", "NEQf" };		// every float compare-branch
 	const int MAX_DEPTH = 3;
 	char buf[64];
 	for (int n = 0; n < stmts; ++n) {
@@ -471,7 +504,16 @@ static void emitBody(std::string& p, Rng& r, std::string& pending, int stmts, in
 			}
 		} else if (kind == 1) {
 			const int id = label++;
-			std::snprintf(buf, sizeof buf, " %s $i%u $i%u @.s%d\n", CMP[pick(r, 5)], pick(r, NI), pick(r, NI), id); putLine(p, pending, buf);
+			const unsigned form = pick(r, 3);																// 0 int, 1 float var/var, 2 float var/const
+			if (form == 0) {
+				std::snprintf(buf, sizeof buf, " %s $i%u $i%u @.s%d\n", CMP[pick(r, 5)], pick(r, NI), pick(r, NI), id);
+			} else if (form == 1) {
+				std::snprintf(buf, sizeof buf, " %s $f%u $f%u @.s%d\n", FCMP[pick(r, 6)], pick(r, NF), pick(r, NF), id);
+			} else {
+				std::snprintf(buf, sizeof buf, " %s $f%u #%d.0 @.s%d\n", FCMP[pick(r, 6)], pick(r, NF)
+						, static_cast<int>(pick(r, 21)) - 10, id);
+			}
+			putLine(p, pending, buf);
 			std::string none;
 			emitBody(p, r, none, 1 + static_cast<int>(pick(r, 3)), depth + 1, label);
 			std::string skip = ".s" + std::to_string(id) + ":";									// rides a guaranteed trailing op
@@ -531,7 +573,9 @@ static const char* const CALLEES =
 	" ANDi $m $k #7\n PEEK $t $pp $m\n ADDi $t $t #1\n POKE $pp $m $t\n MOVi $r $t\n RETU\n";
 
 static std::string buildProgram(Rng& r) {
-	std::string p = "buf: GLOB *8\n";
+	std::string p = "pad: GLOB *8\n";					// the landing zone for buf's negative indices (see emitSimpleOp)
+	for (int i = 0; i < 8; ++i) { p += " DATi #0\n"; }
+	p += "buf: GLOB *8\n";
 	for (int i = 0; i < 8; ++i) { p += " DATi #0\n"; }
 	p += CALLEES;
 	p += "main: FUNC\n PARA *3\n";
