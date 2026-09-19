@@ -25,7 +25,9 @@
 	Apple (macOS / iOS) executable-memory backend. Apple Silicon enforces hardened runtime W^X, so the page is mapped
 	MAP_JIT and writes are wrapped in the per-thread write-protect toggle (pthread_jit_write_protect_np); afterwards the
 	i-cache is flushed with sys_icache_invalidate. See design/jit/JitSpikeA1-Results.md (spike A1 rung-1). The toggle is a
-	no-op / unsupported on older/Intel Macs, so it is applied only when advertised.
+	no-op / unsupported on older/Intel Macs; where it is unavailable the page is dropped to PROT_READ | PROT_EXEC with
+	mprotect instead, so W^X holds on every path rather than leaving a permanently writable-and-executable page
+	(GAZLJitMem.h states honouring W^X as the contract, and the POSIX backend ends non-writable too).
 */
 
 #include "GAZLJitMem.h"
@@ -45,6 +47,7 @@ void* makeExecutable(const uint32_t* words, size_t wordCount) {
 	if (toggle) { pthread_jit_write_protect_np(0); }
 	std::memcpy(p, words, bytes);
 	if (toggle) { pthread_jit_write_protect_np(1); }
+	else if (::mprotect(p, bytes, PROT_READ | PROT_EXEC) != 0) { ::munmap(p, bytes); return 0; }		// fail CLOSED: a page we cannot un-write is not handed out
 	sys_icache_invalidate(p, bytes);
 	return p;
 }

@@ -544,7 +544,7 @@ static void emitBranchFloat(X64Emitter& emitter, RegisterCache& cache, int kind,
 	cache.endInstruction();
 	Label target = resolveConditionalEdge(emitter, cache, entryMaps, labels, targetIndex, resident, coldEdges);			// block ends here (mov loads/stores leave EFLAGS)
 	if (kind == 0) { emitter.jcc(CC_A, target); }
-	else if (kind == 1) { emitter.jcc(CC_AE, target); }																	// a >= b ordered
+	else if (kind == 1) { emitter.jcc(CC_P, target); emitter.jcc(CC_AE, target); }					// !(a < b) - TRUE when unordered. ucomiss sets CF on NaN so CC_AE alone misses it; matches the interpreter and arm64 (PL)
 	else if (kind == 2) { Label unordered = emitter.newLabel(); emitter.jcc(CC_P, unordered); emitter.jcc(CC_E, target); emitter.bind(unordered); }
 	else { emitter.jcc(CC_P, target); emitter.jcc(CC_NE, target); }														// unordered or not-equal
 }
@@ -748,7 +748,7 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 				cache.captureDirtyLines(trap.dirty);																	// the trap exit must leave memory interpreter-identical
 				emitter.jcc(CC_AE, trap.label);																			// trap arm is cold, after the mainline
 				const int d = cache.define(in.p0.i, GENERAL_REGISTER);
-				emitter.loadIdx(static_cast<Reg>(d), MEMORY_BASE, static_cast<Reg>(idx), base * 4);
+				emitter.loadIdx(static_cast<Reg>(d), MEMORY_BASE, RAX, 0);								// index by the CHECKED sum in RAX: `idx` alone is zero-extended to 64 bits, so a 32-bit wrap that passes the bound would address ~16 GiB away
 				cache.endInstruction();
 				coldTraps.push_back(trap);
 				break;
@@ -766,7 +766,7 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 				emitter.load(SCRATCH_B, CONTEXT, offsets.rwmemsize); emitter.cmp(RAX, SCRATCH_B);
 				cache.captureDirtyLines(trap.dirty);																	// the trap exit must leave memory interpreter-identical
 				emitter.jcc(CC_AE, trap.label);																			// trap arm is cold, after the mainline
-				emitter.storeIdx(MEMORY_BASE, static_cast<Reg>(idx), base * 4, static_cast<Reg>(val));
+				emitter.storeIdx(MEMORY_BASE, RAX, 0, static_cast<Reg>(val));							// index by the CHECKED sum (see OP_PEEK_VCV): a wrapped index must not escape the bound
 				cache.endInstruction();
 				if (!constAddrBase) { cache.invalidateAll(); }
 				coldTraps.push_back(trap);

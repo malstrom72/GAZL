@@ -1365,7 +1365,9 @@ const Char* Assembler::feed(const Char* line) {
 									parseOperand(op1Begin, op1End, op->accepts[1], &v);
 									regionExtent = v.i;
 								}
-								if (regionStart + (regionExtent < 0 ? 0 : regionExtent) > (Int)(sectionEnd - sectionBegin))
+								const Int sectionSize = (Int)(sectionEnd - sectionBegin);			// SUBTRACT, never add: `regionStart + regionExtent` overflows int32 for two large
+								if (regionStart > sectionSize											// CONST_INT_P operands, wrapping NEGATIVE so the check passed and the cursor
+										|| (regionExtent >= 0 && regionExtent > sectionSize - regionStart))	// landed outside the section. Both operands are >= 0, so this form cannot wrap.
 									throw Exception(OFFSET_OUT_OF_BOUNDS, dataLabel);
 								dataPointer = sectionBegin + regionStart;
 								dataEnd = (regionExtent < 0 ? sectionEnd : dataPointer + regionExtent);

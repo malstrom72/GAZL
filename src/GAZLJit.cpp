@@ -30,6 +30,13 @@
 #include "assert.h"																										// assert - RegisterCache contracts + the unlowerable-opcode check (local-overridable, see GAZL.h)
 #include <set>																											// jitFuelSafepoints - block-leader set
 #include <algorithm>																									// std::upper_bound - Belady next-read lookup
+#if defined(_M_X64) || defined(__x86_64__)															// the x64 backend lowers FLOF with SSE4.1 `roundss`
+	#if defined(_MSC_VER)
+		#include <intrin.h>
+	#elif defined(__GNUC__) || defined(__clang__)
+		#include <cpuid.h>
+	#endif
+#endif
 
 #if defined(_WIN32)
 #ifndef WIN32_LEAN_AND_MEAN
@@ -611,6 +618,7 @@ void RegisterCache::evictOtherClass(Int slot, RegisterClass wantedClass, bool sp
 		if (lines[i].occupied && !lines[i].scratchTemp && lines[i].slot == slot) {
 			if (spillFirst) { spillLine(other, static_cast<int>(i)); }
 			lines[i].occupied = false;
+			lines[i].dirty = false;																	// unoccupied: leave no stale flag for the next occupant to read
 			return;
 		}
 	}
@@ -659,6 +667,7 @@ int RegisterCache::read(Int slot, RegisterClass registerClass) {
 				const bool writeHome = cacheBackend.bridgeWritesHome();
 				if (writeHome) { cacheBackend.emitSpill(slot, sourceRegister, other); }				// clean the line here, or leave it dirty and let the block end do it
 				otherLines[k].occupied = false;																			// it moves out of that file
+				otherLines[k].dirty = false;													// ditto: the value is carried by the bridged line now
 				const int b = acquire(registerClass);
 				Line& bridged = lines[b];
 				bridged.occupied = true;
@@ -975,6 +984,7 @@ void RegisterCache::reconcileTo(const ResidencyMap& map) {
 			cacheBackend.emitFill(entry.physicalRegister, entry.slot, entry.registerClass);							// home is current: the value was spilled above or never diverged
 			line.occupied = true;
 			line.scratchTemp = false;
+			line.dirty = false;																			// just filled FROM the home, so it matches - never inherit the flag the previous occupant left
 			line.slot = entry.slot;
 			line.registerClass = entry.registerClass;
 			line.pinned = false;
@@ -1202,12 +1212,35 @@ bool runProbe(ProbeFunc func) {
 
 }																														// anonymous namespace
 
+#if defined(_M_X64) || defined(__x86_64__)
+/*
+	Layer 0 of the probe: the BASELINE ISA the x64 backend emits. Only `roundss` (OP_FLOF) exceeds SSE2, and a single
+	FLOf on a pre-SSE4.1 host would raise #UD at run time rather than degrade - the page probe below cannot see that,
+	because the stub it runs is plain SSE2. Returning false here routes the whole program to the interpreter, which is
+	the documented fallback. arm64 needs no equivalent: everything that backend emits is base ARMv8-A.
+*/
+static bool x64BaselineIsa() {
+	unsigned int regs[4] = { 0, 0, 0, 0 };
+	#if defined(_MSC_VER)
+		__cpuid(reinterpret_cast<int*>(regs), 1);
+	#elif defined(__GNUC__) || defined(__clang__)
+		if (__get_cpuid(1, &regs[0], &regs[1], &regs[2], &regs[3]) == 0) return false;
+	#else
+		return false;																			// unknown compiler: cannot ask, so do not promise
+	#endif
+	return (regs[2] & (1u << 19)) != 0;														// CPUID.01H:ECX.SSE4_1
+}
+#endif
+
 bool jitAvailable() {
 #if defined(GAZL_NO_PROBE_STUB)
 	return false;
 #else
 	static int cached = -1;																								// -1 unknown / 0 no / 1 yes; probed once (single-threaded startup)
 	if (cached < 0) {
+#if defined(_M_X64) || defined(__x86_64__)
+		if (!x64BaselineIsa()) { cached = 0; return false; }								// layer 0: ISA, before spending a page on the probe
+#endif
 		const size_t words = sizeof(PROBE_STUB) / sizeof(PROBE_STUB[0]);
 		void* page = makeExecutable(PROBE_STUB, words);																	// layer 1: policy denial fails the syscalls here
 		if (page == 0) {

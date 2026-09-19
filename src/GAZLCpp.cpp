@@ -71,6 +71,14 @@ static std::string fconst(const Value& p) { return "f32(" + U(static_cast<UInt>(
 static std::string memIndex(const Value& p) { return U(static_cast<UInt>(p.p - MEMORY_OFFSET)); }
 static std::string label(UInt j, Int off) { std::ostringstream s; s << "L_" << (static_cast<Int>(j) + off); return s.str(); }
 
+/*
+	Entries in the NAT[] table emitted by emitCpp below. OP_CALL_NVC is rejected above this, because the ordinal
+	comes from the program and GAZLCmd registers MORE natives than Tier 0 knows how to emit (`^exit` is 10, and
+	`--forward=nat:func` adds further ones) - those used to be emitted as an out-of-range NAT[n] that compiled
+	clean and called whatever followed the array. A static assert keeps the two in step.
+*/
+static const Int EMITTED_NATIVE_COUNT = 10;
+
 // A binary int op with the three operand-const modes (VVV/VVC/VCV); op is a C operator string.
 static std::string ibin(const Instruction& in, const char* op, bool s1Const, bool s2Const) {
 	const std::string a = s1Const ? I(in.p1.i) : islot(in.p1);
@@ -105,10 +113,11 @@ static std::string ibranch(const Instruction& in, UInt j, const char* cmp, bool 
 	const std::string b = c1Const ? I(in.p1.i) : islot(in.p1);
 	return "if (" + a + " " + cmp + " " + b + ") goto " + label(j, in.p2.i) + ";";
 }
-static std::string fbranch(const Instruction& in, UInt j, const char* cmp, bool c0Const, bool c1Const) {
+static std::string fbranch(const Instruction& in, UInt j, const char* cmp, bool c0Const, bool c1Const, bool negate = false) {
 	const std::string a = c0Const ? fconst(in.p0) : fslot(in.p0);
 	const std::string b = c1Const ? fconst(in.p1) : fslot(in.p1);
-	return "if (" + a + " " + cmp + " " + b + ") goto " + label(j, in.p2.i) + ";";
+	const std::string test = negate ? ("!(" + a + " " + cmp + " " + b + ")") : (a + " " + cmp + " " + b);
+	return "if (" + test + ") goto " + label(j, in.p2.i) + ";";
 }
 
 // Is instruction j a branch, and if so where does it target? (for label placement)
@@ -150,9 +159,14 @@ static void promoteFunctionLocals(std::string& text, Int localsSize) {
 }
 
 // Emit one function body; returns false on an unsupported opcode. `sharedWindow` = the caller-shared slot count (see above).
-static bool emitFunction(std::ostringstream& out, const Instruction* code, UInt funcIndex, UInt ordinal, bool promoteLocals, Int sharedWindow) {
-	UInt retIndex = funcIndex;
-	while (code[retIndex].opcode != OP_RETU) { ++retIndex; }
+static bool emitFunction(std::ostringstream& out, const Instruction* code, UInt funcIndex, UInt endIndex, UInt ordinal, bool promoteLocals, Int sharedWindow) {
+	/*
+		The extent is the caller-supplied end (the next FUNC in functionTable order), NOT the first RETU. Multi-RETU
+		and GOTO-ending functions are legal - and Assembler::threadBranches rewrites every GOTO-onto-a-RETU into an
+		inline RETU, so an ordinary early exit routinely MAKES a mid-function RETU. Stopping there dropped every
+		instruction after it and emitted a goto to a label that was never written. Both JIT backends say the same.
+	*/
+	const UInt retIndex = endIndex - 1;
 
 	std::set<UInt> targets;
 	bool frameAddressed = false;
@@ -250,9 +264,9 @@ static bool emitFunction(std::ostringstream& out, const Instruction* code, UInt 
 			case OP_LSSF_CVB: s = fbranch(in, j, "<", true, false); break;
 			case OP_EQUF_VVB: s = fbranch(in, j, "==", false, false); break;
 			case OP_EQUF_VCB: s = fbranch(in, j, "==", false, true); break;
-			case OP_NLSF_VVB: s = fbranch(in, j, ">=", false, false); break;
-			case OP_NLSF_VCB: s = fbranch(in, j, ">=", false, true); break;
-			case OP_NLSF_CVB: s = fbranch(in, j, ">=", true, false); break;
+			case OP_NLSF_VVB: s = fbranch(in, j, "<", false, false, true); break;	// NLSF is !(a < b), which is TRUE for NaN;
+			case OP_NLSF_VCB: s = fbranch(in, j, "<", false, true, true); break;	// `a >= b` is FALSE there, diverging from
+			case OP_NLSF_CVB: s = fbranch(in, j, "<", true, false, true); break;	// the interpreter and the arm64 backend.
 			case OP_NEQF_VVB: s = fbranch(in, j, "!=", false, false); break;
 			case OP_NEQF_VCB: s = fbranch(in, j, "!=", false, true); break;
 
@@ -262,6 +276,7 @@ static bool emitFunction(std::ostringstream& out, const Instruction* code, UInt 
 				break;
 			}
 			case OP_CALL_NVC:
+				if (in.p0.i < 0 || in.p0.i >= EMITTED_NATIVE_COUNT) { return false; }			// the emitted NAT[] holds EMITTED_NATIVE_COUNT entries; a higher ordinal (^exit, --forward) indexed PAST it, silently
 				s = "{ int st = NAT[" + I(in.p0.i) + "](dsp + " + I(in.p1.i) + "); if (st) return st; }";
 				break;
 
@@ -282,13 +297,15 @@ std::string translateToCpp(const AssembledProgram& program, UInt mainOrdinal, bo
 	const UInt* const functionTable = program.functionTable;
 	const Value* const memory = program.memory;
 	const UInt memorySize = program.memorySize;
+	const UInt codeSize = program.codeSize;
 	const UInt globalsSize = program.globalsSize;
 	const UInt constsSize = program.constsSize;
 
 	// Caller-shared window per callee: the widest `*N` any CALL_CVC passes it (its OUT/INP region; excluded from promotion).
 	std::vector<Int> sharedWindow(functionCount, 0);
 	for (UInt ord = 0; ord < functionCount; ++ord) {
-		for (UInt j = functionTable[ord]; code[j].opcode != OP_RETU; ++j) {
+		const UInt scanEnd = (ord + 1 < functionCount ? functionTable[ord + 1] : codeSize);		// ditto: to the next FUNC, not the first RETU
+		for (UInt j = functionTable[ord]; j < scanEnd; ++j) {
 			if (code[j].opcode == OP_CALL_CVC) {
 				const UInt callee = code[j].p0.p - FUNCTION_OFFSET;
 				if (callee < functionCount && code[j].p2.i > sharedWindow[callee]) { sharedWindow[callee] = code[j].p2.i; }
@@ -298,7 +315,8 @@ std::string translateToCpp(const AssembledProgram& program, UInt mainOrdinal, bo
 
 	std::ostringstream body;
 	for (UInt ord = 0; ord < functionCount; ++ord) {
-		if (!emitFunction(body, code, functionTable[ord], ord, promoteLocals, sharedWindow[ord])) { return std::string(); }
+		const UInt funcEnd = (ord + 1 < functionCount ? functionTable[ord + 1] : codeSize);
+		if (!emitFunction(body, code, functionTable[ord], funcEnd, ord, promoteLocals, sharedWindow[ord])) { return std::string(); }
 	}
 
 	std::ostringstream out;
@@ -335,6 +353,8 @@ std::string translateToCpp(const AssembledProgram& program, UInt mainOrdinal, bo
 	out << "static int nat_log(Value* p) { p[0].f = (float)std::log(p[1].f); return 0; }\n";
 	out << "static int nat_atan2(Value* p) { p[0].f = (float)std::atan2(p[1].f, p[2].f); return 0; }\n";
 	out << "typedef int (*Native)(Value*);\n";
+	typedef char nativeCountInStep[(EMITTED_NATIVE_COUNT == 10) ? 1 : -1];					// the literal table below must match the count OP_CALL_NVC is checked against
+	(void)sizeof(nativeCountInStep);
 	out << "static Native NAT[] = { nat_stub, nat_stub, nat_printInt, nat_printFloat, nat_print, nat_printLF, nat_stub, nat_atan2, nat_sqrt, nat_log };\n\n";
 
 	// Forward declarations.
