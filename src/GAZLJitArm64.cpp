@@ -389,8 +389,14 @@ void Arm64Emitter::finalize() {
 		/*
 			RANGE FIRST, then mask. AND-ing an over-long displacement into the field silently produced a branch to the
 			wrong address in the same page - wrong code, no fault, in release as well as debug. Nothing bounds a
-			function's emitted size, so a large enough mainline puts its cold-section traps past b.cond's +-1 MB reach.
-			Throwing degrades that function to the interpreter, which is what JitException means everywhere else here.
+			function's emitted size, so a large enough mainline puts its FUEL CHECKS past b.cond's +-1 MB reach - one
+			`b.mi` to the timeout stub every ~133 words, which is what actually overflows; the divide-by-zero `cbz`
+			reaches its cold trap comfortably (measured at +145512 words). It needs fuel to actually RUN OUT inside
+			that function, so a full-slice run never sees it and tiny-fuel does. Measured on arm64 against the parent
+			commit: SIGBUS when the wrapped target lands before the code page, and SILENT WRONG CODE (status -7, no
+			output, where the interpreter prints) when a preceding large function's trap stubs absorb it instead.
+			Throwing hands the whole COMPILE back - GAZLCmd's catch is around compile(), not around one function - so
+			the program runs interpreted. Safe, but it is not a per-function degrade.
 			x64 needs no equivalent: its finalize() writes a full rel32 for every fixup.
 		*/
 		if (f.kind == FIXUP_IMM26) {
@@ -399,8 +405,8 @@ void Arm64Emitter::finalize() {
 		} else if (f.kind == FIXUP_IMM19) {
 			if (disp < -(1 << 18) || disp >= (1 << 18)) throw JitException("JIT: arm64 conditional branch beyond imm19 reach");
 			words[f.site] |= ((static_cast<uint32_t>(disp) & 0x0007FFFFu) << 5);
-		} else {
-			if (disp * 4 < -(1 << 20) || disp * 4 >= (1 << 20)) throw JitException("JIT: arm64 ADR beyond imm21 reach");																										// FIXUP_ADR: 21-bit byte displacement, split lo/hi
+		} else {																										// FIXUP_ADR: 21-bit byte displacement, split lo/hi
+			if (disp * 4 < -(1 << 20) || disp * 4 >= (1 << 20)) throw JitException("JIT: arm64 ADR beyond imm21 reach");
 			const uint32_t immBytes = static_cast<uint32_t>(disp * 4) & 0x001FFFFFu;
 			words[f.site] |= ((immBytes & 0x3u) << 29) | (((immBytes >> 2) & 0x0007FFFFu) << 5);
 		}
@@ -819,7 +825,7 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 				if (window != 0) { addImmXBig(e, X1, X1, window * 4); }
 				e.strX(X1, X0, o.dsp); e.strW(W3, X0, o.fuel); e.strX(X4, X0, o.ipsp);									// publish window/fuel/ipsp (interpreter-shaped)
 				e.adr(X9, after); e.strX(X9, X0, o.nativeafter);														// redirectable OK continuation (pushCall retargets)
-				if (ordinal >= 4096) throw JitException("JIT: native ordinal beyond the arm64 ldr imm12 reach");		// scaled imm12 tops out at 4095 ELEMENTS; past it the OR is a no-op against a bit already set in the base, silently yielding natives[0]
+				if (ordinal >= 4096) throw JitException("JIT: native ordinal beyond the arm64 ldr imm12 reach");		// scaled imm12 tops out at 4095 ELEMENTS; past it the offset wraps into the field and silently calls natives[ordinal % 4096] (measured: 4096 -> native0, 4100 -> native4, both status 0, no fault)
 				e.ldrX(X9, X0, o.natives); e.ldrX(X9, X9, ordinal * 8);													// natives[ordinal]
 				e.blr(X9);																								// inline host call (x0 = ctx); w0 = status
 				e.mov(W12, W0);																							// save the status BEFORE we overwrite x0 with ctx
