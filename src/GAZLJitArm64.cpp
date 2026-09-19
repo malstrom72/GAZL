@@ -386,11 +386,21 @@ void Arm64Emitter::finalize() {
 		const ptrdiff_t target = labelTargets[f.labelId];
 		assert(target >= 0 && "branch to unbound label");
 		const ptrdiff_t disp = target - static_cast<ptrdiff_t>(f.site);													// PC-relative, in instruction words
+		/*
+			RANGE FIRST, then mask. AND-ing an over-long displacement into the field silently produced a branch to the
+			wrong address in the same page - wrong code, no fault, in release as well as debug. Nothing bounds a
+			function's emitted size, so a large enough mainline puts its cold-section traps past b.cond's +-1 MB reach.
+			Throwing degrades that function to the interpreter, which is what JitException means everywhere else here.
+			x64 needs no equivalent: its finalize() writes a full rel32 for every fixup.
+		*/
 		if (f.kind == FIXUP_IMM26) {
+			if (disp < -(1 << 25) || disp >= (1 << 25)) throw JitException("JIT: arm64 branch beyond imm26 reach");
 			words[f.site] |= (static_cast<uint32_t>(disp) & 0x03FFFFFFu);
 		} else if (f.kind == FIXUP_IMM19) {
+			if (disp < -(1 << 18) || disp >= (1 << 18)) throw JitException("JIT: arm64 conditional branch beyond imm19 reach");
 			words[f.site] |= ((static_cast<uint32_t>(disp) & 0x0007FFFFu) << 5);
-		} else {																										// FIXUP_ADR: 21-bit byte displacement, split lo/hi
+		} else {
+			if (disp * 4 < -(1 << 20) || disp * 4 >= (1 << 20)) throw JitException("JIT: arm64 ADR beyond imm21 reach");																										// FIXUP_ADR: 21-bit byte displacement, split lo/hi
 			const uint32_t immBytes = static_cast<uint32_t>(disp * 4) & 0x001FFFFFu;
 			words[f.site] |= ((immBytes & 0x3u) << 29) | (((immBytes >> 2) & 0x0007FFFFu) << 5);
 		}
@@ -809,6 +819,7 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 				if (window != 0) { addImmXBig(e, X1, X1, window * 4); }
 				e.strX(X1, X0, o.dsp); e.strW(W3, X0, o.fuel); e.strX(X4, X0, o.ipsp);									// publish window/fuel/ipsp (interpreter-shaped)
 				e.adr(X9, after); e.strX(X9, X0, o.nativeafter);														// redirectable OK continuation (pushCall retargets)
+				if (ordinal >= 4096) throw JitException("JIT: native ordinal beyond the arm64 ldr imm12 reach");		// scaled imm12 tops out at 4095 ELEMENTS; past it the OR is a no-op against a bit already set in the base, silently yielding natives[0]
 				e.ldrX(X9, X0, o.natives); e.ldrX(X9, X9, ordinal * 8);													// natives[ordinal]
 				e.blr(X9);																								// inline host call (x0 = ctx); w0 = status
 				e.mov(W12, W0);																							// save the status BEFORE we overwrite x0 with ctx
