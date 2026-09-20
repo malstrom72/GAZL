@@ -792,12 +792,35 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size) {
 #endif	// JITDIFF
 #endif
 
+#ifdef _WIN32
+#include <crtdbg.h>							// _CrtSetReportMode - see quietAsserts()
+#include <stdlib.h>							// _set_abort_behavior
+#endif
+
+/*
+	This binary is built `beta` on purpose - /O2 with asserts ON, so the internal RegisterCache / finalize / contract
+	asserts fire during a soak. On Windows the debug CRT answers a failed assert with a MODAL DIALOG, which for an
+	unattended run is the worst possible outcome: the process blocks forever instead of exiting non-zero, so
+	test-jit.cmd and fuzzSoak.ps1 HANG rather than fail, and the assert text - the most useful part - never reaches
+	a log. Route asserts to stderr and let abort() be abort(). Observed: a 3000-program range on a deliberately
+	buggy engine blocked on the dialog and had to be killed; the same range built without asserts exited 127 at the
+	first divergence, as it should. No effect on POSIX, where this was never the behaviour.
+*/
+static void quietAsserts() {
+#ifdef _WIN32
+	_CrtSetReportMode(_CRT_ASSERT, _CRTDBG_MODE_FILE);
+	_CrtSetReportFile(_CRT_ASSERT, _CRTDBG_FILE_STDERR);
+	_CrtSetReportMode(_CRT_ERROR, _CRTDBG_MODE_FILE);
+	_CrtSetReportFile(_CRT_ERROR, _CRTDBG_FILE_STDERR);
+	_set_abort_behavior(0, _WRITE_ABORT_MSG | _CALL_REPORTFAULT);					// no "abort() has been called" popup either
+#endif
+}
+
 #ifdef LIBFUZZ_STANDALONE
 
 #ifndef _WIN32
 #include <dirent.h>							// POSIX corpus-directory replay; MSVC has no dirent (Windows uses --gen / single-file replay)
 #endif
-
 void doOne(const char* fn) {
 	printf ("%s\n", fn);
 	fprintf(stderr, "Running: %s\n", fn);
@@ -816,6 +839,7 @@ void doOne(const char* fn) {
 }
 
 int main(int argc, const char* argv[]) {
+	quietAsserts();
 #if defined(JITDIFF) && defined(GAZL_JIT)
 	if (argc >= 3 && strcmp(argv[1], "--gen1") == 0) {		// dump the generated program for a seed (repro / inspection)
 		if (argc >= 4 && strcmp(argv[3], "deep") == 0) { g_deepRecursion = true; }
@@ -906,6 +930,7 @@ int main(int argc, const char* argv[]) {
 #ifndef LIBFUZZ
 #ifndef LIBFUZZ_STANDALONE
 int main(int argc, const char* argv[]) {
+	quietAsserts();																						// build.cmd runs this binary unattended; a dialog would hang it, not fail it
 	try {
 	#if !defined(NDEBUG)
 		unitTest();
