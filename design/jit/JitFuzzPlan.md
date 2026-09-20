@@ -30,8 +30,17 @@ names a different program now.
 Those two seeds are the clang stream, which is now the stream everywhere: the generator used to consume its choices in
 argument-evaluation order (see section 3), so MSVC built different programs from the same seed and found the NaN bug at
 its own seed 1800031 instead. Fixed 2026-09-20 by giving every `pick()` its own statement, which left the clang stream
-byte-identical over 5000 seeds. Fingerprints to check a build against (`--gen1 SEED deep`, sha256, first 32 hex):
-1800004 = 95df89dde8a531b02f92cef4280e260a, 1800024 = 4dec2331ae5a5a810ff3376c8a1f45cc.
+byte-identical over 3000 seeds. (That commit said 5000; its check was void - macOS `seq` prints `1.8e+06` for values
+past 6 digits, so every iteration re-ran seed 1. Loop with `seq -f '%.0f'` or a C-style `for ((s=...))`, and check
+that a sample holds as many DISTINCT programs as seeds. Re-run with distinct seeds: identical, 3000 of them.)
+
+Fingerprints to check a build against - sha256 of `--gen1 SEED deep`, first 32 hex, of the program text with LF
+line endings: 1800004 = 95df89dde8a531b02f92cef4280e260a,
+1800024 = 4dec2331ae5a5a810ff3376c8a1f45cc. **Normalise line endings before hashing** (`| tr -d '\r'`): a Windows build
+writes stdout in TEXT mode, so every `\n` leaves as `\r\n` and the same correct program hashes differently
+(1800004 = a4389f47a50e069d6d3b600178a5dd68 there). The text itself is identical - confirmed from both sides, by
+hashing the CRLF form here and the stripped form on MSVC - but a fingerprint that fails on a correct build is the same
+trap as the seed that did not port.
 
 Out of the generator's reach by design: an arm64 function large enough to push a branch past its +-1 MB imm19 field,
 and a native ordinal >= 4096 (the imm12 `ldr` offset). Both are pinned instead by the "reach" cases in
