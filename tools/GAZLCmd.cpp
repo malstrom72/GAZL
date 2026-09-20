@@ -399,8 +399,9 @@ static void emitSimpleOp(std::string& p, Rng& r, std::string& pending) {
 		const unsigned f = pick(r, NF);
 		const unsigned kind = pick(r, 6);
 		if (kind >= 3) {
-			std::snprintf(buf, sizeof buf, " MOVf $f%u #%d.%u\n", f, static_cast<int>(pick(r, 2000)) - 1000
-					, pick(r, 1000));
+			const int whole = static_cast<int>(pick(r, 2000)) - 1000;
+			const unsigned frac = pick(r, 1000);
+			std::snprintf(buf, sizeof buf, " MOVf $f%u #%d.%u\n", f, whole, frac);
 		} else {
 			std::snprintf(buf, sizeof buf, " MOVf $f%u #1e30\n", f); putLine(p, pending, buf);
 			std::snprintf(buf, sizeof buf, " MULf $f%u $f%u #%s\n", f, f, kind == 1 ? "-1e30" : "1e30");	// overflow: +Inf / -Inf
@@ -408,25 +409,41 @@ static void emitSimpleOp(std::string& p, Rng& r, std::string& pending) {
 		}
 	} else if (choice < 5) {
 		const char* op = IOPS[pick(r, 6)];
-		if (pick(r, 2)) { std::snprintf(buf, sizeof buf, " %s $i%u $i%u #%d\n", op, pick(r, NI), pick(r, NI), static_cast<int>(r.word())); }
-		else { std::snprintf(buf, sizeof buf, " %s $i%u $i%u $i%u\n", op, pick(r, NI), pick(r, NI), pick(r, NI)); }
+		const unsigned useConst = pick(r, 2);
+		const unsigned d = pick(r, NI);
+		const unsigned s1 = pick(r, NI);
+		if (useConst) { std::snprintf(buf, sizeof buf, " %s $i%u $i%u #%d\n", op, d, s1, static_cast<int>(r.word())); }
+		else { std::snprintf(buf, sizeof buf, " %s $i%u $i%u $i%u\n", op, d, s1, pick(r, NI)); }
 	} else if (choice == 5) {
-		std::snprintf(buf, sizeof buf, " ABSi $i%u $i%u\n", pick(r, NI), pick(r, NI));
+		const unsigned d = pick(r, NI);
+		const unsigned s1 = pick(r, NI);
+		std::snprintf(buf, sizeof buf, " ABSi $i%u $i%u\n", d, s1);
 	} else if (choice == 6) {
 		std::snprintf(buf, sizeof buf, " ANDi $idx $i%u #7\n", pick(r, NI)); putLine(p, pending, buf);	// divisor 0-7: ~1/8 traps
-		std::snprintf(buf, sizeof buf, " %s $i%u $i%u $idx\n", pick(r, 2) ? "DIVi" : "MODi", pick(r, NI), pick(r, NI));
+		const char* dop = pick(r, 2) ? "DIVi" : "MODi";
+		const unsigned d = pick(r, NI);
+		const unsigned s1 = pick(r, NI);
+		std::snprintf(buf, sizeof buf, " %s $i%u $i%u $idx\n", dop, d, s1);
 	} else if (choice < 9) {
 		const unsigned fop = pick(r, 4);
 		if (fop == 3) {																			// DIVf: force a finite divisor >= 1 (ABSf then +1) - avoids 0/0 (NaN, unspecified bits) and x/0 (Inf) and runaway growth
 			const unsigned dv = pick(r, NF);
 			std::snprintf(buf, sizeof buf, " ABSf $f%u $f%u\n", dv, dv); putLine(p, pending, buf);
 			std::snprintf(buf, sizeof buf, " ADDf $f%u $f%u #1.0\n", dv, dv); p += buf;
-			std::snprintf(buf, sizeof buf, " DIVf $f%u $f%u $f%u\n", pick(r, NF), pick(r, NF), dv);
+			const unsigned fd = pick(r, NF);
+			const unsigned fs = pick(r, NF);
+			std::snprintf(buf, sizeof buf, " DIVf $f%u $f%u $f%u\n", fd, fs, dv);
 		} else {
-			std::snprintf(buf, sizeof buf, " %s $f%u $f%u $f%u\n", FOPS[fop], pick(r, NF), pick(r, NF), pick(r, NF));
+			const unsigned fd = pick(r, NF);
+			const unsigned fa = pick(r, NF);
+			const unsigned fb = pick(r, NF);
+			std::snprintf(buf, sizeof buf, " %s $f%u $f%u $f%u\n", FOPS[fop], fd, fa, fb);
 		}
 	} else if (choice == 9) {
-		std::snprintf(buf, sizeof buf, " %s $f%u $f%u\n", pick(r, 2) ? "ABSf" : "FLOf", pick(r, NF), pick(r, NF));
+		const char* uop = pick(r, 2) ? "ABSf" : "FLOf";
+		const unsigned fd = pick(r, NF);
+		const unsigned fs = pick(r, NF);
+		std::snprintf(buf, sizeof buf, " %s $f%u $f%u\n", uop, fd, fs);
 	} else if (pick(r, 2) == 0) {
 		// Big-LOCA (far-slot) access: index masked in-bounds to [0, BIGN). BIGN>1024 words puts the slot past the 12-bit
 		// immediate range, exercising the large-frame addressing path (the addImmX class) under the full differential.
@@ -506,12 +523,20 @@ static void emitBody(std::string& p, Rng& r, std::string& pending, int stmts, in
 			const int id = label++;
 			const unsigned form = pick(r, 3);																// 0 int, 1 float var/var, 2 float var/const
 			if (form == 0) {
-				std::snprintf(buf, sizeof buf, " %s $i%u $i%u @.s%d\n", CMP[pick(r, 5)], pick(r, NI), pick(r, NI), id);
+				const char* cmp = CMP[pick(r, 5)];
+				const unsigned ca = pick(r, NI);
+				const unsigned cb = pick(r, NI);
+				std::snprintf(buf, sizeof buf, " %s $i%u $i%u @.s%d\n", cmp, ca, cb, id);
 			} else if (form == 1) {
-				std::snprintf(buf, sizeof buf, " %s $f%u $f%u @.s%d\n", FCMP[pick(r, 6)], pick(r, NF), pick(r, NF), id);
+				const char* cmp = FCMP[pick(r, 6)];
+				const unsigned ca = pick(r, NF);
+				const unsigned cb = pick(r, NF);
+				std::snprintf(buf, sizeof buf, " %s $f%u $f%u @.s%d\n", cmp, ca, cb, id);
 			} else {
-				std::snprintf(buf, sizeof buf, " %s $f%u #%d.0 @.s%d\n", FCMP[pick(r, 6)], pick(r, NF)
-						, static_cast<int>(pick(r, 21)) - 10, id);
+				const char* cmp = FCMP[pick(r, 6)];
+				const unsigned ca = pick(r, NF);
+				const int cc = static_cast<int>(pick(r, 21)) - 10;
+				std::snprintf(buf, sizeof buf, " %s $f%u #%d.0 @.s%d\n", cmp, ca, cc, id);
 			}
 			putLine(p, pending, buf);
 			std::string none;
@@ -585,7 +610,11 @@ static std::string buildProgram(Rng& r) {
 	p += " $bigarr: LOCA *" + std::to_string(BIGN) + "\n $bi: LOCi\n";								// big frame (>4 KB): far-slot addressing + high CALL-window offsets, all under the differential
 	char buf[48];
 	for (int i = 0; i < NI; ++i) { std::snprintf(buf, sizeof buf, " MOVi $i%d #%d\n", i, static_cast<int>(r.word())); p += buf; }
-	for (int i = 0; i < NF; ++i) { std::snprintf(buf, sizeof buf, " MOVf $f%d #%d.%u\n", i, static_cast<int>(pick(r, 2000)) - 1000, pick(r, 1000)); p += buf; }
+	for (int i = 0; i < NF; ++i) {
+		const int whole = static_cast<int>(pick(r, 2000)) - 1000;
+		const unsigned frac = pick(r, 1000);
+		std::snprintf(buf, sizeof buf, " MOVf $f%d #%d.%u\n", i, whole, frac); p += buf;
+	}
 	p += " ADRL $p $arr *0\n";
 	p += " MOVi $c0 #0\n";									// fully initialize the LOCA array: GETL/PEEK read every slot, so an
 	for (int i = 0; i < 8; ++i) {							// unwritten slot would be a read-before-write - UNSPECIFIED, and the

@@ -27,6 +27,12 @@ passes; with only the index fix, the reverse. So each bug is caught on its own. 
 deep programs on both backends. **The seed stream changed**, so a seed quoted before this date (e.g. 1800001, 4242)
 names a different program now.
 
+Those two seeds are the clang stream, which is now the stream everywhere: the generator used to consume its choices in
+argument-evaluation order (see section 3), so MSVC built different programs from the same seed and found the NaN bug at
+its own seed 1800031 instead. Fixed 2026-09-20 by giving every `pick()` its own statement, which left the clang stream
+byte-identical over 5000 seeds. Fingerprints to check a build against (`--gen1 SEED deep`, sha256, first 32 hex):
+1800004 = 95df89dde8a531b02f92cef4280e260a, 1800024 = 4dec2331ae5a5a810ff3376c8a1f45cc.
+
 Out of the generator's reach by design: an arm64 function large enough to push a branch past its +-1 MB imm19 field,
 and a native ordinal >= 4096 (the imm12 `ldr` offset). Both are pinned instead by the "reach" cases in
 tools/GAZLJitLowerTest.cpp, which fail on 05be173c and pass after 2d873b2a. x64 has neither limit, so on x64 the same
@@ -120,6 +126,11 @@ Deliberately over-represent what breaks coherence:
   exactly this, and any diff is a real bug.
 - **Generator is a pure function of the input bytes**, so a crashing input reproduces exactly. Add a `--dump` mode that
   re-decodes a saved crash input back to `.gazl` for human inspection.
+- **One `pick()` (or `r.word()`) per statement.** Argument evaluation order is UNSPECIFIED in C++, so two picks in one
+  call consume the stream in whatever order the compiler chose: clang evaluated them left to right, MSVC right to
+  left, and the same seed therefore named DIFFERENT programs on the two toolchains. Found 2026-09-20, when a seed
+  recorded here as an acceptance check did not reproduce on Windows. Every pick now goes to its own named local first.
+  Keep it that way - a seed in this file is only meaningful if it means one program everywhere.
 
 ## 4. Build and platform
 
