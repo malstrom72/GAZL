@@ -903,45 +903,6 @@ void Assembler::finalize(UInt& codeSize, UInt& globalsSize, UInt& constsSize, UI
 	functionCount = sizes.functionCount;
 }
 
-/*
-	Dry assembly. Assembles into internally-owned scratch that starts small and doubles on the three arena overflows,
-	so the caller neither sizes nor owns a guess and the answer is exact by construction - it IS a real assembly,
-	just thrown away. The cost is a transient allocation and at	most log2 of the largest final arena in restarts;
-	every other outcome, program errors included, is exactly feed()'s. Each attempt works on a COPY of the seed symbols,
-	so the caller's table never learns the program's names and a retry never sees a half-defined one.
-
-	In the future, we may replace this with a true dry-run that does not require any memory allocations.
-*/
-ProgramSizes Assembler::measure(const Char* source, const Symbols& globals, const ProgramSizes* seed) {
-	UInt codeMax = 256, memoryMax = 256, functionMax = 64;
-	if (seed != 0) {
-		codeMax = std::max(codeMax, seed->codeSize);
-		memoryMax = std::max(memoryMax, seed->globalsSize + seed->constsSize);
-		functionMax = std::max(functionMax, seed->functionCount);
-	}
-	while (true) {
-		std::vector<Instruction> code(codeMax);
-		std::vector<UInt> functions(functionMax);
-		std::vector<Value> memory(memoryMax);
-		Symbols scratch(globals);
-		Assembler assem(codeMax, &code[0], functionMax, &functions[0], memoryMax, &memory[0], scratch);
-		assem.newUnit(0);
-		try {
-			for (const Char* p = source; *p != 0; ) p = assem.feed(p);
-			ProgramSizes sizes;
-			assem.finalize(sizes);
-			return sizes;
-		}
-		catch (const Exception& x) {
-			if (x.error != NOT_ENOUGH_CODE_SPACE && x.error != NOT_ENOUGH_MEMORY_SPACE
-					&& x.error != NOT_ENOUGH_FUNCTION_SPACE) throw;
-			codeMax *= 2;								// ALL three, whichever tripped: every retry re-assembles the whole
-			memoryMax *= 2;								// source, so the retry count should be the MAX of the three logs,
-			functionMax *= 2;							// not their sum - transient over-allocation costs nothing here.
-		}
-	}
-}
-
 void Assembler::newUnit(const Char* unitName) { // FIX : use unitName (or not?)
 	(void)unitName;
 	if (!skipUntilLabel.empty()) throw Exception(MISSING_COMPILE_TIME_LABEL, skipUntilLabel);
@@ -1710,8 +1671,8 @@ int testCallback(Processor* p) {
 	return 0;
 }
 
-// ONE list of the unit-test natives: measure()'s self-check compares two assemblies that must have been
-// seeded identically, so the seeding cannot be allowed to drift between sites.
+// ONE list of the unit-test natives: the freeze/thaw round-trip below compares two assemblies that must
+// have been seeded identically, so the seeding cannot be allowed to drift between sites.
 static void seedTestNatives(Symbols& g) { g.registerNative("assertFail", 0); g.registerNative("testMul", 1); g.registerNative("testCallback", 2); }
 
 bool unitTest() {
@@ -1790,23 +1751,6 @@ bool unitTest() {
 			}
 		}
 
-		// measure() must agree with the real assembly above exactly - and the deliberately tiny
-		// starting arenas mean this very test exercises its retry-and-double path.
-		{
-			Symbols seed;
-			seedTestNatives(seed);
-			ProgramSizes measured = { 0, 0, 0, 0 };
-			try {
-				measured = Assembler::measure(UNITTEST, seed);
-			}
-			catch (const Exception& e) {
-				(void)e;
-				assert(0);
-			}
-			assert(measured.codeSize == sizes.codeSize && measured.globalsSize == sizes.globalsSize
-					&& measured.constsSize == sizes.constsSize && measured.functionCount == sizes.functionCount);
-		}
-			
 		TestCallbackData callbackData;
 		
 		UInt size;
