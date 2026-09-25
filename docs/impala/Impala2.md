@@ -876,7 +876,8 @@ nothing about which come first.
 
 N returns simply occupy the first N window words. Impala's layout was built for this from the
 start; only the Impala surface was missing. What it cannot express is a window that is not
-outs-first - that is a limit of the convention, not of the machine.
+outs-first - that is a limit of the convention, not of the machine. See
+`design/impala/ExternPrototypes.md`, "Arbitrary call windows", for the plan that closes it.
 
 ### Syntax
 
