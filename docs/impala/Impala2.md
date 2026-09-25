@@ -857,19 +857,28 @@ eventually support this in Impala too"). This step closes the gap. **The VM need
 
 ### The calling convention (verified)
 
-From `docs/gazl/InstructionSet.md` and the compiler's own output (`impala/testdata/perfTest2.expected.gazl`,
-`src/UnitTest.gazl`):
+**GAZL imposes no order.** `INPi` and `OUTi` are the same declaration in `src/GAZL.cpp` - one
+`case LOCA____` bumping `localsSize` in declaration order - differing only in their type flags:
+`VAR_INT_R & ~TRANSIENT` against `(VAR_INT_R | VAR_INT_W) & ~TRANSIENT`. Read-only versus
+read-write, never position. So a GAZL window is an arbitrary sequence of slots with write
+permission per slot, `INP` before `OUT` assembles and runs, and a host native may lay its window
+out any way it likes. `CALL`'s documentation says only that `*size` counts inputs *and* outputs,
+nothing about which come first.
+
+**Outs-first is Impala's own convention**, from the compiler's output
+(`impala/testdata/perfTest2.expected.gazl`, `src/UnitTest.gazl`):
 
 - **Callee:** `OUT` declarations first, then `INP` declarations, in order
   (`fib`: `$x: OUTi` then `$y: INPi`).
 - **Caller:** picks a window base `%b`, writes arguments at `%b+N...`, executes
-  `CALL &f %b *size` where `*size` counts outputs *and* inputs (the `CALL` documentation says so
-  explicitly), and reads results from `%b+0..%b+N-1`. The `fib` fixture even shows window
+  `CALL &f %b *size`, and reads results from `%b+0..%b+N-1`. The `fib` fixture even shows window
   *sliding*: a second call uses base `%1` so the first result parked in `%0` survives
   (`ADDi $x %0 %1`).
 
-N returns simply occupy the first N window words. The convention was designed for this from the
-start; only the Impala surface was missing.
+N returns simply occupy the first N window words. Impala's layout was built for this from the
+start; only the Impala surface was missing. What it cannot express is a window that is not
+outs-first - that is a limit of the convention, not of the machine. See
+`design/impala/ExternPrototypes.md`, "Arbitrary call windows", for the plan that closes it.
 
 ### Syntax
 
