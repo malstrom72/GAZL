@@ -265,7 +265,7 @@ struct AssembledProgram {
 };
 
 /*
-	The four sizes an assembly computes: what a program actually used (from `finalize`) or will need (from `measure`).
+	The four sizes an assembly computes: what a program actually used (from `finalize`) or will need (from `preAssemble`).
 */
 struct ProgramSizes {
 	UInt codeSize;

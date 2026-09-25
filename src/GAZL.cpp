@@ -1985,7 +1985,7 @@ int testCallback(Processor* p) {
 	return 0;
 }
 
-// ONE list of the unit-test natives: measure()'s self-check compares two assemblies that must have been
+// ONE list of the unit-test natives: preAssemble()'s self-check compares two assemblies that must have been
 // seeded identically, so the seeding cannot be allowed to drift between sites.
 static void seedTestNatives(Symbols& g) { g.registerNative("assertFail", 0); g.registerNative("testMul", 1); g.registerNative("testCallback", 2); }
 
