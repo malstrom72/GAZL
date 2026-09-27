@@ -8,7 +8,7 @@ lets some recursions overflow the ipStack). Ran 200k+/stage on arm64 and 100k de
 0 divergences. The one bug it found (JIT `DIVf` not trapping a runtime zero divisor) is fixed. Remainder of this doc is
 the original plan.
 
-**Blind spots closed (2026-09-19).** A code review found two x64 miscompiles (fixed in 2d873b2a) that had passed
+**Blind spots closed (2026-09-19).** A code review found two x64 miscompiles (fixed in 6cd0141b) that had passed
 300k-deep soaks on both backends, because the generator could not produce them:
 - **Float branches and non-finite floats.** The generator emitted no float compare-branch at all (its if-skips were
   integer-only) and avoided NaN on purpose, so x64 `GEQf`/`LEQf` taking the wrong branch on NaN was unreachable twice
@@ -21,7 +21,7 @@ the original plan.
   and `POKE` forms (incl. `POKE_CVC`) sometimes shift the index to [-8, -1]. The sum stays inside `pad` but the index
   word is negative: the case x64 addressed ~16 GiB away through a zero-extended index.
 
-Acceptance: with the new generator, the pre-fix engine (05be173c) fails at once on x64: seed 1800004 segfaults and
+Acceptance: with the new generator, the pre-fix engine (426b7cbc) fails at once on x64: seed 1800004 segfaults and
 seed 1800024 diverges. Each needs exactly one fix: with only the NaN fix applied, 1800004 still crashes and 1800024
 passes; with only the index fix, the reverse. So each bug is caught on its own. The fixed engine is clean over 300k
 deep programs on both backends. **The seed stream changed**, so a seed quoted before this date (e.g. 1800001, 4242)
@@ -44,7 +44,7 @@ trap as the seed that did not port.
 
 Out of the generator's reach by design: an arm64 function large enough to push a branch past its +-1 MB imm19 field,
 and a native ordinal >= 4096 (the imm12 `ldr` offset). Both are pinned instead by the "reach" cases in
-tools/GAZLJitLowerTest.cpp, which fail on 05be173c and pass after 2d873b2a. x64 has neither limit, so on x64 the same
+tools/GAZLJitLowerTest.cpp, which fail on 426b7cbc and pass after 6cd0141b. x64 has neither limit, so on x64 the same
 cases must instead compile and match the interpreter, including at tiny fuel.
 
 Plan for a JIT-vs-interpreter differential fuzzer. Today's `GAZLFuzz` (tools/buildGazlFuzz.sh + the `LIBFUZZ`

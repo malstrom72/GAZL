@@ -572,7 +572,7 @@ static const char* const K_DEADTAIL =
 /*
 	A slot that is live in ONE register file and then read as the other class. RegisterCache::read bridges it with
 	emitCrossMove (x64 movd, arm64 fmovSW / fmovWS) instead of spilling and reloading through the frame slot - see
-	89714023. Nothing else here reaches that path: isolation test H below covers it against the MOCK backend, which
+	646439bf. Nothing else here reaches that path: isolation test H below covers it against the MOCK backend, which
 	LOGS a move without encoding one, so before this kernel the lower test would have passed with a wrong fmov.
 
 	DO NOT DELETE THIS AS REDUNDANT. Measured per-kernel (instrumented emitCrossMove, probe on stdout, 2026-09-17):
@@ -925,7 +925,7 @@ static void runLivenessTest() {
 }
 
 /*
-	Encoding reach (2d873b2a). A displacement or offset that does not fit its arm64 field must make compile() THROW -
+	Encoding reach (6cd0141b). A displacement or offset that does not fit its arm64 field must make compile() THROW -
 	the host then runs the whole program interpreted - never be masked into a valid-looking wrong encoding. Before that
 	fix both cases below compiled and ran wrong code: a SIGBUS, or with a large function in front a silent wrong status;
 	and a call to native (ordinal % 4096). The generative fuzzer cannot reach either (its functions are ~100 ops and it

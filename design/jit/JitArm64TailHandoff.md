@@ -188,12 +188,12 @@ first kernel that actually exercises `ce10da6`'s weight change. On arm64 at the 
   did: `FIDELITY n=100 interp_suspends=9 jit_suspends=99 ratio=11.00` and `n=1000 ... ratio=11.10`, 2 failures.
   The two backends agree on a block's extent; the weight computation is shared, and this confirms it.
 
-### The cross-register-file bridge, `8971402` through `73fc9bd` (2026-09-16/17)
+### The cross-register-file bridge, `646439b` through `dd14d23` (2026-09-16/17)
 
 Not TAIL. This file has been the running arm64 verification log since the `ce10da6` and `K_DEADTAIL` sections
 above, and this continues that rather than starting a fourth handoff document.
 
-`89714023` made `RegisterCache::read` bridge a slot register-to-register when it is resident in the other
+`646439bf` made `RegisterCache::read` bridge a slot register-to-register when it is resident in the other
 register file, instead of spilling and reloading through the frame slot. On arm64 that is `fmovSW` / `fmovWS`.
 Two things were unverified when it was pushed, and a third turned up during the work.
 
@@ -205,20 +205,20 @@ emitter in that commit with no reference entry. Verified three ways on Apple Sil
     non-trivial registers    fmov w13, s22  -> 1e2602cd = 0x1E260000 | (22 << 5) | 13
 
 The third is the one that counts. A `w0`/`s1` check passes even with the register fields misplaced or
-mis-masked, since both indices are small and one is zero. That was not a hypothetical: `fb4178ae` added an
-oracle entry and used exactly that weak pair, for both directions. `81abdc4f` moved both to registers drawn
+mis-masked, since both indices are small and one is zero. That was not a hypothetical: `46258063` added an
+oracle entry and used exactly that weak pair, for both directions. `635a8f08` moved both to registers drawn
 from the real pools (`ARM64_GENERAL_POOL` has `W17`, `ARM64_FLOAT_POOL` has `V22`), confirmed on arm64 as
 `fmov s22, w17` = 0x1E270236 and `fmov w17, s22` = 0x1E2602D1.
 
-**2. The bridge had never EXECUTED on arm64.** `4a4473fa`'s 300k soak predates it. On `89714023`: the 300k-deep
+**2. The bridge had never EXECUTED on arm64.** `d9f2c643`'s 300k soak predates it. On `646439bf`: the 300k-deep
 soak is clean in 5m07s, `build.sh` and `test-jit.sh` exit 0, 28/28 firmwares, all 482 lower-test rows identical
-to the `4a4473f` run. What makes that evidence rather than a green tick is the instrumented count - seed 1's
+to the `d9f2c64` run. What makes that evidence rather than a green tick is the instrumented count - seed 1's
 first 3000 programs emit **7480 bridges, 6959 general->float against 521 float->general** - and the benchmark
 suite is 13/13 byte-identical with `--jit` against without.
 
 **3. No lower-test kernel emitted a bridge at all.** The cross-file row was isolation test H against
 `RecordingBackend`, which LOGS a move without encoding one, so the fast gate could not have caught a wrong
-`fmov` however the oracle was written. `81abdc4f` adds `K_CROSSFILE`. `MOVE` is the lever: it is
+`fmov` however the oracle was written. `635a8f08` adds `K_CROSSFILE`. `MOVE` is the lever: it is
 `ANY_VAR_W`/`ANY_VAR_R`, the one instruction that can name a float local while lowering through the GENERAL
 file, so it leaves a slot in the wrong file for the next instruction to find. A typed op cannot - `ADDf` will
 not name a `LOCi`.
@@ -237,16 +237,16 @@ kernel" here and a false per-kernel attribution on the x64 side, within an hour 
 
 ### The spectralnorm regression, and why the bridge policy is per-backend
 
-`89714023` was reproducibly ~1-2% SLOWER on spectralnorm on x64, instruction-count neutral, and unexplained.
+`646439bf` was reproducibly ~1-2% SLOWER on spectralnorm on x64, instruction-count neutral, and unexplained.
 The cause: **the bridge did not remove a store, it relocated it and changed its domain.** The old spill wrote
 the home, which left the line clean; the bridge carried the dirty flag, so the line had to spill later - on the
 block's back edge, once per iteration, as an FP `movss` where it had been an integer `mov`.
 
-`cc69dd03` fixed that on x64 by writing the home from the source register and marking the line clean. **On
+`fe0234af` fixed that on x64 by writing the home from the source register and marking the line clean. **On
 arm64 the same change is a LOSS** - spectralnorm +6.9%, sor +5.1% - so it was a live regression there, and one
-rule cannot serve both. `b1cea191` makes it `RegisterCacheBackend::bridgeWritesHome()`: true on x64, false on
-arm64, which restores this backend to exactly the `89714023` path. Confirmed: the emitted code is
-**byte-identical** to `89714023` for spectralnorm, sor, mandelbrot and leibniz, layout sidecars included.
+rule cannot serve both. `e600f47e` makes it `RegisterCacheBackend::bridgeWritesHome()`: true on x64, false on
+arm64, which restores this backend to exactly the `646439bf` path. Confirmed: the emitted code is
+**byte-identical** to `646439bf` for spectralnorm, sor, mandelbrot and leibniz, layout sidecars included.
 
                        spectralnorm            sor
   x64 (Zen 4 7950X)    eager 89.35            eager 68.10
@@ -269,31 +269,31 @@ about 3% there as nothing unless the per-round ranges separate - which is how bo
 actually settled, not by a gap in a single min.
 
 **What actually ran on arm64, per commit.** Stated this way because an earlier draft of this section
-aggregated these into one "gates at `73fc9bd`" list, which claimed runs that never happened - including a
+aggregated these into one "gates at `dd14d23`" list, which claimed runs that never happened - including a
 soak. In a verification log that is the one error that matters, so: nothing below is inferred.
 
-- **`8971402`** - `build.sh` and `test-jit.sh` exit 0 (28/28 firmwares), lower test debug and release,
-  emitter golden, and a 300k-deep soak clean in 5m07s. **This is the only arm64 soak after `4a4473f`.**
-- **`81abdc4`** - emitter golden (`fmov s22, w17` = 1E270236 and `fmov w17, s22` = 1E2602D1, both MATCH),
+- **`646439b`** - `build.sh` and `test-jit.sh` exit 0 (28/28 firmwares), lower test debug and release,
+  emitter golden, and a 300k-deep soak clean in 5m07s. **This is the only arm64 soak after `d9f2c64`.**
+- **`635a8f0`** - emitter golden (`fmov s22, w17` = 1E270236 and `fmov w17, s22` = 1E2602D1, both MATCH),
   lower test debug and release (`K_CROSSFILE` 14/14), `build.sh` and `test-jit.sh` exit 0 (28/28). No soak.
-- **`b1cea19`** - lower test RELEASE only (both `cross-file slot (eager)` and `(deferred)` OK, `K_CROSSFILE`
+- **`e600f47`** - lower test RELEASE only (both `cross-file slot (eager)` and `(deferred)` OK, `K_CROSSFILE`
   OK, ALL PASS), the `--emit-jit` byte comparison of four kernels, and the timing runs. NOT run: debug lower
   test, emitter golden, `build.sh`, `test-jit.sh`, firmwares, any soak.
-- **`73fc9bd` and `51f0162`** - nothing run, and nothing needed: `b1cea19` -> `73fc9bd` adds nine
-  comment-only lines to `GAZLJit.h`, and `51f0162` touches no `src/` file at all. `b1cea19`'s results
+- **`dd14d23` and `db957a1`** - nothing run, and nothing needed: `e600f47` -> `dd14d23` adds nine
+  comment-only lines to `GAZLJit.h`, and `db957a1` touches no `src/` file at all. `e600f47`'s results
   transfer to the code at those commits; the GATE LIST does not.
-- **`149f80d`** - the full set, on a clean checkout, nothing skipped. `build.sh` exit 0 (lower test ALL
+- **`c72be9d`** - the full set, on a clean checkout, nothing skipped. `build.sh` exit 0 (lower test ALL
   PASS with both cross-file rows, 28/28 firmwares, 2000-program smoke clean, NuXJS Impala smoke passed);
   `test-jit.sh` exit 0; lower test debug AND release ALL PASS; emitter golden ALL PASS with
   `fmov(sw)` emit=1E270236 ref=1E270236 and `fmov(ws)` emit=1E2602D1 ref=1E2602D1. Soak:
   `GAZLFuzz --gen 300000 300001 deep` -> `no divergence`, 5m18s.
 
 **The bridge policy is soaked on arm64, and the fuzzer really does reach it.** That needed showing rather
-than assuming: `b1cea19` being byte-identical to `8971402` on four benchmark kernels says nothing about
+than assuming: `e600f47` being byte-identical to `646439b` on four benchmark kernels says nothing about
 shapes those kernels do not contain, and the change is in `RegisterCache::read`, which far more of the
 fuzzer's surface reaches than four hand-written programs do. So the soak above used **seed 300001**,
-covering programs 300001..600000 - disjoint from the `8971402` arm64 soak (1..300000), from the x64 policy
-soak (7..50006) and from the x64 `4a4473f` bands (21M-24M), so they are new programs rather than a rerun.
+covering programs 300001..600000 - disjoint from the `646439b` arm64 soak (1..300000), from the x64 policy
+soak (7..50006) and from the x64 `d9f2c64` bands (21M-24M), so they are new programs rather than a rerun.
 An instrumented scratch copy then confirmed `bridgeWritesHome()` really is false on this backend and
 counted the emissions: seed 300001's first 3000 programs emit **7354 bridges, 6773 general->float against
 581 float->general**. Both directions of the DEFERRED path are exercised across fuzzer shapes. (Per

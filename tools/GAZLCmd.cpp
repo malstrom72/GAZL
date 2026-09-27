@@ -391,7 +391,7 @@ static void emitSimpleOp(std::string& p, Rng& r, std::string& pending) {
 	if (choice == 18) {
 		/*
 			Non-finite floats, so the float branches below see Inf and NaN operands (the x64 GEQf/LEQf NaN miscompile,
-			fixed in 2d873b2a, needed exactly that). Built ONLY through MULf/SUBf, which the fuzz build canonicalizes in
+			fixed in 6cd0141b, needed exactly that). Built ONLY through MULf/SUBf, which the fuzz build canonicalizes in
 			both engines (GAZL_CANONICAL_NAN), so every NaN has the same bits in both and the image diff stays exact.
 			Half the time the slot gets a fresh finite value instead, so NaN does not swallow every float in the
 			program.
@@ -459,7 +459,7 @@ static void emitSimpleOp(std::string& p, Rng& r, std::string& pending) {
 				Const-base forms. Half the time the index is shifted to [-8, -1]: the sum stays inside `pad` (the global
 				before `buf`), so the access is legal, but the index word itself is negative. That is the case a 64-bit
 				zero-extended index mis-addresses by ~16 GiB while a 32-bit bound check on the sum passes (x64, fixed in
-				2d873b2a) - an in-range [0, 7] index can never show it, and `buf` alone is word 0, where any negative
+				6cd0141b) - an in-range [0, 7] index can never show it, and `buf` alone is word 0, where any negative
 				index traps correctly in both engines.
 			*/
 			case 0:

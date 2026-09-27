@@ -17,7 +17,7 @@ Tier C is the real fix; tier B are the pieces that can move without restructurin
 
 ## Tier B - DONE (2026-09-17)
 
-Every item landed as a pure refactor, verified against `f47c379`: the JIT's emitted code (`GAZLCmd --emit-jit`,
+Every item landed as a pure refactor, verified against `9976532`: the JIT's emitted code (`GAZLCmd --emit-jit`,
 code plus layout sidecar) is byte-identical on BOTH backends over 135 programs - the benchmark suite, the Impala
 goldens, and 40 Permut8 firmwares through the host wrapper - arm64 native and x64 under Rosetta, after each item.
 Gates on the result: `build.sh`, the lower test debug and release on both backends, both emitter byte-golden tests,
@@ -52,9 +52,9 @@ now lowers `ABSF` in the float file too - `andps` against a pooled 0x7FFFFFFF, b
 - Gates: `build.sh`, both emitter byte-golden tests (new `andps` entry), lower test on both backends, exec/engine/slice,
   firmwares plain and `--jit` on arm64 and `--jit` on x64 under Rosetta, 300k-deep soaks on both backends (seed
   900001; x64 under Rosetta).
-- Native x64 (AMD 7950X, Windows session), same kernel, JIT vs JIT, 6 alternating rounds: `8bbbf3e` 54.86 ms best
-  (54.86-55.06) -> `b89e919` 14.73 ms best (14.73-14.77), 3.7x; both JITs and the interpreter print 8601898. At
-  `b89e919` natively: `build.cmd` exit 0 with "28/28 firmware checksums match" and "gen 2000 programs, no divergence"
+- Native x64 (AMD 7950X, Windows session), same kernel, JIT vs JIT, 6 alternating rounds: `628ccc5` 54.86 ms best
+  (54.86-55.06) -> `7cd4d44` 14.73 ms best (14.73-14.77), 3.7x; both JITs and the interpreter print 8601898. At
+  `7cd4d44` natively: `build.cmd` exit 0 with "28/28 firmware checksums match" and "gen 2000 programs, no divergence"
   observed - the lower test and emitter goldens it runs are covered by that exit code, not quoted - and
   `GAZLFuzz --gen 300000 900001 deep` "no divergence". Seed 900001 repeats the Rosetta band on purpose: no new
   programs, but it shows native x64 agrees with Rosetta on the same ones.
@@ -67,7 +67,7 @@ be done in verifiable steps: after each step run the lower/exec/engine/slice tes
 `checkPermut8Firmwares.sh` both plain and `--jit`, plus a fuzz soak.
 
 **Status 2026-09-17: C1, C3 and C4 DONE; C2 set aside.** C1 and C3 landed as pure refactors: `--emit-jit` output is
-byte-identical to `b89e919` on both backends over the 135-program corpus, lower test green on both backends after each
+byte-identical to `7cd4d44` on both backends over the 135-program corpus, lower test green on both backends after each
 step, then `build.sh`, both emitter goldens, exec/engine/slice, firmwares plain and `--jit` on arm64 and `--jit` on x64
 under Rosetta, and 300k-deep soaks (seed 1200001: arm64 310 s, x64 under Rosetta 640 s, no divergence). 28 lines
 smaller.
@@ -76,7 +76,7 @@ smaller.
 - **C3:** `planConditionalEdge` makes the decision (reconcile, ColdEdge stub, or barrier). The note below that the
   edge policy needs no templating is only half right: `Label`, `ColdEdge` and the emitter are distinct per-backend
   types, so the decision is shared and each backend keeps label allocation and branch emission (a few lines each).
-- **C4:** a pure refactor too, verified the same way against `ce3c9cb` (136 programs, now including absloop; soaks
+- **C4:** a pure refactor too, verified the same way against `6826d4e` (136 programs, now including absloop; soaks
   at seed 1500001: arm64 306 s, x64 under Rosetta 625 s, no divergence); 34 lines smaller. `spillResidencyMap` and
   `fillResidencyMap` route the cold-section stores and reloads through the backend's own `emitSpill` / `emitFill`,
   replacing `emitDirtyStores` and the suspend-stub loops - byte-identical, because those encodings were already the
@@ -121,7 +121,7 @@ orchestration, the structs, the edge policy) move to `GAZLJit.cpp` with no templ
 ## Second /simplify pass, 2026-09-17 (after tier C)
 
 Four review agents (reuse / simplification / efficiency / altitude) over the whole JIT. Everything below is verified
-the same way as the tiers: `--emit-jit` byte-identical to `5542b3d` on BOTH backends over 136 programs, lower test
+the same way as the tiers: `--emit-jit` byte-identical to `6d88bc5` on BOTH backends over 136 programs, lower test
 debug and release on both, then `build.sh`, both emitter goldens, exec/engine/slice, firmwares plain and `--jit` on
 arm64 and `--jit` on x64 under Rosetta, and 300k-deep soaks (seed 1800001, both backends, no divergence). The
 cleanups remove 29 lines; the two measured optimizations add 30, so the pass is line-neutral and emits the same code.
