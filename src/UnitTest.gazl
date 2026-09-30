@@ -1970,6 +1970,19 @@ DEFINED_POINTER: ! DEFp    &gArray:3
  DIVi      i2              i0              i1              ; 0 / -1
  NEQi      i2              #0              @fail
 
+; --- integer literal parsing: the decimal spelling of INT_MIN ---
+; Every case in this section writes INT_MIN as #0x80000000, so until these four lines nothing fed
+; stringToInt the decimal form - where the closing negate used to be a SIGNED multiply, undefined
+; exactly at magnitude 2^31. Both spellings must parse to the same word, on both paths.
+ MOVi      i0              #-2147483648    ; decimal INT_MIN, straight through stringToInt
+ NEQi      i0              #0x80000000     @fail
+ MOVi      i0              #2147483647     ; decimal INT_MAX, the other edge
+ NEQi      i0              #0x7FFFFFFF     @fail
+ MOVi      i0              #-0x80000000    ; negated hex, same magnitude, same negate
+ NEQi      i0              #0x80000000     @fail
+ ADDi      i3              #-2147483648    #0              ; folded, so calcConstant sees the same parse
+ NEQi      i3              #0x80000000     @fail
+
 ; --- add / sub / mul overflow: two's-complement wrap ---
  MOVi      i0              #0x7FFFFFFF     ; INT_MAX
  MOVi      i1              #1
