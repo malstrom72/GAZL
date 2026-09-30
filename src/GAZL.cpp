@@ -174,7 +174,7 @@ static Int stringToInt(const Char* &p, const Char* e) {
 					} /* else continue */
 		default:	for (; p < e && *p >= '0' && *p <= '9'; ++p) i = i * 10 + (*p - '0'); break;
 	}
-	return (Int)(i) * sign;
+	return (Int)(sign < 0 ? 0u - i : i);									// negate in UNSIGNED: `(Int)i * -1` is signed-overflow UB at i == 2^31, the literal -2147483648
 }
 
 template<class F> F pow10(F x) { return pow(10, x); }
