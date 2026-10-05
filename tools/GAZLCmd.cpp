@@ -43,7 +43,7 @@
 // --- Deterministic FP runtime environment (ported from Numbstrict) --------------------------------------------
 // Round-to-nearest, all FP exceptions masked, FTZ/DAZ off - so interp and JIT run the differential under a known,
 // host-independent FP env instead of whatever the CRT/host left in MXCSR/FPCR. Restores on scope exit.
-#include <cassert>
+#include "assert.h"							// quoted like the rest of the code, so a host can substitute its handler; falls back to the system header when no local one exists
 #include <cfenv>
 #if defined(_MSC_VER)
 #pragma fenv_access(on)
