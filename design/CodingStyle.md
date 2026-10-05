@@ -18,6 +18,8 @@ These are the most important principles in the codebase. Get them wrong and the 
   Prefer the `assert(condition && "why this must hold")` form so a failure reads as an explanation. Include it as
   `#include "assert.h"` (with quotes, not `<cassert>`) so a project can override the handler with a local `assert.h`.
   Asserts are how programmer errors are handled - you never reach for `abort()`.
+- **Silence an assert-only variable with `(void)name;`.** Not `static_cast<void>(name)`, `[[maybe_unused]]` or a
+  macro. A library ships no `assert.h` of its own; the host product supplies it.
 - **Trust the contract inward; validate only at the boundary.** A function states its preconditions and then relies on
   them. It does not re-check what a caller is contractually obligated to provide, and it does not defensively null-,
   range-, or enum-check a value the contract already pins down - it accesses it directly. Untrusted data (external
