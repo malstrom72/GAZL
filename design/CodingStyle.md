@@ -211,8 +211,8 @@ These are the most important principles in the codebase. Get them wrong and the 
 
 ## Local additions
 
-GAZL takes two deliberate exceptions to the rules above. Do not "fix" either one, and do not convert existing code to
-match the shared rule; both apply to new and edited code the same way they apply to what is already here.
+GAZL takes three deliberate exceptions to the rules above. Do not "fix" any of them, and do not convert existing
+code to match the shared rule; they apply to new and edited code the same way they apply to what is already here.
 
 - **Section 6, braces: a flat dispatch or lookup table stays unbraced.** Where braces clearly hurt, a one-per-line run
   of `if (cond) return X;` rows reads better than dozens of braced blocks, and bracing it only bloats the line count
@@ -224,3 +224,7 @@ match the shared rule; both apply to new and edited code the same way they apply
   defined-semantics helpers that replaced undefined behaviour, so the interpreter, both JIT backends and the emitted
   C++ must all agree on them. Removing the keyword is a performance change, not a formatting change, and would need a
   benchmark rather than a sweep.
+- **Section 1, `abort()`: the differential fuzzer's abort is deliberate.** `tools/GAZLCmd.cpp` calls
+  `std::abort()` when the interpreter and the JIT disagree on a generated program. That is not error handling; it
+  is the crash signal libFuzzer detects, and it has to fire in release builds, where `assert` compiles away.
+  Leave it. Asserts stay the rule everywhere else, including the rest of that file.
