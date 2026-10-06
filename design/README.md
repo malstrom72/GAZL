@@ -21,6 +21,7 @@ written. PLAN / BACKLOG = not done.
 |---|---|---|
 | [TwoStageConstants](impala/TwoStageConstants.md) | **NORMATIVE** | Why a constant is not always a number Impala knows. **Read before touching any constant handling, folding, bounds check or diagnostic.** |
 | [CodingStyle](CodingStyle.md) | **NORMATIVE** | House style for this repo |
+| [fuzzing](fuzzing.md) | **NORMATIVE** | How fuzzing is built and run, plus GAZL's own lanes |
 | [ParkedFeatures](ParkedFeatures.md) | **INDEX** | What was built then deliberately removed, which tag holds it, and why. **Start here when you wonder "didn't we already build that?"** |
 
 ## Known problems and backlog
