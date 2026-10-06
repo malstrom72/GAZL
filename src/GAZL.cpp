@@ -1334,12 +1334,16 @@ const Char* Assembler::feed(const Char* line) {
 				it from RESOLVED sizes, so `LOCA *.z.Struct` overlays correctly even when only the host knows
 				the size. Purely a declaration-time construct: no instruction is emitted and the VM is unchanged.
 			*/
-			case SCOP____:	if (ip != (functionStart + 1)) throw Exception(MUST_DEFINE_LOCALS_FIRST);					// SCOP
+			case SCOP____:	if (functionStart == 0 || ip != functionStart + 1) {										// SCOP
+								throw Exception(MUST_DEFINE_LOCALS_FIRST);
+							}
 							if (localScopeDepth >= MAX_LOCAL_SCOPE_DEPTH) throw Exception(UNBALANCED_LOCAL_SCOPE);
 							localScopeStack[localScopeDepth++] = localsSize;
 							break;
 
-			case ENDS____:	if (ip != (functionStart + 1)) throw Exception(MUST_DEFINE_LOCALS_FIRST);					// ENDS
+			case ENDS____:	if (functionStart == 0 || ip != functionStart + 1) {										// ENDS
+								throw Exception(MUST_DEFINE_LOCALS_FIRST);
+							}
 							if (localScopeDepth == 0) throw Exception(UNBALANCED_LOCAL_SCOPE);
 							localsSize = localScopeStack[--localScopeDepth];
 							break;
