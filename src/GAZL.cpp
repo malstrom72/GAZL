@@ -1147,7 +1147,9 @@ const Char* Assembler::feed(const Char* line) {
 							functionStart = ip++;
 							break;
 				
-			case LOCA____:	if (ip != (functionStart + 1)) throw Exception(MUST_DEFINE_LOCALS_FIRST);					// LOCA, PARA, LOCi, LOCf, LOCp, INPi, INPf, INPp, OUTi, OUTf, OUTp
+			case LOCA____:	if (functionStart == 0 || ip != functionStart + 1) {										// LOCA, PARA, LOCi, LOCf, LOCp, INPi, INPf, INPp, OUTi, OUTf, OUTp
+								throw Exception(MUST_DEFINE_LOCALS_FIRST);
+							}
 							v.i = 1;
 							parseOperand(op0Begin, op0End, op->accepts[0], &v);
 							size = v.i;
