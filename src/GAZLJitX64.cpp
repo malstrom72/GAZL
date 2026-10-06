@@ -865,10 +865,12 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 				Label copyTrap = emitter.newLabel(), copyCont = emitter.newLabel();										// range check BEFORE the win64 push, so a trap needs no stack unwind
 				if (destConst) { emitter.movImm(RAX, static_cast<uint32_t>(in.p0.p - MEMORY_OFFSET)); }
 				else { emitter.load(RAX, DSP, in.p0.i * 4); emitter.subImm(RAX, MEMORY_OFFSET); }
-				emitter.addImm(RAX, static_cast<uint32_t>(in.p2.i)); emitter.load(SCRATCH_B, CONTEXT, offsets.rwmemsize); emitter.cmp(RAX, SCRATCH_B); emitter.jcc(CC_A, copyTrap);	// destIdx+count > rwMemorySize
+				emitter.load(SCRATCH_B, CONTEXT, offsets.rwmemsize); emitter.cmpImm(SCRATCH_B, static_cast<uint32_t>(in.p2.i)); emitter.jcc(CC_B, copyTrap);	// count alone past the arena
+					emitter.subImm(SCRATCH_B, static_cast<uint32_t>(in.p2.i)); emitter.cmp(RAX, SCRATCH_B); emitter.jcc(CC_A, copyTrap);	// destIdx > rwMemorySize - count. SUBTRACT, never add: destIdx+count wrapped, letting a count of MEMORY_OFFSET past the check
 				if (srcConst) { emitter.movImm(RAX, static_cast<uint32_t>(in.p1.p - MEMORY_OFFSET)); }
 				else { emitter.load(RAX, DSP, in.p1.i * 4); emitter.subImm(RAX, MEMORY_OFFSET); }
-				emitter.addImm(RAX, static_cast<uint32_t>(in.p2.i)); emitter.load(SCRATCH_B, CONTEXT, offsets.memsize); emitter.cmp(RAX, SCRATCH_B); emitter.jcc(CC_A, copyTrap);		// srcIdx+count > memorySize
+				emitter.load(SCRATCH_B, CONTEXT, offsets.memsize); emitter.cmpImm(SCRATCH_B, static_cast<uint32_t>(in.p2.i)); emitter.jcc(CC_B, copyTrap);		// count alone past the arena
+					emitter.subImm(SCRATCH_B, static_cast<uint32_t>(in.p2.i)); emitter.cmp(RAX, SCRATCH_B); emitter.jcc(CC_A, copyTrap);		// srcIdx > memorySize - count, same reason
 			#if defined(_WIN32)
 				emitter.push(RSI); emitter.push(RDI);																	// Win64: rsi/rdi are callee-saved; rep movsd clobbers them
 			#endif
