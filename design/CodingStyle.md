@@ -1,6 +1,6 @@
 # Coding Style and Design Principles
 
-Version: 2026-10-05
+Version: 2026-10-06
 
 The coding style and design principles shared across these projects: the basis for both humans and agents, and held to
 in review. Each project adds its own operational notes (directory layout, build and test gates, dependencies) in that
@@ -208,6 +208,23 @@ These are the most important principles in the codebase. Get them wrong and the 
   diff already shows. Add a body only when the *why* is not visible in the change itself.
 - **No attribution trailers.** No `Co-Authored-By` for tools or agents, no generated-with footers.
 - The dash and ASCII rule in section 5 applies to commit messages too.
+
+## 9. const, increment and decrement
+
+- **A local that never changes after initialization is `const`**: `const UInt32 size = header.getSize();`. A pointer
+  that is never re-pointed is `const` itself: `char* const p = buffer;`.
+- **By-value parameters are never `const`.** `const` goes on what a parameter points or refers to: `const char* text`,
+  `const std::string& s`. The copy belongs to the function, so `const` on it is noise in the signature.
+- **`const` on the left**: `const T&` and `const T*`, never `T const&`.
+- **A method that does not change the object is a `const` method**: `getName() const`.
+- **Named constants are `static const` (or `const`) with UPPERCASE names, never `#define`**: `MAX_PROGRAM_NAME_LENGTH`,
+  `STATE_MAGIC_SIZE`. Lookup tables are named constants too: `static const char HEX_DIGITS[16]`.
+- **`++` and `--` are used sparingly.** They are normally a statement of their own (a loop step, a counter), not a
+  value buried in a larger expression, so each line does one thing and a debugger can stop between the steps. Count
+  down with an explicit condition and step, `for (size_t i = n; i > 0; --i)` indexing `[i - 1]`, never
+  `for (size_t i = n; i-- > 0;)`. Idioms that read at a glance are fine: a byte copy `*d++ = *s++`, a buffer write
+  `*p++ = c`, a stack push `*++sp = v`. An atomic counter that must increment and read in one operation
+  (`if (instanceCount++ == 0)`) is required, not a style choice. When in doubt, write it out.
 
 ## Local additions
 
