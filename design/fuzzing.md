@@ -1,6 +1,6 @@
 # Fuzzing
 
-Version: 2026-10-07
+Version: 2026-10-07b
 
 How these projects fuzz with libFuzzer. Every copy of this file is identical apart from the "Local additions" section
 at the end, which holds a project's targets, scripts and exceptions.
@@ -49,12 +49,16 @@ quote the compiler path because it contains a space:
 The throw test: before a clang-cl build is trusted, replay a corpus in which most inputs make the target throw through
 both that build and a plain build of the same target without sanitizers, and require identical outcomes (status and
 output) for every input. Zero crashes is not enough, since a handler cut short can run on to the wrong result without
-crashing. Repeat the test whenever LLVM is updated.
+crashing. The reference must be truly plain: with coverage instrumentation (`-fsanitize=fuzzer-no-link`) it breaks in
+the same way, and the comparison proves nothing. Repeat the test whenever LLVM is updated.
 
 ## The harness
 
 Remove every route to files, the console and the system from the target itself. Replacing a variable or a name is not
 enough when the same function can still be reached another way.
+
+A differential target, which compares implementations of the same thing, cannot find a bug they all share, such as a
+range check that overflows the same way in each. It complements reading the bounds checks; it does not replace it.
 
 Turn off CRT dialogs in `LLVMFuzzerInitialize`, or a failed assert hangs the worker on a message box:
 
@@ -84,6 +88,8 @@ Turn off CRT dialogs in `LLVMFuzzerInitialize`, or a failed assert hangs the wor
   avoids a deadlock in `atos`.
 - Start runs longer than half an hour with `nohup caffeinate -i ... & disown`, so that neither sleep nor the end of the
   session that started them stops them.
+- Do not raise `-rss_limit_mb` to reproduce an out-of-memory input on a shared machine. Swap comes out of the same
+  disk, and one 8 GB reproduction took 3 GB of a nearly full Mac disk.
 
 ## Corpus and regression
 
@@ -97,8 +103,11 @@ Turn off CRT dialogs in `LLVMFuzzerInitialize`, or a failed assert hangs the wor
   lot: the `tar.exe` that ships with Windows cannot read xz and hangs instead of failing.
 - The normal build replays the corpus, the seeds and every past crash input through a plain `main()` that reads files
   and calls `LLVMFuzzerTestOneInput`. It is built without fuzzer instrumentation, with every compiler the project uses,
-  and never with clang-cl's sanitizers, which would bring back the exception handling bugs above.
-- Commit the input of each fixed crash as a regression input.
+  and never with clang-cl's sanitizers, which would bring back the exception handling bugs above. Unpack each archive
+  into an empty folder, or inputs left from the previous archive are replayed too.
+- Commit the input of each fixed crash as a plain file in `tests/fuzz/<target>Crashes/`, outside the archives:
+  `-merge=1` drops any input whose features others already cover, fixed crashes included. Mark these files `binary`
+  in `.gitattributes`, so line-ending conversion cannot rewrite them.
 - Keep a crash file from a Windows clang-cl build only if it also crashes with MSVC or on the Mac.
 
 ## Local additions
