@@ -23,9 +23,30 @@ the original plan.
 
 Acceptance: with the new generator, the pre-fix engine (426b7cbc) fails at once on x64: seed 1800004 segfaults and
 seed 1800024 diverges. Each needs exactly one fix: with only the NaN fix applied, 1800004 still crashes and 1800024
-passes; with only the index fix, the reverse. So each bug is caught on its own. The fixed engine is clean over 300k
-deep programs on both backends. **The seed stream changed**, so a seed quoted before this date (e.g. 1800001, 4242)
-names a different program now.
+passes; with only the index fix, the reverse. So each bug is caught on its own. **The seed stream changed**, so a seed
+quoted before this date (e.g. 1800001, 4242) names a different program now.
+
+This section used to claim the fixed engine was "clean over 300k deep programs on both backends". No session holds
+records of that run, so it is withdrawn rather than repeated. The evidenced current-generator baseline is **2026-10-06
+at `113b4ec`**: four shards of 75,000 on arm64 native and four more on x86_64 under Rosetta, 8 of 8 shards `rc=0` and
+"no divergence", i.e. 300,000 per backend and 600,000 in total, with the two fingerprints above matching on both
+binaries. The same bands were run at `e75e28f` immediately before, equally clean, so the two are directly comparable.
+Quote the `113b4ec` run, with its generator, until something newer is actually run.
+
+**A clean differential run means the two engines AGREE, not that either is right.** This lane cannot find a bug they
+share. The `COPY` bounds check computed `index + count` and compared the sum against the arena size; in the
+interpreter that was an unsigned add, on x64 an `addImm` and on arm64 an `add`, so all three wrapped identically and
+all three accepted a count of `MEMORY_OFFSET` that then copied far out of bounds. The 600,000-program run above was
+clean, and UBSan had nothing to report either, because unsigned wraparound is defined behaviour. It was found by
+reading the check. Treat agreement as evidence of agreement; correctness of a shared computation needs a different
+argument.
+
+What tested it instead was a **boundary sweep**: an identity copy `COPY &g &g *N` with `N` walked across the arena
+limit, on both backends and both engines. `N` = 131070 and 131071 return `0`; 131072 and 131073 return `-8`, on all
+four combinations, so the check is exact with no off-by-one either side. One line of the fix is still unexercised:
+the SOURCE-side bound (arm64 `W10` against `o.memsize`, x64 the second `SCRATCH_B` compare) never decides, because
+`rwMemorySize < memorySize` and both pointers start in the same place, so the destination check always rejects
+first. Reaching it needs a copy whose destination is in range while its source runs into the consts region.
 
 Those two seeds are the clang stream, which is now the stream everywhere: the generator used to consume its choices in
 argument-evaluation order (see section 3), so MSVC built different programs from the same seed and found the NaN bug at
