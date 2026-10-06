@@ -16,6 +16,7 @@ written. PLAN / BACKLOG = not done.
 | Doc | Kind | What it is |
 |---|---|---|
 | [CodingStyle](CodingStyle.md) | **NORMATIVE** | House style for this repo |
+| [fuzzing](fuzzing.md) | **NORMATIVE** | How fuzzing is built and run, plus GAZL's own lanes |
 
 ## GAZL
 
