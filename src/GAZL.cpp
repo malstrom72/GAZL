@@ -1665,12 +1665,12 @@ Int Processor::run() {
 			case PEEK_VC_:	V0 = mb[C1.p]; break; // FIX : remove memory_offset from constant indexes and move back mb -> memoryBase +/- 0
 			case POKE_CV_:	mb[C0.p] = V1; break;
 			case POKE_CC_:	mb[C0.p] = C1; break;
-			case PEEK_VVV:	if ((ui = V1.i + V2.i - MEMORY_OFFSET) < memorySize) { V0 = mb[ui + MEMORY_OFFSET]; break; } else { err = BAD_PEEK; goto ret; }
-			case PEEK_VCV:	if ((ui = C1.i + V2.i - MEMORY_OFFSET) < memorySize) { V0 = mb[ui + MEMORY_OFFSET]; break; } else { err = BAD_PEEK; goto ret; }
-			case POKE_VVV:	if ((ui = V0.i + V1.i - MEMORY_OFFSET) < rwMemorySize) { mb[ui + MEMORY_OFFSET] = V2; break; } else { err = BAD_POKE; goto ret; }
-			case POKE_CVV:	if ((ui = C0.i + V1.i - MEMORY_OFFSET) < rwMemorySize) { mb[ui + MEMORY_OFFSET] = V2; break; } else { err = BAD_POKE; goto ret; }
-			case POKE_VVC:	if ((ui = V0.i + V1.i - MEMORY_OFFSET) < rwMemorySize) { mb[ui + MEMORY_OFFSET] = C2; break; } else { err = BAD_POKE; goto ret; }
-			case POKE_CVC:	if ((ui = C0.i + V1.i - MEMORY_OFFSET) < rwMemorySize) { mb[ui + MEMORY_OFFSET] = C2; break; } else { err = BAD_POKE; goto ret; }
+			case PEEK_VVV:	if ((ui = (UInt)V1.i + (UInt)V2.i - MEMORY_OFFSET) < memorySize) { V0 = mb[ui + MEMORY_OFFSET]; break; } else { err = BAD_PEEK; goto ret; }
+			case PEEK_VCV:	if ((ui = (UInt)C1.i + (UInt)V2.i - MEMORY_OFFSET) < memorySize) { V0 = mb[ui + MEMORY_OFFSET]; break; } else { err = BAD_PEEK; goto ret; }
+			case POKE_VVV:	if ((ui = (UInt)V0.i + (UInt)V1.i - MEMORY_OFFSET) < rwMemorySize) { mb[ui + MEMORY_OFFSET] = V2; break; } else { err = BAD_POKE; goto ret; }
+			case POKE_CVV:	if ((ui = (UInt)C0.i + (UInt)V1.i - MEMORY_OFFSET) < rwMemorySize) { mb[ui + MEMORY_OFFSET] = V2; break; } else { err = BAD_POKE; goto ret; }
+			case POKE_VVC:	if ((ui = (UInt)V0.i + (UInt)V1.i - MEMORY_OFFSET) < rwMemorySize) { mb[ui + MEMORY_OFFSET] = C2; break; } else { err = BAD_POKE; goto ret; }
+			case POKE_CVC:	if ((ui = (UInt)C0.i + (UInt)V1.i - MEMORY_OFFSET) < rwMemorySize) { mb[ui + MEMORY_OFFSET] = C2; break; } else { err = BAD_POKE; goto ret; }
 			case GETL_VVV:	if ((ui = V2.i) < (UInt)(dataStackEnd - dsp - C1.i)) { V0 = (dsp + C1.i)[ui]; break; } else { err = BAD_PEEK; goto ret; };
 			case SETL_VVV:	if ((ui = V1.i) < (UInt)(dataStackEnd - dsp - C0.i)) { (dsp + C0.i)[ui] = V2; break; } else { err = BAD_POKE; goto ret; };
 			case SETL_VVC:	if ((ui = V1.i) < (UInt)(dataStackEnd - dsp - C0.i)) { (dsp + C0.i)[ui] = C2; break; } else { err = BAD_POKE; goto ret; };
