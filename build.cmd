@@ -18,6 +18,11 @@ CALL buildGAZLCmd.cmd release
 IF ERRORLEVEL 1 EXIT /B 1
 POPD
 
+REM Replay the committed fuzz corpus and the fixed-crash inputs, shared with build.sh. Runs here, straight after the
+REM engine it exercises, so a regression surfaces before the slower node suite rather than after it.
+CALL tools\test-fuzz.cmd
+IF ERRORLEVEL 1 EXIT /B 1
+
 REM Build Impala
 CALL tools\BuildImpala.cmd
 IF ERRORLEVEL 1 EXIT /B 1

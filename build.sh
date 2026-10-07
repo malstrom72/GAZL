@@ -11,6 +11,10 @@ mkdir -p output
 # Build GAZLCmd release
 (cd tools && bash buildGAZLCmd.sh release)
 
+# Replay the committed fuzz corpus and the fixed-crash inputs, shared with build.cmd. Runs here, straight after the
+# engine it exercises, so a regression surfaces before the slower node suite rather than after it.
+bash tools/test-fuzz.sh
+
 # Build Impala
 bash tools/BuildImpala.sh
 
