@@ -1418,8 +1418,8 @@ Int Processor::run() {
 								err = ACCESS_VIOLATION;
 								goto ret;
 							}
-			case FORi_VVB:	if (++V0.i < V1.i) { ip += C2.i; continue; }; break;
-			case FORi_VCB:	if (++V0.i < C1.i) { ip += C2.i; continue; }; break;
+			case FORi_VVB:	V0.i = iadd(V0.i, 1); if (V0.i < V1.i) { ip += C2.i; continue; }; break;		// iadd, not ++: a counter already at INT_MAX made `++` signed-overflow UB. Wrap is unchanged, and FORp maps here too
+			case FORi_VCB:	V0.i = iadd(V0.i, 1); if (V0.i < C1.i) { ip += C2.i; continue; }; break;
 			case LSSI_VVB:	if (V0.i < V1.i) { ip += C2.i; continue; }; break;
 			case LSSI_VCB:	if (V0.i < C1.i) { ip += C2.i; continue; }; break;
 			case LSSI_CVB:	if (C0.i < V1.i) { ip += C2.i; continue; }; break;
