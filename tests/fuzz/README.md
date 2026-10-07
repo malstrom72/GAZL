@@ -77,3 +77,21 @@ choice-streams, not readable GAZL. After a soak, fold new coverage back in and r
 
 Only `corpus/` is tracked; live run dirs and crash artifacts are git-ignored. Because the corpus's meaning is tied to
 the generator grammar, it lives in this repo alongside the code that defines it - if the grammar changes, re-minimize.
+
+## The committed crash inputs
+
+`textCrashes/` is marked `binary` in `.gitattributes`: the inputs are byte-exact, and line-ending conversion would
+corrupt them. Each runs clean on a current engine and reproduces its defect on the commit before the fix:
+
+| input | defect |
+| ----------------------------- | ------------------------------------------------------------------------ |
+| `copyCountWrapsPastArena`     | `COPY` summed index + count, so a count of `MEMORY_OFFSET` wrapped past the bounds check and wrote out of bounds |
+| `copyInRangeControl`          | the in-range control for the above; must stay clean, and is not a defect |
+| `declaratorOutsideFunc`       | a declarator before any `FUNC` computed `nullptr + 1`                    |
+| `foriConstLimitAtIntMax`      | `FORi` incremented with `++` on a counter already at `INT_MAX`           |
+| `foriVarLimitAtIntMax`        | the same, with a variable limit                                          |
+| `peekIndexOverflowsInt`       | `PEEK`'s bounds check summed a biased address in `Int`, overflowing it   |
+| `pokeIndexOverflowsInt`       | the same, for `POKE`                                                     |
+
+Only inputs for FIXED defects belong here. An input for a defect that is still open goes somewhere else until the fix
+lands, or it aborts a strict run while the corpus is still loading.
