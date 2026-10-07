@@ -125,12 +125,23 @@ GAZL's lanes, and the one place it departs from the shared rules.
   not that either is right. A `COPY` bounds check that wrapped identically in the interpreter and in both JIT
   backends survived 600,000 generated programs across two backends, and was found by reading the check. Treat a
   clean differential run as evidence of agreement only.
-- **Throughput here is nothing like a parser-only target.** One iteration assembles AND RUNS a program across a
-  128K-`Value` data arena and a 128K-`Instruction` code arena with a 10M-instruction timeout, so expect single or
-  low-hundreds of execs per second under sanitizers, not tens of thousands. Size campaigns accordingly.
+- **Throughput depends entirely on what fraction of inputs the assembler rejects.** A rejected program costs a parse;
+  an accepted one assembles AND RUNS across a 128K-`Value` data arena and a 128K-`Instruction` code arena with a
+  10M-instruction timeout. Measured on the Windows MSVC lane: **~1300 execs/s** from a 31-program seed corpus, where
+  most mutations are invalid and rejected cheaply, against **about 1/s** on a corpus of a single valid program that
+  executes every time. So a throughput figure means nothing without the corpus it was measured on, and a campaign
+  slowing down as its corpus grows is expected, not a fault.
 - **UBSan is Mac-only for now.** clang-cl's instrumentation breaks MSVC C++ exception handling, and this assembler
   throws to reject a malformed program as its normal path, so a Windows clang-cl build can silently run the wrong
   code. The Windows lane uses MSVC `/fsanitize=fuzzer /fsanitize=address` (separate flags; the comma form is clang
   syntax and MSVC drops it with only a warning), which is ASan-only.
 - **The CRT dialog fix lives in `quietAsserts()`**, called from both `main()`s in `tools/GAZLCmd.cpp`, rather than in
   `LLVMFuzzerInitialize`. Same effect: an unattended run fails instead of blocking on a message box.
+- **`buildGazlFuzz.cmd` and `buildGazlFuzz.sh` are deliberately NOT behaviour-identical**, the one documented
+  exception to this repo's rule that a `.sh` and its `.cmd` twin behave the same. The `.sh` uses clang with
+  `-fsanitize=fuzzer,address` (and `undefined` on request); the `.cmd` uses MSVC's libFuzzer and ASan, because
+  clang-cl is unusable for this target and MSVC has no UBSan. Both build the same fuzz target from the same sources;
+  only the engine and the available sanitizers differ. `seedTextCorpus.cmd` IS a true twin, down to matching
+  `find -size -8k`'s rounding to whole KiB, which excludes a file the obvious `< 8192` test would include.
+- **The MSVC build needs `clang_rt.asan_dynamic-x86_64.dll` beside the exe**, or it exits `0xC0000135` anywhere but a
+  developer prompt. `buildGazlFuzz.cmd` copies it from the Visual Studio tree; that is why it searches for it.
