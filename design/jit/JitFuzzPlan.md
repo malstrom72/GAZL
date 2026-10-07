@@ -43,10 +43,16 @@ argument.
 
 What tested it instead was a **boundary sweep**: an identity copy `COPY &g &g *N` with `N` walked across the arena
 limit, on both backends and both engines. `N` = 131070 and 131071 return `0`; 131072 and 131073 return `-8`, on all
-four combinations, so the check is exact with no off-by-one either side. One line of the fix is still unexercised:
-the SOURCE-side bound (arm64 `W10` against `o.memsize`, x64 the second `SCRATCH_B` compare) never decides, because
-`rwMemorySize < memorySize` and both pointers start in the same place, so the destination check always rejects
-first. Reaching it needs a copy whose destination is in range while its source runs into the consts region.
+four combinations, so the check is exact with no off-by-one either side.
+
+The SOURCE-side bound (arm64 `W10` against `o.memsize`, x64 the second `SCRATCH_B` compare) needs its own program,
+because `rwMemorySize < memorySize`: with both pointers in the same place the destination check always rejects first.
+Put the source in the consts region instead - `COPY &g &k *N` with `g` a 16-word global and `k` a 4-word `CNST`
+(reported consts size 5), so the destination is never out of range and any rejection is the source check. `N` = 3 and
+4 return `0`; 5 and 6 return `-8`, again on both backends and both engines. A source-side WRAP is unreachable on its
+own: any count large enough to wrap the source is at least `MEMORY_OFFSET`, which the destination check already
+rejects as `count > rwMemorySize`. So both bounds are exercised and the remaining wrap case is excluded by argument,
+not left untested.
 
 Those two seeds are the clang stream, which is now the stream everywhere: the generator used to consume its choices in
 argument-evaluation order (see section 3), so MSVC built different programs from the same seed and found the NaN bug at
