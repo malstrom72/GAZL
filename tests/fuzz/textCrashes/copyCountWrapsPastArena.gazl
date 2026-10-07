@@ -1,0 +1,8 @@
+g:	GLOB *16
+main:	FUNC
+	$p:	LOCp
+	$q:	LOCp
+	MOVp $p &NULL
+	MOVp $q &NULL
+	COPY $p $q *305419896
+	RETU

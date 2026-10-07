@@ -6,3 +6,6 @@
 # core.autocrlf=true expects CRLF in the working copy and every Windows build leaves the file reported as modified
 # with an empty diff.
 src/UnitTest.inc text eol=lf
+
+# Fuzz regression inputs are byte-exact; line-ending conversion would corrupt them (design/fuzzing.md).
+tests/fuzz/textCrashes/* binary

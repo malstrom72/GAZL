@@ -1,0 +1,6 @@
+main:	FUNC
+	$i:	LOCi
+	$n:	LOCi
+	MOVi $i #2147483647
+.l:	FORi $i $n @.l
+	RETU

@@ -1,0 +1,6 @@
+g:	GLOB *1
+main:	FUNC
+	$x:	LOCi
+	MOVi $x #2147483647
+	POKE &g $x $x
+	RETU
