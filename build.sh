@@ -11,6 +11,10 @@ mkdir -p output
 # Build GAZLCmd release
 (cd tools && bash buildGAZLCmd.sh release)
 
+# Replay the committed fuzz corpus and the fixed-crash inputs, shared with build.cmd. Runs here, straight after the
+# engine it exercises, so a regression surfaces before the slower node suite rather than after it.
+bash tools/test-fuzz.sh
+
 # Every node-only gate, shared with build.cmd so the two cannot run different subsets.
 bash tools/test-js.sh
 
