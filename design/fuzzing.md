@@ -1,6 +1,6 @@
 # Fuzzing
 
-Version: 2026-10-07b
+Version: 2026-10-07c
 
 How these projects fuzz with libFuzzer. Every copy of this file is identical apart from the "Local additions" section
 at the end, which holds a project's targets, scripts and exceptions.
@@ -90,6 +90,8 @@ Turn off CRT dialogs in `LLVMFuzzerInitialize`, or a failed assert hangs the wor
   session that started them stops them.
 - Do not raise `-rss_limit_mb` to reproduce an out-of-memory input on a shared machine. Swap comes out of the same
   disk, and one 8 GB reproduction took 3 GB of a nearly full Mac disk.
+- Keep `-jobs` small (a few thousand at most). A run that crashes while loading its corpus restarts job after job,
+  looks busy and fuzzes nothing; a small cap ends that loop quickly and visibly. Watch the job logs as well.
 
 ## Corpus and regression
 
@@ -108,6 +110,9 @@ Turn off CRT dialogs in `LLVMFuzzerInitialize`, or a failed assert hangs the wor
 - Commit the input of each fixed crash as a plain file in `tests/fuzz/<target>Crashes/`, outside the archives:
   `-merge=1` drops any input whose features others already cover, fixed crashes included. Mark these files `binary`
   in `.gitattributes`, so line-ending conversion cannot rewrite them.
+- Only inputs for fixed defects belong in a corpus or the crash folder. Keep the input for a known, still unfixed
+  defect in a separate folder until the fix lands, or it aborts a run that stops on the first error while the corpus
+  loads.
 - Keep a crash file from a Windows clang-cl build only if it also crashes with MSVC or on the Mac.
 
 ## Local additions
