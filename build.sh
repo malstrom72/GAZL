@@ -15,6 +15,10 @@ mkdir -p output
 # surfaces before the slower node suite rather than after it.
 bash tools/test-jit.sh
 
+# Replay the committed fuzz corpus and the fixed-crash inputs, shared with build.cmd. A regression gate, not a fuzz
+# run: it cannot find anything new, it stops what has been found from coming back.
+bash tools/test-fuzz.sh
+
 # Every node-only gate, shared with build.cmd so the two cannot run different subsets.
 bash tools/test-js.sh
 

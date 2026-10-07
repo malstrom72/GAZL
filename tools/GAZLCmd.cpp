@@ -819,25 +819,33 @@ static void quietAsserts() {
 #ifdef LIBFUZZ_STANDALONE
 
 #ifndef _WIN32
-#include <dirent.h>							// POSIX corpus-directory replay; MSVC has no dirent (Windows uses --gen / single-file replay)
+#include <dirent.h>							// POSIX directory replay only; MSVC has no dirent, so Windows passes `@listfile`
 #endif
+
 void doOne(const char* fn) {
 	printf ("%s\n", fn);
 	fprintf(stderr, "Running: %s\n", fn);
-	FILE *f = fopen(fn, "r");
-	assert(f);
-	fseek(f, 0, SEEK_END);
+	FILE *f = fopen(fn, "rb");					// BINARY: in text mode Windows folds CRLF to LF, so fread returns fewer
+	assert(f);									// bytes than ftell promised - the tail of buf stayed uninitialised and
+	fseek(f, 0, SEEK_END);						// was handed to the target anyway once asserts were compiled out
 	size_t len = ftell(f);
 	fseek(f, 0, SEEK_SET);
 	unsigned char *buf = (unsigned char*)malloc(len);
 	size_t n_read = fread(buf, 1, len, f);
 	fclose(f);
 	assert(n_read == len);
-	LLVMFuzzerTestOneInput(buf, len);
+	LLVMFuzzerTestOneInput(buf, n_read);		// what was actually read, never more
 	free(buf);
 	fprintf(stderr, "Done:    %s: (%zd bytes)\n", fn, n_read);
 }
 
+/*
+	Replay driver. Each argument is a file to feed to LLVMFuzzerTestOneInput, a directory whose entries to feed
+	(POSIX only), or `@listfile` naming a file that holds one path per line. The list form exists because a corpus
+	replay cannot be expressed any other way on Windows: there is no dirent, and a thousand-odd paths do not fit in
+	a command line. Both tools/test-fuzz.sh and its .cmd twin use it, so the two behave identically.
+	A crash is the signal; surviving every input is the pass.
+*/
 int main(int argc, const char* argv[]) {
 	quietAsserts();
 #if defined(JITDIFF) && defined(GAZL_JIT)
@@ -898,6 +906,18 @@ int main(int argc, const char* argv[]) {
 	}
 #endif
 	for (int i = 1; i < argc; ++i) {
+		if (argv[i][0] == '@') {
+			FILE* listFile = fopen(argv[i] + 1, "r");
+			if (listFile == 0) { perror(argv[i] + 1); return EXIT_FAILURE; }
+			char line[1024];
+			while (fgets(line, sizeof line, listFile) != 0) {
+				size_t n = strlen(line);
+				while (n > 0 && (line[n - 1] == '\n' || line[n - 1] == '\r')) line[--n] = 0;	// tolerate either line ending
+				if (n > 0) doOne(line);
+			}
+			fclose(listFile);
+			continue;
+		}
 #ifndef _WIN32
 		DIR *dir;
 		struct dirent *ent;
@@ -920,7 +940,7 @@ int main(int argc, const char* argv[]) {
 			}
 		}
 #else
-		doOne(argv[i]);							// Windows: single-file replay only (no dirent corpus-dir walk)
+		doOne(argv[i]);							// no directory walk here; pass files, or an @listfile
 #endif
 	}
 	return 0;

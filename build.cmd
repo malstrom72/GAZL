@@ -23,6 +23,11 @@ REM surfaces before the slower node suite rather than after it.
 CALL tools\test-jit.cmd
 IF ERRORLEVEL 1 EXIT /B 1
 
+REM Replay the committed fuzz corpus and the fixed-crash inputs, shared with build.sh. A regression gate, not a fuzz
+REM run: it cannot find anything new, it stops what has been found from coming back.
+CALL tools\test-fuzz.cmd
+IF ERRORLEVEL 1 EXIT /B 1
+
 REM Every node-only gate, shared with build.sh so the two cannot run different subsets.
 CALL tools\test-js.cmd
 IF ERRORLEVEL 1 EXIT /B 1
