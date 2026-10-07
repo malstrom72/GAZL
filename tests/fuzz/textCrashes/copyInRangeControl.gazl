@@ -1,0 +1,5 @@
+g:	GLOB *16
+h:	GLOB *16
+main:	FUNC
+	COPY &g &h *16
+	RETU
