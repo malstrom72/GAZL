@@ -2,9 +2,9 @@ name: ci
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, Impala2, GAZL2, jit-compiler ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, Impala2, GAZL2, jit-compiler ]
 
 jobs:
   windows-msvc:
