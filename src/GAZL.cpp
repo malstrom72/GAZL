@@ -104,7 +104,7 @@ inline float absolute(float f) { return fabsf(f); }
 inline double absolute(double f) { return fabs(f); }
 #ifdef GAZL_CANONICAL_NAN
 inline Float canonicalNaN(Float f) {	// strict FP: collapse every NaN to one bit pattern. IEEE leaves NaN sign/payload unspecified, so the C++ interpreter and the JIT's SSE/NEON can emit different NaN bits for the same op; that only matters because a GAZL float word is bit-observable (compared / reinterpreted as int). Both engines must canonicalize identically.
-	if (f != f) { const UInt bits = 0x7FC00000u; Float c; std::memcpy(&c, &bits, sizeof c); return c; }
+	if (f != f) { const UInt bits = 0x7FC00000u; Float c; memcpy(&c, &bits, sizeof c); return c; }
 	return f;
 }
 #define CANON_F(x) (canonicalNaN(x))
