@@ -319,96 +319,308 @@ static const Char* parseHex(const Char* p, const Char* e, UInt32& i) {
 	return p;
 }
 
-static const Char* parseUnsignedInt(const Char* p, const Char* e, UInt32& i) {
+// Saturates: 8.5 rounds anything past a few hundred to infinity or zero, so further digits cannot matter.
+static const Char* parseExponentDigits(const Char* p, const Char* e, UInt32& i) {
 	for (i = 0; p != e && *p >= '0' && *p <= '9'; ++p) {
-		i = i * 10 + (*p - '0');
+		if (i <= 100000) {
+			i = i * 10 + (*p - '0');
+		}
 	}
 	return p;
 }
 
 /*
-	Helper class for high-precision double <=> string conversion routines. 52*2 bits of two doubles allows accurate
-	representation of integers between 0 and 81129638414606681695789005144064.
+	An unsigned integer of N 32-bit words, least significant first, with only the operations the decimal conversions
+	need; docs/Number Conversion.md describes those.
 */
-struct DoubleDouble {
-	DoubleDouble() { }
-	DoubleDouble(double d) : high(floor(d)), low(d - high) { }
-	DoubleDouble(double high, double low) : high(high), low(low) {
-		assert(high < ldexp(1.0, 53));
-		assert(low < 1.0);
-	}
-	DoubleDouble operator+(const DoubleDouble& other) {
-		const double lowSum = low + other.low;
-		const double overflow = floor(lowSum);
-		return DoubleDouble((high + other.high) + overflow, lowSum - overflow);
-	}
-	DoubleDouble operator*(int factor) const {
-		const double lowTimesFactor = low * factor;
-		const double overflow = floor(lowTimesFactor);
-		return DoubleDouble((high * factor) + overflow, lowTimesFactor - overflow);
-	}
-	DoubleDouble operator/(int divisor) const {
-		const double floored = floor(high / divisor);
-		const double remainder = high - floored * divisor;
-		return DoubleDouble(floored, (low + remainder) / divisor);
-	}
-	bool operator<(const DoubleDouble& other) const {
-		return high < other.high || (high == other.high && low < other.low);
-	}
-	operator double() const {
-		return high + low;
-	}
-	double high;
-	double low;
+template<int N> class Words {
+	public:
+		explicit Words(UInt64 value = 0) {
+			for (int i = 0; i < N; ++i) {
+				words[i] = (i == 0 ? static_cast<UInt32>(value) : i == 1 ? static_cast<UInt32>(value >> 32) : 0);
+			}
+		}
+		template<int M> explicit Words(const Words<M>& other) {
+			assert(other.bitLength() <= N * 32);
+			for (int i = 0; i < N; ++i) {
+				words[i] = (i < M ? other.word(i) : 0);
+			}
+		}
+		static Words powerOfTwo(int bit) {
+			Words result;
+			result.setBit(bit);
+			return result;
+		}
+		UInt32 word(int i) const { return words[i]; }
+		int bitLength() const {
+			int i = N;
+			while (i > 0 && words[i - 1] == 0) {
+				--i;
+			}
+			int bits = i * 32;
+			for (UInt32 top = (i > 0 ? words[i - 1] : 0x80000000u); (top & 0x80000000u) == 0; top <<= 1) {
+				--bits;
+			}
+			return bits;
+		}
+		UInt64 bitsFrom(int bit) const {					// the low 64 bits of *this >> bit
+			const int index = bit / 32;
+			const int shift = bit % 32;
+			const UInt64 low = (index < N ? words[index] : 0)
+					| (index + 1 < N ? static_cast<UInt64>(words[index + 1]) << 32 : 0);
+			const UInt64 high = (index + 2 < N ? static_cast<UInt64>(words[index + 2]) : 0);	// shifted by up to 63
+			return (shift == 0 ? low : ((low >> shift) | (high << (64 - shift))));
+		}
+		int compare(const Words& other) const {
+			for (int i = N; i > 0; --i) {
+				if (words[i - 1] != other.words[i - 1]) {
+					return (words[i - 1] < other.words[i - 1] ? -1 : 1);
+				}
+			}
+			return 0;
+		}
+		void setBit(int bit) { words[bit / 32] |= static_cast<UInt32>(1) << (bit % 32); }
+		void multiplyAdd(UInt32 factor, UInt32 addend) {
+			UInt64 carry = addend;
+			for (int i = 0; i < N; ++i) {
+				carry += static_cast<UInt64>(words[i]) * factor;
+				words[i] = static_cast<UInt32>(carry);
+				carry >>= 32;
+			}
+			assert(carry == 0);								// the product must fit in N words
+		}
+		Words timesTenPlus(UInt32 digit) const {
+			Words result = *this;
+			result.multiplyAdd(10, digit);
+			return result;
+		}
+		void add(const Words& other) {
+			UInt64 carry = 0;
+			for (int i = 0; i < N; ++i) {
+				carry += static_cast<UInt64>(words[i]) + other.words[i];
+				words[i] = static_cast<UInt32>(carry);
+				carry >>= 32;
+			}
+			assert(carry == 0);								// the sum must fit in N words
+		}
+		void subtract(const Words& other) {
+			UInt64 borrow = 0;
+			for (int i = 0; i < N; ++i) {
+				const UInt64 difference = static_cast<UInt64>(words[i]) - other.words[i] - borrow;
+				words[i] = static_cast<UInt32>(difference);
+				borrow = ((difference >> 32) != 0 ? 1 : 0);	// unsigned wrap-around marks the borrow
+			}
+			assert(borrow == 0);							// the difference must not go below zero
+		}
+		void shiftLeft(int bits) {
+			assert(bitLength() + bits <= N * 32);
+			const int wordShift = bits / 32;
+			const int bitShift = bits % 32;
+			for (int i = N; i > 0; --i) {
+				const int source = i - 1 - wordShift;
+				words[i - 1] = (source >= 0 ? words[source] << bitShift : 0)
+						| (bitShift != 0 && source > 0 ? words[source - 1] >> (32 - bitShift) : 0);
+			}
+		}
+		void shiftRight(int bits) {
+			const int wordShift = bits / 32;
+			const int bitShift = bits % 32;
+			for (int i = 0; i < N; ++i) {
+				const int source = i + wordShift;
+				words[i] = (source < N ? words[source] >> bitShift : 0)
+						| (bitShift != 0 && source + 1 < N ? words[source + 1] << (32 - bitShift) : 0);
+			}
+		}
+		void keepLowBits(int bits) {
+			for (int i = 0; i < N; ++i) {
+				const int kept = bits - i * 32;					// low bits of this word that survive
+				words[i] &= (kept >= 32 ? 0xFFFFFFFFu : kept <= 0 ? 0 : (static_cast<UInt32>(1) << kept) - 1);
+			}
+		}
+		template<int A, int B> void setProduct(const Words<A>& a, const Words<B>& b) {
+			for (int i = 0; i < N; ++i) {						// zeroed in place: a temporary costs MSVC a copy here
+				words[i] = 0;
+			}
+			for (int i = 0; i < A; ++i) {
+				UInt64 carry = 0;
+				for (int j = 0; j < B; ++j) {
+					carry += static_cast<UInt64>(a.word(i)) * b.word(j) + words[i + j];
+					words[i + j] = static_cast<UInt32>(carry);
+					carry >>= 32;
+				}
+				words[i + B] = static_cast<UInt32>(carry);
+			}
+		}
+
+	protected:
+		UInt32 words[N];
 };
 
-static DoubleDouble multiplyAndAdd(const DoubleDouble& term, const DoubleDouble& factorA, double factorB) {
-	const double fmaLow = factorA.low * factorB + term.low;
-	const double overflow = floor(fmaLow);
-	return DoubleDouble(factorA.high * factorB + term.high + overflow, fmaLow - overflow);
+/*
+	5^q for q in -343..343 as a 128-bit `significand` P and `exponent` e, 5^q = (P + f) * 2^e with 0 <= f < 1. P is
+	truncated, never rounded: every decision relies on the true value never lying below it.
+*/
+class PowerOfFiveTable {
+	public:
+		struct Entry {
+			Words<4> significand;
+			int exponent;
+		};
+
+		enum { MIN_POWER = -343, MAX_POWER = 343, COUNT = MAX_POWER + 1 - MIN_POWER };
+
+		PowerOfFiveTable() {
+			Words<32> power(1);
+			for (int q = 0; q <= MAX_POWER; ++q) {
+				const int length = power.bitLength();
+				Words<32> top = power;
+				top.shiftLeft(128);								// then down to exactly 128 bits, from either side
+				top.shiftRight(length);
+				entries[q - MIN_POWER].significand = Words<4>(top);
+				entries[q - MIN_POWER].exponent = length - 128;
+				power.multiplyAdd(5, 0);
+			}
+			power = Words<32>(1);
+			for (int k = 1; k <= -MIN_POWER; ++k) {			// 1 / 5^k is floor(2^(length + 127) / 5^k)
+				power.multiplyAdd(5, 0);
+				const int length = power.bitLength();
+				Words<32> remainder = Words<32>::powerOfTwo(length + 127);
+				Words<32> divisor = power;
+				divisor.shiftLeft(127);
+				Words<4> quotient;
+				for (int bit = 127; bit >= 0; --bit) {
+					if (remainder.compare(divisor) >= 0) {
+						remainder.subtract(divisor);
+						quotient.setBit(bit);
+					}
+					divisor.shiftRight(1);
+				}
+				assert(quotient.bitLength() == 128);		// normalized by construction
+				entries[-k - MIN_POWER].significand = quotient;
+				entries[-k - MIN_POWER].exponent = -(length + 127);
+			}
+		}
+
+		const Entry& entry(int power) const {
+			assert(MIN_POWER <= power && power <= MAX_POWER);
+			return entries[power - MIN_POWER];
+		}
+
+	protected:
+		Entry entries[COUNT];
+};
+
+static const PowerOfFiveTable POWERS_OF_FIVE;
+
+const int MANTISSA_BITS = 53;							// including the implicit one
+const int MIN_BINARY_EXPONENT = -1074;					// of the smallest subnormal
+const int MAX_SIGNIFICANT_DIGITS = 20;					// the most 9.3.1 obliges us to read exactly
+const int MAX_SHORTEST_DIGITS = 17;					// always enough to tell two doubles apart
+static const double EXACT_POWERS_OF_TEN[] = { 1e0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9, 1e10, 1e11, 1e12,
+		1e13, 1e14, 1e15, 1e16, 1e17, 1e18, 1e19, 1e20, 1e21, 1e22 };	// the most a double holds exactly
+
+/*
+	The integer part of `x` above bit `position`, for an exact value known to lie in [x, x + delta) with delta below
+	2^(position - 1), and in `halfComparison` -1, 0 or 1 as the rest lies below, on or above one half. An interval
+	that reaches the next integer means the value is that integer.
+*/
+static UInt64 splitAtBit(const Words<8>& x, const Words<8>& delta, int position, int& halfComparison) {
+	Words<8> rest = x;
+	rest.keepLowBits(position);
+	const Words<8> half = Words<8>::powerOfTwo(position - 1);
+	const bool aboveHalf = (rest.compare(half) > 0);
+	rest.add(delta);
+	const bool reachesNext = (rest.compare(Words<8>::powerOfTwo(position)) > 0);
+	halfComparison = (reachesNext ? -1 : aboveHalf ? 1 : rest.compare(half) <= 0 ? -1 : 0);
+	return x.bitsFrom(position) + (reachesNext ? 1 : 0);
 }
 
-/**
-	If we just do (high + low) first, that sum is rounded to 53 bits once, possibly nudging the result slightly upward.
-	Then when we scale down into the subnormal range (right-shift the mantissa) we hit what looks like an exact halfway
-	case — and since the current mantissa is odd, IEEE-754 rounds up again. In reality, the exact (high+low) value was
-	just below that halfway point, so it should have rounded down to the even mantissa. This is a classic "double
-	rounding" problem.
+/*
+	`significand` * 10^`power` rounded to the nearest double, ties to even, for 0 < significand < 10^20 and `power`
+	inside the table.
+*/
+static double convertExact(const Words<3>& significand, int power) {
+	const PowerOfFiveTable::Entry& entry = POWERS_OF_FIVE.entry(power);
+	Words<8> x;
+	x.setProduct(significand, entry.significand);
+	const int scale = power + entry.exponent;			// the value is x * 2^scale
+	const int position = std::max(x.bitLength() - MANTISSA_BITS, MIN_BINARY_EXPONENT - scale);
+	int half;
+	const UInt64 mantissa = splitAtBit(x, Words<8>(significand), position, half);
+	const UInt64 rounded = mantissa + (half > 0 || (half == 0 && (mantissa & 1) != 0) ? 1 : 0);
+	return ldexp(static_cast<double>(rounded), position + scale);
+}
 
-	scaleAndRound avoids this by combining high and low at full precision under the final exponent window and
-	performing a *single* correct round-to-nearest-even step. This matches the Decimal oracle and fixes all denormal
-	boundary mismatches.
+/*
+	As `convertExact`, for a significand that fits 64 bits. One below 2^53 with a power of ten within 10^+-22 takes a
+	single IEEE operation on two exact operands instead, which rounds the same under the default round-to-nearest.
+*/
+static double convertDecimal(UInt64 significand, int power) {
+	const bool operandsExact = ((significand >> MANTISSA_BITS) == 0 && -22 <= power && power <= 22);
+	return (!operandsExact ? convertExact(Words<3>(significand), power)
+			: power >= 0 ? static_cast<double>(significand) * EXACT_POWERS_OF_TEN[power]
+			: static_cast<double>(significand) / EXACT_POWERS_OF_TEN[-power]);
+}
 
-	Assumptions:
-	- 'factor' is an exact power-of-two (normal or subnormal) from the table.
-	- 'acc.high' is integral in [0, 2^53) and 'acc.low' ∈ [0,1).
-	- Table ensures factorExponent >= -1073 so T = factorExponent + 1073 >= 0.
-**/
-static double scaleAndRound(const DoubleDouble& acc, double factor) {
-	if (acc.high == 0.0 && acc.low == 0.0) {
-		return 0.0;
+/*
+	`value` as an exact `mantissa` below 2^53 times 2^`exponent2`.
+*/
+static void decompose(double value, UInt64& mantissa, int& exponent2) {
+	int exponent;
+	const double fraction = frexp(value, &exponent);
+	mantissa = static_cast<UInt64>(ldexp(fraction, MANTISSA_BITS));
+	exponent2 = exponent - MANTISSA_BITS;
+}
+
+/*
+	floor(mantissa * 2^exponent2 * 10^power), which the caller keeps below 10^18, and in `halfComparison` where the
+	remainder lies relative to one half (see `splitAtBit`).
+*/
+static UInt64 scaledFloor(UInt64 mantissa, int exponent2, int power, int& halfComparison) {
+	const PowerOfFiveTable::Entry& entry = POWERS_OF_FIVE.entry(power);
+	Words<8> x;
+	x.setProduct(Words<2>(mantissa), entry.significand);
+	const int shift = -(exponent2 + entry.exponent + power);
+	assert(shift >= 54 && shift < 256);					// the value is below 10^18, the product above 2^127
+	return splitAtBit(x, Words<8>(mantissa), shift, halfComparison);
+}
+
+/*
+	The shortest decimal that converts back to the positive finite `value`, the closest of its length and the even
+	digit on an exact half: its digits as an integer, and in `exponent10` the decimal exponent of the leading digit.
+*/
+static UInt64 shortestDigits(double value, int& exponent10) {
+	UInt64 mantissa;
+	int exponent2;
+	decompose(value, mantissa, exponent2);
+	const int binaryExponent = exponent2 + Words<2>(mantissa).bitLength() - 1;
+	const int scaled = binaryExponent * 1233;			// 1233 / 4096 is log10(2) closely enough to be off by one
+	const int estimate = (scaled >= 0 ? scaled : scaled - 4095) / 4096;	// at most one off in every binade
+	int half;
+	const UInt64 first = scaledFloor(mantissa, exponent2, -estimate, half);
+	const int k = estimate + (first >= 10 ? 1 : first == 0 ? -1 : 0);
+	assert(scaledFloor(mantissa, exponent2, -k, half) - 1 < 9);	// the leading digit is now 1 to 9
+	const bool isMax = (value == std::numeric_limits<double>::max());	// never rounded up past the overflow line
+	UInt64 digits = 0;
+	int low = 1;
+	int high = MAX_SHORTEST_DIGITS;
+	while (low <= high) {
+		const int n = (low + high) / 2;
+		const int power = k - n + 1;
+		const UInt64 truncated = scaledFloor(mantissa, exponent2, -power, half);
+		const bool lowerFits = (convertDecimal(truncated, power) == value);
+		const bool upperFits = ((!lowerFits || half >= 0) && convertDecimal(truncated + 1, power) == value);
+		if (lowerFits || upperFits) {
+			const bool preferUpper = (half > 0 || (half == 0 && (truncated & 1) != 0));
+			digits = (!lowerFits || (upperFits && preferUpper && !isMax) ? truncated + 1 : truncated);
+			high = n - 1;
+		} else {
+			low = n + 1;
+		}
 	}
-	
-	const double fastResult = (acc.high + acc.low) * factor;
-	if (fastResult >= 2.2250738585072014e-308) {
-		return fastResult;												// normal result; fast path is exact here
-	}
-	
-	int factorExponent;													// slow path: denormal/transition region
-	frexp(factor, &factorExponent);										// assemble payload then single rounding
-	
-	const int t = factorExponent + 1073;								// guaranteed by table construction
-	assert(t >= 0);														// (no right-shift branch needed)	
-	const double bf = ldexp(acc.low, t);								// align (high, low) into the 52-bit subnormal payload scale
-	const double bi = floor(bf);
-	const double fraction = bf - bi;									// fractional contribution
-	
-	double ni = ldexp(acc.high, t) + bi;								// integer payload (exact in double)
-	if (fraction > 0.5 || (fraction == 0.5 && fmod(ni, 2.0) != 0.0)) {
-		ni += 1.0;														// round to nearest, ties-to-even
-	}
-	
-	return ldexp(ni, -1074);											// subnormal construction (or DBL_MIN when ni == 2^52)
+	assert(digits != 0);								// MAX_SHORTEST_DIGITS digits always convert back
+	exponent10 = k + (digits == 10 ? 1 : 0);			// 10 is the only carry that survives the search
+	return (digits == 10 ? 1 : digits);
 }
 
 const int QUICK_CONSTANTS_INTEGERS_RANGE = 1000;
@@ -424,141 +636,64 @@ struct QuickConstants {
 			integers[i + QUICK_CONSTANTS_INTEGERS_RANGE] = String(intToString(buffer, i), buffer + 32); // FIX : newHashedString
 			integers[i + QUICK_CONSTANTS_INTEGERS_RANGE].createBloomCode();
 		}
-
-		/*
-			Generate a table of `DoubleDoubles` for all powers of 10 from -324 to 308. The `DoubleDoubles` are
-			normalized to take up as many bits as possible while leaving enough headroom to allow multiplications of up
-			to 10 without overflowing. The exp10Factors array will contain the multiplication factors required to
-			revert the normalization. I.e. `static_cast<double>(normals[1 - (-324)]) * factors[1 - (-324)] == 10.0`.
-			Notice that for the very lowest exponents we refrain from normalizing to correctly handle denormal values.
-		*/
-		const double WIDTH = ldexp(1.0, 53 - 4);
-
-		DoubleDouble normal(WIDTH, 0.0);
-		double factor = 1.0 / WIDTH;
-		for (int i = 0; i <= MAX_EXPONENT; ++i) {
-			if (normal.high >= WIDTH) {
-				factor *= 16.0;
-				normal = normal / 16;
-			}
-			assert(factor < std::numeric_limits<double>::infinity());
-			exp10Normals[i - MIN_EXPONENT] = normal;
-			exp10Factors[i - MIN_EXPONENT] = factor;
-			normal = normal * 10;
-		}
-	
-		normal = DoubleDouble(WIDTH, 0.0);
-		factor = 1.0 / WIDTH;
-		for (int i = -1; i >= MIN_EXPONENT; --i) {
-			// Check factor / 16.0 > 0.0 to avoid normalizing denormal exponents.
-			if (normal.high < WIDTH && factor / 16.0 > 0.0) {
-				factor /= 16.0;
-				normal = normal * 16;
-			}
-			normal = normal / 10;
-			exp10Normals[i - MIN_EXPONENT] = normal;
-			exp10Factors[i - MIN_EXPONENT] = factor;
-		}
 	}
 	Value ascii[127];
 	String asciiChars[127];
 	String integers[QUICK_CONSTANTS_INTEGERS_RANGE * 2 + 1];
-	DoubleDouble exp10Normals[MAX_EXPONENT + 1 - MIN_EXPONENT];
-	double exp10Factors[MAX_EXPONENT + 1 - MIN_EXPONENT];
 } QUICK_CONSTANTS;
 
 static Char* doubleToString(Char buffer[32], const double value) {
 	Char* p = buffer;
-
-	double absValue = value;
 	if (value < 0) {
 		*p++ = '-';
-		absValue = -value;
 	}
-	
+	const double absValue = (value < 0 ? -value : value);
 	if (absValue == 0.0) {
 		*p++ = '0';
 		return p;
 	}
 
-	// frexp is fast and precise and gives log2(x), log10(x) = log2(x) / log2(10)
-	int base2Exponent;
-	(void) frexp(absValue, &base2Exponent);
-	int exponent = std::max(static_cast<int>(ceil(0.30102999566398119521 * (base2Exponent - 1))) - 1, MIN_EXPONENT);
-	if (exponent < MAX_EXPONENT) {
-		assert(MIN_EXPONENT <= exponent + 1 && exponent + 1 <= MAX_EXPONENT);
-		const double factor = QUICK_CONSTANTS.exp10Factors[exponent + 1 - MIN_EXPONENT];
-
-		// Notice that in theory we could have a value that is considered equal to next magnitude but should be rounded
-		// downwards (to a lower exponential) and not upwards. However in reality, only the first denormal power of 10
-		// would be a candidate for this, and for both double and single precision floats, they round upwards.
-		if (absValue >= static_cast<double>(QUICK_CONSTANTS.exp10Normals[exponent + 1 - MIN_EXPONENT]) * factor) {
-			++exponent;
-		}
-	}
-	
-	const bool eNotation = (exponent < NEGATIVE_E_NOTATION_START || exponent >= POSITIVE_E_NOTATION_START);
-	Char* periodPosition = p + (eNotation || exponent < 0 ? 0 : exponent) + 1;
-	if (!eNotation && exponent < 0) {
-		*p++ = '0';
-		*p++ = '.';
-		while (p < periodPosition - exponent) {
-			*p++ = '0';
-		}
+	int exponent;
+	const UInt64 digits = shortestDigits(absValue, exponent);
+	Char reversed[MAX_SHORTEST_DIGITS + 1];				// the digits come out least significant first
+	int count = 0;
+	for (UInt64 rest = digits; rest != 0; rest /= 10) {
+		reversed[count] = static_cast<Char>('0' + static_cast<int>(rest % 10));
+		++count;
 	}
 
-	assert(MIN_EXPONENT <= exponent && exponent <= MAX_EXPONENT);
-	const double factor = QUICK_CONSTANTS.exp10Factors[exponent - MIN_EXPONENT];
-	DoubleDouble magnitude = QUICK_CONSTANTS.exp10Normals[exponent - MIN_EXPONENT];
-	const DoubleDouble normalized = absValue / factor;
-	DoubleDouble accumulator = 0.0;
-	double reconstructed;
-	do {
-		if (p == periodPosition) {
+	if (exponent < NEGATIVE_E_NOTATION_START || exponent >= POSITIVE_E_NOTATION_START) {
+		*p++ = reversed[count - 1];
+		if (count > 1) {
 			*p++ = '.';
+			for (int i = count - 2; i >= 0; --i) {
+				*p++ = reversed[i];
+			}
 		}
-		
-		// Incrementally find the max digit that keeps accumulator < normalized target (instead of using division).
-		DoubleDouble next = accumulator + magnitude;
-		int digit = 0;
-		while (next < normalized && digit < 9) {
-			accumulator = next;
-			next = next + magnitude;
-			++digit;
-		}
-		assert(next >= normalized); // Correct behavior is to never reach higher than digit 9.
-
-		// Decide between digit and digit + 1 under final rounding; bump the digit if the lower one doesn't reconstruct
-		// to the exact value, or if we are strictly past the half-step. (Ported from Numbstrict's realToString. The
-		// previous version overwrote `reconstructed` and so missed the "lower digit doesn't round-trip but the higher
-		// one does" case, emitting a last digit one too low for some values, e.g. String(7.120236347223045e-307).)
-		reconstructed = scaleAndRound(accumulator, factor);
-		const double r1 = scaleAndRound(accumulator + magnitude, factor);
-		if ((reconstructed != absValue && r1 == absValue) || (reconstructed == absValue
-				&& accumulator + magnitude / 2 < normalized && absValue != std::numeric_limits<double>::max())) {
-			reconstructed = r1;
-			++digit;
-			assert(digit < 10); // If this happens we have failed to calculate the correct exponent above.
-		}
-
-		*p++ = '0' + digit;
-		magnitude = magnitude / 10;
-		
-		// p < buffer + 27 is an extra precaution if the correct value is never reached (e.g. because of too aggressive
-		// optimizations). 27 leaves room for longest exponent.
-	} while (p < buffer + 27 && reconstructed != absValue);
-
-	while (p < periodPosition) {
-		*p++ = '0';
-	}
-	
-	if (eNotation) {
 		*p++ = 'e';
 		*p++ = (exponent < 0 ? '-' : '+');
-
-		// intToString fills the buffer from right (buffer + 32) to left and there should always be enough space
 		p = std::copy(intToString(buffer, exponent < 0 ? -exponent : exponent), buffer + 32, p);
+	} else if (exponent < 0) {
+		*p++ = '0';
+		*p++ = '.';
+		for (int i = -exponent - 1; i > 0; --i) {
+			*p++ = '0';
+		}
+		for (int i = count - 1; i >= 0; --i) {
+			*p++ = reversed[i];
+		}
+	} else {
+		for (int i = 0; i <= exponent; ++i) {			// zero-padded where the digits run out before the point
+			*p++ = (i < count ? reversed[count - 1 - i] : '0');
+		}
+		if (count > exponent + 1) {
+			*p++ = '.';
+			for (int i = count - exponent - 2; i >= 0; --i) {
+				*p++ = reversed[i];
+			}
+		}
 	}
+
 	assert(p <= buffer + 32);
 	return p;
 }
@@ -609,9 +744,9 @@ static const Char* parseDouble(const Char* const b, const Char* const e, double&
 				++p;
 			}
 			UInt32 ui;
-			const Char* q = parseUnsignedInt(p, e, ui);
+			const Char* q = parseExponentDigits(p, e, ui);
 			if (q != p) {
-				exponent += sign * wrapToInt32(ui);
+				exponent += sign * static_cast<Int32>(ui);
 				numberEnd = q;
 			}
 		}
@@ -629,17 +764,20 @@ static const Char* parseDouble(const Char* const b, const Char* const e, double&
 		} else if (exponent > MAX_EXPONENT) {
 			value = std::numeric_limits<double>::infinity();
 		} else {
-			DoubleDouble magnitude = QUICK_CONSTANTS.exp10Normals[exponent - MIN_EXPONENT];
-			DoubleDouble accumulator(0.0, 0.0);
-			while (p != significandEnd) {
+			UInt64 leading = 0;								// the first 19 digits fit: 10^19 < 2^64
+			int count = 0;
+			for (; p != significandEnd && count < MAX_SIGNIFICANT_DIGITS - 1; ++p) {
 				if (*p != '.') {
-					accumulator = multiplyAndAdd(accumulator, magnitude, (*p - '0'));
-					magnitude = magnitude / 10;
+					leading = leading * 10 + static_cast<UInt64>(*p - '0');
+					++count;
 				}
+			}
+			while (p != significandEnd && *p == '.') {
 				++p;
 			}
-			const double factor = QUICK_CONSTANTS.exp10Factors[exponent - MIN_EXPONENT];
-			value = scaleAndRound(accumulator, factor);
+			const bool hasTwentieth = (p != significandEnd);	// 9.3.1 drops only the digits after it
+			value = (hasTwentieth ? convertExact(Words<3>(leading).timesTenPlus(static_cast<UInt32>(*p - '0'))
+					, exponent + 1 - MAX_SIGNIFICANT_DIGITS) : convertDecimal(leading, exponent + 1 - count));
 		}
 	}
 	value *= sign;
@@ -678,7 +816,7 @@ class GenericWrapper : public JSObject {
 		typedef JSObject super;
 		GenericWrapper(GCList& gcList, const String* className, const Value& value, Runtime::PrototypeId prototypeId
 				, Object* prototype = 0)
-				: super(gcList, prototype), className(className), wrapped(value), prototypeId(prototypeId) {
+				: super(gcList, prototype), className(className), prototypeId(prototypeId), wrapped(value) {
 			assert(prototypeId != Runtime::ARBITRARY_PROTOTYPE || prototype != 0);
 		}
 		virtual const String* getClassName() const { return className; }
@@ -786,7 +924,7 @@ Int32 Value::toInt() const {
 		return 0;
 	} else {
 		const UInt32 ui = static_cast<UInt32>(fmod(fabs(v), 4294967296.0));
-		return (v >= 0 ? wrapToInt32(ui) : -wrapToInt32(ui));
+		return wrapToInt32(v >= 0 ? ui : 0u - ui);	// 9.5 (4) takes the modulo of the signed value
 	}
 }
 
@@ -1290,16 +1428,22 @@ void Heap::free(void* ptr) {
 	}
 }
 
+#ifndef NDEBUG
+void Heap::gcMarkChecked(const GCItem* item) {
+	item->_gcReferenceMarkingComplete = false;	// every subclass must chain gcMarkReferences() up to GCItem
+	item->gcMarkReferences(*this);
+	assert(item->_gcReferenceMarkingComplete);
+}
+#else
+void Heap::gcMarkChecked(const GCItem* item) { item->gcMarkReferences(*this); }
+#endif
+
 void Heap::gc() {
 	for (const GCItem* item = rootList._gcNext; item != &rootList; item = item->_gcNext) {
-		assert((item->_gcReferenceMarkingComplete = false, true));
-		item->gcMarkReferences(*this);
-		assert(item->_gcReferenceMarkingComplete);
+		gcMarkChecked(item);
 	}
 	for (const GCItem* item = newList->_gcPrev; item != newList; item = item->_gcPrev) {
-		assert((item->_gcReferenceMarkingComplete = false, true));
-		item->gcMarkReferences(*this);
-		assert(item->_gcReferenceMarkingComplete);
+		gcMarkChecked(item);
 	}
 	std::swap(currentList, newList);
 	newList->deleteAll();
@@ -1576,7 +1720,7 @@ Enumerator* JSObject::getOwnPropertyEnumerator(Runtime& rt) const {
 /* --- RangeEnumerator --- */
 
 RangeEnumerator::RangeEnumerator(GCList& gcList, Int32 from, Int32 count) : super(gcList), heap(gcList.getHeap())
-		, index(from), to(from + count) { }
+		, to(from + count), index(from) { }
 const String* RangeEnumerator::nextPropertyName() { return (index >= to ? 0 : String::fromInt(heap, index++)); }
 
 /* --- StringListEnumerator --- */
@@ -2050,9 +2194,9 @@ Scope::Scope(GCList& gcList, Scope* parentScope)
 		: super(gcList), parentScope(parentScope), localsPointer(parentScope != 0 ? parentScope->localsPointer : 0)
 		, deleteOnPop(true) { }
 
-Flags Scope::readVar(Runtime& rt, const String* name, Value* v) const {
+Flags Scope::readVar(Runtime& rt, const String* name, Value* v, Value* implicitThis) const {
 	assert(parentScope != 0);
-	return parentScope->readVar(rt, name, v);
+	return parentScope->readVar(rt, name, v, implicitThis);
 }
 
 void Scope::writeVar(Runtime& rt, const String* name, const Value& v) {
@@ -2102,7 +2246,7 @@ JSObject* FunctionScope::getDynamicVars(Runtime& rt) const {
 	return dynamicVars;
 }
 
-Flags FunctionScope::readVar(Runtime& rt, const String* name, Value* v) const {
+Flags FunctionScope::readVar(Runtime& rt, const String* name, Value* v, Value* implicitThis) const {
 	const UInt32 bloomCode = name->createBloomCode();
 	if ((bloomSet & bloomCode) == bloomCode) {
 		Int32 index;
@@ -2123,7 +2267,7 @@ Flags FunctionScope::readVar(Runtime& rt, const String* name, Value* v) const {
 			return DONT_DELETE_FLAG | READ_ONLY_FLAG | EXISTS_FLAG;
 		}
 	}
-	return parentScope->readVar(rt, name, v);
+	return parentScope->readVar(rt, name, v, implicitThis);
 }
 
 void FunctionScope::writeVar(Runtime& rt, const String* name, const Value& v) {
@@ -2331,7 +2475,9 @@ const Processor::OpcodeInfo Processor::opcodeInfo[Processor::OP_COUNT] = {
 	{ TYPEOF_OP                  , "TYPEOF"                  , 0      , 0 },
 	{ TYPEOF_NAMED_OP            , "TYPEOF_NAMED"            , 1      , 0 },
 	{ GET_ENUMERATOR_OP          , "GET_ENUMERATOR"          , 0      , 0 },
-	{ NEXT_PROPERTY_OP           , "NEXT_PROPERTY"           , 0      , OpcodeInfo::POP_ON_BRANCH }
+	{ NEXT_PROPERTY_OP           , "NEXT_PROPERTY"           , 0      , OpcodeInfo::POP_ON_BRANCH },
+	{ READ_NAMED_WITH_THIS_OP    , "READ_NAMED_WITH_THIS"    , 2      , 0 },
+	{ CALL_WITH_THIS_OP          , "CALL_WITH_THIS"          , -1     , OpcodeInfo::POP_OPERAND }
 };
 
 const Processor::OpcodeInfo& Processor::getOpcodeInfo(const Opcode opcode) {
@@ -2363,12 +2509,12 @@ struct Processor::CatchScope : public Scope {
 
 	CatchScope(GCList& gcList, Scope* parentScope, const String* exceptionName, const Value& exceptionValue)
 			: super(gcList, parentScope), exceptionName(exceptionName), exceptionValue(exceptionValue) { }
-	virtual Flags readVar(Runtime& rt, const String* name, Value* v) const  {
+	virtual Flags readVar(Runtime& rt, const String* name, Value* v, Value* implicitThis) const  {
 		if (name->isEqualTo(*exceptionName)) {
 			*v = exceptionValue;
 			return DONT_DELETE_FLAG | EXISTS_FLAG;
 		} else {
-			return parentScope->readVar(rt, name, v);
+			return parentScope->readVar(rt, name, v, implicitThis);
 		}
 	}
 	virtual void writeVar(Runtime& rt, const String* name, const Value& v) {
@@ -2400,9 +2546,15 @@ struct Processor::WithScope : public Scope {
 	typedef Scope super;
 	WithScope(GCList& gcList, Scope* parentScope, Object* withObject)
 	 		: super(gcList, parentScope), withObject(withObject) { }
-	virtual Flags readVar(Runtime& rt, const String* name, Value* v) const {
+	virtual Flags readVar(Runtime& rt, const String* name, Value* v, Value* implicitThis) const {
 		Flags flags = withObject->getProperty(rt, name, v);
-		return (flags != NONEXISTENT ? flags : parentScope->readVar(rt, name, v));
+		if (flags == NONEXISTENT) {
+			return parentScope->readVar(rt, name, v, implicitThis);
+		}
+		if (implicitThis != 0) {
+			*implicitThis = withObject;
+		}
+		return flags;
 	}
 	virtual void writeVar(Runtime& rt, const String* name, const Value& v) {
 		const Value key(name);
@@ -2654,7 +2806,17 @@ void Processor::innerRun() {
 			case WRITE_LOCAL_POP_OP:	assert(locals != 0); locals[im] = sp[0]; pop(1); break;
 			case READ_NAMED_OP: {
 				const String* name = constants[im].getString();
-				if (scope->readVar(rt, name, ++sp) == NONEXISTENT) {
+				if (scope->readVar(rt, name, ++sp, 0) == NONEXISTENT) {
+					error(REFERENCE_ERROR, new(heap) String(heap.managed(), *name, IS_NOT_DEFINED_STRING));
+					return;
+				}
+				break;
+			}
+			case READ_NAMED_WITH_THIS_OP: {
+				const String* name = constants[im].getString();
+				sp[1] = UNDEFINED_VALUE;	// the receiver slot enters the gc-marked range with `sp += 2`, so fill it first,
+				sp += 2;					// and it is what stands unless a with scope overwrites it below
+				if (scope->readVar(rt, name, sp, sp - 1) == NONEXISTENT) {
 					error(REFERENCE_ERROR, new(heap) String(heap.managed(), *name, IS_NOT_DEFINED_STRING));
 					return;
 				}
@@ -2808,6 +2970,14 @@ void Processor::innerRun() {
 				return;
 			}
 			
+			case CALL_WITH_THIS_OP: {
+				Function* const f = asFunction(sp[-im]);
+				if (f != 0) {
+					invokeFunction(f, im + 1, im, sp[-im - 1].asObject());
+				}
+				return;
+			}
+			
 			case CALL_EVAL_OP: {
 				Function* f = asFunction(sp[-im]);
 				if (f != 0) {
@@ -2827,7 +2997,7 @@ void Processor::innerRun() {
 			
 			case GEN_FUNC_OP: {
 				const Object* o = constants[im].getObject();
-				assert(dynamic_cast<const Code*>(o) != 0);
+				assert(isA<Code>(o));
 				scope->makeClosure();
 				push(new(heap) JSFunction(heap.managed(), reinterpret_cast<const Code*>(o), scope));
 				break;
@@ -2844,7 +3014,7 @@ void Processor::innerRun() {
 			
 			case PUSH_ELEMENTS_OP: {
 				Object* o = sp[-im].getObject();
-				assert(dynamic_cast<JSArray*>(o) != 0);
+				assert(isA<JSArray>(o));
 				reinterpret_cast<JSArray*>(o)->pushElements(rt, im, sp - im + 1);
 				pop(im);
 				break;
@@ -2904,7 +3074,7 @@ void Processor::innerRun() {
 			case TYPEOF_OP: sp[0] = sp[0].typeOfString(); break;
 			case TYPEOF_NAMED_OP: {
 				Value v(UNDEFINED_VALUE);
-				scope->readVar(rt, constants[im].getString(), &v);
+				scope->readVar(rt, constants[im].getString(), &v, 0);
 				push(v.typeOfString());
 				break;
 			}
@@ -2920,7 +3090,7 @@ void Processor::innerRun() {
 			
 			case NEXT_PROPERTY_OP: {
 				Object* o = sp[0].getObject();
-				assert(dynamic_cast<Enumerator*>(o) != 0);
+				assert(isA<Enumerator>(o));
 				const String* name = reinterpret_cast<Enumerator*>(o)->nextPropertyName();
  				if (name != 0) {
 					sp[0] = name;
@@ -3082,17 +3252,22 @@ struct Compiler::ExpressionResult {
 	Type t;
 	Value v;
 };
-	
+
+/*
+	Kept small because every nested loop, `try`, `with` and label holds one on the C++ stack, and the compiler inlines
+	some of those into `statement`, which every nesting level pays for: the label is borrowed from the labelled
+	statement that owns it, and the branch lists keep two points inline and spill to the heap beyond that.
+*/
 struct Compiler::SemanticScope {
 	enum Type { ROOT_TYPE, LABEL_TYPE, ITERATOR_LABEL_TYPE, TRY_TYPE, CATCH_TYPE, FINALLY_TYPE, WITH_TYPE };
 	
 	SemanticScope(Heap& heap, Type type, Int32 stackDepthOnEntry, SemanticScope* next)
-			: breaks(&heap), continues(&heap), finallys(&heap), type(type), stackDepthOnEntry(stackDepthOnEntry)
-			, next(next) { }
-	
+			: type(type), label(&EMPTY_STRING), next(next), stackDepthOnEntry(stackDepthOnEntry), breaks(&heap)
+			, continues(&heap), finallys(&heap) { }
+
 	SemanticScope(Heap& heap, const String& label, Int32 stackDepthOnEntry, SemanticScope* next)
-			: breaks(&heap), continues(&heap), finallys(&heap), type(LABEL_TYPE), label(label)
-			, stackDepthOnEntry(stackDepthOnEntry), next(next) { }
+			: type(LABEL_TYPE), label(&label), next(next), stackDepthOnEntry(stackDepthOnEntry), breaks(&heap)
+			, continues(&heap), finallys(&heap) { }
 	
 	void makeIteratorScopes(SemanticScope* untilScope) {
 		for (SemanticScope* s = this; s != untilScope; s = s->next) {
@@ -3133,18 +3308,19 @@ struct Compiler::SemanticScope {
 	}
 	
 	Type type;
-	const String label; 				// empty for automatic while, for, case labels
+	const String* const label;			// &EMPTY_STRING for automatic while, for, case labels
 	SemanticScope* const next;
 	Int32 stackDepthOnEntry;
-	Vector<BranchPoint> breaks; 		// source points for break jmp's
-	Vector<BranchPoint> continues; 		// source points for continue jmp's
-	Vector<BranchPoint> finallys; 		// source points for finally jsr's
+	Vector<BranchPoint, 2> breaks;		// source points for break jmp's
+	Vector<BranchPoint, 2> continues;	// source points for continue jmp's
+	Vector<BranchPoint, 2> finallys;	// source points for finally jsr's
 };
 
-Compiler::Compiler(GCList& gcList, Code* code, Target compileFor, int initialNestCounter)
-	: super(gcList), heap(gcList.getHeap()), code(code), compilingFor(compileFor), setupSection(heap, 1)
-	, mainSection(heap, 1), b(0), p(0), e(0), sourceUnitBase(code->getSourceUnit()->getSource()->begin())
-	, currentSection(0), acceptInOperator(true), withScopeCounter(0), nestCounter(initialNestCounter)
+Compiler::Compiler(GCList& gcList, Code* code, Target compileFor, Compiler* outer)
+	: super(gcList), heap(gcList.getHeap()), code(code), compilingFor(compileFor), root(outer != 0 ? outer->root : *this)
+	, setupSection(heap, 1), mainSection(heap, 1), b(0), p(0), e(0)
+	, sourceUnitBase(code->getSourceUnit()->getSource()->begin()), currentSection(0), acceptInOperator(true)
+	, withScopeCounter(0), nestCounter(0)
 {
 }
 
@@ -3157,7 +3333,12 @@ const String* Compiler::newHashedString(Heap& heap, const Char* b, const Char* e
 	return s;
 }
 
-void Compiler::error(ErrorType type, const char* message) { ScriptException::throwError(heap, type, message); }
+void Compiler::error(ErrorType type, const String* message) {
+	root.p = p;
+	ScriptException::throwError(heap, type, message);
+}
+
+void Compiler::error(ErrorType type, const char* message) { error(type, String::allocate(heap, message)); }
 
 void Compiler::CodeSection::pushSourceMapping(UInt32 offset) {
 	if (sourceOffsets.empty() || sourceOffsets[sourceOffsets.size() - 1] != offset) {
@@ -3357,8 +3538,7 @@ bool Compiler::token(const char* t, bool eatLeadingWhite) {
 
 void Compiler::expectToken(const char* t, bool eatLeadingWhite) {
 	if (!token(t, eatLeadingWhite)) {
-		ScriptException::throwError(heap, SYNTAX_ERROR
-				, String::concatenate(heap, *String::concatenate(heap, "Expected '", t), "'"));
+		error(SYNTAX_ERROR, String::concatenate(heap, *String::concatenate(heap, "Expected '", t), "'"));
 	}
 }
 
@@ -3894,6 +4074,9 @@ bool Compiler::postOperate(ExpressionResult& xr, Precedence precedence) {
 			}
 			if (xr.t == ExpressionResult::PROPERTY) {
 				callOp = Processor::CALL_METHOD_OP;
+			} else if (xr.t == ExpressionResult::NAMED && callOp != Processor::CALL_EVAL_OP) {
+				emitWithConstant(Processor::READ_NAMED_WITH_THIS_OP, xr.v);
+				callOp = Processor::CALL_WITH_THIS_OP;
 			} else {
 				makeRValue(xr, false);
 			}
@@ -3952,34 +4135,27 @@ bool Compiler::postOperate(ExpressionResult& xr, Precedence precedence) {
 void Compiler::functionDefinition(const String* functionName, const String* selfName) {
 	assert(functionName != 0);
 	Code* func = new(heap) Code(heap.managed(), code->constants, code->getSourceUnit());
-	Compiler funcCompiler(heap.roots(), func, Compiler::FOR_FUNCTION, nestCounter);
-	try {
-		p = funcCompiler.compileFunction(p, e, functionName, selfName);
-	}
-	catch (const Exception&) { // FIX : a bit Q & D ish
-		p = funcCompiler.p;
-		throw;
-	}
+	Compiler funcCompiler(heap.roots(), func, Compiler::FOR_FUNCTION, this);
+	p = funcCompiler.compileFunction(p, e, functionName, selfName);
 	emitWithConstant(Processor::GEN_FUNC_OP, func);
 }
 
 /*
-	Caps total live compile-time recursion depth. Expressions and statements share this one counter (it is threaded
-	into nested function compilers), so deeply nested source cannot overflow the C++ stack during compilation. It must
-	stay well below the real stack ceiling - nested function definitions, the largest frames, overflow at a few thousand
-	levels - while leaving ample room for real code and for JSON.parse(), which eval()s validated input that is already
-	bounded far below this by MAX_JSON_DEPTH in stdlib.js.
+	Caps total live compile-time recursion depth, shared by expressions, statements and nested function compilers, so
+	deeply nested source raises a RangeError instead of overflowing the C++ stack. It must stay above the 57 levels a
+	real generated parser (GAZL's Impala compiler) needs and well below the stack wall: see "Nesting limits" in NuXJS
+	Documentation.md.
 */
-const Int32 MAX_NESTED_COMPILE_DEPTH = 256;
+const Int32 MAX_NESTED_COMPILE_DEPTH = 128;
 const Int32 CATCH_PARAMETER = 0x7FFFFFFF;
 
 Compiler::NestGuard::NestGuard(Compiler& compiler) : compiler(compiler) {
-	if (compiler.nestCounter >= MAX_NESTED_COMPILE_DEPTH) {
+	if (compiler.root.nestCounter >= MAX_NESTED_COMPILE_DEPTH) {
 		compiler.error(RANGE_ERROR, "Internal compiler limitations reached. Reduce code complexity.");
 	}
-	++compiler.nestCounter;
+	++compiler.root.nestCounter;
 }
-Compiler::NestGuard::~NestGuard() { --compiler.nestCounter; }
+Compiler::NestGuard::~NestGuard() { --compiler.root.nestCounter; }
 
 bool Compiler::optionalExpression(ExpressionResult& xr, Precedence precedence) {
 	NestGuard nestGuard(*this);
@@ -4284,7 +4460,7 @@ void Compiler::breakStatement(SemanticScope* currentScope) {
 	const String* label = (whiteNoLF() ? identifier(false, false) : &EMPTY_STRING);
 	Int32 rollbackStackDepth = currentSection->stackDepth;
 	for (SemanticScope* s = currentScope; s != 0; s = s->next) {
-		if (s->label.isEqualTo(*label)
+		if (s->label->isEqualTo(*label)
 				&& (s->type == SemanticScope::ITERATOR_LABEL_TYPE || s->type == SemanticScope::LABEL_TYPE)) {
 			s->popStack(*this, rollbackStackDepth, evalPopOpcode());
 			s->breaks.push(emitForwardBranch(Processor::JMP_OP));
@@ -4300,7 +4476,7 @@ void Compiler::continueStatement(SemanticScope* currentScope) {
 	const String* label = (whiteNoLF() ? identifier(false, false) : &EMPTY_STRING);
 	Int32 rollbackStackDepth = currentSection->stackDepth;
 	for (SemanticScope* s = currentScope; s != 0; s = s->next) {
-		if (s->label.isEqualTo(*label) && (s->type == SemanticScope::ITERATOR_LABEL_TYPE
+		if (s->label->isEqualTo(*label) && (s->type == SemanticScope::ITERATOR_LABEL_TYPE
 				|| (s->type == SemanticScope::LABEL_TYPE && !label->empty()))) {
 			if (s->type != SemanticScope::ITERATOR_LABEL_TYPE) {
 				error(SYNTAX_ERROR, "Illegal label for continue");
@@ -4679,6 +4855,29 @@ void Compiler::switchStatement(SemanticScope* currentScope) {
 	because it is legal to give while loops etc multiple alternative labels to be used with 'continue'.
 	(These should all be converted to 'ITERATOR_LABEL_TYPE' upon entry.)
 */
+/*
+	Kept out of `statement` because labels are rare while every level of statement nesting pays for its frame: the
+	label's `SemanticScope` alone would otherwise sit on the stack of every nested block and function body.
+*/
+void Compiler::labelledStatement(const Char* labelBegin, const Char* labelEnd, SemanticScope* currentScope
+		, SemanticScope* scopeLabelsEnd) {
+	const String label(labelBegin, labelEnd);
+	assert(!label.empty());
+	if (findReservedKeyword(label.size(), label.begin()) >= 0) {
+		error(SYNTAX_ERROR, "Illegal use of keyword");
+	}
+	for (SemanticScope* s = currentScope; s != 0; s = s->next) {
+		if (!s->label->empty() && s->label->isEqualTo(label)) {
+			error(SYNTAX_ERROR, "Duplicate label");
+		}
+	}
+	SemanticScope newLabelScope(heap, label, currentSection->stackDepth, currentScope);
+	statement(&newLabelScope, scopeLabelsEnd);
+	if (newLabelScope.type != SemanticScope::ITERATOR_LABEL_TYPE) {
+		completeBreaks(&newLabelScope);
+	}
+}
+
 void Compiler::statement(SemanticScope* currentScope, SemanticScope* scopeLabelsEnd) {
 	assert(currentSection == &mainSection); // statements must produce into main-section because of breaks etc...
 
@@ -4697,21 +4896,7 @@ void Compiler::statement(SemanticScope* currentScope, SemanticScope* scopeLabels
 	int statementTokenIndex = findStatementKeyword(p - b, &*b);
 	if (statementTokenIndex < 0) {
 		if (p != b && token(":", true)) {
-			const String label = String(parsed.begin(), parsed.end());
-			assert(!label.empty());
-			if (findReservedKeyword(label.size(), label.begin()) >= 0) {
-				error(SYNTAX_ERROR, "Illegal use of keyword");
-			}
-			for (SemanticScope* s = currentScope; s != 0; s = s->next) {
-				if (!s->label.empty() && s->label.isEqualTo(label)) {
-					error(SYNTAX_ERROR, "Duplicate label");
-				}
-			}
-			SemanticScope newLabelScope(heap, label, currentSection->stackDepth, currentScope);
-			statement(&newLabelScope, scopeLabelsEnd);
-			if (newLabelScope.type != SemanticScope::ITERATOR_LABEL_TYPE) {
-				completeBreaks(&newLabelScope);
-			}
+			labelledStatement(parsed.begin(), parsed.end(), currentScope, scopeLabelsEnd);
 		} else {
 			p = b;
 			ExpressionResult evalXR = (compilingFor == FOR_EVAL ? ExpressionResult::PUSHED : ExpressionResult::NONE);
@@ -4853,7 +5038,8 @@ Object* Runtime::ErrorPrototype::getPrototype(Runtime& rt) const {
 
 Runtime::GlobalScope::GlobalScope(GCList& gcList) : super(gcList, 0) { deleteOnPop = false; }
 
-Flags Runtime::GlobalScope::readVar(Runtime& rt, const String* name, Value* v) const {
+Flags Runtime::GlobalScope::readVar(Runtime& rt, const String* name, Value* v, Value*) const {
+	// No implicit this here: the global object is the scope of last resort, never an object scope introduced by `with`.
 	return rt.getGlobalObject()->getProperty(rt, name, v);
 }
 
@@ -4984,7 +5170,7 @@ struct Support {
 		if (argc >= 2) {
 			Object* o = argv[0].asObject();
 			if (o != 0 && o->getClassName()->isEqualTo(D_ATE_STRING)) {
-				assert(dynamic_cast<GenericWrapper*>(o) != 0);
+				assert(isA<GenericWrapper>(o));
 				reinterpret_cast<GenericWrapper*>(o)->setInternalValue(argv[1]);
 			}
 		}
@@ -5177,11 +5363,6 @@ struct Support {
 			return NAN_VALUE;
 		}
 		t = static_cast<std::time_t>(dt);
-		// std::time_t spanning the value says nothing about the conversions accepting it: MSVC's CRT stops at
-		// 3000-12-31T23:59:59Z and returns null past that, where the Date range reaches the year 275760, so
-		// new Date(3100, 0, 1) dereferenced null and took the process down. A null answers NaN like the
-		// pre-epoch case above, which is what localTimeDiff in the stdlib already substitutes a fixed offset
-		// for. The copy has to happen before the next call: the two may share one static tm.
 		const struct std::tm* const localPtr = std::localtime(&t);
 		if (localPtr == 0) {
 			return NAN_VALUE;
@@ -5202,7 +5383,8 @@ struct Support {
 		newTM.tm_sec = utcTM.tm_sec;
 		newTM.tm_isdst = localTM.tm_isdst;
 		const std::time_t newTime = std::mktime(&newTM);
-		return (newTime == -1 ? NAN_VALUE : Value(t * 1000.0 - newTime * 1000.0));
+		return (newTime == -1 ? NAN_VALUE
+				: Value(static_cast<double>(t) * 1000.0 - static_cast<double>(newTime) * 1000.0));
 	}
 	
 	static Value random(Runtime&, Processor&, UInt32, const Value*, Object*) {
@@ -5251,8 +5433,8 @@ static struct NoRegExpSupport : public Function {
 
 Runtime::Runtime(Heap& heap) : super(heap.roots()), heap(heap), globalScope(heap.roots()), globalObject(0)
 		, stackSize(STANDARD_JS_STACK_SIZE), callNestCounter(0), checkTimeOutCounter(0)
-		, timeOut(0), memoryCap(MAX_MEMORY_CAP), gcThreshold(AUTO_GC_MIN_SIZE), createRegExpFunction(&NO_REG_EXP_SUPPORT)
-		, evalFunction(&EVAL_FUNCTION), unixEpochTimeDiff(0.0), evalCodeCache(&heap) {
+		, timeOut(0), memoryCap(MAX_MEMORY_CAP), gcThreshold(AUTO_GC_MIN_SIZE), evalCodeCache(&heap)
+		, createRegExpFunction(&NO_REG_EXP_SUPPORT), evalFunction(&EVAL_FUNCTION), unixEpochTimeDiff(0.0) {
 	std::fill(stringConstantsCache, stringConstantsCache + (1 << STRING_CONSTANTS_CACHE_SIZE_N), (const String*)(0));
 	std::fill(prototypes, prototypes + PROTOTYPE_COUNT, (Object*)(0));
 	std::fill(toPrimitiveFunctions + 0, toPrimitiveFunctions + 3, &DEFAULT_CONVERSION);
@@ -5286,9 +5468,10 @@ void Runtime::autoGC(bool checkOutOfMemory) {
 	}
 }
 
-// Handle wrapping if clock_t is an integer type but not if it is a double.
-template<typename T> static bool clockExceeds(T a, T b) { return wrapToInt32(static_cast<UInt32>(a) - static_cast<UInt32>(b)) >= 0; }
-static bool clockExceeds(double a, double b) { return a >= b; }
+// clock_t may be an integer that wraps or a floating type that does not; static_cast<T>(0.5) tells them apart.
+template<typename T> static bool clockExceeds(T a, T b) {
+	return (static_cast<T>(0.5) != 0 ? a >= b : wrapToInt32(static_cast<UInt32>(a) - static_cast<UInt32>(b)) >= 0);
+}
 
 void Runtime::checkTimeOut() {
 	if (checkTimeOutCounter != 0 && --checkTimeOutCounter == 0) {
@@ -5314,7 +5497,7 @@ Object* Runtime::getPrototypeObject(PrototypeId prototype) const {
 
 Object* Runtime::getErrorPrototype(ErrorType error) const {
 	assert(0 <= error && error < ERROR_TYPE_COUNT);
-	return prototypes[static_cast<PrototypeId>(FIRST_ERROR_PROTOTYPE + error)];
+	return prototypes[static_cast<PrototypeId>(FIRST_ERROR_PROTOTYPE + static_cast<int>(error))];
 }
 
 JSObject* Runtime::newJSObject() const { return new(heap) JSObject(heap.managed(), getObjectPrototype()); }
@@ -5368,17 +5551,26 @@ void Runtime::run(const String& source, const String* filename) {
 	runUntilReturn(processor);
 }
 
+static Code* compileCode(Heap& heap, const String* source, const String* filename, Compiler::Target target) {
+	Code* code = new(heap) Code(heap.managed(), 0, new(heap) SourceCodeUnit(heap.managed(), source, filename));
+	Compiler compiler(heap.roots(), code, target);
+	try {
+		compiler.compile(*source);
+	}
+	catch (const ScriptException& x) {
+		throw CompilationError(x, filename, compiler);
+	}
+	return code;
+}
+
 Code* Runtime::compileEvalCode(const String* expression) {
 	const Table::Bucket* bucket = evalCodeCache.lookup(expression);
 	if (bucket != 0) {
 		Object* o = bucket->getValue().getObject();
-		assert(dynamic_cast<Code*>(o) != 0);
+		assert(isA<Code>(o));
 		return reinterpret_cast<Code*>(o);
 	} else {
-		SourceCodeUnit* unit = new(heap) SourceCodeUnit(heap.managed(), expression, &EVAL_CODE_STRING);
-		Code* code = new(heap) Code(heap.managed(), 0, unit);
-		Compiler compiler(heap.roots(), code, Compiler::FOR_EVAL);
-		compiler.compile(*expression);
+		Code* code = compileCode(heap, expression, &EVAL_CODE_STRING, Compiler::FOR_EVAL);
 		evalCodeCache.update(evalCodeCache.insert(expression), code);
 		return code;
 	}
@@ -5393,19 +5585,9 @@ Var Runtime::eval(const String& expression) {
 }
 
 Code* Runtime::compileGlobalCode(const String& source, const String* filename) {
-	const String* effectiveFileName = (filename != 0 ? filename : &ANONYMOUS_SCRIPT_STRING);
 	const String* retainedSource = (heap.managed().owns(&source)
 			? &source : new(heap) String(heap.managed(), source.begin(), source.end()));
-	SourceCodeUnit* unit = new(heap) SourceCodeUnit(heap.managed(), retainedSource, effectiveFileName);
-	Code* code = new(heap) Code(heap.managed(), 0, unit);
-	Compiler compiler(heap.roots(), code, Compiler::FOR_GLOBAL);
-	try {
-		compiler.compile(*retainedSource);
-	}
-	catch (const ScriptException& x) {
-		throw CompilationError(x, effectiveFileName, compiler);
-	}
-	return code;
+	return compileCode(heap, retainedSource, (filename != 0 ? filename : &ANONYMOUS_SCRIPT_STRING), Compiler::FOR_GLOBAL);
 }
 
 void Runtime::fetchFunction(const Object* supportObject, const char* name, Function** f) {
@@ -5421,7 +5603,7 @@ extern const char* STDLIB_JS;
 double Runtime::getCurrentEpochTime() {
 	std::time_t t;
 	std::time(&t);
-	return t * 1000.0 + unixEpochTimeDiff;
+	return static_cast<double>(t) * 1000.0 + unixEpochTimeDiff;
 }
 
 void Runtime::setupStandardLibrary() {
@@ -5431,15 +5613,12 @@ void Runtime::setupStandardLibrary() {
 		refTM.tm_year = 80;
 		refTM.tm_mday = 1;
 		const std::time_t refTime = std::mktime(&refTM);
-		// gmtime answers null for a time it cannot represent and mktime would dereference it. 1980 is in range
-		// for every plausible zone and time_t, so this guards a path that should not open rather than one that
-		// does; the assert below has always come after the dereference and is gone in a release build. With no
-		// probe to go on, assume time() already counts from the unix epoch, which POSIX and Windows both do.
 		struct std::tm* const refUTC = (refTime == static_cast<std::time_t>(-1) ? 0 : std::gmtime(&refTime));
 		const std::time_t refTimeAsUTC = (refUTC == 0 ? static_cast<std::time_t>(-1) : std::mktime(refUTC));
 		assert(refTime != -1 && refTimeAsUTC != -1);
 		unixEpochTimeDiff = (refTime == static_cast<std::time_t>(-1) || refTimeAsUTC == static_cast<std::time_t>(-1))
-				? 0.0 : 315532800000.0 - refTime * 2000.0 + refTimeAsUTC * 1000.0;
+				? 0.0 : 315532800000.0 - static_cast<double>(refTime) * 2000.0
+				+ static_cast<double>(refTimeAsUTC) * 1000.0;
 	}
 	
 	JSObject* supportObject = new(heap) JSObject(heap.managed(), getObjectPrototype());

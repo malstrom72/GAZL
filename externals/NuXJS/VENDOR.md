@@ -4,10 +4,15 @@ NuXJS is Magnus Lidström's own ES5.1 JavaScript engine, BSD 2-Clause, upstream 
 <https://github.com/malstrom72/NuXJS>. It is vendored here by **file copy**, not as a submodule, so
 nothing in `.git` records which upstream revision these files came from. This file is that record.
 
-**Pinned at `5fb318dac900069849206ada8a1920e73efd3a51`** (2026-08-31, "Guard the local-time
-conversions"). Take releases from `main` only. Upstream also publishes work-in-progress branches
+**Pinned at `f49acdd2e98f16ddda8725477b06eee730b6a79e`** (2026-10-08, "Merge pull request #257 from
+malstrom72/nestingDocs"). Take releases from `main` only. Upstream also publishes work-in-progress branches
 (`ES51`, `codex/*`, `opcode-layout-opt-experiment`, `stepwise-gc`), and a local `NuXJS` clone sitting
 on one of those is work in progress, not a release.
+
+**The Impala compiler needs `MAX_NESTED_COMPILE_DEPTH` >= 57.** It is a generated JSPEG parser, so its
+nesting comes from the grammar rather than from anything hand-written, and it moves when the grammar does.
+NuXJS set that limit to 48 on 2026-10-08 and GAZL stopped building entirely; it is 128 here. Nothing measures
+the 57, so treat it as todays figure, not a budget - see tools/test-fuzz for where a check would belong.
 
 Only five files are taken:
 
