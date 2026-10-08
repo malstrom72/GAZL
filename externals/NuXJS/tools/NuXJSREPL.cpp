@@ -200,10 +200,9 @@ static const String* utf8ToString(Heap& heap, const char* utf8, size_t size) {
 static bool doQuit = false;			// set by the quit() helper
 static bool pauseBeforeQuit = false;	// -p; read by main()
 static int timeOutSeconds = 0;			// -T; read by compileAndRun(), 0 for no limit
+static bool recordTranscript = false;	// interactive mode: print() output and errors go to the transcript for #save
 
-// In-memory transcript of the interactive session, tagged for #save (see pushIOLines). It is recorded
-// only while an interactive session is running; PrintFunction appends to it through a pointer that is null
-// in script-file mode.
+// In-memory transcript of the interactive session, tagged for #save (see pushIOLines).
 static std::vector<std::string> ioLines;
 
 static void pushIOLines(char typeChar, const String& s) {
@@ -225,48 +224,40 @@ static void pushIOStop() {
 	ioLines.push_back("-");
 }
 
-struct PrintFunction : public Function {
-	std::vector<std::string>* capture;	// null => do not record (script-file mode)
-	PrintFunction() : capture(0) { }
-	virtual Value invoke(Runtime& rt, Processor& processor, UInt32 argc, const Value* argv, Object* thisObject) {
-		const String* s = (argc >= 1 ? argv[0].toString(rt.getHeap()) : &EMPTY_STRING);
-		std::wcout << s->toWideString().c_str() << std::endl;
-		if (capture != 0) {
-			pushIOLines('<', *s);
-		}
-		return Value::UNDEFINED;
+Var print(Runtime& rt, const Var& thisVar, const VarList& args) {
+	const String* const s = (args.size() >= 1 ? args[0].to<const String*>() : &EMPTY_STRING);
+	std::wcout << s->toWideString().c_str() << std::endl;
+	if (recordTranscript) {
+		pushIOLines('<', *s);
 	}
-};
+	return Var(rt);
+}
 
 // printErr() is print()'s stderr twin: it writes to the diagnostic stream and, being off the recorded
 // stdout transcript, is never captured for #save or compared by the golden .io tests.
-struct PrintErrFunction : public Function {
-	virtual Value invoke(Runtime& rt, Processor& processor, UInt32 argc, const Value* argv, Object* thisObject) {
-		const String* s = (argc >= 1 ? argv[0].toString(rt.getHeap()) : &EMPTY_STRING);
-		std::wcerr << s->toWideString().c_str() << std::endl;
-		return Value::UNDEFINED;
-	}
-};
+Var printErr(Runtime& rt, const Var& thisVar, const VarList& args) {
+	const String* const s = (args.size() >= 1 ? args[0].to<const String*>() : &EMPTY_STRING);
+	std::wcerr << s->toWideString().c_str() << std::endl;
+	return Var(rt);
+}
 
-struct GCFunction : public Function {
-	virtual Value invoke(Runtime& rt, Processor& processor, UInt32 argc, const Value* argv, Object* thisObject) {
-	   Heap& heap = rt.getHeap();
-	   const UInt32 preCount = heap.count();
-	   const size_t preSize = heap.size();
-	   heap.gc();
-	   const UInt32 postCount = heap.count();
-	   const size_t postSize = heap.size();
-	   const size_t pooled = heap.pooled();
-	   heap.drain();
-	   JSObject* o = new(heap) JSObject(heap.managed(), rt.getObjectPrototype());
-	   o->setOwnProperty(rt, String::allocate(heap, "preCount"), preCount);
-	   o->setOwnProperty(rt, String::allocate(heap, "preSize"), static_cast<double>(preSize));
-	   o->setOwnProperty(rt, String::allocate(heap, "postCount"), postCount);
-	   o->setOwnProperty(rt, String::allocate(heap, "postSize"), static_cast<double>(postSize));
-	   o->setOwnProperty(rt, String::allocate(heap, "pooled"), static_cast<double>(pooled));
-	   return o;
-	}
-};
+Var gc(Runtime& rt, const Var& thisVar, const VarList& args) {
+	Heap& heap = rt.getHeap();
+	const UInt32 preCount = heap.count();
+	const size_t preSize = heap.size();
+	heap.gc();
+	const UInt32 postCount = heap.count();
+	const size_t postSize = heap.size();
+	const size_t pooled = heap.pooled();
+	heap.drain();
+	Var stats = rt.newObjectVar();
+	stats["preCount"] = preCount;
+	stats["preSize"] = static_cast<double>(preSize);
+	stats["postCount"] = postCount;
+	stats["postSize"] = static_cast<double>(postSize);
+	stats["pooled"] = static_cast<double>(pooled);
+	return stats;
+}
 
 static void disassemble(Heap& heap, const Code& code) {
 	const CodeWord* codeWords = code.getCodeWords();
@@ -316,7 +307,9 @@ static void disassemble(Heap& heap, const Code& code) {
 			case Processor::WRITE_LOCAL_POP_OP: {
 				const Int32 index = operand;
 				const String* name = code.getLocalName(index);
-				if (name != 0) std::wcerr << L" $" << name->toWideString();
+				if (name != 0) {
+					std::wcerr << L" $" << name->toWideString();
+				}
 				std::wcerr << L" (" << index << L")";
 				break;
 			}
@@ -353,19 +346,18 @@ static void disassemble(Heap& heap, const Code& code) {
 	}
 }
 
-Value disassemble(Runtime& rt, Processor& processor, UInt32 argc, const Value* argv, Object* thisObject) {
+Var dasm(Runtime& rt, const Var& thisVar, const VarList& args) {
 	Heap& heap = rt.getHeap();
-	Function* f = (argc >= 1 ? argv[0].asFunction() : 0);
+	const Function* const f = args[0].to<Value>().asFunction();
 	if (f == 0) {
-		const String* desc = (argc >= 1 ? argv[0].toString(heap) : String::allocate(heap, "undefined"));
-		ScriptException::throwError(heap, TYPE_ERROR, String::concatenate(heap, *desc, String(" is not a function")));
+		ScriptException::throwError(heap, TYPE_ERROR, String::concatenate(heap, args[0], String(" is not a function")));
 	}
-	const Code* code = f->getScriptCode();
+	const Code* const code = f->getScriptCode();
 	if (code == 0) {
 		ScriptException::throwError(heap, TYPE_ERROR, "Cannot disassemble native code");
 	}
 	disassemble(heap, *code);
-	return Value::UNDEFINED;
+	return Var(rt);
 }
 
 Var read(Runtime& rt, const Var& thisVar, const VarList& args) {
@@ -545,117 +537,82 @@ void printUsage() {
 			<< "JS receives global `arguments`: [script.js, arguments...]." << std::endl;
 }
 
-// Compiles one chunk of source and runs it to completion. All program-visible output (print() and `!!!!`
-// error/stack reporting) goes to stdout; the result echo and timing go to stderr. When `capture` is
-// non-null the `!!!!` lines are also appended to the interactive transcript. Returns true on success,
-// false if a compile-time or run-time error was reported.
-static bool compileAndRun(Runtime& rt, MyHeap& heap, Processor& processor, const String& source
-		, const String* scriptFileName, Compiler::Target compileFor, bool timing, bool echoResult
-		, bool legacyExceptions, std::vector<std::string>* capture, size_t& peakMemory) {
-	try {
-		const String* scriptSource = new(heap) String(heap.managed(), source.begin(), source.end());
-		SourceCodeUnit* sourceCodeUnit = new(heap) SourceCodeUnit(heap.managed(), scriptSource, scriptFileName);
-		Code globalCode(heap.roots(), 0, sourceCodeUnit);
-		Compiler compiler(heap.roots(), &globalCode, compileFor, 1);
-		try {
-			compiler.compile(*scriptSource);
-		}
-		catch (const Exception&) {
-			UInt32 offset;
-			UInt32 lineNumber;
-			UInt32 columnNumber;
-			compiler.getStopPosition(offset, lineNumber, columnNumber);
-			std::wstringstream ss;
-			ss << L"!!!! Line: " << lineNumber;
-			const std::wstring ws = ss.str();
-			std::wcout << ws << std::endl;
-			if (capture != 0) {
-				pushIOLines('!', String(heap.roots(), ws.c_str()));
-			}
-			throw;
-		}
-
-		processor.enterGlobalCode(&globalCode);
-		bool done = false;
-		// Re-armed per chunk, so an interactive session gets the full allowance on each entry.
-		if (timeOutSeconds > 0) rt.resetTimeOut(timeOutSeconds);
-		const double start = getCPUSecs();
-		do {
-			done = !processor.run(STANDARD_CYCLES_BETWEEN_AUTO_GC);
-			rt.autoGC(true);
-			rt.checkTimeOut();
-			peakMemory = std::max<size_t>(peakMemory, heap.size());
-		} while (!done);
-
-		if (echoResult) {
-			Value v = processor.getResult();
-			std::wcerr << L"\t=" << v.toString(heap)->toWideString() << std::endl;
-		}
-		if (timing) {
-			const double end = getCPUSecs();
-			std::cerr << (end - start) << "s" << std::endl;
-			std::cerr << heap.size() / (1024.0 * 1024.0) << "MiB" << std::endl;
-			std::cerr << peakMemory / (1024.0 * 1024.0) << "MiB" << std::endl;
-			std::cerr << heap.peakSize / (1024.0 * 1024.0) << "MiB" << std::endl;
-		}
-		return true;
-	}
-	catch (const ScriptException& x) {
-		const std::wstring ws = L"!!!! " + x.value.toString(heap)->toWideString();
-		std::wcout << ws << std::endl;
-		std::string stackLine;
-		if (!legacyExceptions) {
-			const char* stackTrace = x.getStackTrace();
-			if (stackTrace[0] != '\0') {
-				stackLine = std::string("!!!! stack: ") + stackTrace;
-				std::wcout << std::wstring(stackLine.begin(), stackLine.end()) << std::endl;
-			}
-		}
-		if (capture != 0) {
-			pushIOLines('!', String(heap.roots(), ws.c_str()));
-			if (!stackLine.empty()) {
-				pushIOLines('!', String(heap.roots(), stackLine.c_str()));
-			}
-		}
-		return false;
-	}
-	catch (const std::exception& x) {
-		std::cout << "!!!! " << x.what() << std::endl;
-		if (capture != 0) {
-			pushIOLines('!', x.what());
-		}
-		return false;
-	}
-	catch (...) {
-		std::cout << "Unknown exception" << std::endl;
-		if (capture != 0) {
-			pushIOLines('!', "Unknown exception");
-		}
-		return false;
+// Prints one `!!!!` line on stdout and records it in the transcript of an interactive session.
+static void reportError(const std::wstring& line) {
+	std::wcout << line << std::endl;
+	if (recordTranscript) {
+		pushIOLines('!', String(line.c_str()));
 	}
 }
 
-// Runs a single whole-file script (global code). Returns a process exit code.
-static int runScriptFile(Runtime& rt, MyHeap& heap, Processor& processor, const String& source
-		, const std::string& path, bool timing, bool legacyExceptions) {
-	size_t peakMemory = 0;
-	const String* scriptFileName = String::allocate(heap, path.c_str());
-	// A script run is a pure runner: never echo the completion value (which is always undefined for global
-	// code anyway). The `=<result>` echo is an interactive-REPL convenience only.
-	const bool ok = compileAndRun(rt, heap, processor, source, scriptFileName, Compiler::FOR_GLOBAL
-			, timing, false, legacyExceptions, 0, peakMemory);
-	return ok ? 0 : 1;
+static void reportScriptException(Heap& heap, const ScriptException& x, bool legacyExceptions) {
+	reportError(L"!!!! " + x.value.toString(heap)->toWideString());
+	const std::string stackTrace = x.getStackTrace();
+	if (!legacyExceptions && !stackTrace.empty()) {
+		reportError(L"!!!! stack: " + std::wstring(stackTrace.begin(), stackTrace.end()));
+	}
+}
+
+/*
+	Runs one chunk of source to completion in the global scope: a script file as global code when `scriptFileName` is
+	given, otherwise an interactive chunk compiled as eval code, only for the completion value it echoes on request: its
+	declarations stay global code's, not deletable as an eval's would be. Errors go to stdout as `!!!!` lines, the echo
+	and the timing to stderr. Returns false if an error was reported.
+*/
+static bool compileAndRun(Runtime& rt, MyHeap& heap, const String& source, const String* scriptFileName, bool timing
+		, bool echoResult, bool legacyExceptions) {
+	try {
+		if (timeOutSeconds > 0) {	// re-armed per chunk, so an interactive session gets the full allowance each time
+			rt.resetTimeOut(timeOutSeconds);
+		}
+		const double start = getCPUSecs();
+		const Code* const code = (scriptFileName != 0 ? rt.compileGlobalCode(source, scriptFileName)
+				: rt.compileEvalCode(new(heap) String(heap.managed(), source.begin(), source.end())));
+		Processor processor(rt);
+		processor.enterGlobalCode(code);
+		const Var result = rt.runUntilReturn(processor);
+		if (echoResult) {
+			std::wcerr << L"\t=" << result.to<std::wstring>() << std::endl;
+		}
+		if (timing) {
+			std::cerr << (getCPUSecs() - start) << "s" << std::endl
+					<< heap.size() / (1024.0 * 1024.0) << "MiB" << std::endl
+					<< heap.peakSize / (1024.0 * 1024.0) << "MiB" << std::endl;
+		}
+		return true;
+	}
+	catch (const CompilationError& x) {
+		std::wstringstream ss;
+		ss << L"!!!! Line: " << x.lineNumber;
+		reportError(ss.str());
+		reportScriptException(heap, x, legacyExceptions);
+	}
+	catch (const ScriptException& x) {
+		reportScriptException(heap, x, legacyExceptions);
+	}
+	catch (const std::exception& x) {
+		const std::string what = x.what();
+		reportError(L"!!!! " + std::wstring(what.begin(), what.end()));
+	}
+	catch (...) {
+		reportError(L"Unknown exception");
+	}
+	return false;
+}
+
+// Runs a whole-file script as global code, which has no completion value to echo. Returns a process exit code.
+static int runScriptFile(Runtime& rt, MyHeap& heap, const String& source, const std::string& path, bool timing
+		, bool legacyExceptions) {
+	return (compileAndRun(rt, heap, source, String::allocate(heap, path.c_str()), timing, false, legacyExceptions) ? 0 : 1);
 }
 
 // Reads lines (from a terminal or a piped stream), accumulating them until a blank line triggers
 // evaluation as eval-global code. Handles the #save / #undo / #purge / ?expr conveniences and records the
 // session transcript for #save. Returns a process exit code.
-static int runInteractive(Runtime& rt, MyHeap& heap, Processor& processor, std::istream& in
+static int runInteractive(Runtime& rt, MyHeap& heap, std::istream& in
 		, bool timing, bool suppressResultEcho, bool legacyExceptions) {
 	const String LF_STRING("\n");
-	const String* scriptFileName = rt.newStringConstant("<anonymous>");
 	String source(EMPTY_STRING);
-	size_t peakMemory = 0;
 
 	in.exceptions(std::ios_base::badbit);
 	while (in.good() && !doQuit) {
@@ -673,9 +630,6 @@ static int runInteractive(Runtime& rt, MyHeap& heap, Processor& processor, std::
 				} else {
 					const time_t t = time(0);
 					char buf[256];
-					// localtime answers null for a clock it cannot represent and strftime would dereference it;
-					// strftime itself answers 0 when the result does not fit, leaving buf unwritten. Only a
-					// machine clock set outside the CRT's range reaches either, and any name beats both.
 					const struct tm* const lt = (t == static_cast<time_t>(-1) ? 0 : localtime(&t));
 					if (lt != 0 && strftime(buf, sizeof (buf), "tests/%Y%m%d_%H%M%S.io", lt) != 0) {
 						fn = buf;
@@ -706,7 +660,9 @@ static int runInteractive(Runtime& rt, MyHeap& heap, Processor& processor, std::
 			} else if (!utf8Line.empty()) {
 				const std::vector<Char> u = utf8ToUtf16(utf8Line.data(), utf8Line.size());
 				const String line(heap.roots(), u.empty() ? 0 : u.data(), u.empty() ? 0 : u.data() + u.size());
-				if (!source.empty()) source = String(heap.roots(), source, LF_STRING);
+				if (!source.empty()) {
+					source = String(heap.roots(), source, LF_STRING);
+				}
 				source = String(heap.roots(), source, line);
 			} else {
 				if (source.size() > 0 && source[0] == '?') {
@@ -719,8 +675,7 @@ static int runInteractive(Runtime& rt, MyHeap& heap, Processor& processor, std::
 			}
 
 			if (execute) {
-				compileAndRun(rt, heap, processor, source, scriptFileName, Compiler::FOR_EVAL
-						, timing, !suppressResultEcho, legacyExceptions, &ioLines, peakMemory);
+				compileAndRun(rt, heap, source, 0, timing, !suppressResultEcho, legacyExceptions);
 				source = EMPTY_STRING;
 			}
 		}
@@ -756,10 +711,18 @@ int replMain(int argc, const char* argv[]) {
 		for (int argi = 1; argi < argc; ++argi) {
 			if (!inputFilePath.empty()) {
 				scriptArguments.push_back(argv[argi]);
-			} else if (strcmp(argv[argi], "-t") == 0) doTime = true;
-			else if (strcmp(argv[argi], "-s") == 0) suppressResultEcho = true;
-			else if (strcmp(argv[argi], "-p") == 0) pauseBeforeQuit = true;
-			else if (strcmp(argv[argi], "-n") == 0) loadStdLib = false;
+			} else if (strcmp(argv[argi], "-t") == 0) {
+				doTime = true;
+			}
+			else if (strcmp(argv[argi], "-s") == 0) {
+				suppressResultEcho = true;
+			}
+			else if (strcmp(argv[argi], "-p") == 0) {
+				pauseBeforeQuit = true;
+			}
+			else if (strcmp(argv[argi], "-n") == 0) {
+				loadStdLib = false;
+			}
 			else if (strcmp(argv[argi], "--timeout") == 0 || strcmp(argv[argi], "-T") == 0) {
 				char* end;		// a missing value parses as the empty string, which fails on seconds <= 0 like any other
 				const long seconds = strtol(argi + 1 < argc ? argv[++argi] : "", &end, 10);
@@ -769,7 +732,9 @@ int replMain(int argc, const char* argv[]) {
 				}
 				timeOutSeconds = static_cast<int>(seconds);
 			}
-			else if (strcmp(argv[argi], "--legacy-exceptions") == 0 || strcmp(argv[argi], "-E") == 0) legacyExceptions = true;
+			else if (strcmp(argv[argi], "--legacy-exceptions") == 0 || strcmp(argv[argi], "-E") == 0) {
+				legacyExceptions = true;
+			}
 			else if (strcmp(argv[argi], "--help") == 0 || strcmp(argv[argi], "-h") == 0) {
 				printUsage();
 				return 0;
@@ -780,6 +745,7 @@ int replMain(int argc, const char* argv[]) {
 		}
 
 		const bool scriptMode = !inputFilePath.empty();
+		recordTranscript = !scriptMode;
 
 		MyHeap heap;
 		Runtime rt(heap);
@@ -801,39 +767,26 @@ int replMain(int argc, const char* argv[]) {
 			return 1;
 		}
 
-		Object& globals = *rt.getGlobalObject();
-		Var globs = rt.getGlobalsVar();
-		globs["read"] = read;
-		globs["write"] = writeFile;
-		globs["load"] = load;
-		globs["system"] = runSystem;
-		globs["getenv"] = readEnv;
-		globs["quit"] = quit;
-		globs["help"] = help;
-		{
-			Var argumentsVar = scriptMode
-					? rt.newArrayVar(static_cast<UInt32>(scriptArguments.size()) + 1)
-					: rt.newArrayVar();
-			if (scriptMode) {
-				argumentsVar[0] = inputFilePath;
-				for (UInt32 i = 0; i < static_cast<UInt32>(scriptArguments.size()); ++i) {
-					argumentsVar[i + 1] = scriptArguments[i];
-				}
+		Var globals = rt.getGlobalsVar();
+		globals["print"] = print;
+		globals["printErr"] = printErr;
+		globals["read"] = read;
+		globals["write"] = writeFile;
+		globals["load"] = load;
+		globals["system"] = runSystem;
+		globals["getenv"] = readEnv;
+		globals["quit"] = quit;
+		globals["help"] = help;
+		globals["gc"] = gc;
+		globals["dasm"] = dasm;
+		Var argumentsVar = rt.newArrayVar();
+		if (scriptMode) {
+			argumentsVar[0] = inputFilePath;
+			for (UInt32 i = 0; i < static_cast<UInt32>(scriptArguments.size()); ++i) {
+				argumentsVar[i + 1] = scriptArguments[i];
 			}
-			globs["arguments"] = argumentsVar;
 		}
-
-		PrintFunction printFunction;
-		printFunction.capture = (scriptMode ? 0 : &ioLines);
-		const String PRINT_STRING("print");
-		globals.setOwnProperty(rt, &PRINT_STRING, &printFunction, DONT_ENUM_FLAG);
-		PrintErrFunction printErrFunction;
-		const String PRINT_ERR_STRING("printErr");
-		globals.setOwnProperty(rt, &PRINT_ERR_STRING, &printErrFunction, DONT_ENUM_FLAG);
-		GCFunction gcFunction;
-		const String GC_STRING("gc");
-		globals.setOwnProperty(rt, &GC_STRING, &gcFunction, DONT_ENUM_FLAG);
-		globals.setOwnProperty(rt, String::allocate(heap, "dasm"), new(heap) FunctorAdapter<NativeFunction>(heap.managed(), disassemble), DONT_ENUM_FLAG);
+		globals["arguments"] = argumentsVar;
 
 		randomSeed();
 
@@ -851,12 +804,8 @@ int replMain(int argc, const char* argv[]) {
 			}
 		}
 
-		Processor processor(rt);
-		if (scriptMode) {
-			return runScriptFile(rt, heap, processor, source, inputFilePath, doTime, legacyExceptions);
-		} else {
-			return runInteractive(rt, heap, processor, std::cin, doTime, suppressResultEcho, legacyExceptions);
-		}
+		return (scriptMode ? runScriptFile(rt, heap, source, inputFilePath, doTime, legacyExceptions)
+				: runInteractive(rt, heap, std::cin, doTime, suppressResultEcho, legacyExceptions));
 	}
 	catch (const Exception& x) {
 		std::cerr << "Uncaught exception: " << x.what() << std::endl;
@@ -871,9 +820,36 @@ int replMain(int argc, const char* argv[]) {
 }
 
 #ifdef LIBFUZZ
+#if (_MSC_VER)
+#pragma comment(linker, "/STACK:8388608")
+#endif
+
+extern "C" int LLVMFuzzerInitialize(int*, char***) {
+#if (_MSC_VER)
+	// These builds keep asserts live, and a failing one would otherwise hang the worker on a message box.
+	_set_error_mode(_OUT_TO_STDERR);
+	_set_abort_behavior(0, _WRITE_ABORT_MSG | _CALL_REPORTFAULT);
+	_CrtSetReportMode(_CRT_ASSERT, _CRTDBG_MODE_FILE);
+	_CrtSetReportFile(_CRT_ASSERT, _CRTDBG_FILE_STDERR);
+	_CrtSetReportMode(_CRT_ERROR, _CRTDBG_MODE_FILE);
+	_CrtSetReportFile(_CRT_ERROR, _CRTDBG_FILE_STDERR);
+	/*
+		A sanitizer's frames exhaust the default 1 MB stack well before the engine reaches its own recursion limit, and
+		without a guarantee the overflow goes unreported, so the crash is lost rather than saved. The reserve above and
+		the guarantee here are what make stackOverflow.io's depth a finding instead of a silence.
+	*/
+	::ULONG stackGuarantee = 1024 * 1024;
+	::SetThreadStackGuarantee(&stackGuarantee);
+#endif
+	return 0;
+}
+
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size) {
 	Heap heap;
 	Runtime rt(heap);
+#ifdef LIBFUZZ_STDLIB
+	rt.setupStandardLibrary();	// before the limits below, so the library is not charged to the input budget
+#endif
 	rt.resetTimeOut(2);
 	rt.setMemoryCap(64*1024*1024);
 	try {
@@ -889,7 +865,9 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size) {
 #ifndef LIBFUZZ
 int main(int argc, const char* argv[]) {
 	int rc = replMain(argc, argv);
-	if (pauseBeforeQuit) std::wcin.get();
+	if (pauseBeforeQuit) {
+		std::wcin.get();
+	}
 	return rc;
 }
 #endif
