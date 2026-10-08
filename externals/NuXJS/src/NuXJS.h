@@ -57,6 +57,7 @@ typedef short Int16;
 typedef unsigned short UInt16;
 typedef int Int32;
 typedef unsigned int UInt32;
+typedef uint64_t UInt64;			// only the decimal conversions need 64 bits; <stdint.h> is already required
 typedef UInt16 Char;
 typedef Int32 CodeWord;
 
@@ -91,7 +92,11 @@ class GCItem {
 		GCItem(const GCItem& copy) throw();
 		GCItem& operator=(const GCItem&) throw() { return *this; }
 		Heap& gcGetHeap() const;
-		virtual void gcMarkReferences(Heap&) const { assert(_gcReferenceMarkingComplete = true); }
+		virtual void gcMarkReferences(Heap&) const {
+	#ifndef NDEBUG
+			_gcReferenceMarkingComplete = true;
+	#endif
+		}
 		virtual ~GCItem();
 		friend void gcMark(Heap& heap, const GCItem* item);
 
@@ -160,6 +165,7 @@ class Heap {
 		virtual void* acquireMemory(size_t size);
 		virtual void releaseMemory(void* ptr, size_t size);
 		static int calcPoolIndex(size_t size);
+		void gcMarkChecked(const GCItem* item);
 		void* pools[MAX_POOLED_SIZE / POOL_SIZE_GRANULARITY];
 		UInt32 allocatedCount;
 		size_t allocatedSize;
@@ -185,6 +191,21 @@ inline void gcMark(Heap& heap, const GCItem* item) {
 	if (item != 0 && item->_gcList == heap.currentList) {
 		heap.newList->claim(const_cast<GCItem*>(item));
 	}
+}
+
+/*
+	assert(isA<Code>(o)) instead of assert(dynamic_cast<const Code*>(o) != 0), because a public library must not
+	require RTTI to be either on or off. A dynamic_cast is ill-formed under -fno-rtti even where it can never be
+	evaluated, and a release assert that expands to ((void)(0 && (a))) still has to compile: clang rejects that,
+	msvc only warns. Where RTTI is unavailable there is nothing to check and this answers true.
+*/
+template<class T, class U> bool isA(const U* o) {
+#if defined(__cpp_rtti)
+	return dynamic_cast<const T*>(o) != 0;
+#else
+	(void)o;
+	return true;
+#endif
 }
 
 inline void GCItem::operator delete(void* ptr, Heap& heap) {
@@ -837,7 +858,6 @@ class Constants : public GCItem, public Vector<Value> {
 			super::gcMarkReferences(heap);
 		}
 
-	private:
 		mutable Table stringIndexes;			// string constant -> its index in this list
 		mutable Vector<UInt32> otherIndexes;	// indexes of the non-strings worth scanning
 };
@@ -986,7 +1006,7 @@ class Scope : public GCItem {
 	public:
 		typedef GCItem super;
 		Scope(GCList& gcList, Scope* parentScope);
-		virtual Flags readVar(Runtime& rt, const String* name, Value* v) const;
+		virtual Flags readVar(Runtime& rt, const String* name, Value* v, Value* implicitThis) const;
 		virtual void writeVar(Runtime& rt, const String* name, const Value& v);
 		virtual bool deleteVar(Runtime& rt, const String* name);
 		virtual void declareVar(Runtime& rt, const String* name, const Value& initValue, bool dontDelete);
@@ -1121,7 +1141,7 @@ class FunctionScope : public Scope {
 		typedef Scope super;
 
 		FunctionScope(GCList& gcList, JSFunction* function, UInt32 argc, const Value* argv);
-		virtual Flags readVar(Runtime& rt, const String* name, Value* v) const;
+		virtual Flags readVar(Runtime& rt, const String* name, Value* v, Value* implicitThis) const;
 		virtual void writeVar(Runtime& rt, const String* name, const Value& v);
 		virtual bool deleteVar(Runtime& rt, const String* name);
 		virtual void declareVar(Runtime& rt, const String* name, const Value& initValue, bool dontDelete);
@@ -1168,7 +1188,7 @@ class Runtime : public GCItem {
 		struct GlobalScope : public Scope {
 			typedef Scope super;
 			GlobalScope(GCList& gcList);
-			virtual Flags readVar(Runtime& rt, const String* name, Value* v) const;
+			virtual Flags readVar(Runtime& rt, const String* name, Value* v, Value* implicitThis) const;
 			virtual void writeVar(Runtime& rt, const String* name, const Value& v);
 			virtual bool deleteVar(Runtime& rt, const String* name);
 			virtual void declareVar(Runtime& rt, const String* name, const Value& initValue, bool dontDelete);
@@ -1418,17 +1438,17 @@ class VarList : public GCItem, public Vector<Value> {
 	public:
 		typedef GCItem super;
 		VarList(Runtime& rt, UInt32 initialCount = 0)
-			: super(rt.getHeap().roots()), rt(rt), Vector<Value>(initialCount, &rt.getHeap()) { }
+			: super(rt.getHeap().roots()), Vector<Value>(initialCount, &rt.getHeap()), rt(rt) { }
 		VarList(Runtime& rt, const Value& a0)
-			: super(rt.getHeap().roots()), rt(rt), Vector<Value>(1, &rt.getHeap()) { begin()[0] = a0; }
+			: super(rt.getHeap().roots()), Vector<Value>(1, &rt.getHeap()), rt(rt) { begin()[0] = a0; }
 		VarList(Runtime& rt, const Value& a0, const Value& a1)
-			: super(rt.getHeap().roots()), rt(rt), Vector<Value>(2, &rt.getHeap()) { const Value v[] = { a0, a1 }; std::copy(v, v + 2, begin()); }
+			: super(rt.getHeap().roots()), Vector<Value>(2, &rt.getHeap()), rt(rt) { const Value v[] = { a0, a1 }; std::copy(v, v + 2, begin()); }
 		VarList(Runtime& rt, const Value& a0, const Value& a1, const Value& a2)
-			: super(rt.getHeap().roots()), rt(rt), Vector<Value>(3, &rt.getHeap()) { const Value v[] = { a0, a1, a2 }; std::copy(v, v + 3, begin()); }
+			: super(rt.getHeap().roots()), Vector<Value>(3, &rt.getHeap()), rt(rt) { const Value v[] = { a0, a1, a2 }; std::copy(v, v + 3, begin()); }
 		template<typename T> VarList(Runtime& rt, UInt32 count, const T* values)
-			: super(rt.getHeap().roots()), rt(rt), Vector<Value>(count, &rt.getHeap()) { std::copy(values, values + count, begin()); }
+			: super(rt.getHeap().roots()), Vector<Value>(count, &rt.getHeap()), rt(rt) { std::copy(values, values + count, begin()); }
 		template<typename T> explicit VarList(Runtime& rt, const std::vector<T>& container)
-			: super(rt.getHeap().roots()), rt(rt), Vector<Value>(container.data(), container.data() + container.size(), &rt.getHeap()) { } // Use with std::vector or C++11 std::array
+			: super(rt.getHeap().roots()), Vector<Value>(container.data(), container.data() + container.size(), &rt.getHeap()), rt(rt) { } // Use with std::vector or C++11 std::array
 		Value& operator[](ptrdiff_t index) { return Vector<Value>::operator[](index); }
 		Var operator[](ptrdiff_t index) const { return Var(rt, (static_cast<size_t>(index) < size() ? *(begin() + index) : UNDEFINED_VALUE)); }
 
@@ -1546,7 +1566,7 @@ template<class C> struct AccessorBase::VarMemberFunctionAdapter : public Extensi
 		if ((me->C::getClassName()) != (me->getClassName())) {
 			ScriptException::throwError(rt.getHeap(), TYPE_ERROR, "Invalid class");
 		}
-		assert(dynamic_cast<const C*>(thisObject) != 0);
+		assert(isA<C>(thisObject));
 		return (me->*cppMethod)(rt, Var(rt, thisObject), VarList(rt, argc, argv));
 	}
 	Var (C::*cppMethod)(Runtime& rt, const Var& thisObject, const VarList& args);
@@ -1644,6 +1664,8 @@ class Processor : public GCItem {
 			, TYPEOF_NAMED_OP								// operand: const_index (name), stack: -> string
 			, GET_ENUMERATOR_OP								// stack: object -> enumerator
 			, NEXT_PROPERTY_OP								// operand: exit_loop_offset, stack: enumerator -> string (unless end of loop)
+			, READ_NAMED_WITH_THIS_OP						// operand: const_index (name), stack: -> implicit_this, value
+			, CALL_WITH_THIS_OP								// operand: n, stack: this_value, function, n * args -> return_value
 			, OP_COUNT
 		};
 	
@@ -1767,7 +1789,7 @@ class Compiler : public GCItem {
 
 		enum Target { FOR_GLOBAL, FOR_FUNCTION, FOR_EVAL };
 
-		Compiler(GCList& gcList, Code* code, Target compileFor, int initialNestCounter = 0);
+		Compiler(GCList& gcList, Code* code, Target compileFor, Compiler* outer = 0);
 		const Char* compile(const Char* b, const Char* e);
 		const Char* compileFunction(const Char* b, const Char* e, const String* functionName, const String* selfName); // FIX : messy, why do we have compileFor if we separate this anyhow? Maybe subclass Compiler instead?
 		void compile(const String& source);
@@ -1818,6 +1840,7 @@ class Compiler : public GCItem {
 		struct SemanticScope;
 
 		static const String* newHashedString(Heap& heap, const Char* b, const Char* e);
+		void error(ErrorType type, const String* message);
 		void error(ErrorType type, const char* message);
 		void emit(Processor::Opcode opcode, Int32 operand = 0);
 		CodeSection* changeSection(CodeSection* newOutputSection);
@@ -1873,6 +1896,8 @@ class Compiler : public GCItem {
 		void throwStatement();
 		void tryStatement(SemanticScope* currentScope);
 		void switchStatement(SemanticScope* currentScope);
+		void labelledStatement(const Char* labelBegin, const Char* labelEnd, SemanticScope* currentScope
+				, SemanticScope* scopeLabelsEnd);
 		void statement(SemanticScope* firstScope, SemanticScope* scopeLabelsEnd);
 		void statementList(SemanticScope* firstScope);
 		bool token(const char* t, bool eatLeadingWhite);
@@ -1888,6 +1913,7 @@ class Compiler : public GCItem {
 		Heap& heap;
 		Code* const code;
 		const Target compilingFor;
+		Compiler& root;			// the outermost compiler: it counts the nesting and holds the position of a compilation error
 		CodeSection setupSection; ///< function declarations (and vars in eval code), inserted at top of function when finalizing
 		CodeSection mainSection;
 		const Char* b;
@@ -1897,7 +1923,7 @@ class Compiler : public GCItem {
 		CodeSection* currentSection;
 		bool acceptInOperator;
 		int withScopeCounter; // FIX : if we have a Context object instead as "this" we could create a new one with a simple flag for this instead of yucky counter
-		int nestCounter;
+		int nestCounter;			// used in the root compiler only
 
 		virtual void gcMarkReferences(Heap& heap) const {
 			gcMark(heap, code);
@@ -1905,9 +1931,9 @@ class Compiler : public GCItem {
 		}
 };
 
-/**
-	Extended ScriptException thrown by Runtime::compileGlobalCode that includes the filename, character offset, line and
-	column where the compilation error occurred.
+/*
+	The ScriptException that `Runtime::compileGlobalCode` and `compileEvalCode` throw for source that does not compile,
+	extended with the filename and the offset, line and column where compilation stopped.
 */
 struct CompilationError : public ScriptException {
 	CompilationError(const ScriptException& sourceException, const String* filename, const Compiler& fromCompiler)
