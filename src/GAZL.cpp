@@ -21,8 +21,6 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-// TODO : persistant data storage by creating a new source by feeding the assembler code and replacing all globals with the current data, alternatively just outputting the globals and make it possible to merge them with code... need to think about this....
-
 #include "GAZL.h"
 #include <math.h>
 #include <string.h>
