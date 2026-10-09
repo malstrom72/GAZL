@@ -30,18 +30,20 @@ For a change that touches only the JavaScript compiler, the fast gate is enough.
 toolchain, and `build.sh` and `build.cmd` both call it, so the two cannot drift apart:
 
 ```bash
-timeout 300 bash tools/test-js.sh
+bash tools/test-js.sh
 ```
 
 The full sequence builds the C++ tools as well, and runs the demo end to end:
 
 ```bash
-timeout 900 bash build.sh
+bash build.sh
 ```
 
 Always run one of these before committing, and the full one before committing anything outside
 `impala/`. Budget generously: the JS gate alone takes about a minute and a half, most of it a
-3000-program fuzz run.
+3000-program fuzz run. macOS has no `timeout` command of its own, so the bare commands above are
+the ones that work everywhere; prefix `timeout 300` or `timeout 900` on Linux, or `gtimeout` on macOS with GNU
+coreutils installed, if you want a hard cap.
 
 ## Code style
 

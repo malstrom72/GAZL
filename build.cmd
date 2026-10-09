@@ -38,6 +38,11 @@ IF ERRORLEVEL 1 EXIT /B 1
 output\GAZLCmd.exe output\ImpalaDemo.gazl main
 IF ERRORLEVEL 1 EXIT /B 1
 
+REM The staging above only proves the compiler fits TODAY's nesting limit. This fails while there is still headroom,
+REM because the limit is NuXJS's to change: when it dropped to 48, GAZL stopped building with no prior warning.
+CALL tools\checkImpalaNesting.cmd
+IF ERRORLEVEL 1 EXIT /B 1
+
 REM ImpalaDemo imports nothing, so it cannot tell whether the closure walk survived staging.
 CALL tools\run-nuxjs-impala-smoke.cmd
 IF ERRORLEVEL 1 EXIT /B 1

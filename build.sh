@@ -26,5 +26,9 @@ bash tools/BuildImpala.sh
 	impala/ImpalaDemo.impala output/ImpalaDemo.gazl 0x4d2 impala/ImpalaDemo.impala
 ./output/GAZLCmd output/ImpalaDemo.gazl main
 
+# The staging above only proves the compiler fits TODAY's nesting limit. This fails while there is still headroom,
+# because the limit is NuXJS's to change: when it dropped to 48, GAZL stopped building with no prior warning.
+bash tools/checkImpalaNesting.sh
+
 # ImpalaDemo imports nothing, so it cannot tell whether the closure walk survived staging.
 bash tools/run-nuxjs-impala-smoke.sh
