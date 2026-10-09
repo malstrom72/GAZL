@@ -1,10 +1,14 @@
 # Repository Guidelines
 
-To run the test suite use the helper script with up to three minutes allowed for execution:
+To run the test suite use the helper script:
 
 ```bash
-timeout 180 ./build.sh
+bash build.sh
 ```
+
+It normally finishes well inside three minutes. macOS has no `timeout` command of its own, so the bare command
+above is the one that works everywhere; prefix `timeout 180` on Linux, or `gtimeout 180` on macOS with GNU
+coreutils installed, if you want a hard cap.
 
 Always execute this command before committing changes to verify that the build and regression tests succeed.
 
