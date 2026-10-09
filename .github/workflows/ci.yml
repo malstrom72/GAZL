@@ -24,7 +24,10 @@ jobs:
         chmod +x ./build.sh               # ensure it is executable
         ./build.sh
         
-  linux-gcc:
+  # Named for the PLATFORM, not a compiler: the toolchain is whatever build.sh selects, which is g++ by default
+  # (BuildCpp.sh) plus clang++ for the standalone fuzz driver on branches whose build.sh runs test-jit.sh. The old
+  # name said gcc and reported a clang failure under it, which cost real time to attribute.
+  linux:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
