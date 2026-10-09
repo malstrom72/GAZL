@@ -30,6 +30,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <stdint.h>
+#include <stdio.h>										// snprintf, fprintf - unqualified, as elsewhere here
 #include <string>
 #include <vector>
 #include <algorithm>
@@ -217,6 +218,14 @@ int testCallback(Processor* p) {
 }
 
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size) {
+	// Every input starts from the state a FRESH PROCESS would have. These arenas are file-scope statics reused across
+	// inputs, while real GAZLCmd assembles one program per process into zeroed memory. Without this a crash can depend
+	// on the previous input's residue, so a minimized input need not reproduce on its own - and the replay gate feeds
+	// inputs one at a time, in a different order than the fuzzer found them.
+	memset(memory, 0, sizeof memory);
+	memset(code, 0, sizeof code);
+	memset(functionTable, 0, sizeof functionTable);
+	memset(callStack, 0, sizeof callStack);
     try {
 		Symbols globals;
 
@@ -321,8 +330,13 @@ int main(int argc, const char* argv[]) {
 			while ((ent = readdir (dir)) != NULL) {
 				if (strcmp(ent->d_name, ".") != 0 && strcmp(ent->d_name, "..") != 0) {
 					char fn[1024];
-					strcpy(fn, argv[i]);
-					strcat(fn, ent->d_name);
+					const size_t dirLength = strlen(argv[i]);
+					// the directory argument need not end with a separator
+					const char* separator = (dirLength > 0 && argv[i][dirLength - 1] != '/') ? "/" : "";
+					if (snprintf(fn, sizeof fn, "%s%s%s", argv[i], separator, ent->d_name) >= (int)(sizeof fn)) {
+						fprintf(stderr, "Path too long, skipped: %s%s%s\n", argv[i], separator, ent->d_name);
+						continue;						// a truncated path would replay the WRONG file, or none
+					}
 					doOne(fn);
 				}
 			}
