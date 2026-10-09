@@ -1,6 +1,6 @@
 # Fuzzing
 
-Version: 2026-10-07c
+Version: 2026-10-08
 
 How these projects fuzz with libFuzzer. Every copy of this file is identical apart from the "Local additions" section
 at the end, which holds a project's targets, scripts and exceptions.
@@ -60,6 +60,11 @@ enough when the same function can still be reached another way.
 A differential target, which compares implementations of the same thing, cannot find a bug they all share, such as a
 range check that overflows the same way in each. It complements reading the bounds checks; it does not replace it.
 
+Random inputs say little about correctness where only rare inputs fail. Number conversion is the clearest case: billions
+of random decimals passed a parser that rounded constructed near-midpoint inputs wrong. Test such code with inputs
+constructed to sit on the hard cases, checked against an exact oracle, and treat "random fuzzing found nothing" there
+as uninformative.
+
 Turn off CRT dialogs in `LLVMFuzzerInitialize`, or a failed assert hangs the worker on a message box:
 
 ```cpp
@@ -103,10 +108,14 @@ Turn off CRT dialogs in `LLVMFuzzerInitialize`, or a failed assert hangs the wor
   ```
   GNU tar and bsdtar do not produce identical archives, so refresh with GNU tar. Use `xz -9` only where it saves a
   lot: the `tar.exe` that ships with Windows cannot read xz and hangs instead of failing.
-- The normal build replays the corpus, the seeds and every past crash input through a plain `main()` that reads files
-  and calls `LLVMFuzzerTestOneInput`. It is built without fuzzer instrumentation, with every compiler the project uses,
-  and never with clang-cl's sanitizers, which would bring back the exception handling bugs above. Unpack each archive
-  into an empty folder, or inputs left from the previous archive are replayed too.
+- Inputs are replayed through a plain `main()` that reads files in binary mode and passes the number of bytes actually
+  read to `LLVMFuzzerTestOneInput`; text mode on Windows folds CRLF and feeds the target the wrong bytes. It is built
+  without fuzzer instrumentation, with every compiler the project uses, and never with clang-cl's sanitizers, which
+  would bring back the exception handling bugs above. Unpack each archive into an empty folder, or inputs left from
+  the previous archive are replayed too.
+- The normal build replays every past crash input, always. It also replays the corpus and the seeds as long as that
+  takes no more than about 30 seconds per build configuration. A corpus over that budget is replayed by a separate
+  script, run in CI and before every release or freeze, so the normal build stays fast and nothing ships unreplayed.
 - Commit the input of each fixed crash as a plain file in `tests/fuzz/<target>Crashes/`, outside the archives:
   `-merge=1` drops any input whose features others already cover, fixed crashes included. Mark these files `binary`
   in `.gitattributes`, so line-ending conversion cannot rewrite them.
