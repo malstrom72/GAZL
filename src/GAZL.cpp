@@ -255,8 +255,7 @@ enum Opcode {
 };
 const int FIRST_COMPILE_TIME_OPCODE = MOVE_CC_;
 
-// FIX : sort in some meaningful order?
-const int TRANSIENT			= 0x00001;					// FIX : name ?
+const int TRANSIENT			= 0x00001;
 const int VAR_INT_R			= 0x00002 | TRANSIENT;		// Readable int variable.
 const int VAR_INT_W			= 0x00004 | TRANSIENT;		// Writable int variable.
 const int VAR_FLOAT_R		= 0x00008 | TRANSIENT;		// Readable float variable.
@@ -293,7 +292,7 @@ const int ANY_FWD_FREE		= ANY_FREE | FORWARD;
 const int ANY_VAR_FREE_W	= ANY_VAR_W | UNCHECKED_ADDRESS;
 const int ANY_VAR_FREE_R	= ANY_VAR_R | UNCHECKED_ADDRESS;
 const int ANY_VAR_FREE		= ANY_VAR | UNCHECKED_ADDRESS;
-const int KONST				= CONST_INT | CONST_FLOAT | ANY_FWD_FREE; // FIX : called KONST because windows defines a CONST macro, which messes up CONST if you force include windows.h
+const int KONST				= CONST_INT | CONST_FLOAT | ANY_FWD_FREE; // called KONST because windows.h defines a CONST macro
 
 const int SWAP_0_AND_1		= 0x01; // Used for commutative operations where operand 0 and operand 1 can be swapped in order to minimize the effective instruction set when operands have different addressing modes.
 const int SWAP_1_AND_2		= 0x02; // Used for commutative operations where operand 1 and operand 2 can be swapped in order to minimize the effective instruction set when operands have different addressing modes.
@@ -646,7 +645,6 @@ void Symbols::link(const Char* labelBegin, const Char* labelEnd, Value* storage,
 	}	
 }
 
-// TODO : sort the two containers instead and do line by line lookup (a bit tricky with the switch though, but it should be doable)
 void Symbols::resolveForwardRefs() {
 	for (std::vector<Reference>::const_iterator refIt = forwardRefs.begin(); refIt != forwardRefs.end(); ++refIt) {
 		SymbolMap::const_iterator symbolIt = symbols.find(refIt->label);
@@ -1074,7 +1072,6 @@ const Char* Assembler::feed(const Char* line) {
 			if ((cv.types & CONST_INT_P) != 0 && cv.value.i < 0) cv.types &= ~CONST_INT_P;
 		} else if ((op->accepts[2] & BRANCH) != 0) {																	// Compile-time conditional
 			assert(*op2Begin == '@');
-			// FIX : sub
 			if (!isValidIdentifier(op2Begin + 1, op2End))
 				throw Exception(INVALID_IDENTIFIER, op2Begin + 1, op2End);
 			if (doConstantBranch(op, op0Begin, op0End, op1Begin, op1End))
@@ -1312,14 +1309,7 @@ Int Processor::run() {
 							this->ipsp = ipsp;
 							if ((nativeError = (*natives[C0.i])(this)) != 0) { err = nativeError; goto ret; }
 							clockCyclesLeft = this->clockCyclesLeft;
-							if (this->ip != ip) {
-								/*
-									The native pushed one or more calls (pushCall()): adopt the redirected state and
-									flow into the last-pushed callee. Its RETU chains through the pushed frames (LIFO)
-									and finally returns into this caller, exactly like nested `&function` calls.
-									(Blocking usage - enterCall() plus a nested run() - restores this->ip before
-									returning here, so it never takes this path.)
-								*/
+							if (this->ip != ip) {																		// the native called pushCall(): continue in the last-pushed callee
 								assert(this->ipsp > ipsp && this->ipsp[-1].dsp != 0);	// plain pushCall frames on top
 								ipsp = this->ipsp;
 								dsp = this->dsp;
@@ -1469,7 +1459,7 @@ Status Processor::enterCall(Pointer functionPointer) {
 }
 
 /*
-	pushCall() - see GAZL.h. The first push in a native call returns to the `^call`'s continuation and restores the
+	pushCall(); the contract is in GAZL.h. The first push in a native call returns to the `^call`'s continuation and restores the
 	caller's frame base (undoing the window advance CALL_NVC performed for the native); every further push chains: its
 	frame resumes at the previously pushed target, so the calls run last-pushed-first, each RETU flowing into the next.
 	Frames store the resume point MINUS ONE because RETU restores and then the dispatch loop increments (`++ip`); for a
