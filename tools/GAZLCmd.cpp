@@ -30,7 +30,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <stdint.h>
-#include <stdio.h>										// snprintf, fprintf - unqualified, as elsewhere here
+#include <stdio.h>
 #include <string>
 #include <vector>
 #include <algorithm>
@@ -243,7 +243,7 @@ Status gazlExit(Processor*) {
 /*
 	--forward=native:function[,native:function...]: satisfy `^native` call sites with GAZL functions. Each listed native
 	name is registered as one of these stubs; after assembly the paired GAZL function is looked up by name and every call
-	to the native pushCall()s it - the `^native` call then behaves exactly like a `&function` call (args and return value
+	to the native pushCall()s it, so the `^native` call behaves exactly like a `&function` call (args and return value
 	in the same window). This is how the Permut8 firmware harness supplies yield/read/write/trace as concatenated GAZL
 	(see tools/permut8Host.js). Interpreter only for now: pushCall is not yet supported under the JIT.
 */
@@ -741,11 +741,7 @@ long g_fuzzSkips = 0, g_fuzzRan = 0;
 #else
 
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size) {
-	// Every input starts from the state a FRESH PROCESS would have. These arenas are file-scope statics reused across
-	// inputs, while real GAZLCmd assembles one program per process into zeroed memory. Without this a crash can depend
-	// on the previous input's residue, so a minimized input need not reproduce on its own - and the replay gate feeds
-	// inputs one at a time, in a different order than the fuzzer found them.
-	memset(memory, 0, sizeof memory);
+	memset(memory, 0, sizeof memory);																					// zeroed as in a fresh process, so no crash depends on the previous input
 	memset(code, 0, sizeof code);
 	memset(functionTable, 0, sizeof functionTable);
 	memset(callStack, 0, sizeof callStack);
@@ -834,9 +830,9 @@ static void quietAsserts() {
 void doOne(const char* fn) {
 	printf ("%s\n", fn);
 	fprintf(stderr, "Running: %s\n", fn);
-	FILE *f = fopen(fn, "rb");					// BINARY: in text mode Windows folds CRLF to LF, so fread returns fewer
-	assert(f);									// bytes than ftell promised - the tail of buf stayed uninitialised and
-	fseek(f, 0, SEEK_END);						// was handed to the target anyway once asserts were compiled out
+	FILE *f = fopen(fn, "rb");																							// binary: on Windows text mode folds CRLF and fread comes up short
+	assert(f);
+	fseek(f, 0, SEEK_END);
 	size_t len = ftell(f);
 	fseek(f, 0, SEEK_SET);
 	unsigned char *buf = (unsigned char*)malloc(len);
