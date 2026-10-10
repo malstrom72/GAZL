@@ -18,6 +18,23 @@ written. PLAN / BACKLOG = not done.
 | [CodingStyle](CodingStyle.md) | **NORMATIVE** | House style for this repo |
 | [fuzzing](fuzzing.md) | **NORMATIVE** | How fuzzing is built and run, plus GAZL's own lanes |
 
+## Branches
+
+Four long-lived branches, all built by CI (`.github/workflows/ci.yml`), in one straight cascade:
+
+    main -> Impala2 -> GAZL2 -> jit-compiler
+
+| Branch | What it is |
+|---|---|
+| `main` | GAZL 1 and Impala 1 |
+| `Impala2` | Impala 2 |
+| `GAZL2` | GAZL 2 (`SCOP` / `ENDS`, the `GAZL #n` directive) |
+| `jit-compiler` | The native JIT. `GAZL_LOCAL_SCOPES=0` still builds a GAZL 1 compatible engine |
+
+A change lands on the highest branch it belongs to, through a pull request, and is then merged one step at
+a time down the chain: `main` into `Impala2`, `Impala2` into `GAZL2`, `GAZL2` into `jit-compiler`. Each
+branch contains everything above it, and a conflict is resolved once, at the step where it appears.
+
 ## GAZL
 
 | Doc | Kind | What it is |
