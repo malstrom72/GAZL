@@ -963,6 +963,54 @@ int main(int argc, const char* argv[]) {
 
 #ifndef LIBFUZZ
 #ifndef LIBFUZZ_STANDALONE
+
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <windows.h>
+#else
+#include <time.h>
+#ifdef __linux__
+#include <sched.h>
+#endif
+#endif
+
+/*
+	CPU time of the calling thread, counted only while it runs. Windows counts constant-rate cycles, elsewhere it
+	is nanoseconds, so `CPU_TICKS_M_UNIT` names what a million ticks are.
+*/
+static uint64_t threadCpuTicks() {
+#ifdef _WIN32
+	ULONG64 cycles = 0;
+	QueryThreadCycleTime(GetCurrentThread(), &cycles);
+	return cycles;
+#else
+	timespec ts;
+	clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ts);
+	return static_cast<uint64_t>(ts.tv_sec) * 1000000000u + static_cast<uint64_t>(ts.tv_nsec);
+#endif
+}
+#ifdef _WIN32
+static const char* const CPU_TICKS_M_UNIT = "Mcyc";
+#else
+static const char* const CPU_TICKS_M_UNIT = "ms";
+#endif
+
+static void pinToCore(int core) {	/// restrict the calling thread to logical processor `core`
+	if (core < 0 || core >= 64) throw CmdException("--pin: core must be 0 to 63");
+#if defined(_WIN32)
+	if (SetThreadAffinityMask(GetCurrentThread(), static_cast<DWORD_PTR>(1) << core) == 0)
+		throw CmdException("--pin: cannot pin to that core");
+#elif defined(__linux__)
+	cpu_set_t set;
+	CPU_ZERO(&set);
+	CPU_SET(core, &set);
+	if (sched_setaffinity(0, sizeof (set), &set) != 0) throw CmdException("--pin: cannot pin to that core");
+#else
+	throw CmdException("--pin: this platform has no hard thread affinity");
+#endif
+}
+
 int main(int argc, const char* argv[]) {
 	quietAsserts();																						// build.cmd runs this binary unattended; a dialog would hang it, not fail it
 	try {
@@ -977,6 +1025,7 @@ int main(int argc, const char* argv[]) {
 		int benchWarmup = 3;	// iterations run and discarded before measuring
 		bool useJit = false;	// --jit: run on the native (arm64) JIT instead of the interpreter (see GAZL_JIT build)
 		bool jitStats = false;	// --jit-stats: implies --jit; print `jitstats compile_ms=.. code_bytes=.. funcs=..`
+		int pinCore = -1;		// --pin=N: run on logical processor N only (-1 = anywhere)
 		bool noLibm = false;	// --no-libm: don't register the atan2/sqrt/log natives (for programs that define their own)
 		const char* noNativeSpec = 0;	// --no-native=name,...: don't register the listed built-in natives (for programs defining same-named functions)
 		const char* forwardSpec = 0;	// --forward=native:function,...: satisfy ^native calls with GAZL functions (see forwardNative)
@@ -994,6 +1043,8 @@ int main(int argc, const char* argv[]) {
 					useJit = true;
 				} else if (strcmp(a, "--jit-stats") == 0) {
 					useJit = true; jitStats = true;
+				} else if (strncmp(a, "--pin=", 6) == 0) {
+					pinCore = atoi(a + 6);
 				} else if (strcmp(a, "--no-libm") == 0) {
 					noLibm = true;
 				} else if (strncmp(a, "--forward=", 10) == 0) {
@@ -1020,6 +1071,8 @@ int main(int argc, const char* argv[]) {
 					<< std::endl;
 			std::cerr << "        [--jit]                      run on the native JIT (arm64 / x64) (falls back to interpreter)"
 					<< std::endl;
+			std::cerr << "        [--pin=N]                    run on logical processor N only (Windows, Linux)"
+					<< std::endl;
 			std::cerr << "        [--no-libm]                  skip the atan2/sqrt/log natives (for self-contained libm)"
 					<< std::endl;
 			std::cerr << "        [--no-native=name,...]       skip the named built-in natives (the program defines its own)"
@@ -1032,6 +1085,7 @@ int main(int argc, const char* argv[]) {
 					<< std::endl;
 			return 0;
 		}
+		if (pinCore >= 0) pinToCore(pinCore);
 
 		Symbols globals;
 
@@ -1237,15 +1291,21 @@ int main(int argc, const char* argv[]) {
 
 			if (benchRepeat > 0) {
 				std::vector<double> samples;			// milliseconds, measured iterations only
+				std::vector<double> cpuSamples;			// millions of `threadCpuTicks`, measured iterations only
 				for (int iter = 0; iter < benchWarmup + benchRepeat; ++iter) {
 					if (iter != 0) remakeProc();		// fresh stacks per iteration (see remakeProc); outside the timed span
+					const uint64_t c0 = threadCpuTicks();
 					auto t0 = std::chrono::steady_clock::now();
 					runToCompletion();
 					auto t1 = std::chrono::steady_clock::now();
-					if (iter >= benchWarmup)
+					const uint64_t c1 = threadCpuTicks();
+					if (iter >= benchWarmup) {
 						samples.push_back(std::chrono::duration<double, std::milli>(t1 - t0).count());
+						cpuSamples.push_back((c1 - c0) / 1e6);
+					}
 				}
 				std::sort(samples.begin(), samples.end());
+				std::sort(cpuSamples.begin(), cpuSamples.end());
 				const double mn = samples.front();
 				const double median = samples[samples.size() / 2];
 				double sum = 0.0;
@@ -1263,7 +1323,9 @@ int main(int argc, const char* argv[]) {
 						<< "\tmin_ms=" << mn
 						<< "\tmedian_ms=" << median
 						<< "\tmean_ms=" << mean
-						<< "\tstddev_ms=" << stddev << std::endl;
+						<< "\tstddev_ms=" << stddev
+						<< "\tcpu_min_" << CPU_TICKS_M_UNIT << "=" << cpuSamples.front()
+						<< "\tcpu_median_" << CPU_TICKS_M_UNIT << "=" << cpuSamples[cpuSamples.size() / 2] << std::endl;
 			} else {
 				clock_t c0 = clock();
 				runToCompletion();
