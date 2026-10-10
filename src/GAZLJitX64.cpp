@@ -824,7 +824,7 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 				const int idx = cache.read(in.p2.i, GENERAL_REGISTER);
 				cache.spillDirtyResident();
 				emitter.loadQ(RAX, CONTEXT, offsets.dsend); emitter.subQ(RAX, DSP); emitter.shrImm(RAX, 2);				// (dataStackEnd - dsp) in words
-				emitter.subImm(RAX, static_cast<uint32_t>(frameBase));													// limit = words - C
+				emitter.subImm(RAX, static_cast<uint32_t>(frameBase)); emitter.jcc(CC_S, trap);							// limit = words - C, never negative
 				emitter.cmp(static_cast<Reg>(idx), RAX); emitter.jcc(CC_AE, trap);
 				const int d = cache.define(in.p0.i, GENERAL_REGISTER);
 				emitter.loadIdx(static_cast<Reg>(d), DSP, static_cast<Reg>(idx), frameBase * 4);						// [dsp + index*4 + C*4]
@@ -843,7 +843,7 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 				else { val = cache.read(in.p2.i, GENERAL_REGISTER); }
 				cache.spillDirtyResident();
 				emitter.loadQ(RAX, CONTEXT, offsets.dsend); emitter.subQ(RAX, DSP); emitter.shrImm(RAX, 2);
-				emitter.subImm(RAX, static_cast<uint32_t>(frameBase));													// limit = words - C
+				emitter.subImm(RAX, static_cast<uint32_t>(frameBase)); emitter.jcc(CC_S, trap);							// limit = words - C, never negative
 				emitter.cmp(static_cast<Reg>(idx), RAX); emitter.jcc(CC_AE, trap);
 				emitter.storeIdx(DSP, static_cast<Reg>(idx), frameBase * 4, static_cast<Reg>(val));						// [dsp + index*4 + C*4] = value
 				cache.endInstruction();
