@@ -1286,7 +1286,7 @@ Int Processor::run() {
 	
 	while (--clockCyclesLeft >= 0) {
 		switch (ip->opcode) {
-			case FUNC_CC_:	if ((dsp += (UInt)(C0.i)) + C1.i > dataStackEnd) { err = DATA_STACK_OVERFLOW; goto ret; } break;
+			case FUNC_CC_:	if ((UInt)C0.i + (UInt)C1.i > (UInt)(dataStackEnd - dsp)) { err = DATA_STACK_OVERFLOW; goto ret; } dsp += (UInt)(C0.i); break;
 			case CALL_VVC:	ui = V0.p - FUNCTION_OFFSET;						// ui = function ordinal
 							if (ui >= functionCount) { err = BAD_CALL; goto ret; }
 							ui = functionTable[ui];						// ui = code offset
@@ -1475,7 +1475,7 @@ Value* Processor::pushCall(Pointer functionPointer) {
 	const bool chainedPush = (ipsp != ipStackBase && this->ip->opcode == FUNC_CC_);	// a previous pushCall in this native call
 	if (!atNativeCall && !chainedPush) return 0;				// only valid from inside a native callback
 	if (ipsp >= ipStackEnd) return 0;
-	if (this->dsp + (UInt)(func->p0.i) + (UInt)(func->p1.i) > dataStackEnd) return 0;	// the callee's own FUNC check, done early
+	if ((UInt)func->p0.i + (UInt)func->p1.i > (UInt)(dataStackEnd - this->dsp)) return 0;	// the callee's own FUNC check, done early
 	ipsp->ip = atNativeCall ? this->ip : this->ip - 1;
 	ipsp++->dsp = atNativeCall ? this->dsp - this->ip->p1.i : this->dsp;
 	this->ip = func;											// this->dsp stays: the ^call's window is the argument window
