@@ -56,7 +56,6 @@ Status print(Processor* vpu) {
 	if (vp == 0) return ACCESS_VIOLATION;
 	do {
 		if (vp->i != 0) {
-			// FIX : unicode support
 			std::cout << static_cast<Char>(vp->i);
 			++vp;
 			++p;

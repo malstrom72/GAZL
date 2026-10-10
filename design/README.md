@@ -40,6 +40,7 @@ branch contains everything above it, and a conflict is resolved once, at the ste
 | Doc | Kind | What it is |
 |---|---|---|
 | [PortabilityAudit](gazl/PortabilityAudit.md) | NOTE | C++ portability findings |
+| [Backlog](gazl/Backlog.md) | BACKLOG | Assembler and VM improvements not done yet |
 
 ## Impala
 

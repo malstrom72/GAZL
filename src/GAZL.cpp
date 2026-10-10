@@ -790,7 +790,6 @@ void Assembler::linkWithOffset(Symbols& defs, const char* b, const char* e, int 
 
 void Assembler::parseConstant(const Char* b, const Char* e, int accepts, Value* v) {
 	if ((accepts & KONST) == 0) throw Exception(DID_NOT_EXPECT_CONSTANT, b, e);
-// FIX : why?	assert((accepts & FORWARD) == 0);
 	switch (b < e ? *b : 0) {
 		case '\'': case '+': case '-': case '0': case '1': case '2': case '3':
 		case '4': case '5': case '6': case '7': case '8': case '9':
@@ -892,7 +891,7 @@ void Assembler::finalize(UInt& codeSize, UInt& globalsSize, UInt& constsSize, UI
 	functionCount = sizes.functionCount;
 }
 
-void Assembler::newUnit(const Char* unitName) { // FIX : use unitName (or not?)
+void Assembler::newUnit(const Char* unitName) {
 	(void)unitName;
 	if (!skipUntilLabel.empty()) throw Exception(MISSING_COMPILE_TIME_LABEL, skipUntilLabel);
 	if (functionStart != 0) finalizeFunction();
@@ -1306,7 +1305,7 @@ Int Processor::run() {
 							ipsp->ip = ip;
 							ipsp++->dsp = dsp;
 							dsp += (UInt)(C1.i);
-							ip = codeBase + ui; // FIX : same thing here as with memory_offset, precalc the constant
+							ip = codeBase + ui;
 							continue;
 			case CALL_NVC:	this->clockCyclesLeft = clockCyclesLeft;
 							this->ip = ip;
@@ -1328,7 +1327,7 @@ Int Processor::run() {
 							break;
 			case MOVE_VV_:	V0 = V1; break;
 			case MOVE_VC_:	V0 = C1; break;
-			case PEEK_VC_:	V0 = mb[C1.p]; break; // FIX : remove memory_offset from constant indexes and move back mb -> memoryBase +/- 0
+			case PEEK_VC_:	V0 = mb[C1.p]; break;
 			case POKE_CV_:	mb[C0.p] = V1; break;
 			case POKE_CC_:	mb[C0.p] = C1; break;
 			case PEEK_VVV:	if ((ui = (UInt)V1.i + (UInt)V2.i - MEMORY_OFFSET) < memorySize) { V0 = mb[ui + MEMORY_OFFSET]; break; } else { err = BAD_PEEK; goto ret; }
@@ -1384,7 +1383,6 @@ Int Processor::run() {
 			case DIVF_VCV:	CHECK_FLOAT_DIV_BY_ZERO(V2.f); V0.f = C1.f / V2.f; break;
 			case FTOI_VVC:	V0.i = ftoi(V1.f * C2.f); break;
 			case ITOF_VVC:	V0.f = (Float)(V1.i) * C2.f; break;
-			// FIX : all constant addresses here should be checked compile-time, but then we would need to parse operand 2 first and have an option for forward linking where the size is added to the check.
 			case COPY_VVC:	ui = V0.i - MEMORY_OFFSET; ui2 = V1.i - MEMORY_OFFSET; goto copy;
 			case COPY_VCC:	ui = V0.i - MEMORY_OFFSET; ui2 = C1.i - MEMORY_OFFSET; goto copy;
 			case COPY_CVC:	ui = C0.i - MEMORY_OFFSET; ui2 = V1.i - MEMORY_OFFSET; goto copy;
