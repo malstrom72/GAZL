@@ -49,6 +49,7 @@ branch contains everything above it, and a conflict is resolved once, at the ste
 | [CompileTimeHardening](impala/CompileTimeHardening.md) | DESIGN NOTE | "The compiler should have caught that" items, plus the 2026-08-01 scan for guess/refuse/skip sites. Overlaps C6 above - attributions mark which copy is authoritative |
 | [SyntaxConsistency](impala/SyntaxConsistency.md) | AUDIT | Every place Impala's C-looking surface does not behave like C, each reproduced against this tree and graded FORCED / ARBITRARY / BUG. The bugs section is FIXED and kept as the record |
 | [PortabilityAudit](gazl/PortabilityAudit.md) | NOTE | C++ portability findings |
+| [Backlog](gazl/Backlog.md) | BACKLOG | Assembler and VM improvements not done yet |
 
 ## Symbols, layout and types
 

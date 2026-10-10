@@ -64,7 +64,6 @@
 
 namespace GAZL {
 
-// TODO : support unicode source
 typedef char Char;
 typedef int Int;
 typedef unsigned int UInt;
@@ -189,7 +188,7 @@ class Symbols {
 	public:		Pointer findFunction(const Char* name) const;															/// Returns `NULL_POINTER` if not found.
 	public:		Pointer findGlobal(const Char* name, UInt& size) const;													/// Returns `NULL_POINTER` if not found (in which case, `size` is left untouched).
 	public:		void defineConstant(const Char* name, bool asFloat, const Value& value);
-	public:		bool lookupConstant(const Char* name, bool* isFloat, Value* value) const;	// FIX : why * isFloat here, when we use & at other places
+	public:		bool lookupConstant(const Char* name, bool* isFloat, Value* value) const;
 	public:		bool findFirstGlobal(Iterator& iterator, bool includeTemps) const;
 	public:		bool findNextGlobal(Iterator& iterator, bool includeTemps) const;
 	public:		const char* getGlobalInfo(const Iterator& iterator, bool& isTemp, Pointer& address, UInt& size) const;
@@ -370,7 +369,6 @@ class Processor {
 	public:		const Value* accessConstMemory(Pointer pointer, UInt count) const; 										// If returning null pointer you should normally return `ACCESS_VIOLATION`
 	public:		Value* accessMemory(Pointer pointer, UInt count) const; 												// If returning null pointer you should normally return `ACCESS_VIOLATION`
 	public:		Value* accessParams(UInt count) const; 																	// If returning null pointer you should normally return `DATA_STACK_OVERFLOW`
-	// FIX : stack alloc function
 	public:		Status enterCall(Pointer functionPointer); 																// After `enterCall()`, call `run()` (and on time out, repeatedly call `run()` until it returns OK). It is ok to call `enterCall()` at any time, current instruction pointer and stack is pushed and popped as expected which makes `enterCall()` double as a mean to issue interrupts.
 	public:		Value* pushCall(Pointer functionPointer);																/// Push a call onto the current GAZL continuation, from INSIDE a native callback only: return OK from the native (do not run()) and execution flows into the pushed function; its RETU returns into the GAZL caller, so the `^native` call behaves exactly like a `&function` call. The returned pointer is the argument window ([0] = return value, [1..] = arguments); for a transparent forward the `^call`'s arguments are already in place. Pushing several calls forms a LIFO chain: the last pushed runs first and each RETU flows into the next. All links share the ONE window: each receives the same arguments, each overwrites [0] with its result (so [0] ends as the FIRST-pushed link's result); the typical chain is several argument-less handlers delivered at one safe point. Returns 0 on error (not inside a native call, bad function, ipStack or data-stack overflow).
 	public:		Status run();
