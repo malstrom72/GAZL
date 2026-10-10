@@ -21,8 +21,6 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-// TODO : persistant data storage by creating a new source by feeding the assembler code and replacing all globals with the current data, alternatively just outputting the globals and make it possible to merge them with code... need to think about this....
-
 #include "GAZL.h"
 #include <math.h>
 #include <string.h>
@@ -257,8 +255,7 @@ enum Opcode {
 };
 const int FIRST_COMPILE_TIME_OPCODE = MOVE_CC_;
 
-// FIX : sort in some meaningful order?
-const int TRANSIENT			= 0x00001;					// FIX : name ?
+const int TRANSIENT			= 0x00001;
 const int VAR_INT_R			= 0x00002 | TRANSIENT;		// Readable int variable.
 const int VAR_INT_W			= 0x00004 | TRANSIENT;		// Writable int variable.
 const int VAR_FLOAT_R		= 0x00008 | TRANSIENT;		// Readable float variable.
@@ -300,7 +297,7 @@ const int ANY_FWD_FREE		= ANY_FREE | FORWARD;
 const int ANY_VAR_FREE_W	= ANY_VAR_W | UNCHECKED_ADDRESS;
 const int ANY_VAR_FREE_R	= ANY_VAR_R | UNCHECKED_ADDRESS;
 const int ANY_VAR_FREE		= ANY_VAR | UNCHECKED_ADDRESS;
-const int KONST				= CONST_INT | CONST_FLOAT | ANY_FWD_FREE; // FIX : called KONST because windows defines a CONST macro, which messes up CONST if you force include windows.h
+const int KONST				= CONST_INT | CONST_FLOAT | ANY_FWD_FREE; // called KONST because windows.h defines a CONST macro
 
 const int SWAP_0_AND_1		= 0x01; // Used for commutative operations where operand 0 and operand 1 can be swapped in order to minimize the effective instruction set when operands have different addressing modes.
 const int SWAP_1_AND_2		= 0x02; // Used for commutative operations where operand 1 and operand 2 can be swapped in order to minimize the effective instruction set when operands have different addressing modes.
@@ -657,7 +654,6 @@ void Symbols::link(const Char* labelBegin, const Char* labelEnd, Value* storage,
 	}	
 }
 
-// TODO : sort the two containers instead and do line by line lookup (a bit tricky with the switch though, but it should be doable)
 void Symbols::resolveForwardRefs() {
 	for (std::vector<Reference>::const_iterator refIt = forwardRefs.begin(); refIt != forwardRefs.end(); ++refIt) {
 		SymbolMap::const_iterator symbolIt = symbols.find(refIt->label);
@@ -1085,7 +1081,6 @@ const Char* Assembler::feed(const Char* line) {
 			if ((cv.types & CONST_INT_P) != 0 && cv.value.i < 0) cv.types &= ~CONST_INT_P;
 		} else if ((op->accepts[2] & BRANCH) != 0) {																	// Compile-time conditional
 			assert(*op2Begin == '@');
-			// FIX : sub
 			if (!isValidIdentifier(op2Begin + 1, op2End))
 				throw Exception(INVALID_IDENTIFIER, op2Begin + 1, op2End);
 			if (doConstantBranch(op, op0Begin, op0End, op1Begin, op1End))
@@ -1323,14 +1318,7 @@ Int Processor::run() {
 							this->ipsp = ipsp;
 							if ((nativeError = (*natives[C0.i])(this)) != 0) { err = nativeError; goto ret; }
 							clockCyclesLeft = this->clockCyclesLeft;
-							if (this->ip != ip) {
-								/*
-									The native pushed one or more calls (pushCall()): adopt the redirected state and
-									flow into the last-pushed callee. Its RETU chains through the pushed frames (LIFO)
-									and finally returns into this caller, exactly like nested `&function` calls.
-									(Blocking usage - enterCall() plus a nested run() - restores this->ip before
-									returning here, so it never takes this path.)
-								*/
+							if (this->ip != ip) {																		// the native called pushCall(): continue in the last-pushed callee
 								assert(this->ipsp > ipsp && this->ipsp[-1].dsp != 0);	// plain pushCall frames on top
 								ipsp = this->ipsp;
 								dsp = this->dsp;
@@ -1480,7 +1468,7 @@ Status Processor::enterCall(Pointer functionPointer) {
 }
 
 /*
-	pushCall() - see GAZL.h. The first push in a native call returns to the `^call`'s continuation and restores the
+	pushCall(); the contract is in GAZL.h. The first push in a native call returns to the `^call`'s continuation and restores the
 	caller's frame base (undoing the window advance CALL_NVC performed for the native); every further push chains: its
 	frame resumes at the previously pushed target, so the calls run last-pushed-first, each RETU flowing into the next.
 	Frames store the resume point MINUS ONE because RETU restores and then the dispatch loop increments (`++ip`); for a
@@ -1701,7 +1689,8 @@ bool unitTest() {
 			assert((op.accepts[j] & ANY_VAR) == 0 || (op.accepts[j] & FORWARD) == 0);
 			assert(op.accepts[0] != COMPILE_TIME || (((op.accepts[1] & FORWARD) == 0 || op.accepts[1] == 0) && (((op.accepts[2] & FORWARD) == 0) || op.accepts[2] == 0)));
 			assert((op.accepts[j] & CONST_INT_P) != 0 || (op.accepts[j] & CONST_INT_N) == 0);
-// FIX : fails			assert((op.accepts[j] & (CONST_INT_P | CONST_FLOAT)) == 0 || ((op.accepts[j] & FORWARD) == 0));
+			assert(op.accepts[j] == KONST																// `#const` may name a forward address
+					|| (op.accepts[j] & (CONST_INT_P | CONST_FLOAT)) == 0 || (op.accepts[j] & FORWARD) == 0);
 			assert((op.accepts[j] & BRANCH) == 0 || (op.accepts[j] & FORWARD) != 0);
 		}
 		assert((op.otherFlags & YIELDS_CONST) == 0 || (op.opcode >= FIRST_COMPILE_TIME_OPCODE));
@@ -1855,89 +1844,6 @@ bool unitTest() {
 	delete [] callStack;
 
 	return true;
-}
-
-// FIX : drop
-static void instructionReport() {
-	const Operator* currentMnemonic = 0;
-	for (int i = 0; i < OPERATOR_COUNT; ++i) {
-		const Operator& op = OPERATORS[i];
-
-		const int FIRST_OPERAND_COLUMN = 10;
-		const int OPERAND_WIDTH = 16;
-		const int ADDRESS_MASK = (ADDRESS_R | ADDRESS_W | TEMPORARY | NULL_PTR | FUNC);
-		const int CONST_MASK = (CONST_INT_P | CONST_INT_N | CONST_FLOAT);
-		const int VAR_MASK = (TRANSIENT | VAR_INT_R | VAR_INT_W | VAR_FLOAT_R | VAR_FLOAT_W | VAR_PTR_R | VAR_PTR_W);
-		const int CATEGORY_MASK = COMPILE_TIME | ADDRESS_MASK | CONST_MASK | VAR_MASK;
-
-		assert(strlen(op.key) == 9);
-		std::string s;
-		if (currentMnemonic == 0 || memcmp(op.key, currentMnemonic, 5) != 0) {
-			if (currentMnemonic != 0) std::cout << std::endl;
-			currentMnemonic = &op;
-			s = op.key;
-			if (s[0] == '!') s = s.substr(0, 1) + ' ' + s.substr(1, 4);
-			else s = s.substr(1, 4);
-		}
-		s += std::string(FIRST_OPERAND_COLUMN - s.size(), ' ');
-		for (int j = 0; j < 3; ++j) {
-			int a = op.accepts[j];
-			switch (op.key[6 + j]) {
-				case '_': assert(a == 0); break;
-				case 'v': {
-					if ((a & CATEGORY_MASK) == TRANSIENT) {
-						s += "%temp";
-					} else if ((a & CATEGORY_MASK) == (a & VAR_MASK)) {
-						if ((a & VAR_MASK) == (a & (VAR_INT_R | VAR_INT_W))) s += "int";
-						else if ((a & VAR_MASK) == (a & (VAR_FLOAT_R | VAR_FLOAT_W))) s += "float";
-						else if ((a & VAR_MASK) == (a & (VAR_PTR_R | VAR_PTR_W))) s += "ptr";
-						else s += "var";
-						if ((a & VAR_MASK) == (a & (VAR_INT_W | VAR_FLOAT_W | VAR_PTR_W))) s += "(d)";
-						// else if ((a & VAR_MASK) != (a & (VAR_INT_R | VAR_FLOAT_R | VAR_PTR_R))) s += "(s+d)";
-					}
-					break;
-				}
-				case 'c': {
-					if ((a & CATEGORY_MASK) == COMPILE_TIME) {
-						s += "<?>";
-					} else if ((a & CATEGORY_MASK) == FUNC) {
-						s += "&function";
-					} else if ((a & CATEGORY_MASK) == (a & ADDRESS_MASK)) {
-						s += "&address";
-						if ((a & (ADDRESS_R | ADDRESS_W)) == ADDRESS_R) s += "(r)";
-						else if ((a & (ADDRESS_R | ADDRESS_W)) == ADDRESS_W) s += "(w)";
-					} else if ((a & CATEGORY_MASK) == (a & CONST_MASK) || op.opcode == IFDF_CB_ || op.opcode == IFND_CB_) {
-						s += "#";
-						if ((a & (CONST_MASK)) == CONST_FLOAT) s += "float";
-						else if ((a & (CONST_MASK)) != (CONST_INT_P | CONST_INT_N | CONST_FLOAT)) s += "int";
-						else s += "const";
-					}
-// FIX : fails					// else assert(0);
-					break;
-				}
-				case 'b': {
-					assert(a == FWD_BRANCH);
-					s += "@label";
-					break;
-				}
-				case 'n': {
-					assert((a & ~FORWARD) == NATIVE);
-					s += "^native";
-					break;
-				}
-				case 's': {
-					assert(a == CONST_INT_P);
-					s += "*size";
-					break;
-				}
-				default: assert(0);
-			}
-			size_t count = FIRST_OPERAND_COLUMN + (j + 1) * OPERAND_WIDTH - s.size();
-			assert(count > 1);
-			if (j != 2) s += std::string(count, ' ');
-		}
-		std::cout << s.c_str() << std::endl;
-	}
 }
 
 #endif

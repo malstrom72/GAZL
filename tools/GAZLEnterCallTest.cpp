@@ -29,13 +29,12 @@
 	                              the native).
 	  - NON-BLOCKING (pushCall):  the native calls pushCall() and simply returns OK. The pushed plain frame makes
 	                              the current run() flow into the callee, and its RETU returns transparently into
-	                              the GAZL caller - the `^native` call behaves exactly like a `&function` call.
+	                              the GAZL caller, so the `^native` call behaves exactly like a `&function` call.
 	                              Several pushCalls form a LIFO chain sharing one argument window.
 
 	Covers: single calls, recursion THROUGH the native (both flavors), a forwarded callee that itself blocks,
 	sequential forwards in a loop, fuel suspend/resume in the middle of forwarded calls, and pushCall chains
-	(order + shared-window semantics). Interpreter only - the JIT side is TODO(jit-native-reentrancy) in
-	GAZLJitLowerTest.cpp. Exits non-zero on any failure.
+	(order + shared-window semantics). Interpreter only. Exits non-zero on any failure.
 
 	The kernels are compiled Impala (comment-stripped); each kernel's Impala source is quoted above it.
 */
