@@ -415,6 +415,24 @@ static const char* const K_BIGFRAME =		// a function whose frame exceeds the dat
 	"main: FUNC\n PARA *2\n$x: LOCi\n"
 	" CALL &big %0 *1\n MOVi $x %0\n POKE &gOut $x\n RETU\n";
 
+static const char* const K_FRAMELIMIT =		// 0x0FFFFFFE + 1 locals: the largest frame the JIT accepts -> DATA_STACK_OVERFLOW
+	"gIn: GLOB *1\n DATi #0\n" "gOut: GLOB *1\n DATi #0\n"
+	"big: FUNC\n$huge: LOCA *268435454\n$r: OUTi\n MOVi $r #123\n RETU\n"
+	"main: FUNC\n PARA *2\n$x: LOCi\n"
+	" CALL &big %0 *1\n MOVi $x %0\n POKE &gOut $x\n RETU\n";
+
+static const char* const K_HUGEFRAME =		// locals of 0x40000001 words: the byte size does not fit 32 bits -> DATA_STACK_OVERFLOW
+	"gIn: GLOB *1\n DATi #0\n" "gOut: GLOB *1\n DATi #0\n"
+	"big: FUNC\n$huge: LOCA *1073741825\n$r: OUTi\n MOVi $r #123\n RETU\n"
+	"main: FUNC\n PARA *2\n$x: LOCi\n"
+	" CALL &big %0 *1\n MOVi $x %0\n POKE &gOut $x\n RETU\n";
+
+static const char* const K_SIGNFRAME =		// locals of 0x20000001 words: the byte size sets bit 31 -> DATA_STACK_OVERFLOW
+	"gIn: GLOB *1\n DATi #0\n" "gOut: GLOB *1\n DATi #0\n"
+	"big: FUNC\n$huge: LOCA *536870913\n$r: OUTi\n MOVi $r #123\n RETU\n"
+	"main: FUNC\n PARA *2\n$x: LOCi\n"
+	" CALL &big %0 *1\n MOVi $x %0\n POKE &gOut $x\n RETU\n";
+
 static const char* const K_COPY =			// block copy of a global array (COPY) + read back
 	"gIn: GLOB *1\n DATi #0\n" "gOut: GLOB *1\n DATi #0\n"
 	"gsrc: GLOB *4\n DATi #10\n DATi #20\n DATi #30\n DATi #40\n"
@@ -1018,6 +1036,13 @@ static bool runFarNative(int ordinal) {
 	return true;
 }
 
+static void runFrameRefusal(const char* name, const char* source) {	/// a frame past MAX_JIT_FRAME_WORDS must make compile() throw
+	std::printf("Frame \"%s\":\n", name);
+	Symbols globals; JitModule module;
+	if (compileThrows(globals, source, module)) { std::printf("  OK (the host runs it interpreted)\n\n"); }
+	else { std::printf("  COMPILED - a frame with no 32-bit byte size was encoded\n\n"); ++failures; }
+}
+
 static void runReachTests() {
 	const int inputs[] = { 0, 1000000, -1000000 };
 	const std::string inReach = divChainKernel(36000), outOfReach = divChainKernel(60000);
@@ -1040,7 +1065,7 @@ static void runReachTests() {
 	std::printf("\n");
 }
 
-int main() {
+int main() { setvbuf(stdout, 0, _IONBF, 0);
 	std::printf("GAZLJit consolidated lowering test: JIT (compiled from Instruction[]) vs interpreter (arm64)\n\n");
 	runRegisterCacheTests();
 	runLivenessTest();
@@ -1078,6 +1103,9 @@ int main() {
 	runKernel("far slots    [big frame, register-offset]", K_FARSLOT, floats, sizeof(floats) / sizeof(*floats));
 	runKernel("recursion    [IP_STACK_OVERFLOW]", K_RECURSE, depths, sizeof(depths) / sizeof(*depths));
 	runKernel("big frame    [DATA_STACK_OVERFLOW]", K_BIGFRAME, one, sizeof(one) / sizeof(*one));
+	runKernel("frame limit  [0x0FFFFFFF words]", K_FRAMELIMIT, one, sizeof(one) / sizeof(*one));
+	runFrameRefusal("huge frame   [0x40000002 words]", K_HUGEFRAME);
+	runFrameRefusal("sign frame   [0x20000002 words]", K_SIGNFRAME);
 	runKernel("checked mem  [PEEK/POKE + trap]", K_MEMORY, indices, sizeof(indices) / sizeof(*indices), 100);		// 100 = past the symbol, inside rwMemorySize: cross-realm (§1.1)
 	runKernel("far globals  [const-addr PEEK/POKE >4096]", K_FARGLOBAL, counts, sizeof(counts) / sizeof(*counts));
 	runKernel("switch       [SWCH jump table]", K_SWITCH, indices, sizeof(indices) / sizeof(*indices));

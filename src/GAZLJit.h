@@ -124,6 +124,8 @@ class JitException : public Exception {
 	private:	std::string failureMessage;
 };
 
+const UInt MAX_JIT_FRAME_WORDS = 0x10000000u;	/// locals or params at or above this are refused by compile(), so every frame byte offset fits 32 bits with room to spare
+
 /*
 	A backend's raw output, before it is made executable: the emitted machine-code words, each function ordinal's entry as
 	a byte offset into them, and the dispatcher's byte offset. A plain value (its vectors own themselves); JitCompiler

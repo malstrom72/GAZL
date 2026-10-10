@@ -577,6 +577,9 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 		frame (FUNC p0) and run the FUNC stack-overflow check.
 	*/
 	const UInt localsSize = static_cast<UInt>(code[funcStart].p0.i);
+	if (localsSize >= MAX_JIT_FRAME_WORDS || static_cast<UInt>(code[funcStart].p1.i) >= MAX_JIT_FRAME_WORDS) {
+		throw JitException("JIT: frame too large for a 32-bit byte offset");								// the host runs it interpreted
+	}
 	if (localsSize != 0) { emitter.addImmQ(DSP, localsSize * 4u); }														// dsp += frame
 	{
 		const UInt paramsSize = static_cast<UInt>(code[funcStart].p1.i);

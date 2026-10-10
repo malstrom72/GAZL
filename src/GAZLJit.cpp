@@ -1085,7 +1085,7 @@ Value* JitProcessor::pushCall(Pointer functionPointer) {
 	if (nativeAfter == 0) return 0;										// only valid from inside a native callback
 	if (ipsp >= ipStackEnd) return 0;
 	const Instruction* func = codeBase + functionTable[ui];
-	if (this->dsp + static_cast<UInt>(func->p0.i) + static_cast<UInt>(func->p1.i) > dataStackEnd) return 0;	// early FUNC check
+	if (static_cast<UInt>(func->p0.i) + static_cast<UInt>(func->p1.i) > static_cast<UInt>(dataStackEnd - this->dsp)) return 0;	// early FUNC check
 	ipsp->returnAddress = nativeAfter;									// current continuation: `after`, or an earlier-pushed entry
 	ipsp++->dsp = this->dsp;											// the window (see above)
 	nativeAfter = funcEntries[ui];										// the OK path jumps straight into the pushed callee

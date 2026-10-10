@@ -700,6 +700,9 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 	*/
 	e.bind(entryLabels[selfOrdinal]);
 	const UInt localsSize = static_cast<UInt>(code[funcIndex].p0.i);
+	if (localsSize >= MAX_JIT_FRAME_WORDS || static_cast<UInt>(code[funcIndex].p1.i) >= MAX_JIT_FRAME_WORDS) {
+		throw JitException("JIT: frame too large for a 32-bit byte offset");								// the host runs it interpreted
+	}
 	if (localsSize != 0) {																								// dsp += localsSize (in bytes); register add if beyond the imm12 range
 		if (localsSize * 4 < 0x1000) { e.addImmX(X1, X1, localsSize * 4); }
 		else { matConst(e, W9, static_cast<Int>(localsSize * 4)); e.addX(X1, X1, X9); }
