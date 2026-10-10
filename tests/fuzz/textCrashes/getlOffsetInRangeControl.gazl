@@ -1,0 +1,7 @@
+main:	FUNC
+	$base:	LOCi
+	$idx:	LOCi
+	$dst:	LOCi
+	MOVi $idx #0
+	GETL $dst $base $idx
+	RETU
