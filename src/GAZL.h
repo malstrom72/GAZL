@@ -75,7 +75,7 @@ typedef Int Status;																										// Run-time status code
 const int VERSION = 2;						// 2 adds SCOP / ENDS local scopes, SEEK data regions, `GAZL #2` regions with the `t` call-target type, and the TAIL instruction. Pin an exact version with `! EQUi` (as UnitTest.gazl does - it tests one version); require a minimum with `! GEQi #GAZL_VERSION #2 @label`.
 const int WORD_SIZE = 32;
 const Pointer MEMORY_OFFSET = 0x12345678;																				// All memory pointers in GAZL are offsetted by this amount (thus the address of the first memory word is not zero). This makes it easier to detect invalid memory operations (such as writing to a null-pointer).
-const Pointer FUNCTION_OFFSET = 0x56789ABC;																				// All function pointers in GAZL are offsetted by this amount (thus the ordinal of the first function is not zero). This makes it easier to detect an invalid indirect call - through a null pointer, or through a small integer that was never a function pointer at all. A function pointer is an ORDINAL indexing `functionTable`, NOT a code address, which is why this is not an instruction-pointer offset; it was named IP_OFFSET until 2026-08-05.
+const Pointer FUNCTION_OFFSET = 0x56789ABC;																				// All function pointers in GAZL are offsetted by this amount (thus the ordinal of the first function is not zero). This makes it easier to detect an invalid indirect call, through a null pointer or through a small integer that was never a function pointer at all. A function pointer is an ORDINAL indexing `functionTable`, NOT a code address, which is why this is not an instruction-pointer offset.
 const Pointer NULL_POINTER = 0;
 
 union Value {
@@ -193,16 +193,15 @@ class Symbols {
 	public:		bool findNextGlobal(Iterator& iterator, bool includeTemps) const;
 	public:		const char* getGlobalInfo(const Iterator& iterator, bool& isTemp, Pointer& address, UInt& size) const;
 
-	// TODO : all these below could take std::string&, would be more consistent
 	protected:	bool lookup(const Char* nameBegin, const Char* nameEnd, int acceptedTypes, int& types, Value& value, UInt& size) const;
 	protected:	void define(const std::string& name, int types, Value value, UInt size = 1);
-	protected:	void link(const Char* labelBegin, const Char* labelEnd, Value* storage, int accepts, Int offset = 0); // FIX : name?
+	protected:	void link(const Char* labelBegin, const Char* labelEnd, Value* storage, int accepts, Int offset = 0);
 	protected:	void registerSwitch(const Char* labelBegin, const Char* labelEnd, UInt switchSize, Value* storage, Int offset = 0);
 	protected:	void resolveForwardRefs();
 	protected:	void clear() { symbols.clear(); forwardRefs.clear(); }
 	protected:	void resolve(const Reference& ref, const Symbol& symbol);
-	protected:	SymbolMap symbols;						// TODO : try a C variation with a sorted array (fixed size strings) and bsearch or alternatively a hash table (nick the one from NuXScript)
-	protected:	std::vector<Reference> forwardRefs;		// TODO : move this to a Linker class (or some better name)? in assembler, the methods herein that needs forwardRefs only lookup things in Symbols so they can use lookup()
+	protected:	SymbolMap symbols;
+	protected:	std::vector<Reference> forwardRefs;
 };
 
 struct Operator;
@@ -372,7 +371,7 @@ class Processor {
 	public:		Value* accessParams(UInt count) const; 																	// If returning null pointer you should normally return `DATA_STACK_OVERFLOW`
 	// FIX : stack alloc function
 	public:		Status enterCall(Pointer functionPointer); 																// After `enterCall()`, call `run()` (and on time out, repeatedly call `run()` until it returns OK). It is ok to call `enterCall()` at any time, current instruction pointer and stack is pushed and popped as expected which makes `enterCall()` double as a mean to issue interrupts.
-	public:		Value* pushCall(Pointer functionPointer);																/// Push a call onto the current GAZL continuation, from INSIDE a native callback only: return OK from the native (do not run()) and execution flows into the pushed function; its RETU returns into the GAZL caller, so the `^native` call behaves exactly like a `&function` call. The returned pointer is the argument window ([0] = return value, [1..] = arguments) - for a transparent forward the `^call`'s arguments are already in place. Pushing several calls forms a LIFO chain: the last pushed runs first and each RETU flows into the next. All links share the ONE window - each receives the same arguments, each overwrites [0] with its result (so [0] ends as the FIRST-pushed link's result); the typical chain is several argument-less handlers delivered at one safe point. Returns 0 on error (not inside a native call, bad function, ipStack or data-stack overflow).
+	public:		Value* pushCall(Pointer functionPointer);																/// Push a call onto the current GAZL continuation, from INSIDE a native callback only: return OK from the native (do not run()) and execution flows into the pushed function; its RETU returns into the GAZL caller, so the `^native` call behaves exactly like a `&function` call. The returned pointer is the argument window ([0] = return value, [1..] = arguments); for a transparent forward the `^call`'s arguments are already in place. Pushing several calls forms a LIFO chain: the last pushed runs first and each RETU flows into the next. All links share the ONE window: each receives the same arguments, each overwrites [0] with its result (so [0] ends as the FIRST-pushed link's result); the typical chain is several argument-less handlers delivered at one safe point. Returns 0 on error (not inside a native call, bad function, ipStack or data-stack overflow).
 	public:		Status run();
 	public:		void* getUserData() const;
 	public:		int getClockCyclesLeft() const;
