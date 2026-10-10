@@ -1726,7 +1726,7 @@ static unsigned char* putMemoryWord(unsigned char* p, UInt v) {	// Writes a 32-b
 }
 
 static const unsigned char* getMemoryWord(const unsigned char* p, const unsigned char* end, UInt& value, bool& ok) {
-	if (p + 4 > end) { ok = false; value = 0; return p; }		// Truncated: stop reading, leave `ok` false.
+	if (end - p < 4) { ok = false; value = 0; return p; }		// Truncated: stop reading, leave `ok` false.
 	value = (UInt)p[0] | ((UInt)p[1] << 8) | ((UInt)p[2] << 16) | ((UInt)p[3] << 24);
 	return p + 4;
 }
@@ -1809,7 +1809,7 @@ MemoryLoad thawMemory(Processor& processor, const Symbols& symbols, const void* 
 	for (UInt g = 0; g < globalCount && ok; ++g) {
 		UInt nameLength;
 		p = getMemoryWord(p, end, nameLength, ok);
-		if (!ok || p + nameLength > end) { ok = false; break; }
+		if (!ok || nameLength > (UInt)(end - p)) { ok = false; break; }
 		std::string name(reinterpret_cast<const char*>(p), nameLength);
 		p += nameLength;
 		UInt size;
@@ -2013,6 +2013,12 @@ bool unitTest() {
 					, sizes2.globalsSize, sizes2.constsSize, CALL_STACK_SIZE, &callStack2[0], nativeTable, &callbackData);
 			MemoryLoad loaded = thawMemory(pmachine2, globals2, memoryBlob.empty() ? 0 : &memoryBlob[0], (UInt)memoryBlob.size());
 			assert(loaded == MEMORY_OK);
+
+			// A first global name length far past the end of the blob must be rejected, not read.
+			std::vector<unsigned char> badBlob(memoryBlob);
+			assert(badBlob.size() >= 32);
+			badBlob[28] = 0xF0; badBlob[29] = 0xFF; badBlob[30] = 0xFF; badBlob[31] = 0xFF;
+			assert(thawMemory(pmachine2, globals2, &badBlob[0], (UInt)badBlob.size()) == MEMORY_TRUNCATED);
 
 			// Every non-TEMP global must match the frozen original (identical assemblies share global addresses).
 			Symbols::Iterator it;
