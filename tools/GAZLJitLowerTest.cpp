@@ -385,6 +385,16 @@ static const char* const K_STACK =			// checked stack-local access by index (SET
 	"main: FUNC\n PARA *1\n$arr: LOCA *8\n$n: LOCi\n$x: LOCi\n"
 	" PEEK $n &gIn\n MOVi $x #777\n SETL $arr $n $x\n GETL $x $arr $n\n POKE &gOut $x\n RETU\n";
 
+static const char* const K_GETLFAR =		// GETL base offset past the end of the data stack -> BAD_PEEK for every index
+	"gIn: GLOB *1\n DATi #0\n" "gOut: GLOB *1\n DATi #0\n"
+	"main: FUNC\n PARA *1\n$arr: LOCA *8\n$n: LOCi\n$x: LOCi\n"
+	" PEEK $n &gIn\n GETL $x $arr:1000000 $n\n POKE &gOut $x\n RETU\n";
+
+static const char* const K_SETLFAR =		// SETL base offset past the end of the data stack -> BAD_POKE for every index
+	"gIn: GLOB *1\n DATi #0\n" "gOut: GLOB *1\n DATi #0\n"
+	"main: FUNC\n PARA *1\n$arr: LOCA *8\n$n: LOCi\n"
+	" PEEK $n &gIn\n SETL $arr:1000000 $n #1234\n POKE &gOut $n\n RETU\n";
+
 static const char* const K_FARSLOT =		// scalars declared before a big LOCA -> slots far from dsp (register-offset path)
 	"gIn: GLOB *1\n DATi #0\n" "gOut: GLOB *1\n DATi #0\n"
 	"main: FUNC\n PARA *1\n$fint: LOCi\n$ff: LOCf\n$huge: LOCA *200\n$near: LOCi\n"
@@ -1061,6 +1071,8 @@ int main() {
 	runKernel("push chain   [pushCall LIFO pair]", K_CHAIN, reenter, sizeof(reenter) / sizeof(*reenter));
 	runKernel("pointer      [ADRL + PEEK/POKE_VVV]", K_POINTER, indices, sizeof(indices) / sizeof(*indices));
 	runKernel("stack access [GETL/SETL + trap]", K_STACK, indices, sizeof(indices) / sizeof(*indices));
+	runKernel("getl far     [base past stack -> BAD_PEEK]", K_GETLFAR, indices, sizeof(indices) / sizeof(*indices));
+	runKernel("setl far     [base past stack -> BAD_POKE]", K_SETLFAR, indices, sizeof(indices) / sizeof(*indices));
 	runKernel("block copy   [COPY]", K_COPY, signed_, sizeof(signed_) / sizeof(*signed_));
 	runKernel("copy oob     [COPY -> ACCESS_VIOLATION]", K_COPYOOB, indices, sizeof(indices) / sizeof(*indices));
 	runKernel("far slots    [big frame, register-offset]", K_FARSLOT, floats, sizeof(floats) / sizeof(*floats));

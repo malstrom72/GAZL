@@ -950,7 +950,7 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 				const int lim = cache.scratch(GENERAL_REGISTER);
 				e.ldrX(static_cast<Reg>(lim), X0, o.dsend); e.sub(static_cast<Reg>(lim), static_cast<Reg>(lim), W1); e.lsrImm(static_cast<Reg>(lim), static_cast<Reg>(lim), 2);
 				const int c = cache.scratch(GENERAL_REGISTER);
-				matConst(e, static_cast<Reg>(c), in.p1.i); e.sub(static_cast<Reg>(lim), static_cast<Reg>(lim), static_cast<Reg>(c)); // limit = (end-dsp)/4 - C1
+				matConst(e, static_cast<Reg>(c), in.p1.i); e.subs(static_cast<Reg>(lim), static_cast<Reg>(lim), static_cast<Reg>(c)); e.bcond(MI, trap); // limit = (end-dsp)/4 - C1, never negative
 				e.cmp(static_cast<Reg>(idx), static_cast<Reg>(lim)); e.bcond(HS, trap);
 				e.add(static_cast<Reg>(c), static_cast<Reg>(c), static_cast<Reg>(idx));									// C1 + index (reuse c as the signed frame offset)
 				const int d = cache.define(in.p0.i, GENERAL_REGISTER);
@@ -970,7 +970,7 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 				const int lim = cache.scratch(GENERAL_REGISTER);
 				e.ldrX(static_cast<Reg>(lim), X0, o.dsend); e.sub(static_cast<Reg>(lim), static_cast<Reg>(lim), W1); e.lsrImm(static_cast<Reg>(lim), static_cast<Reg>(lim), 2);
 				const int c = cache.scratch(GENERAL_REGISTER);
-				matConst(e, static_cast<Reg>(c), in.p0.i); e.sub(static_cast<Reg>(lim), static_cast<Reg>(lim), static_cast<Reg>(c)); // limit = (end-dsp)/4 - C0
+				matConst(e, static_cast<Reg>(c), in.p0.i); e.subs(static_cast<Reg>(lim), static_cast<Reg>(lim), static_cast<Reg>(c)); e.bcond(MI, trap); // limit = (end-dsp)/4 - C0, never negative
 				e.cmp(static_cast<Reg>(idx), static_cast<Reg>(lim)); e.bcond(HS, trap);
 				e.add(static_cast<Reg>(c), static_cast<Reg>(c), static_cast<Reg>(idx));									// C0 + index
 				e.strWxs(static_cast<Reg>(val), X1, static_cast<Reg>(c));
