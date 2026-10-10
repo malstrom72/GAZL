@@ -1680,7 +1680,8 @@ bool unitTest() {
 			assert((op.accepts[j] & ANY_VAR) == 0 || (op.accepts[j] & FORWARD) == 0);
 			assert(op.accepts[0] != COMPILE_TIME || (((op.accepts[1] & FORWARD) == 0 || op.accepts[1] == 0) && (((op.accepts[2] & FORWARD) == 0) || op.accepts[2] == 0)));
 			assert((op.accepts[j] & CONST_INT_P) != 0 || (op.accepts[j] & CONST_INT_N) == 0);
-// FIX : fails			assert((op.accepts[j] & (CONST_INT_P | CONST_FLOAT)) == 0 || ((op.accepts[j] & FORWARD) == 0));
+			assert(op.accepts[j] == KONST																// `#const` may name a forward address
+					|| (op.accepts[j] & (CONST_INT_P | CONST_FLOAT)) == 0 || (op.accepts[j] & FORWARD) == 0);
 			assert((op.accepts[j] & BRANCH) == 0 || (op.accepts[j] & FORWARD) != 0);
 		}
 		assert((op.otherFlags & YIELDS_CONST) == 0 || (op.opcode >= FIRST_COMPILE_TIME_OPCODE));
