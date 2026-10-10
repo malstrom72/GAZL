@@ -1671,9 +1671,9 @@ Int Processor::run() {
 			case POKE_CVV:	if ((ui = (UInt)C0.i + (UInt)V1.i - MEMORY_OFFSET) < rwMemorySize) { mb[ui + MEMORY_OFFSET] = V2; break; } else { err = BAD_POKE; goto ret; }
 			case POKE_VVC:	if ((ui = (UInt)V0.i + (UInt)V1.i - MEMORY_OFFSET) < rwMemorySize) { mb[ui + MEMORY_OFFSET] = C2; break; } else { err = BAD_POKE; goto ret; }
 			case POKE_CVC:	if ((ui = (UInt)C0.i + (UInt)V1.i - MEMORY_OFFSET) < rwMemorySize) { mb[ui + MEMORY_OFFSET] = C2; break; } else { err = BAD_POKE; goto ret; }
-			case GETL_VVV:	if ((ui = V2.i) < (UInt)(dataStackEnd - dsp - C1.i)) { V0 = (dsp + C1.i)[ui]; break; } else { err = BAD_PEEK; goto ret; };
-			case SETL_VVV:	if ((ui = V1.i) < (UInt)(dataStackEnd - dsp - C0.i)) { (dsp + C0.i)[ui] = V2; break; } else { err = BAD_POKE; goto ret; };
-			case SETL_VVC:	if ((ui = V1.i) < (UInt)(dataStackEnd - dsp - C0.i)) { (dsp + C0.i)[ui] = C2; break; } else { err = BAD_POKE; goto ret; };
+			case GETL_VVV:	if ((Int)(ui2 = (UInt)(dataStackEnd - dsp - C1.i)) > 0 && (ui = V2.i) < ui2) { V0 = (dsp + C1.i)[ui]; break; } else { err = BAD_PEEK; goto ret; };
+			case SETL_VVV:	if ((Int)(ui2 = (UInt)(dataStackEnd - dsp - C0.i)) > 0 && (ui = V1.i) < ui2) { (dsp + C0.i)[ui] = V2; break; } else { err = BAD_POKE; goto ret; };
+			case SETL_VVC:	if ((Int)(ui2 = (UInt)(dataStackEnd - dsp - C0.i)) > 0 && (ui = V1.i) < ui2) { (dsp + C0.i)[ui] = C2; break; } else { err = BAD_POKE; goto ret; };
 			case ADRL_VV_:	V0.p = Pointer(&dsp[C1.i] - mb); break;
 			case ABSI_VV_:	V0.i = absolute(V1.i); break;
 			case ADDI_VVV:	V0.i = iadd(V1.i, V2.i); break;
