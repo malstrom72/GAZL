@@ -54,6 +54,7 @@ branch contains everything above it, and a conflict is resolved once, at the ste
 | [GAZLAssemblerOptimizations](gazl/GAZLAssemblerOptimizations.md) | DESIGN NOTE | Assembler-side optimisation |
 | [GAZL2FunctionPointers](gazl/GAZL2FunctionPointers.md) | PROPOSAL | A distinct function-pointer storage type `t` |
 | [TailCalls](gazl/TailCalls.md) | DESIGN NOTE | `TAIL` IMPLEMENTED: engine, Impala `tail`, both backends |
+| [Backlog](gazl/Backlog.md) | BACKLOG | Assembler and VM improvements not done yet |
 
 ## The JIT
 
