@@ -45,3 +45,14 @@ bash tools/checkPermut8Firmwares.sh --jit
 # cross-class preload miscompile, two of them after every other test passed. 2000 programs is a smoke test only.
 bash tools/buildGazlFuzz.sh standalone
 ./output/GAZLFuzz --gen 2000 1 deep
+
+# Every recorded crash input through BOTH engines. test-fuzz replays them through the interpreter only, which is how
+# the GETL/SETL frame-offset fault stayed out of sight on the JIT side. This is the text lane: a crash or assert in
+# either engine fails, but results are not compared, since arbitrary source may legally make the engines differ.
+bash tools/buildGazlFuzz.sh standalone text
+mkdir -p output/fuzz
+LIST=output/fuzz/jitCrashInputs.txt
+find tests/fuzz/textCrashes -type f -name '*.gazl' > "$LIST"
+N=$(wc -l < "$LIST" | tr -d ' ')
+./output/GAZLFuzzText "@$LIST" > /dev/null
+echo "test-jit: $N crash inputs replayed through the interpreter and the JIT, no crashes"

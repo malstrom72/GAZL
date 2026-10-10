@@ -4,6 +4,7 @@
 #   standalone  self-contained --gen driver for the differential fuzzer (no libFuzzer runtime) -> ../output/GAZLFuzz
 #   x64         the differential fuzzer on the x86_64 backend, run under Rosetta on Apple Silicon -> ../output/GAZLFuzzX64
 #   text        coverage-guided libFuzzer over GAZL SOURCE TEXT, assembled then diffed interp-vs-JIT -> ../output/GAZLFuzzText
+#   standalone text   the text lane as a plain replay binary, no libFuzzer runtime (test-jit.sh) -> ../output/GAZLFuzzText
 # The (no-arg)/standalone/x64 modes decode the input bytes as a structured-generator choice stream (every input a valid
 # program); `text` instead feeds the raw bytes to the assembler as source and runs the SAME interp-vs-JIT diff, so it
 # reaches arbitrary/real programs the generator can't. libFuzzer needs a clang that ships the fuzzer runtime; Apple
@@ -55,8 +56,6 @@ if [ "$text" = 1 ]; then
 		chmod +x "$out" 2>/dev/null || true
 		exit 0
 	fi
-	pick_libfuzzer_clang
-	CPP_OPTIONS=${CPP_OPTIONS:-"-fsanitize=fuzzer -DLIBFUZZ -DGAZL_JIT -DJITDIFF -DFUZZ_TEXT_INPUT -DGAZL_CANONICAL_NAN $libcxxflags"}
 	case "$(uname -m)" in
 		arm64 | aarch64) backend=../src/GAZLJitArm64.cpp ;;
 		x86_64) backend=../src/GAZLJitX64.cpp ;;
@@ -65,6 +64,18 @@ if [ "$text" = 1 ]; then
 	jitmem=../src/GAZLJitMemPosix.cpp
 	[ "$(uname -s)" = "Darwin" ] && jitmem=../src/GAZLJitMemMacOS.cpp
 	out=../output/GAZLFuzzText
+	if [ "$standalone" = 1 ]; then
+		# Plain replay binary on the host backend: every file, directory or @listfile argument runs through both
+		# engines. Built beta, so asserts fire. Any clang++ will do, since no fuzzer runtime is linked.
+		: "${CPP_COMPILER:=clang++}"
+		textopts="-O1 -g -DLIBFUZZ -DLIBFUZZ_STANDALONE -DGAZL_JIT -DJITDIFF -DFUZZ_TEXT_INPUT -DGAZL_CANONICAL_NAN"
+		CPP_COMPILER="$CPP_COMPILER" CPP_OPTIONS="${CPP_OPTIONS:-$textopts}" \
+				bash BuildCpp.sh beta native "$out" -I.. GAZLCmd.cpp ../src/GAZL.cpp ../src/GAZLJit.cpp "$backend" "$jitmem"
+		chmod +x "$out" 2>/dev/null || true
+		exit 0
+	fi
+	pick_libfuzzer_clang
+	CPP_OPTIONS=${CPP_OPTIONS:-"-fsanitize=fuzzer -DLIBFUZZ -DGAZL_JIT -DJITDIFF -DFUZZ_TEXT_INPUT -DGAZL_CANONICAL_NAN $libcxxflags"}
 	"$CPP_COMPILER" -std=c++11 -O1 -g $CPP_OPTIONS -I.. -o "$out" GAZLCmd.cpp ../src/GAZL.cpp ../src/GAZLJit.cpp "$backend" "$jitmem"
 	chmod +x "$out" 2>/dev/null || true
 	exit 0

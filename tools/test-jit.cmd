@@ -64,3 +64,21 @@ IF NOT EXIST output\GAZLFuzz.exe (
 )
 output\GAZLFuzz.exe --gen 2000 1 deep
 IF ERRORLEVEL 1 EXIT /B 1
+
+REM Every recorded crash input through BOTH engines. test-fuzz replays them through the interpreter only, which is how
+REM the GETL/SETL frame-offset fault stayed out of sight on the JIT side. This is the text lane: a crash or assert in
+REM either engine fails, but results are not compared, since arbitrary source may legally make the engines differ.
+DEL /Q output\GAZLFuzzText.exe >NUL 2>&1
+CALL tools\buildGazlFuzz.cmd text
+IF NOT EXIST output\GAZLFuzzText.exe (
+	ECHO test-jit: tools\buildGazlFuzz.cmd text produced no output\GAZLFuzzText.exe.
+	EXIT /B 1
+)
+IF NOT EXIST output\fuzz MKDIR output\fuzz
+SET "LIST=output\fuzz\jitCrashInputs.txt"
+IF EXIST "%LIST%" DEL /Q "%LIST%"
+FOR /F "delims=" %%F IN ('DIR /S /B "tests\fuzz\textCrashes\*.gazl" 2^>NUL') DO ECHO %%F>>"%LIST%"
+FOR /F %%C IN ('FIND /C /V "" ^< "%LIST%"') DO SET "N=%%C"
+output\GAZLFuzzText.exe "@%LIST%" >NUL
+IF ERRORLEVEL 1 EXIT /B 1
+ECHO test-jit: %N% crash inputs replayed through the interpreter and the JIT, no crashes
