@@ -86,6 +86,7 @@ const char* ASSEMBLER_ERROR_TEXTS[] = {
 	/* , EXPECTED_CONSTANT							*/	, "Expected constant"
 	/* , NOT_ENOUGH_FUNCTION_SPACE					*/	, "Not enough space for function table"
 	/* , LABEL_ON_FUNCTION							*/	, "Branch target lands on a FUNC"
+	/* , FRAME_TOO_LARGE								*/	, "Frame too large"
 	/* , UNBALANCED_LOCAL_SCOPE						*/	, "Unbalanced SCOP / ENDS"
 	/* , OVERLAPPING_DATA_REGIONS					*/	, "Data regions overlap"
 	/* , UNSUPPORTED_GAZL_VERSION					*/	, "File requires a newer GAZL engine"
@@ -916,6 +917,7 @@ void Assembler::parseOperand(const Char* b, const Char* e, int accepts, Value* v
 
 		case '%':	assert((accepts & TRANSIENT) != 0);
 					parseConstant(++b, e, CONST_INT_P, v);
+					if (v->i == 0x7FFFFFFF) throw Exception(FRAME_TOO_LARGE);
 					paramsSize = maximum(paramsSize, (UInt)(v->i + 1));
 					break;		
 
@@ -1198,7 +1200,7 @@ const Char* Assembler::feed(const Char* line) {
 							e = p + strcspn(p, STR("\r\n"));
 							while (e > p && (*(e - 1) == ' ' || *(e - 1) == '\t')) --e;
 							if ((e - p) == 0) throw Exception(MISSING_OPERAND);
-							if (dataPointer + (e - p) > dataEnd) throw Exception(DATA_SECTION_FULL, dataLabel);
+							if ((e - p) > dataEnd - dataPointer) throw Exception(DATA_SECTION_FULL, dataLabel);
 							Value v;
 							v.p = (Int)(dataPointer - memoryBase + MEMORY_OFFSET);
 							declare(globals, labelBegin, labelEnd, dataLabelType, v, static_cast<Int>(e - p));
@@ -1390,6 +1392,7 @@ const Char* Assembler::feed(const Char* line) {
 							v.i = 1;
 							parseOperand(op0Begin, op0End, op->accepts[0], &v);
 							size = v.i;
+							if (size > 0x7FFFFFFFu - localsSize) throw Exception(FRAME_TOO_LARGE);							// slot offsets must fit an Int
 							v.i = localsSize;
 							declare(locals, labelBegin, labelEnd, op->declareTypes, v, size);
 							localsSize += size;
@@ -1488,8 +1491,10 @@ const Char* Assembler::feed(const Char* line) {
 											|| ((op->accepts[2] & CONST_INT) != 0 && p2->i == 0)))
 										throw Exception(CONSTANT_DIVISION_BY_ZERO);
 								}
-								if ((op->otherFlags & LOCAL_BOUNDS) != 0)
+								if ((op->otherFlags & LOCAL_BOUNDS) != 0) {
+									if ((UInt)p2->i > 0x7FFFFFFFu - (UInt)p1->i) throw Exception(FRAME_TOO_LARGE);
 									paramsSize = maximum((Int)(paramsSize), p1->i + p2->i);
+								}
 								++ip;
 							}
 							break;
@@ -2088,6 +2093,26 @@ bool unitTest() {
 			}
 		}
 			
+		// A frame summing past INT_MAX is refused at assembly, so a slot offset can never wrap.
+		{
+			std::vector<Value> m(100);
+			std::vector<Instruction> c(100);
+			std::vector<UInt> f(100);
+			Symbols g;
+			Assembler assem(100, &c[0], 100, &f[0], 100, &m[0], g);
+			assem.newUnit("FrameTooLarge");
+			bool refused = false;
+			try {
+				const Char* cp = STR("f: FUNC\n$a: LOCA *2147483647\n$b: LOCA *1\n RETU\n");
+				while (*cp != 0) cp = assem.feed(cp);
+			}
+			catch (const Exception& e) {
+				refused = (e.error == FRAME_TOO_LARGE);
+			}
+			assert(refused);
+			(void)refused;
+		}
+
 		TestCallbackData callbackData;
 		
 		UInt size;
