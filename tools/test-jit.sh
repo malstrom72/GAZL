@@ -38,6 +38,9 @@ esac
 # memory image + Status, at full fuel AND at tiny fuel (which forces every leader through suspend/resume).
 bash tools/buildAndRunGAZLJitLowerTest.sh
 
+# Every memory instruction form at every edge of the memory arena, through the JIT too, against the sweep's oracle.
+bash tools/buildAndRunGAZLBoundsSweepJit.sh
+
 # The 28 shipped Permut8 firmwares against interpreter-produced goldens: a differential over real products.
 bash tools/checkPermut8Firmwares.sh --jit
 
