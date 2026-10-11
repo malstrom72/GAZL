@@ -41,7 +41,8 @@
 	The whole memory, plus guard zones on both sides of it, is compared after every run. The only cells exempt are
 	the probe function's own frame at the bottom of the data stack, which the program writes itself.
 
-	Exits non-zero on any failure.
+	Built with GAZL_JIT, every probe also runs through the JIT, checked against the same oracle (not against the
+	interpreter), unless the host forbids executable memory. Exits non-zero on any failure.
 */
 
 #include <cstdio>
@@ -51,6 +52,9 @@
 #include <vector>
 #include <map>
 #include "../src/GAZL.h"
+#ifdef GAZL_JIT
+#include "../src/GAZLJit.h"
+#endif
 
 using namespace GAZL;
 
@@ -471,10 +475,37 @@ bool assemble(Machine& m, const std::string& source, Layout& layout, std::string
 	return true;
 }
 
-Status run(Machine& m) {
+enum Engine { INTERPRETER, JIT, ENGINE_COUNT };
+
+const char* const ENGINE_NAMES[] = { "interpreter", "JIT" };
+
+/*
+	Runs `main` on `engine` over the memory in `m`. With GAZL_JIT the program is compiled for each run, which costs
+	little for programs this small; without it, the JIT engine is never asked for.
+*/
+Status run(Machine& m, Engine engine) {
+	const Pointer mainFunction = m.symbols.findFunction("main");
+#ifdef GAZL_JIT
+	if (engine == JIT) {
+		const AssembledProgram program = { &m.code[0], m.sizes.codeSize, &m.functionTable[0], m.sizes.functionCount
+				, m.memory(), MEMORY_SIZE, m.sizes.globalsSize, m.sizes.constsSize };
+		JitModule module;
+		NativeJitCompiler compiler;
+		compiler.compile(program, module);
+		JitProcessor processor(module, program, CALL_STACK_SIZE, &m.callStack[0], 0);
+		Status status = processor.enterCall(mainFunction);
+		if (status != OK) return status;
+		do {
+			processor.resetTimeOut(1000000);
+			status = processor.run();
+		} while (status == TIME_OUT || status == BLOCK_RETRY);
+		return status;
+	}
+#endif
+	(void)engine;
 	Processor processor(m.sizes.codeSize, &m.code[0], m.sizes.functionCount, &m.functionTable[0], MEMORY_SIZE
 			, m.memory(), m.sizes.globalsSize, m.sizes.constsSize, CALL_STACK_SIZE, &m.callStack[0], 0);
-	Status status = processor.enterCall(m.symbols.findFunction("main"));
+	Status status = processor.enterCall(mainFunction);
 	if (status != OK) return status;
 	processor.resetTimeOut(1000000);
 	return processor.run();
@@ -485,9 +516,88 @@ bool inRange(UInt pointer, UInt count, UInt limit) {
 	return start >= 0 && start + (long long)count <= (long long)limit;
 }
 
+/*
+	Runs probe `p` on `engine`, starting from the memory image `before`, and checks the outcome against the oracle.
+	Returns what is wrong, or an empty string.
+*/
+std::string check(Machine& m, const Probe& p, const Layout& layout, const std::vector<Value>& before, Engine engine) {
+	m.buffer = before;
+	const Status status = run(m, engine);
+	const Value* mem = m.memory();
+	const UInt rw = layout.rwSize();
+	const UInt arAddress = (UInt)mem[layout.outAddress - MEMORY_OFFSET + 1].i;
+
+	// The oracle: is the access in range, which status follows, and which cells must change to what.
+	std::vector<Value> want(before);
+	std::vector<bool> known(before.size(), true);
+	const size_t g = GUARD_SIZE;
+	for (UInt i = 0; i < FRAME_ZONE; ++i) known[g + layout.globalsSize + i] = false;
+	known[g + layout.outAddress - MEMORY_OFFSET] = false;
+	known[g + layout.outAddress - MEMORY_OFFSET + 1] = false;
+	bool valid = false;
+	Status failStatus = OK;
+	Int wantRead = 0;
+	bool checkRead = false;
+	switch (p.op) {
+		case PEEK:
+			valid = inRange(p.address, 1, MEMORY_SIZE);
+			failStatus = BAD_PEEK;
+			if (valid && known[g + p.address - MEMORY_OFFSET]) {
+				wantRead = before[g + p.address - MEMORY_OFFSET].i;
+				checkRead = true;
+			}
+			break;
+		case POKE:
+			valid = inRange(p.address, 1, rw);
+			failStatus = BAD_POKE;
+			if (valid) want[g + p.address - MEMORY_OFFSET].i = p.value;
+			break;
+		case GETL:
+		case SETL: {
+			const UInt slot = arAddress + (UInt)p.index;
+			valid = p.index >= 0 && (long long)arAddress + p.index < (long long)(MEMORY_OFFSET + rw);
+			failStatus = (p.op == GETL ? BAD_PEEK : BAD_POKE);
+			if (valid && p.op == SETL) want[g + slot - MEMORY_OFFSET].i = p.value;
+			if (valid && p.op == GETL && known[g + slot - MEMORY_OFFSET]) {
+				wantRead = before[g + slot - MEMORY_OFFSET].i;
+				checkRead = true;
+			}
+			break;
+		}
+		case COPY: {
+			valid = inRange(p.address, p.count, rw) && inRange(p.source2, p.count, MEMORY_SIZE);
+			failStatus = ACCESS_VIOLATION;
+			if (valid) {
+				const UInt d = p.address - MEMORY_OFFSET;
+				const UInt s = p.source2 - MEMORY_OFFSET;
+				const bool overlap = (d < s + p.count && s < d + p.count);
+				for (UInt i = 0; i < p.count; ++i) {
+					if (overlap || !known[g + s + i]) known[g + d + i] = false;
+					else want[g + d + i] = before[g + s + i];
+				}
+			}
+			break;
+		}
+	}
+	const Status wantStatus = valid ? OK : failStatus;
+	if (p.allConst && !valid) return "assembled although out of range, status " + number(status);
+	if (status != wantStatus) return "status " + number(status) + ", want " + number(wantStatus);
+	if (checkRead && mem[layout.outAddress - MEMORY_OFFSET].i != wantRead) {
+		return "read " + number(mem[layout.outAddress - MEMORY_OFFSET].i) + ", want " + number(wantRead);
+	}
+	for (size_t i = 0; i < want.size(); ++i) {
+		if (known[i] && m.buffer[i].i != want[i].i) {
+			const long long cell = (long long)i - (long long)g;
+			return "cell " + number(cell) + " is " + hex((UInt)m.buffer[i].i) + ", want " + hex((UInt)want[i].i)
+					+ (cell < 0 || cell >= (long long)MEMORY_SIZE ? " (guard zone)" : "");
+		}
+	}
+	return "";
+}
+
 struct Totals { int probes; int failures; };
 
-int sweep() {
+int sweep(int engineCount) {
 	std::map<std::string, Totals> totals;
 	int failures = 0;
 
@@ -515,24 +625,7 @@ int sweep() {
 		Totals& t = totals[p.form];
 		++t.probes;
 		const UInt rw = layout.rwSize();
-		std::string problem;
-
-		if (p.op == GETL || p.op == SETL) {
-			// The first run learns where `ar` is; the index is then set relative to the end of the data stack.
-			if (!assembled) {
-				problem = "refused: " + error;
-			} else {
-				if (p.fromEnd) {
-					m.memory()[layout.inAddress - MEMORY_OFFSET + 1].i = 0;
-					run(m);
-					const UInt arAddress = (UInt)m.memory()[layout.outAddress - MEMORY_OFFSET + 1].i;
-					p.index = (Int)(MEMORY_OFFSET + rw - arAddress) + p.index;
-					p.inputs[1] = p.index;
-					assemble(m, p.source, layout, error);
-				}
-				p.what = "index=" + number(p.index);
-			}
-		}
+		std::vector<std::string> problems;
 
 		if (!assembled) {
 			bool valid = true;
@@ -541,105 +634,57 @@ int sweep() {
 			else if (p.op == COPY) valid = inRange(p.address, p.count, rw) && inRange(p.source2, p.count, MEMORY_SIZE);
 			if (p.refusalOk) {
 				// the assembler's own rule, stricter than memory: see `refusalOk`
-			} else if (valid) {
-				problem = "refused although in range: " + error;
+			} else if (valid || p.op == GETL || p.op == SETL) {
+				problems.push_back("refused although in range: " + error);
 			} else if (!p.allConst) {
-				problem = "refused: " + error;
+				problems.push_back("refused: " + error);
 			}
-		} else if (problem.empty()) {
+		} else {
+			if (p.fromEnd) {
+				// A first run learns where `ar` is; the index is then set relative to the end of the data stack.
+				const std::vector<Value> image(m.buffer);
+				run(m, INTERPRETER);
+				const UInt arAddress = (UInt)m.memory()[layout.outAddress - MEMORY_OFFSET + 1].i;
+				m.buffer = image;
+				p.index = (Int)(MEMORY_OFFSET + rw - arAddress) + p.index;
+				p.inputs[1] = p.index;
+			}
+			if (p.op == GETL || p.op == SETL) p.what = "index=" + number(p.index);
 			Value* mem = m.memory();
 			for (int i = 0; i < 3; ++i) mem[layout.inAddress - MEMORY_OFFSET + i].i = p.inputs[i];
 			const std::vector<Value> before(m.buffer);
-			const Status status = run(m);
-			const UInt arAddress = (UInt)mem[layout.outAddress - MEMORY_OFFSET + 1].i;
-
-			// The oracle: is the access in range, which status follows, and which cells must change to what.
-			std::vector<Value> want(before);
-			std::vector<bool> known(before.size(), true);
-			const size_t g = GUARD_SIZE;
-			for (UInt i = 0; i < FRAME_ZONE; ++i) known[g + layout.globalsSize + i] = false;
-			known[g + layout.outAddress - MEMORY_OFFSET] = false;
-			known[g + layout.outAddress - MEMORY_OFFSET + 1] = false;
-			bool valid = false;
-			Status failStatus = OK;
-			Int wantRead = 0;
-			bool checkRead = false;
-			switch (p.op) {
-				case PEEK:
-					valid = inRange(p.address, 1, MEMORY_SIZE);
-					failStatus = BAD_PEEK;
-					if (valid && known[g + p.address - MEMORY_OFFSET]) {
-						wantRead = before[g + p.address - MEMORY_OFFSET].i;
-						checkRead = true;
-					}
-					break;
-				case POKE:
-					valid = inRange(p.address, 1, rw);
-					failStatus = BAD_POKE;
-					if (valid) want[g + p.address - MEMORY_OFFSET].i = p.value;
-					break;
-				case GETL:
-				case SETL: {
-					const UInt slot = arAddress + (UInt)p.index;
-					valid = p.index >= 0 && (long long)arAddress + p.index < (long long)(MEMORY_OFFSET + rw);
-					failStatus = (p.op == GETL ? BAD_PEEK : BAD_POKE);
-					if (valid && p.op == SETL) want[g + slot - MEMORY_OFFSET].i = p.value;
-					if (valid && p.op == GETL && known[g + slot - MEMORY_OFFSET]) {
-						wantRead = before[g + slot - MEMORY_OFFSET].i;
-						checkRead = true;
-					}
-					break;
-				}
-				case COPY: {
-					valid = inRange(p.address, p.count, rw) && inRange(p.source2, p.count, MEMORY_SIZE);
-					failStatus = ACCESS_VIOLATION;
-					if (valid) {
-						const UInt d = p.address - MEMORY_OFFSET;
-						const UInt s = p.source2 - MEMORY_OFFSET;
-						const bool overlap = (d < s + p.count && s < d + p.count);
-						for (UInt i = 0; i < p.count; ++i) {
-							if (overlap || !known[g + s + i]) known[g + d + i] = false;
-							else want[g + d + i] = before[g + s + i];
-						}
-					}
-					break;
-				}
-			}
-			const Status wantStatus = valid ? OK : failStatus;
-			if (p.allConst && !valid) {
-				problem = "assembled although out of range, status " + number(status);
-			} else if (status != wantStatus) {
-				problem = "status " + number(status) + ", want " + number(wantStatus);
-			} else if (checkRead && mem[layout.outAddress - MEMORY_OFFSET].i != wantRead) {
-				problem = "read " + number(mem[layout.outAddress - MEMORY_OFFSET].i) + ", want " + number(wantRead);
-			} else {
-				for (size_t i = 0; i < want.size(); ++i) {
-					if (known[i] && m.buffer[i].i != want[i].i) {
-						const long long cell = (long long)i - (long long)g;
-						problem = "cell " + number(cell) + " is " + hex((UInt)m.buffer[i].i) + ", want "
-								+ hex((UInt)want[i].i)
-								+ (cell < 0 || cell >= (long long)MEMORY_SIZE ? " (guard zone)" : "");
-						break;
-					}
-				}
+			for (int e = 0; e < engineCount; ++e) {
+				const std::string problem = check(m, p, layout, before, static_cast<Engine>(e));
+				if (!problem.empty()) problems.push_back(std::string(ENGINE_NAMES[e]) + ": " + problem);
 			}
 		}
-		if (!problem.empty()) {
+		if (!problems.empty()) {
 			++t.failures;
 			++failures;
-			if (t.failures <= 5) std::printf("FAIL %-28s %-40s %s\n", p.form.c_str(), p.what.c_str(), problem.c_str());
+			for (size_t i = 0; i < problems.size() && t.failures <= 5; ++i) {
+				std::printf("FAIL %-28s %-40s %s\n", p.form.c_str(), p.what.c_str(), problems[i].c_str());
+			}
 		}
 	}
 
 	for (std::map<std::string, Totals>::const_iterator it = totals.begin(); it != totals.end(); ++it) {
 		std::printf("%-30s %4d probes, %d failed\n", it->first.c_str(), it->second.probes, it->second.failures);
 	}
-	std::printf("bounds sweep: %d probes, %d failed\n", (int)probeCount, failures);
+	std::printf("bounds sweep (%s%s): %d probes, %d failed\n", ENGINE_NAMES[0], engineCount > 1 ? " and JIT" : ""
+			, (int)probeCount, failures);
 	return failures == 0 ? 0 : 1;
 }
 
 } // namespace
 
 int main() {
-	return sweep();
+	int engineCount = 1;
+#ifdef GAZL_JIT
+	if (jitAvailable()) {
+		engineCount = 2;
+	} else {
+		std::printf("bounds sweep: this host forbids executable memory; the JIT is NOT swept\n");
+	}
+#endif
+	return sweep(engineCount);
 }
