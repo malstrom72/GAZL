@@ -112,7 +112,7 @@ function build(seed) {
 	const tools = path.join(ROOT, "tools");
 	const args = ["release", WINDOWS ? "x64" : "native", EXE, "-I..", "-I" + path.join("..", "src"), "GAZLCmd.cpp", permuted];
 	const b = WINDOWS
-		? run("cmd.exe", ["/d", "/c", "BuildCpp.cmd"].concat(args), { cwd: tools })
+		? run("cmd.exe", ["/d", "/c", path.join(tools, "BuildCpp.cmd")].concat(args), { cwd: tools }) // full path: NoDefaultCurrentDirectoryInExePath stops cmd finding it in cwd
 		: run("bash", ["BuildCpp.sh"].concat(args), { cwd: tools });
 	if (b.status !== 0 || !fs.existsSync(EXE)) fail("build failed for seed " + seed + ":\n" + b.stdout + b.stderr);
 }
