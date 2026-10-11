@@ -23,6 +23,10 @@ REM engine it exercises, so a regression surfaces before the slower node suite r
 CALL tools\test-fuzz.cmd
 IF ERRORLEVEL 1 EXIT /B 1
 
+REM Every memory instruction form at every edge of the memory arena, against an oracle (tools\GAZLBoundsSweep.cpp).
+CALL tools\test-bounds.cmd
+IF ERRORLEVEL 1 EXIT /B 1
+
 REM Build Impala
 CALL tools\BuildImpala.cmd
 IF ERRORLEVEL 1 EXIT /B 1
