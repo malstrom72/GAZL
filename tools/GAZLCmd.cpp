@@ -278,6 +278,8 @@ static CallStackEntry callStack[CALL_STACK_SIZE];
 #if defined(LIBFUZZ) || defined(LIBFUZZ_STANDALONE)
 
 #include <sstream>
+#include <climits>
+#include "GAZLReference.h"
 
 struct TestCallbackData {
 	Pointer globalPointer;
@@ -296,6 +298,100 @@ int testMul(Processor* p) {
 
 int testCallback(Processor* p) {
 	return 0;
+}
+
+/*
+	`input` without the console: what `input` does when the line read is empty. A fuzz target must not read stdin,
+	and the reference (below) has to be able to do exactly the same.
+*/
+static Status fuzzInput(Processor* vpu) {
+	vpu->resetTimeOut(0x7FFFFFFF);
+	Value* params = vpu->accessParams(3);
+	if (params == 0) return DATA_STACK_OVERFLOW;
+	Value* bp = vpu->accessMemory(params[2].p, params[1].i + 1);
+	if (bp == 0) return ACCESS_VIOLATION;
+	bp[0].i = 0;
+	params[0].i = 0;
+	return OK;
+}
+
+/*
+	The reference executor (tools/GAZLReference.h) as an oracle for the interpreter. Each native below is the
+	reference's twin of the one the interpreter gets, with `room` standing in for `accessParams`.
+*/
+namespace ReferenceNatives {
+	using GAZLReference::Machine;
+	static Status abortNative(Machine&, Value*, UInt) { return ABORTED; }
+	static Status stub(Machine&, Value*, UInt) { return OK; }
+	static Status input(Machine& m, Value* w, UInt room) {
+		m.resetFuel(0x7FFFFFFF);
+		if (room < 3) return DATA_STACK_OVERFLOW;
+		Value* bp = m.accessMemory(w[2].p, w[1].i + 1);
+		if (bp == 0) return ACCESS_VIOLATION;
+		bp[0].i = 0;
+		w[0].i = 0;
+		return OK;
+	}
+	static Status atan2Native(Machine&, Value* w, UInt room) {
+		if (room < 3) return DATA_STACK_OVERFLOW;
+		w[0].f = atan2(w[1].f, w[2].f);
+		return OK;
+	}
+	static Status sqrtNative(Machine&, Value* w, UInt room) {
+		if (room < 2) return DATA_STACK_OVERFLOW;
+		w[0].f = sqrt(w[1].f);
+		return OK;
+	}
+	static Status logNative(Machine&, Value* w, UInt room) {
+		if (room < 2) return DATA_STACK_OVERFLOW;
+		w[0].f = log(w[1].f);
+		return OK;
+	}
+	static Status testMul(Machine&, Value* w, UInt room) {
+		if (room < 3) return DATA_STACK_OVERFLOW;
+		w[0].f = w[1].f * w[2].f;
+		return OK;
+	}
+}
+
+/*
+	Runs `program` from `snapshot` on the reference and requires the interpreter's outcome: the same status, the same
+	fuel left (unless `interpFuelLeft` is INT_MIN) and the same memory, a NaN matching any NaN. A difference, or a
+	program that breaks an assembler guarantee, is printed with the source and aborts, so a fuzzer keeps it as a crash.
+*/
+static void requireReference(const char* which, const uint8_t* data, size_t size, const AssembledProgram& program
+		, Pointer mainFunction, const GAZLReference::Native* natives, const Value* snapshot, long long fuel
+		, Status interpStatus, Int interpFuelLeft, const Value* interpImage) {
+	static Value image[DATA_MEMORY_SIZE];
+	std::memcpy(image, snapshot, sizeof (image));
+	AssembledProgram copy = program;
+	copy.memory = image;
+	GAZLReference::Machine reference(copy, CALL_STACK_SIZE, natives);
+	const Status status = reference.call(mainFunction, fuel);
+	int diffWord = -1;
+	if (!reference.unspecified) {
+		for (int i = 0; i < DATA_MEMORY_SIZE; ++i) {
+			if (interpImage[i].i == image[i].i) continue;
+			if (interpImage[i].f != interpImage[i].f && image[i].f != image[i].f) continue;
+			diffWord = i;
+			break;
+		}
+	}
+	const bool fuelDiffers = (interpFuelLeft != INT_MIN && interpFuelLeft != reference.fuelLeft());
+	if (status == interpStatus && diffWord < 0 && !fuelDiffers) return;
+	std::fprintf(stderr, "\n=== interpreter/reference divergence (%s): interpreter status=%d reference status=%d", which
+			, static_cast<int>(interpStatus), static_cast<int>(status));
+	if (status == GAZLReference::REFERENCE_VIOLATION) std::fprintf(stderr, " (%s)", reference.violation.c_str());
+	if (fuelDiffers) {
+		std::fprintf(stderr, "; fuel left interpreter=%d reference=%d", interpFuelLeft, reference.fuelLeft());
+	}
+	if (diffWord >= 0) {
+		std::fprintf(stderr, "; word[%d] interpreter=%d reference=%d", diffWord, interpImage[diffWord].i
+				, image[diffWord].i);
+	}
+	std::fprintf(stderr, " ===\n%.*s\n", static_cast<int>(size), reinterpret_cast<const char*>(data));
+	std::fflush(stderr);
+	std::abort();
 }
 
 #if defined(JITDIFF) && defined(GAZL_JIT)
@@ -655,6 +751,9 @@ static void runDiff(const std::string& programText) {
 		static const NativeFunc NATIVE_TABLE[] = { fuzzStub, fuzzStub, fuzzStub, fuzzStub, fuzzStub, fuzzStub, fuzzStub, gazlAtan2, gazlSqrt, gazlLog };
 		static const char* const NATIVE_NAMES[] = { "abort", "assertFail", "printInt", "printFloat", "print", "printLF", "input", "atan2", "sqrt", "log" };
 		for (size_t i = 0; i < sizeof (NATIVE_TABLE) / sizeof (*NATIVE_TABLE); ++i) { globals.registerNative(NATIVE_NAMES[i], static_cast<int>(i)); }
+		using namespace ReferenceNatives;
+		static const GAZLReference::Native REFERENCE_NATIVES[] = { stub, stub, stub, stub, stub, stub, stub, atan2Native
+				, sqrtNative, logNative };
 
 		AssembledProgram program;
 		for (int i = 0; i < DATA_MEMORY_SIZE; ++i) { memory[i].i = 0; }	// clean slate before assembly: the frame-local region is otherwise stale residue from the previous program (platform- and stream-position-dependent), so an uninitialized-local read would be nondeterministic across engines/platforms
@@ -692,7 +791,17 @@ static void runDiff(const std::string& programText) {
 		// inside this budget; running to completion adds no crash coverage.
 		const Int TEXT_FUEL = 2000000;
 		std::memcpy(memory, snapshot, sizeof (memory));
-		{ Processor interp(program, CALL_STACK_SIZE, callStack, NATIVE_TABLE, 0); if (interp.enterCall(mainFunction) == OK) { interp.resetTimeOut(TEXT_FUEL); interp.run(); } }
+		{
+			// Interpreter and reference DO agree on arbitrary source (the realm contract binds only the JIT), so this
+			// lane compares those two, fuel included.
+			Processor interp(program, CALL_STACK_SIZE, callStack, NATIVE_TABLE, 0);
+			if (interp.enterCall(mainFunction) == OK) {
+				interp.resetTimeOut(TEXT_FUEL);
+				const Status s = interp.run();
+				requireReference("text lane", Data, Size, program, mainFunction, REFERENCE_NATIVES, snapshot, TEXT_FUEL
+						, s, interp.getClockCyclesLeft(), memory);
+			}
+		}
 		std::memcpy(memory, snapshot, sizeof (memory));
 		{ JitProcessor jit(module, program, CALL_STACK_SIZE, callStack, NATIVE_TABLE); if (jit.enterCall(mainFunction) == OK) { jit.resetTimeOut(TEXT_FUEL); jit.run(); } }
 #else
@@ -700,6 +809,9 @@ static void runDiff(const std::string& programText) {
 		Processor interp(program, CALL_STACK_SIZE, callStack, NATIVE_TABLE, 0);
 		const Status interpStatus = runEngine(interp, mainFunction, 10000000);	// the oracle
 		std::memcpy(interpImage, memory, sizeof (memory));
+		// ...itself checked against the reference executor, run to completion as runEngine does (fuel is not compared).
+		requireReference("generated", Data, Size, program, mainFunction, REFERENCE_NATIVES, snapshot, 1000000000000LL
+				, interpStatus, INT_MIN, interpImage);
 
 		std::memcpy(memory, snapshot, sizeof (memory));
 		{ JitProcessor jit(module, program, CALL_STACK_SIZE, callStack, NATIVE_TABLE); const Status s = runEngine(jit, mainFunction, 10000000); requireMatch("jit full-fuel", Data, Size, interpStatus, interpImage, s, memory); }
@@ -748,7 +860,13 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size) {
 		Symbols globals;
 
 		static const NativeFunc NATIVE_TABLE[] = {
-			abort, abort, input, gazlAtan2, gazlSqrt, gazlLog, testMul, testCallback
+			abort, abort, fuzzInput, gazlAtan2, gazlSqrt, gazlLog, testMul, testCallback
+		};
+
+		static const GAZLReference::Native REFERENCE_NATIVES[] = {
+			ReferenceNatives::abortNative, ReferenceNatives::abortNative, ReferenceNatives::input
+			, ReferenceNatives::atan2Native, ReferenceNatives::sqrtNative, ReferenceNatives::logNative
+			, ReferenceNatives::testMul, ReferenceNatives::stub
 		};
 
 		static const char* NATIVE_NAMES[] = {
@@ -779,10 +897,14 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size) {
 			Processor pmachine(program, CALL_STACK_SIZE, callStack, NATIVE_TABLE, 0);
 			Pointer mainFunction = globals.findFunction("main");
 			if (mainFunction != 0) {
+				static Value snapshot[DATA_MEMORY_SIZE];
+				std::memcpy(snapshot, memory, sizeof (snapshot));
 				Status status = pmachine.enterCall(mainFunction);
 				assert(status == OK);
 				pmachine.resetTimeOut(10000000);
 				status = pmachine.run();
+				requireReference("text", Data, Size, program, mainFunction, REFERENCE_NATIVES, snapshot, 10000000
+						, status, pmachine.getClockCyclesLeft(), memory);
 			}
 		}
 	}

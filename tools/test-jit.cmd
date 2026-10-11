@@ -81,4 +81,4 @@ FOR /F "delims=" %%F IN ('DIR /S /B "tests\fuzz\textCrashes\*.gazl" 2^>NUL') DO 
 FOR /F %%C IN ('FIND /C /V "" ^< "%LIST%"') DO SET "N=%%C"
 output\GAZLFuzzText.exe "@%LIST%" >NUL
 IF ERRORLEVEL 1 EXIT /B 1
-ECHO test-jit: %N% crash inputs replayed through the interpreter and the JIT, no crashes
+ECHO test-jit: %N% crash inputs replayed through the interpreter, the reference and the JIT, no crashes
