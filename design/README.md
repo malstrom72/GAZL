@@ -55,6 +55,7 @@ branch contains everything above it, and a conflict is resolved once, at the ste
 | [GAZL2FunctionPointers](gazl/GAZL2FunctionPointers.md) | PROPOSAL | A distinct function-pointer storage type `t` |
 | [TailCalls](gazl/TailCalls.md) | DESIGN NOTE | `TAIL` IMPLEMENTED: engine, Impala `tail`, both backends |
 | [Backlog](gazl/Backlog.md) | BACKLOG | Assembler and VM improvements not done yet |
+| [DispatchLayoutSearch](gazl/DispatchLayoutSearch.md) | NOTE | 200 random case orders vs the hand-tuned one; tools on tag `layout-search-2026-10` |
 
 ## The JIT
 
