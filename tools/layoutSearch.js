@@ -4,9 +4,11 @@
 	run on every platform with no link between the machines. Called by tools/layoutSearch.sh / .cmd.
 
 	Usage: node tools/layoutSearch.js <first seed> <last seed> <out.csv> [--drift=20] [--pin=N]
+	       node tools/layoutSearch.js --seeds=a,b,... --repeat=N <out.csv> [--pin=N]
 
 	The seed list is seed 0, then first..last with seed 0 again after every `drift` seeds and at the end (seed 0 is the
-	unchanged source: the baseline, and a drift check over the run). For each entry: permute src/GAZL.cpp into
+	unchanged source: the baseline, and a drift check over the run). The second form is a confirmation round: seed 0,
+	then N times each listed seed followed by seed 0 (0, a, 0, b, 0, ..., a, 0, b, 0). For each entry: permute src/GAZL.cpp into
 	output/layoutSearch/, build release GAZLCmd from it, check that it still computes the same results as the first
 	seed 0 (every Permut8 firmware checksum in tests/impala/golden and every kernel's plain-run output), then time each
 	kernel with `--bench=5 --warmup=2` and append `platform,seed,kernel,cpu_median,median_ms` rows to the CSV. A seed
@@ -42,14 +44,30 @@ function parseArgs(argv) {
 		const a = argv.find((x) => x.startsWith("--" + name + "="));
 		return a === undefined ? fallback : a.slice(name.length + 3);
 	};
-	if (positional.length !== 3 || !/^\d+$/.test(positional[0]) || !/^\d+$/.test(positional[1])) {
-		fail("usage: node tools/layoutSearch.js <first seed> <last seed> <out.csv> [--drift=20] [--pin=N]");
+	const usage =
+		"usage: node tools/layoutSearch.js <first seed> <last seed> <out.csv> [--drift=20] [--pin=N]\n" +
+		"       node tools/layoutSearch.js --seeds=a,b,... --repeat=N <out.csv> [--pin=N]";
+	const pin = option("pin", WINDOWS ? "4" : "");
+	const resolveCsv = (p) => path.resolve(process.env.LAYOUT_SEARCH_CWD || process.cwd(), p); // relative to the wrapper's caller
+	const seeds = option("seeds", null);
+	if (seeds !== null) {
+		const repeat = Number(option("repeat", "1"));
+		if (positional.length !== 1 || !/^\d+(,\d+)*$/.test(seeds) || !(Number.isInteger(repeat) && repeat >= 1)) fail(usage);
+		const list = [0];
+		for (let r = 0; r < repeat; ++r) for (const s of seeds.split(",")) list.push(Number(s), 0);
+		return { list, label: "seeds " + seeds + " x" + repeat, csv: resolveCsv(positional[0]), pin };
 	}
+	if (positional.length !== 3 || !/^\d+$/.test(positional[0]) || !/^\d+$/.test(positional[1])) fail(usage);
 	const drift = Number(option("drift", "20"));
 	if (!(drift >= 1)) fail("--drift must be at least 1");
-	const pin = option("pin", WINDOWS ? "4" : "");
-	const csv = path.resolve(process.env.LAYOUT_SEARCH_CWD || process.cwd(), positional[2]); // relative to the wrapper's caller
-	return { first: Number(positional[0]), last: Number(positional[1]), csv, drift, pin };
+	const first = Number(positional[0]);
+	const last = Number(positional[1]);
+	return {
+		list: seedList(first, last, drift),
+		label: "seeds " + first + ".." + last + ", seed 0 every " + drift,
+		csv: resolveCsv(positional[2]),
+		pin,
+	};
 }
 
 function seedList(first, last, drift) {
@@ -150,7 +168,7 @@ function main() {
 	const kernelList = kernels();
 	const kernelNames = kernelList.map((k) => path.basename(k, ".gazl"));
 	const firmwareList = firmwares();
-	const list = seedList(options.first, options.last, options.drift);
+	const list = options.list;
 
 	// Resume: count the complete entries per seed already in the CSV.
 	const done = new Map();
@@ -177,12 +195,8 @@ function main() {
 		PLATFORM +
 			": " +
 			list.length +
-			" list entries (seeds " +
-			options.first +
-			".." +
-			options.last +
-			", seed 0 every " +
-			options.drift +
+			" list entries (" +
+			options.label +
 			"), " +
 			kernelNames.length +
 			" kernels, " +
