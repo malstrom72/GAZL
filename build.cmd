@@ -28,6 +28,10 @@ REM run: it cannot find anything new, it stops what has been found from coming b
 CALL tools\test-fuzz.cmd
 IF ERRORLEVEL 1 EXIT /B 1
 
+REM Every memory instruction form at every edge of the memory arena, against an oracle (tools\GAZLBoundsSweep.cpp).
+CALL tools\test-bounds.cmd
+IF ERRORLEVEL 1 EXIT /B 1
+
 REM Every node-only gate, shared with build.sh so the two cannot run different subsets.
 CALL tools\test-js.cmd
 IF ERRORLEVEL 1 EXIT /B 1

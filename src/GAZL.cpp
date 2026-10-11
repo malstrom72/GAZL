@@ -1515,7 +1515,7 @@ Processor::Processor(UInt codeSize, const Instruction* code, UInt functionCount,
 		, UInt memorySize, Value* memory, UInt rwMemorySize, UInt dataStackOffset, UInt dataStackSize, UInt ipStackSize
 		, CallStackEntry* ipStack, NativeFunc const* natives, void* userData)
 		: codeSize(codeSize), codeBase(code), functionCount(functionCount), functionTable(functionTable)
-		, memorySize(memorySize - 1), memoryBase(memory), rwMemorySize(rwMemorySize)
+		, memorySize(memorySize), memoryBase(memory), rwMemorySize(rwMemorySize)
 		, dataStackBase(memory + dataStackOffset), dataStackEnd(memory + dataStackOffset + dataStackSize)
 		, ipStackBase(ipStack), ipStackEnd(ipStack + ipStackSize), natives(natives), ip(codeBase), dsp(dataStackBase)
 		, ipsp(ipStackBase), userData(userData), clockCyclesLeft(0x7FFFFFFFU), resume(0) {
@@ -1530,7 +1530,7 @@ Processor::Processor(UInt codeSize, const Instruction* code, UInt functionCount,
 		, UInt memorySize, Value* memory, UInt globalsSize, UInt constsSize, UInt ipStackSize, CallStackEntry* ipStack
 		, NativeFunc const* natives, void* userData)
 		: codeSize(codeSize), codeBase(code), functionCount(functionCount), functionTable(functionTable)
-		, memorySize(memorySize - 1), memoryBase(memory), rwMemorySize(memorySize - constsSize)
+		, memorySize(memorySize), memoryBase(memory), rwMemorySize(memorySize - constsSize)
 		, dataStackBase(memory + globalsSize), dataStackEnd(memory + memorySize - constsSize), ipStackBase(ipStack)
 		, ipStackEnd(ipStack + ipStackSize), natives(natives), ip(codeBase), dsp(dataStackBase), ipsp(ipStackBase)
 		, userData(userData), clockCyclesLeft(0x7FFFFFFFU), resume(0) {
@@ -1548,7 +1548,7 @@ Processor::Processor(UInt codeSize, const Instruction* code, UInt functionCount,
 Processor::Processor(const AssembledProgram& program, UInt ipStackSize, CallStackEntry* ipStack
 		, NativeFunc const* natives, void* userData)
 		: codeSize(program.codeSize), codeBase(program.code), functionCount(program.functionCount)
-		, functionTable(program.functionTable), memorySize(program.memorySize - 1), memoryBase(program.memory)
+		, functionTable(program.functionTable), memorySize(program.memorySize), memoryBase(program.memory)
 		, rwMemorySize(program.memorySize - program.constsSize), dataStackBase(program.memory + program.globalsSize)
 		, dataStackEnd(program.memory + program.memorySize - program.constsSize), ipStackBase(ipStack)
 		, ipStackEnd(ipStack + ipStackSize), natives(natives), ip(program.code), dsp(dataStackBase), ipsp(ipStackBase)
@@ -1562,7 +1562,7 @@ Processor::Processor(const AssembledProgram& program, UInt ipStackSize, CallStac
 Processor::Processor(const AssembledProgram& program, UInt rwMemorySize, UInt dataStackOffset, UInt dataStackSize
 		, UInt ipStackSize, CallStackEntry* ipStack, NativeFunc const* natives, void* userData)
 		: codeSize(program.codeSize), codeBase(program.code), functionCount(program.functionCount)
-		, functionTable(program.functionTable), memorySize(program.memorySize - 1), memoryBase(program.memory)
+		, functionTable(program.functionTable), memorySize(program.memorySize), memoryBase(program.memory)
 		, rwMemorySize(rwMemorySize), dataStackBase(program.memory + dataStackOffset)
 		, dataStackEnd(program.memory + dataStackOffset + dataStackSize), ipStackBase(ipStack)
 		, ipStackEnd(ipStack + ipStackSize), natives(natives), ip(program.code), dsp(dataStackBase), ipsp(ipStackBase)
