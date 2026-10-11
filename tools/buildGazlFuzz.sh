@@ -52,7 +52,7 @@ if [ "$text" = 1 ]; then
 		out=../output/GAZLFuzzTextX64
 		"$CPP_COMPILER" -arch x86_64 -std=c++11 -O1 -g \
 				-DLIBFUZZ -DLIBFUZZ_STANDALONE -DGAZL_JIT -DJITDIFF -DFUZZ_TEXT_INPUT -DGAZL_CANONICAL_NAN -I.. \
-				-o "$out" GAZLCmd.cpp ../src/GAZL.cpp ../src/GAZLJit.cpp ../src/GAZLJitX64.cpp ../src/GAZLJitMemPosix.cpp
+				-o "$out" GAZLCmd.cpp GAZLReference.cpp ../src/GAZL.cpp ../src/GAZLJit.cpp ../src/GAZLJitX64.cpp ../src/GAZLJitMemPosix.cpp
 		chmod +x "$out" 2>/dev/null || true
 		exit 0
 	fi
@@ -70,13 +70,13 @@ if [ "$text" = 1 ]; then
 		: "${CPP_COMPILER:=clang++}"
 		textopts="-O1 -g -DLIBFUZZ -DLIBFUZZ_STANDALONE -DGAZL_JIT -DJITDIFF -DFUZZ_TEXT_INPUT -DGAZL_CANONICAL_NAN"
 		CPP_COMPILER="$CPP_COMPILER" CPP_OPTIONS="${CPP_OPTIONS:-$textopts}" \
-				bash BuildCpp.sh beta native "$out" -I.. GAZLCmd.cpp ../src/GAZL.cpp ../src/GAZLJit.cpp "$backend" "$jitmem"
+				bash BuildCpp.sh beta native "$out" -I.. GAZLCmd.cpp GAZLReference.cpp ../src/GAZL.cpp ../src/GAZLJit.cpp "$backend" "$jitmem"
 		chmod +x "$out" 2>/dev/null || true
 		exit 0
 	fi
 	pick_libfuzzer_clang
 	CPP_OPTIONS=${CPP_OPTIONS:-"-fsanitize=fuzzer -DLIBFUZZ -DGAZL_JIT -DJITDIFF -DFUZZ_TEXT_INPUT -DGAZL_CANONICAL_NAN $libcxxflags"}
-	"$CPP_COMPILER" -std=c++11 -O1 -g $CPP_OPTIONS -I.. -o "$out" GAZLCmd.cpp ../src/GAZL.cpp ../src/GAZLJit.cpp "$backend" "$jitmem"
+	"$CPP_COMPILER" -std=c++11 -O1 -g $CPP_OPTIONS -I.. -o "$out" GAZLCmd.cpp GAZLReference.cpp ../src/GAZL.cpp ../src/GAZLJit.cpp "$backend" "$jitmem"
 	chmod +x "$out" 2>/dev/null || true
 	exit 0
 fi
@@ -100,7 +100,7 @@ if [ "$cross" = 1 ]; then
 	# Cross build for x86_64 (Rosetta). Direct compile: BuildCpp.sh's "native" tuning would fight -arch x86_64.
 	out=../output/GAZLFuzzX64
 	"$CPP_COMPILER" -arch x86_64 -std=c++11 -O2 $CPP_OPTIONS -I.. \
-			-o "$out" GAZLCmd.cpp ../src/GAZL.cpp ../src/GAZLJit.cpp ../src/GAZLJitX64.cpp ../src/GAZLJitMemPosix.cpp
+			-o "$out" GAZLCmd.cpp GAZLReference.cpp ../src/GAZL.cpp ../src/GAZLJit.cpp ../src/GAZLJitX64.cpp ../src/GAZLJitMemPosix.cpp
 else
 	case "$(uname -m)" in
 		arm64 | aarch64) backend=../src/GAZLJitArm64.cpp ;;
@@ -110,6 +110,6 @@ else
 	out=../output/GAZLFuzz
 	CPP_COMPILER="$CPP_COMPILER" CPP_OPTIONS="$CPP_OPTIONS" \
 			bash BuildCpp.sh beta native "$out" \
-			-I.. GAZLCmd.cpp ../src/GAZL.cpp ../src/GAZLJit.cpp "$backend" "$jitmem"
+			-I.. GAZLCmd.cpp GAZLReference.cpp ../src/GAZL.cpp ../src/GAZLJit.cpp "$backend" "$jitmem"
 fi
 chmod +x "$out" 2>/dev/null || true

@@ -11,7 +11,7 @@ IF NOT EXIST output MKDIR output
 
 ECHO test-fuzz: building the replay driver
 PUSHD tools
-CALL BuildCpp.cmd beta x64 ..\output\GAZLReplay.exe -DLIBFUZZ -DLIBFUZZ_STANDALONE -I.. GAZLCmd.cpp ..\src\GAZL.cpp || GOTO error
+CALL BuildCpp.cmd beta x64 ..\output\GAZLReplay.exe -DLIBFUZZ -DLIBFUZZ_STANDALONE -I.. GAZLCmd.cpp GAZLReference.cpp ..\src\GAZL.cpp || GOTO error
 POPD
 
 REM Unpack into an EMPTY folder, or inputs left from a previous run are replayed too (design/fuzzing.md).
