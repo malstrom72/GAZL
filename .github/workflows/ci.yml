@@ -35,3 +35,5 @@ jobs:
       run: |
         chmod +x ./build.sh
         ./build.sh
+    - name: UBSan (unit tests and fuzz corpus replay)
+      run: bash tools/test-ubsan.sh
