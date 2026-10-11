@@ -15,6 +15,9 @@ mkdir -p output
 # engine it exercises, so a regression surfaces before the slower node suite rather than after it.
 bash tools/test-fuzz.sh
 
+# Every memory instruction form at every edge of the memory arena, against an oracle (tools/GAZLBoundsSweep.cpp).
+bash tools/test-bounds.sh
+
 # Build Impala
 bash tools/BuildImpala.sh
 
