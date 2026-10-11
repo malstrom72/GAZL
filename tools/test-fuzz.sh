@@ -27,5 +27,5 @@ find tests/fuzz/textCrashes -type f -name '*.gazl' >> "$LIST"
 N=$(wc -l < "$LIST" | tr -d ' ')
 
 echo "test-fuzz: replaying $N inputs"
-./output/GAZLReplay "@$LIST" > /dev/null
+./output/GAZLReplay --budget=30 "@$LIST" > /dev/null		# warns past the normal build's 30 s budget
 echo "test-fuzz: $N inputs replayed, no crashes"
