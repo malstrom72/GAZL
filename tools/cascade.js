@@ -40,6 +40,12 @@ function git(...args) {
 	return result.stdout.trim();
 }
 
+function gh(...args) {
+	const result = run("gh", args);
+	if (result.status !== 0) fail(`gh ${args.join(" ")} failed:\n${result.stderr}`);
+	return result.stdout.trim();
+}
+
 function gitOk(...args) {
 	return run("git", args).status === 0;
 }
@@ -98,20 +104,33 @@ for (let i = 1; i < CASCADE.length; ++i) {
 	}
 	if (!gitOk("merge-base", "--is-ancestor", `origin/${lower}`, work)) fail(`${work} does not contain origin/${lower}`);
 
+	const sha = git("rev-parse", work);
 	git("push", "--quiet", "--force-with-lease", "-u", "origin", work);
-	if (run("gh", ["pr", "view", work, "--json", "state"]).status !== 0) {
-		const pr = run("gh", ["pr", "create", "--base", lower, "--head", work, "--title", title, "--body", `Cascade of ${upper}.`]);
-		if (pr.status !== 0) fail(`gh pr create failed:\n${pr.stderr}`);
-		console.log(pr.stdout.trim());
+
+	// Only an OPEN pull request counts: a merged one from an earlier cascade has the same head branch name, and its
+	// old passing checks say nothing about this merge.
+	const openPr = () => gh("pr", "list", "--head", work, "--base", lower, "--state", "open", "--json", "number", "-q", ".[0].number");
+	let pr = openPr();
+	if (pr === "") {
+		console.log(gh("pr", "create", "--base", lower, "--head", work, "--title", title, "--body", `Cascade of ${upper}.`));
+		pr = openPr();
+		if (pr === "") fail(`cannot find the pull request just opened for ${work}`);
 	}
 
-	// `gh pr checks --watch` can return before the checks are registered, so wait until there is something to watch.
-	for (let tries = 0; run("gh", ["pr", "checks", work]).stdout.trim() === ""; ++tries) {
-		if (tries === 30) fail(`no CI checks appeared for ${work}`);
+	// Checks on THIS commit only. `gh pr checks --watch` can return before they are registered, so wait for them first.
+	const rollup = () => {
+		const view = JSON.parse(gh("pr", "view", pr, "--json", "headRefOid,statusCheckRollup"));
+		return view.headRefOid === sha ? view.statusCheckRollup : [];
+	};
+	for (let tries = 0; rollup().length === 0; ++tries) {
+		if (tries === 30) fail(`no CI checks appeared on pull request #${pr}`);
 		run(process.execPath, ["-e", "setTimeout(() => {}, 10000)"]);
 	}
-	const checks = run("gh", ["pr", "checks", work, "--watch", "--interval", "30"], { stdio: "inherit" });
-	if (checks.status !== 0) fail(`CI failed on ${work}; fix it there and run this again`);
+	run("gh", ["pr", "checks", pr, "--watch", "--interval", "30"], { stdio: "inherit" });
+	const checks = rollup();
+	if (checks.length === 0 || !checks.every((c) => c.conclusion === "SUCCESS")) {
+		fail(`CI did not pass on pull request #${pr}; fix it on ${work} and run this again`);
+	}
 
 	git("push", "--quiet", "origin", `${work}:refs/heads/${lower}`);
 	git("fetch", "--quiet", "origin");
