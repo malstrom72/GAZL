@@ -50,6 +50,7 @@ branch contains everything above it, and a conflict is resolved once, at the ste
 | [SyntaxConsistency](impala/SyntaxConsistency.md) | AUDIT | Every place Impala's C-looking surface does not behave like C, each reproduced against this tree and graded FORCED / ARBITRARY / BUG. The bugs section is FIXED and kept as the record |
 | [PortabilityAudit](gazl/PortabilityAudit.md) | NOTE | C++ portability findings |
 | [Backlog](gazl/Backlog.md) | BACKLOG | Assembler and VM improvements not done yet |
+| [DispatchLayoutSearch](gazl/DispatchLayoutSearch.md) | NOTE | 200 random case orders vs the hand-tuned one; tools on tag `layout-search-2026-10` |
 
 ## Symbols, layout and types
 
