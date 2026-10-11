@@ -51,6 +51,7 @@ branch contains everything above it, and a conflict is resolved once, at the ste
 | [PortabilityAudit](gazl/PortabilityAudit.md) | NOTE | C++ portability findings |
 | [Backlog](gazl/Backlog.md) | BACKLOG | Assembler and VM improvements not done yet |
 | [DispatchLayoutSearch](gazl/DispatchLayoutSearch.md) | NOTE | 200 random case orders vs the hand-tuned one; tools on tag `layout-search-2026-10` |
+| [Measurements](gazl/Measurements.md) | NOTE | Dated timings, each with its commit, machine and command |
 
 ## Symbols, layout and types
 
