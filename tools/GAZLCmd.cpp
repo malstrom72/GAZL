@@ -826,7 +826,10 @@ static void quietAsserts() {
 #include <dirent.h>							// POSIX directory replay only; MSVC has no dirent, so Windows passes `@listfile`
 #endif
 
+static int replayCount = 0;
+
 void doOne(const char* fn) {
+	++replayCount;
 	printf ("%s\n", fn);
 	fprintf(stderr, "Running: %s\n", fn);
 	FILE *f = fopen(fn, "rb");																							// binary: on Windows text mode folds CRLF and fread comes up short
@@ -848,7 +851,8 @@ void doOne(const char* fn) {
 	(POSIX only), or `@listfile` naming a file that holds one path per line. The list form exists because a corpus
 	replay cannot be expressed any other way on Windows: there is no dirent, and a thousand-odd paths do not fit in
 	a command line. Both tools/test-fuzz.sh and its .cmd twin use it, so the two behave identically.
-	A crash is the signal; surviving every input is the pass.
+	A crash is the signal; surviving every input is the pass. The total wall time goes to stderr at the end, and
+	`--budget=S` adds a warning when it is over S seconds (the normal build's budget, design/fuzzing.md).
 */
 int main(int argc, const char* argv[]) {
 	quietAsserts();
@@ -909,7 +913,13 @@ int main(int argc, const char* argv[]) {
 		return 0;
 	}
 #endif
+	const std::chrono::steady_clock::time_point startTime = std::chrono::steady_clock::now();
+	double budget = 0.0;
 	for (int i = 1; i < argc; ++i) {
+		if (strncmp(argv[i], "--budget=", 9) == 0) {
+			budget = atof(argv[i] + 9);
+			continue;
+		}
 		if (argv[i][0] == '@') {
 			FILE* listFile = fopen(argv[i] + 1, "r");
 			if (listFile == 0) { perror(argv[i] + 1); return EXIT_FAILURE; }
@@ -951,6 +961,12 @@ int main(int argc, const char* argv[]) {
 #else
 		doOne(argv[i]);							// no directory walk here; pass files, or an @listfile
 #endif
+	}
+	const double seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - startTime).count();
+	fprintf(stderr, "Replayed %d inputs in %.1f s\n", replayCount, seconds);
+	if (budget > 0.0 && seconds > budget) {
+		fprintf(stderr, "WARNING: replay took %.1f s, over the %.0f s budget; move the corpus replay to its own script"
+				" (design/fuzzing.md)\n", seconds, budget);
 	}
 	return 0;
 }

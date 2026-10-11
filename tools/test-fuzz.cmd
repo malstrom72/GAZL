@@ -28,7 +28,8 @@ FOR /F "delims=" %%F IN ('DIR /S /B "tests\fuzz\textCrashes\*.gazl" 2^>NUL') DO 
 FOR /F %%C IN ('FIND /C /V "" ^< "%LIST%"') DO SET "N=%%C"
 
 ECHO test-fuzz: replaying %N% inputs
-output\GAZLReplay.exe "@%LIST%" >NUL || GOTO error
+REM --budget warns past the normal build's 30 s budget
+output\GAZLReplay.exe --budget=30 "@%LIST%" >NUL || GOTO error
 ECHO test-fuzz: %N% inputs replayed, no crashes
 EXIT /b 0
 

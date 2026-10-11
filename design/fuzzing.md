@@ -128,6 +128,28 @@ Turn off CRT dialogs in `LLVMFuzzerInitialize`, or a failed assert hangs the wor
 
 GAZL's lanes, and the one place it departs from the shared rules.
 
+### Lanes
+
+What is fuzzed or replayed, with which toolchain, and when. Branch is the first branch in the cascade
+(`design/README.md`) that has the lane; every branch below it has it too.
+
+| Lane | Built by | Toolchain and sanitizers | Branch | Runs |
+|---|---|---|---|---|
+| Text: assembler + interpreter | `buildGazlFuzz.sh` | clang, libFuzzer + ASan (UBSan on request) | `main` | Mac campaigns |
+| Text, Windows | `buildGazlFuzz.cmd` | MSVC, libFuzzer + ASan | `main` | Windows campaigns |
+| Corpus + crash replay | `test-fuzz.sh` / `.cmd` | the build's compiler (MSVC, Apple clang, g++), `beta`, no sanitizers | `main` | Every build, all three CI jobs |
+| The same replay under UBSan | `test-ubsan.sh` | clang++, UBSan | `main` | Linux CI job |
+| Impala generator | `impala/fuzzImpala.js` | Node, no C++ | `Impala2` | JS gate; `fuzz48h` for long rounds |
+| JIT differential, `--gen` | `buildGazlFuzz.sh standalone` | clang, no sanitizers | `jit-compiler` | 2000 programs in `test-jit`; `fuzzSoak.ps1` and `runFuzzMac.sh` for soaks |
+| Text through both engines | `buildGazlFuzz.sh text` | clang, libFuzzer + ASan | `jit-compiler` | `runFuzzMac.sh` lanes 6 and 7 |
+| Crash replay through both engines | `buildGazlFuzz.sh standalone text` | clang, no sanitizers | `jit-compiler` | Every build (`test-jit`) |
+
+On `jit-compiler`, `buildGazlFuzz.cmd` builds the `--gen` differential instead of the text lane (see below).
+
+**The replay budget.** `test-fuzz` passes `--budget=30` to the replay driver, which prints the replay's wall time
+and warns when it is over 30 seconds. The warning does not fail the build; it is the signal to move the corpus replay
+to its own script, as the shared rules above require.
+
 - **Three targets, not one.** The JIT-vs-interpreter differential (`tools/GAZLCmd.cpp` under `-DJITDIFF`), the
   text-assembler crash lane (the same file under `-DLIBFUZZ` without `JITDIFF`), and the Impala compiler fuzzer
   (`impala/fuzzImpala.js`, pure JavaScript, which runs in the JS gate and needs no C++ toolchain).
@@ -145,10 +167,11 @@ GAZL's lanes, and the one place it departs from the shared rules.
   most mutations are invalid and rejected cheaply, against **about 1/s** on a corpus of a single valid program that
   executes every time. So a throughput figure means nothing without the corpus it was measured on, and a campaign
   slowing down as its corpus grows is expected, not a fault.
-- **UBSan is Mac-only for now.** clang-cl's instrumentation breaks MSVC C++ exception handling, and this assembler
+- **No UBSan on Windows.** clang-cl's instrumentation breaks MSVC C++ exception handling, and this assembler
   throws to reject a malformed program as its normal path, so a Windows clang-cl build can silently run the wrong
   code. The Windows lane uses MSVC `/fsanitize=fuzzer /fsanitize=address` (separate flags; the comma form is clang
-  syntax and MSVC drops it with only a warning), which is ASan-only.
+  syntax and MSVC drops it with only a warning), which is ASan-only. UBSan comes from the Mac campaigns and from
+  `test-ubsan.sh` in the Linux CI job.
 - **The CRT dialog fix lives in `quietAsserts()`**, called from both `main()`s in `tools/GAZLCmd.cpp`, rather than in
   `LLVMFuzzerInitialize`. Same effect: an unattended run fails instead of blocking on a message box.
 - **`buildGazlFuzz.cmd` and `buildGazlFuzz.sh` are deliberately NOT behaviour-identical**, the one documented
