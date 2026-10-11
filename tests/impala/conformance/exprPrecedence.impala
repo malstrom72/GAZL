@@ -1,0 +1,24 @@
+/*
+	Conformance: Impala.md#operator-precedence
+	Multiplicative over additive over the one bitwise/shift level; `>>` is arithmetic, `>>>` logical; left associativity.
+	Expected (GAZLCmd exprPrecedence.gazl main): 14 3 256 -4 15 -1 1 1
+*/
+const int DEBUG = 1
+extern native printInt
+extern native printFloat
+extern native printLF
+
+function main()
+locals int x, int a
+{
+	printInt(2 + 3 * 4); printLF();
+	printInt((1 | 2) & 3); printLF();
+	x = 0x1FF;
+	printInt(x & 0xFF + 1); printLF();
+	a = -8;
+	printInt(a >> 1); printLF();
+	printInt(a >>> 28); printLF();
+	printInt(~0); printLF();
+	printInt(7 % 3); printLF();
+	printInt(10 - 5 - 4); printLF();
+}

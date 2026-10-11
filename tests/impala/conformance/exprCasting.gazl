@@ -1,0 +1,39 @@
+; Compiled with Impala version 2.0
+
+; signatures version=1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ exprCasting.impala:6:1
+; signature extern native printInt() -> unknown @ exprCasting.impala:7:1
+; signature extern native printFloat() -> unknown @ exprCasting.impala:8:1
+; signature extern native printLF() -> unknown @ exprCasting.impala:9:1
+.z.untyped:	! DEFi #2
+untyped:	GLOB *.z.untyped	; signature array untyped[2] : unknown @ exprCasting.impala:11:1
+	DATA #7 #0
+
+;-----------------------------------------------------------------------------
+main:	FUNC	; signature func main() -> void @ exprCasting.impala:13:1
+		PARA *1
+	$f:	LOCf
+	$n:	LOCi
+	$raw:	LOCp
+	$p:	LOCp
+;-----------------------------------------------------------------------------
+		! iTOf <A> #3 #1.0	; f = itof(3)
+		MOVf $f <A> 
+		MOVf %1 $f 	; printFloat(f)
+		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ exprCasting.impala:17:15
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ exprCasting.impala:17:26
+		! fTOi <A> #7.9 #1.0	; n = ftoi(7.9)
+		MOVi $n <A> 
+		MOVi %1 $n 	; printInt(n)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ exprCasting.impala:19:13
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ exprCasting.impala:19:24
+		PEEK %1 &untyped:0 	; printInt((int) global untyped[0])
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ exprCasting.impala:20:35
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ exprCasting.impala:20:46
+		MOVp $raw &untyped:0 	; raw = &global untyped[0]
+		MOVp $p $raw 	; p = (int pointer) raw
+		PEEK %1 $p 	; printInt(*p + 1)
+		ADDi %1 %1 #1
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ exprCasting.impala:23:18
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ exprCasting.impala:23:29
+		RETU   	; }

@@ -1,0 +1,26 @@
+/*
+	Conformance: Impala.md#globals
+	Globals with and without initializers, a pointer to a global, and an untyped global array, all reached with `global`.
+	Expected (GAZLCmd declGlobals.gazl main): 23 0 1.5 1.5 9
+*/
+const int DEBUG = 1
+extern native printInt
+extern native printFloat
+extern native printLF
+
+global int uninited
+global int inited = 23
+global float aFloat
+global pointer aPointer = &global aFloat
+global array defaultArray[100]
+
+function main()
+{
+	printInt(global inited); printLF();
+	printInt(global uninited); printLF();
+	global aFloat = 1.5;
+	printFloat(global aFloat); printLF();
+	printFloat((float) *(global aPointer)); printLF();
+	global defaultArray[99] = 9;
+	printInt((int) global defaultArray[99]); printLF();
+}

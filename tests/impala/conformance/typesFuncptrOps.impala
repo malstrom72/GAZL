@@ -1,0 +1,29 @@
+/*
+	Conformance: Impala.md#what-you-can-do-with-a-function-pointer
+	Function pointers compare (`==`, `!=`, a declaration-ordered `<`) and subtract to an `int` ordinal distance.
+	Expected (GAZLCmd typesFuncptrOps.gazl main): 1 1 1 -1
+*/
+const int DEBUG = 1
+extern native printInt
+extern native printFloat
+extern native printLF
+
+function first() { }
+function second() { }
+
+function main()
+locals funcptr f, funcptr g, int same, int differ, int before
+{
+	f = first;
+	g = second;
+	same = 0;
+	differ = 0;
+	before = 0;
+	if (f == first) same = 1;
+	if (f != g) differ = 1;
+	if (f < g) before = 1;
+	printInt(same); printLF();
+	printInt(differ); printLF();
+	printInt(before); printLF();
+	printInt(f - g); printLF();
+}

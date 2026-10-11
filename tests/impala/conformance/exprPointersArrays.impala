@@ -1,0 +1,26 @@
+/*
+	Conformance: Impala.md#pointers-and-arrays
+	`&` and `*`, pointer plus and minus an int, pointer difference in elements, a negative subscript and a subscripted string literal.
+	Expected (GAZLCmd exprPointersArrays.gazl main): 3 4 2 3 2 57
+*/
+const int DEBUG = 1
+extern native printInt
+extern native printFloat
+extern native printLF
+
+global int array data[6] = { 0, 1, 2, 3, 4, 5 }
+global int pointer gp = &global data[0]
+
+function main()
+locals int pointer p, int pointer q, int value
+{
+	p = &global data[3];
+	printInt(*p); printLF();
+	printInt(*(p + 1)); printLF();
+	q = p - 1;
+	printInt(p - (q - 1)); printLF();
+	printInt(*(global gp + 3)); printLF();
+	printInt(p[-1]); printLF();
+	value = 9;
+	printInt(("0123456789abcdef")[value & 0xf]); printLF();
+}

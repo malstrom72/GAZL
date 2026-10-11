@@ -1,0 +1,32 @@
+/*
+	Conformance: Impala.md#functions
+	Arguments, a named return value and locals, including a local array.
+	Expected (GAZLCmd functions.gazl main): 9 10
+*/
+const int DEBUG = 1
+extern native printInt
+extern native printFloat
+extern native printLF
+
+const int TEST_SIZE = 4
+
+function sum3(int a, int b, int c)
+returns int s
+{
+	s = a + b + c;
+}
+
+function fill()
+returns int total
+locals int i, int array mydata[TEST_SIZE]
+{
+	for (i = 0 to TEST_SIZE) mydata[i] = i + 1;
+	total = 0;
+	for (i = 0 to TEST_SIZE) total = total + mydata[i];
+}
+
+function main()
+{
+	printInt(sum3(2, 3, 4)); printLF();
+	printInt(fill()); printLF();
+}

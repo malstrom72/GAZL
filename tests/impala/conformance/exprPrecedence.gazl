@@ -1,0 +1,45 @@
+; Compiled with Impala version 2.0
+
+; signatures version=1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ exprPrecedence.impala:6:1
+; signature extern native printInt() -> unknown @ exprPrecedence.impala:7:1
+; signature extern native printFloat() -> unknown @ exprPrecedence.impala:8:1
+; signature extern native printLF() -> unknown @ exprPrecedence.impala:9:1
+
+;-----------------------------------------------------------------------------
+main:	FUNC	; signature func main() -> void @ exprPrecedence.impala:11:1
+		PARA *1
+	$x:	LOCi
+	$a:	LOCi
+;-----------------------------------------------------------------------------
+		! MULi <A> #3 #4	; printInt(2 + 3 * 4)
+		ADDi %1 #2 <A>
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ exprPrecedence.impala:14:21
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ exprPrecedence.impala:14:32
+		! IORi <A> #1 #2	; printInt((1 | 2) & 3)
+		ANDi %1 <A> #3
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ exprPrecedence.impala:15:23
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ exprPrecedence.impala:15:34
+		MOVi $x #0x1FF 	; x = 0x1FF
+		! ADDi <A> #0xFF #1	; printInt(x & 0xFF + 1)
+		ANDi %1 $x <A>
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ exprPrecedence.impala:17:24
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ exprPrecedence.impala:17:35
+		MOVi $a #-8 	; a = -8
+		SHRi %1 $a #1	; printInt(a >> 1)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ exprPrecedence.impala:19:18
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ exprPrecedence.impala:19:29
+		SHRu %1 $a #28	; printInt(a >>> 28)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ exprPrecedence.impala:20:20
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ exprPrecedence.impala:20:31
+		XORi %1 #0 #-1	; printInt(~0)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ exprPrecedence.impala:21:14
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ exprPrecedence.impala:21:25
+		MODi %1 #7 #3	; printInt(7 % 3)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ exprPrecedence.impala:22:17
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ exprPrecedence.impala:22:28
+		! SUBi <A> #10 #5	; printInt(10 - 5 - 4)
+		SUBi %1 <A> #4
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ exprPrecedence.impala:23:22
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ exprPrecedence.impala:23:33
+		RETU   	; }

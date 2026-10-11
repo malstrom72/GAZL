@@ -1,0 +1,44 @@
+; Compiled with Impala version 2.0
+
+; signatures version=1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ typesFunctype.impala:6:1
+; signature extern native printInt() -> unknown @ typesFunctype.impala:7:1
+; signature extern native printFloat() -> unknown @ typesFunctype.impala:8:1
+; signature extern native printLF() -> unknown @ typesFunctype.impala:9:1
+
+;-----------------------------------------------------------------------------
+tick:	FUNC	; signature func tick(int frame) -> int @ typesFunctype.impala:13:1
+	$r:	OUTi
+	$frame:	INPi
+;-----------------------------------------------------------------------------
+		ADDi $r $frame #4	; r = frame + 4
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+tock:	FUNC	; signature func tock(int frame) -> int @ typesFunctype.impala:14:1
+	$r:	OUTi
+	$frame:	INPi
+;-----------------------------------------------------------------------------
+		MULi $r $frame #2	; r = frame * 2
+		RETU   	; }
+
+	GLOB *1
+cb:	DATp &tick	; signature global cb : Step @ typesFunctype.impala:16:1
+
+;-----------------------------------------------------------------------------
+main:	FUNC	; signature func main() -> void @ typesFunctype.impala:18:1
+		PARA *1
+;-----------------------------------------------------------------------------
+		MOVi %2 #3 	; printInt(global cb(3))
+		PEEK %3 &cb 	; expects function(int) -> int @ typesFunctype.impala:20:23
+		CALL %3 %1 *2
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ typesFunctype.impala:20:24
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ typesFunctype.impala:20:35
+		POKE &cb &tock 	; global cb = tock
+		MOVi %2 #7 	; printInt(global cb(7))
+		PEEK %3 &cb 	; expects function(int) -> int @ typesFunctype.impala:22:23
+		CALL %3 %1 *2
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ typesFunctype.impala:22:24
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ typesFunctype.impala:22:35
+		RETU   	; }

@@ -1,0 +1,27 @@
+; Compiled with Impala version 2.0
+
+; signatures version=1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ declExtern.impala:6:1
+; signature extern native printInt() -> unknown @ declExtern.impala:7:1
+; signature extern native printFloat() -> unknown @ declExtern.impala:8:1
+; signature extern native printLF() -> unknown @ declExtern.impala:9:1
+; signature extern func later(int x) -> int @ declExtern.impala:11:1
+
+;-----------------------------------------------------------------------------
+main:	FUNC	; signature func main() -> void @ declExtern.impala:13:1
+		PARA *1
+;-----------------------------------------------------------------------------
+		MOVi %2 #5 	; printInt(later(5))
+		CALL &later %1 *2	; expects later(int) -> int @ declExtern.impala:15:19
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ declExtern.impala:15:20
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ declExtern.impala:15:31
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+later:	FUNC	; signature func later(int x) -> int @ declExtern.impala:18:1
+	$r:	OUTi
+	$x:	INPi
+;-----------------------------------------------------------------------------
+		ADDi $r $x #7	; r = x + 7
+		RETU   	; }
