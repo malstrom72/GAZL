@@ -43,6 +43,8 @@
 	The whole memory, plus canary zones on both sides of it, is compared after every run. The only cells exempt are
 	the probe function's own frame at the bottom of the data stack, which the program writes itself.
 
+	The memory a native reaches through `accessConstMemory` and `accessMemory` is swept too, by the same rule.
+
 	Built with GAZL_JIT, every probe also runs through the JIT, checked against the same oracle (not against the
 	interpreter), unless the host forbids executable memory. Exits non-zero on any failure.
 */
@@ -598,6 +600,54 @@ std::string check(Machine& m, const Probe& p, const Layout& layout, const std::v
 	return "";
 }
 
+/*
+	The memory a native reaches through `accessConstMemory` / `accessMemory`: a request for the whole readable (or
+	writable) region succeeds, one word more fails, and the zero guard is out of reach of both. Returns the number
+	of failures, each one printed.
+*/
+int sweepNativeAccess() {
+	Machine m;
+	Layout layout = Layout();
+	std::string error;
+	if (!assemble(m, program(""), layout, error)) {
+		std::printf("native access: baseline program refused: %s\n", error.c_str());
+		return 1;
+	}
+	const Processor processor(m.sizes.codeSize, &m.code[0], m.sizes.functionCount, &m.functionTable[0], MEMORY_SIZE
+			, m.memory(), m.sizes.globalsSize, m.sizes.constsSize, CALL_STACK_SIZE, &m.callStack[0], 0);
+	const UInt rw = layout.rwSize();
+	struct Access { bool writable; UInt offset; UInt count; bool succeeds; const char* what; };
+	const Access ACCESSES[] = {
+		{ false, 0, READABLE_SIZE, true, "accessConstMemory, the whole readable region" },
+		{ false, 0, READABLE_SIZE + 1, false, "accessConstMemory, one word more (the zero guard)" },
+		{ false, 1, READABLE_SIZE, false, "accessConstMemory, the region shifted one word" },
+		{ false, READABLE_SIZE - 1, 1, true, "accessConstMemory, the last readable word" },
+		{ false, READABLE_SIZE, 1, false, "accessConstMemory, the zero guard alone" },
+		{ false, 0, 0xFFFFFFFFu, false, "accessConstMemory, a count that wraps" },
+		{ true, 0, rw, true, "accessMemory, the whole writable region" },
+		{ true, 0, rw + 1, false, "accessMemory, one word more" },
+		{ true, 1, rw, false, "accessMemory, the region shifted one word" },
+		{ true, rw - 1, 1, true, "accessMemory, the last writable word" },
+		{ true, rw, 1, false, "accessMemory, the first constant" },
+		{ true, 0, 0xFFFFFFFFu, false, "accessMemory, a count that wraps" }
+	};
+	const int count = sizeof (ACCESSES) / sizeof (*ACCESSES);
+	int failures = 0;
+	for (int i = 0; i < count; ++i) {
+		const Access& a = ACCESSES[i];
+		const Pointer pointer = MEMORY_OFFSET + a.offset;
+		const Value* got = a.writable ? processor.accessMemory(pointer, a.count)
+				: processor.accessConstMemory(pointer, a.count);
+		const Value* want = a.succeeds ? m.memory() + a.offset : 0;
+		if (got != want) {
+			std::printf("FAIL native access: %s: %s\n", a.what, got == 0 ? "refused" : "granted");
+			++failures;
+		}
+	}
+	std::printf("native access: %d probes, %d failed\n", count, failures);
+	return failures;
+}
+
 struct Totals { int probes; int failures; };
 
 int sweep(int engineCount) {
@@ -697,5 +747,6 @@ int main() {
 		std::printf("bounds sweep: this host forbids executable memory; the JIT is NOT swept\n");
 	}
 #endif
-	return sweep(engineCount);
+	const int nativeFailures = sweepNativeAccess();
+	return (sweep(engineCount) != 0 || nativeFailures != 0) ? 1 : 0;
 }

@@ -383,13 +383,13 @@ inline int Processor::getClockCyclesLeft() const { return clockCyclesLeft; }
 
 inline const Value* Processor::accessConstMemory(Pointer pointer, UInt count) const {
 	assert(memoryBase != 0);
-	return (count < memorySize && pointer - MEMORY_OFFSET <= memorySize - count)
+	return (count <= memorySize && pointer - MEMORY_OFFSET <= memorySize - count)
 			? pointer - MEMORY_OFFSET + memoryBase : 0;
 }
 
 inline Value* Processor::accessMemory(Pointer pointer, UInt count) const {
 	assert(memoryBase != 0);
-	return (count < rwMemorySize && pointer - MEMORY_OFFSET <= rwMemorySize - count)
+	return (count <= rwMemorySize && pointer - MEMORY_OFFSET <= rwMemorySize - count)
 			? pointer - MEMORY_OFFSET + memoryBase : 0;
 }
 
