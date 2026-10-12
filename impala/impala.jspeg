@@ -1585,11 +1585,11 @@
         return (v !== undefined ? v : (t !== undefined ? "'" + t + "'" : 'unknown'));
     }
 
+    /* Both placeholders are always filled: an undefined type reads `unknown`, as an untyped array's signature
+       row does. Filling `{$type2}` only when it was defined left the raw placeholder in the message (E422 on an
+       untyped shaped array: "int vs {$type2}"). */
     $$parser.typeError = function (desc, source, offset, type1, type2, code, hint) {
-        var message = replace(desc, '{$type1}', verboseType(type1));
-        if (type2 !== undefined) {
-            message = replace(message, '{$type2}', verboseType(type2));
-        }
+        var message = replace(replace(desc, '{$type1}', verboseType(type1)), '{$type2}', verboseType(type2));
         $$parser.fail(message, source, offset, code, hint);
     };
 

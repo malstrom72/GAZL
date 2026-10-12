@@ -3582,6 +3582,17 @@ if (diagnosticWarnings.length !== 1 || !/^diag\.impala:1:\d+: warning\[E101\]: /
 }
 console.log("impala.jspeg compiler renders --legacy warnings in the same diagnostic shape");
 
+// A type the compiler does not know still gets a name in the message. typeError filled `{$type2}` only when
+// that type was defined, so an untyped shaped array's initializer reported "int vs {$type2}".
+const untypedShape = "global array m[2, 2] = { { 1, 2 }, { 3, 4 } }\nfunction main() { }";
+expectCompileOutcome("type-names", "an untyped element type reads as unknown", untypedShape, "(int vs unknown)");
+try {
+	compileWithJsImpala(untypedShape + "\n", { randomId: 42 });
+} catch (err) {
+	assert(!/\{\$/.test(err.message), `a diagnostic still carries a raw placeholder\n${err.message}`);
+}
+console.log("impala.jspeg compiler names every type in a type diagnostic, never a raw placeholder");
+
 // A symbol table is a plain `{}`, so it inherits `constructor`/`valueOf`/`toString`/`hasOwnProperty`/...
 // from Object.prototype. An unguarded `table[name]` read once mistook those user identifiers for
 // pre-existing entries: `function constructor()` crashed the compiler with a RAW, uncoded
