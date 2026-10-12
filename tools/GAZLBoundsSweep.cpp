@@ -28,8 +28,10 @@
 	memory, end of memory, and the 32-bit wrap), and every outcome is checked against an oracle written here, not
 	derived from the VM:
 
-	  - memory: an address `a` reads [0, memorySize) and writes [0, rwMemorySize), counted from `MEMORY_OFFSET`, with
-	    the address arithmetic `base + index` wrapping at 32 bits. GETL / SETL index a local array; index `i` is in
+	  - memory: an address `a` reads [0, memorySize - 1) and writes [0, rwMemorySize), counted from `MEMORY_OFFSET`,
+	    with the address arithmetic `base + index` wrapping at 32 bits. The last word is the assembler's zero guard,
+	    which stops a native scanning for a string's terminator; no checked read reaches it, so a native can tell a
+	    string that ran into it from one that ended in real memory. GETL / SETL index a local array; index `i` is in
 	    range when 0 <= i and the slot lies below the end of the data stack.
 	  - an access out of range stops the program with BAD_PEEK / BAD_POKE (ACCESS_VIOLATION for COPY) and changes
 	    nothing; one in range reads or writes exactly the cells it names.
@@ -38,7 +40,7 @@
 	    too, except where the assembler's own rule is stricter than memory: a write through a constant label, an
 	    offset outside the label's section, or a COPY count larger than writable memory.
 
-	The whole memory, plus guard zones on both sides of it, is compared after every run. The only cells exempt are
+	The whole memory, plus canary zones on both sides of it, is compared after every run. The only cells exempt are
 	the probe function's own frame at the bottom of the data stack, which the program writes itself.
 
 	Built with GAZL_JIT, every probe also runs through the JIT, checked against the same oracle (not against the
@@ -61,7 +63,8 @@ using namespace GAZL;
 namespace {
 
 const UInt MEMORY_SIZE = 256;					// words, the whole arena: globals, data stack and constants
-const UInt GUARD_SIZE = 64;						// canary words on each side of the arena
+const UInt READABLE_SIZE = MEMORY_SIZE - 1;		// all but the zero guard in the last word
+const UInt CANARY_SIZE = 64;						// canary words on each side of the arena
 const UInt FRAME_ZONE = 32;						// words at the bottom of the data stack the probe's own frame may use
 const int CODE_SIZE = 256;
 const int FUNCTION_COUNT = 16;
@@ -168,7 +171,7 @@ std::vector<UInt> targets(const Layout& layout) {
 		for (int d = -1; d <= 1; ++d) t.push_back(MEMORY_OFFSET + edges[e] + (UInt)d);
 	}
 	t.push_back(0);
-	t.push_back(MEMORY_OFFSET - (UInt)GUARD_SIZE);
+	t.push_back(MEMORY_OFFSET - (UInt)CANARY_SIZE);
 	t.push_back(0x7FFFFFFFu);
 	t.push_back(0x80000000u);
 	t.push_back(0xFFFFFFFFu);
@@ -302,7 +305,7 @@ std::vector<Probe> generate(const Layout& L) {
 		}
 	}
 
-	// `&address` alone: no run-time check at all, so the assembler is the only guard. Offsets run to one past each
+	// `&address` alone: no run-time check at all, so the assembler is the only check. Offsets run to one past each
 	// section, and past the end of memory.
 	const char* const LABEL_ONLY_FORMS[][2] = {
 		{ "PEEK var &address", " PEEK rs &%s:%u\n" },
@@ -432,15 +435,15 @@ std::vector<Probe> generate(const Layout& L) {
 }
 
 struct Machine {
-	std::vector<Value> buffer;					// guard + memory + guard
+	std::vector<Value> buffer;					// canaries + memory + canaries
 	std::vector<Instruction> code;
 	std::vector<UInt> functionTable;
 	std::vector<CallStackEntry> callStack;
 	ProgramSizes sizes;
 	Symbols symbols;
-	Machine() : buffer(GUARD_SIZE + MEMORY_SIZE + GUARD_SIZE), code(CODE_SIZE), functionTable(FUNCTION_COUNT)
+	Machine() : buffer(CANARY_SIZE + MEMORY_SIZE + CANARY_SIZE), code(CODE_SIZE), functionTable(FUNCTION_COUNT)
 			, callStack(CALL_STACK_SIZE) { }
-	Value* memory() { return &buffer[GUARD_SIZE]; }
+	Value* memory() { return &buffer[CANARY_SIZE]; }
 };
 
 UInt canary(size_t i) { return 0xC0DE0000u + (UInt)i; }
@@ -530,7 +533,7 @@ std::string check(Machine& m, const Probe& p, const Layout& layout, const std::v
 	// The oracle: is the access in range, which status follows, and which cells must change to what.
 	std::vector<Value> want(before);
 	std::vector<bool> known(before.size(), true);
-	const size_t g = GUARD_SIZE;
+	const size_t g = CANARY_SIZE;
 	for (UInt i = 0; i < FRAME_ZONE; ++i) known[g + layout.globalsSize + i] = false;
 	known[g + layout.outAddress - MEMORY_OFFSET] = false;
 	known[g + layout.outAddress - MEMORY_OFFSET + 1] = false;
@@ -540,7 +543,7 @@ std::string check(Machine& m, const Probe& p, const Layout& layout, const std::v
 	bool checkRead = false;
 	switch (p.op) {
 		case PEEK:
-			valid = inRange(p.address, 1, MEMORY_SIZE);
+			valid = inRange(p.address, 1, READABLE_SIZE);
 			failStatus = BAD_PEEK;
 			if (valid && known[g + p.address - MEMORY_OFFSET]) {
 				wantRead = before[g + p.address - MEMORY_OFFSET].i;
@@ -565,7 +568,7 @@ std::string check(Machine& m, const Probe& p, const Layout& layout, const std::v
 			break;
 		}
 		case COPY: {
-			valid = inRange(p.address, p.count, rw) && inRange(p.source2, p.count, MEMORY_SIZE);
+			valid = inRange(p.address, p.count, rw) && inRange(p.source2, p.count, READABLE_SIZE);
 			failStatus = ACCESS_VIOLATION;
 			if (valid) {
 				const UInt d = p.address - MEMORY_OFFSET;
@@ -589,7 +592,7 @@ std::string check(Machine& m, const Probe& p, const Layout& layout, const std::v
 		if (known[i] && m.buffer[i].i != want[i].i) {
 			const long long cell = (long long)i - (long long)g;
 			return "cell " + number(cell) + " is " + hex((UInt)m.buffer[i].i) + ", want " + hex((UInt)want[i].i)
-					+ (cell < 0 || cell >= (long long)MEMORY_SIZE ? " (guard zone)" : "");
+					+ (cell < 0 || cell >= (long long)MEMORY_SIZE ? " (outside memory)" : "");
 		}
 	}
 	return "";
@@ -606,6 +609,10 @@ int sweep(int engineCount) {
 	std::string error;
 	if (!assemble(m, program(""), base, error)) {
 		std::printf("baseline program refused: %s\n", error.c_str());
+		return 1;
+	}
+	if (m.memory()[MEMORY_SIZE - 1].i != 0) {
+		std::printf("bounds sweep: the last word of memory is not the zero guard\n");
 		return 1;
 	}
 	const size_t probeCount = generate(base).size();
@@ -629,9 +636,13 @@ int sweep(int engineCount) {
 
 		if (!assembled) {
 			bool valid = true;
-			if (p.op == PEEK) valid = inRange(p.address, 1, MEMORY_SIZE);
-			else if (p.op == POKE) valid = inRange(p.address, 1, rw);
-			else if (p.op == COPY) valid = inRange(p.address, p.count, rw) && inRange(p.source2, p.count, MEMORY_SIZE);
+			if (p.op == PEEK) {
+				valid = inRange(p.address, 1, READABLE_SIZE);
+			} else if (p.op == POKE) {
+				valid = inRange(p.address, 1, rw);
+			} else if (p.op == COPY) {
+				valid = inRange(p.address, p.count, rw) && inRange(p.source2, p.count, READABLE_SIZE);
+			}
 			if (p.refusalOk) {
 				// the assembler's own rule, stricter than memory: see `refusalOk`
 			} else if (valid || p.op == GETL || p.op == SETL) {
