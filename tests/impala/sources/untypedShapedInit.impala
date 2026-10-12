@@ -1,0 +1,29 @@
+/*
+	Regression: an UNTYPED shaped array takes any mix of values in its initializer, as an untyped flat array does
+	(`docs/impala/Impala.md`, Arrays). The buffered initializer path compared each entry with the element's type,
+	which an untyped array does not have, so every entry was a mismatch (E422) and no untyped shaped array could
+	be initialized at all.
+
+	What the golden pins: one DATA region in row order, ints, a float and an address side by side, and the omitted
+	entries of the short last row left to the region's zeros.
+	Expected (GAZLCmd untypedShapedInit.gazl main): 1 2.5 30 4 0 0
+*/
+const int DEBUG = 1
+extern native printInt
+extern native printFloat
+extern native printLF
+
+global int array b[4] = { 0, 10, 30, 40 }
+global array m[2, 3] = { { 1, 2.5, &global b[2] }, { 4 } }
+
+function main()
+locals int pointer p
+{
+	printInt((int) global m[0, 0]); printLF();
+	printFloat((float) global m[0, 1]); printLF();
+	p = (int pointer) global m[0, 2];
+	printInt(*p); printLF();
+	printInt((int) global m[1, 0]); printLF();
+	printInt((int) global m[1, 1]); printLF();
+	printInt((int) global m[1, 2]); printLF();
+}

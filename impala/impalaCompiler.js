@@ -2751,7 +2751,7 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
 
     pushInitScalar = function (out, item, type, elem, fieldName, sourceCode, sourceOffset) {
         if (item === undefined) {
-            out.push(ZEROES[type]);                      /* omitted -> zero, and INVENTED: `out.given`
+            out.push(ZEROES[type !== undefined ? type : 'i']);   /* omitted -> zero, and INVENTED: `out.given`
                                                                      does not advance, so emitInitData may drop
                                                                      it if nothing explicit follows */
             return;
@@ -2760,7 +2760,10 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
             fail('Too many braces in initializer for field ' + fieldName,
                     sourceCode, sourceOffset, 'E422');
         }
-        if (item.type !== type) {
+        /* An UNTYPED element (`type` undefined: a bare `array`) takes any value, as the flat InitList does.
+           Comparing against undefined made every entry a mismatch, so no untyped SHAPED array - which only
+           this buffered path initializes - could be initialized at all. */
+        if (type !== undefined && item.type !== type) {
             typeError('Initializer type mismatch for field ' + fieldName + ' ({$type1} vs {$type2})',
                     sourceCode, sourceOffset, item.type, type, 'E422');
         }

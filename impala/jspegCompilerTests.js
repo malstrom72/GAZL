@@ -3582,16 +3582,24 @@ if (diagnosticWarnings.length !== 1 || !/^diag\.impala:1:\d+: warning\[E101\]: /
 }
 console.log("impala.jspeg compiler renders --legacy warnings in the same diagnostic shape");
 
-// A type the compiler does not know still gets a name in the message. typeError filled `{$type2}` only when
-// that type was defined, so an untyped shaped array's initializer reported "int vs {$type2}".
-const untypedShape = "global array m[2, 2] = { { 1, 2 }, { 3, 4 } }\nfunction main() { }";
-expectCompileOutcome("type-names", "an untyped element type reads as unknown", untypedShape, "(int vs unknown)");
+// Both types are named in a type diagnostic. typeError filled `{$type2}` only when that type was defined, so an
+// untyped shaped array's initializer once reported "int vs {$type2}" (that E422 itself is gone, see below).
+const typedShape = "global int array m[2, 2] = { { 1, 2.5 }, { 3, 4 } }\nfunction main() { }";
+expectCompileOutcome("type-names", "both types named", typedShape, "(float vs int)");
 try {
-	compileWithJsImpala(untypedShape + "\n", { randomId: 42 });
+	compileWithJsImpala(typedShape + "\n", { randomId: 42 });
 } catch (err) {
 	assert(!/\{\$/.test(err.message), `a diagnostic still carries a raw placeholder\n${err.message}`);
 }
 console.log("impala.jspeg compiler names every type in a type diagnostic, never a raw placeholder");
+
+// An untyped shaped array takes any mix of values, as an untyped flat one does. The buffered initializer path
+// compared each entry with the untyped element's undefined type, so no untyped shaped array could be initialized.
+expectCompileOutcome("untyped-shape", "ints", "global array m[2, 2] = { { 1, 2 }, { 3, 4 } }\nfunction main() { }",
+	null);
+expectCompileOutcome("untyped-shape", "a mix with an omitted entry",
+	"global int array b[4]\nglobal array m[2, 3] = { { 1, 2.5, &global b[2] }, { 4 } }\nfunction main() { }", null);
+console.log("impala.jspeg compiler initializes an untyped shaped array with any mix of values");
 
 // A symbol table is a plain `{}`, so it inherits `constructor`/`valueOf`/`toString`/`hasOwnProperty`/...
 // from Object.prototype. An unguarded `table[name]` read once mistook those user identifiers for
