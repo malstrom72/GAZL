@@ -62,6 +62,26 @@ function runExpected(gazlPath, expectedRun) {
 	return undefined;
 }
 
+/* A fixture may also declare that a program must NOT load with some host values:
+	Expected load failure (GAZLCmd <name>.gazl <entry> [<define> <value> ...]): <text>
+   GAZLCmd must stop before the entry point, and its first report line must contain <text>. This is how a
+   deferred assertion (`! FAIL`, design/impala/TwoStageConstants.md) is tested: the failure IS the result. */
+function parseExpectedFailure(source) {
+	const match = source.match(/Expected load failure \(GAZLCmd ([^)]*)\):[ \t]*(.*)/);
+	if (!match) { return undefined; }
+	return { args: match[1].trim().split(/\s+/).slice(1), want: match[2].trim() };
+}
+
+function runExpectedFailure(gazlPath, expected) {
+	const run = runGazlCmd(gazlPath, expected.args);
+	if (run.failure) { return run.failure; }
+	if (run.assembled) { return `loaded, but the fixture expects it to stop with "${expected.want}"`; }
+	if (run.line.indexOf(expected.want) < 0) {
+		return `stopped with "${run.line}" but the fixture expects "${expected.want}"`;
+	}
+	return undefined;
+}
+
 /* A fixture with no run line is still fed to the assembler, because "compiles clean" and "loads"
    are different claims and only the second one catches a label this compiler emitted but never
    defined. Most such fixtures are firmware that links against a host, so a symbol complaint about
@@ -105,5 +125,6 @@ function assembleOnly(gazlPath) {
 	return `did not assemble: ${run.line}`;
 }
 
-module.exports = { gazlCmd, haveGazlCmd, runGazlCmd, parseExpectedRun, runExpected, assembleOnly,
+module.exports = { gazlCmd, haveGazlCmd, runGazlCmd, parseExpectedRun, runExpected, parseExpectedFailure,
+	runExpectedFailure, assembleOnly,
 	NEEDS_HOST, NO_ENTRY_POINT };

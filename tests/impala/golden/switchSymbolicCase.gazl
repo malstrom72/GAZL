@@ -1,31 +1,34 @@
 ; Compiled with Impala version 2.0
 
 ; signatures version=1
-DEBUG:	! DEFi #0	; signature const DEBUG : int @ switchSymbolicCase.impala:10:1
-; signature extern native printInt() -> unknown @ switchSymbolicCase.impala:11:1
-; signature extern native printLF() -> unknown @ switchSymbolicCase.impala:12:1
-; signature extern const K_LOW : int @ switchSymbolicCase.impala:14:1
-; signature extern const K_IN : int @ switchSymbolicCase.impala:15:1
-; signature extern const K_HIGH : int @ switchSymbolicCase.impala:16:1
+DEBUG:	! DEFi #0	; signature const DEBUG : int @ switchSymbolicCase.impala:12:1
+; signature extern native printInt() -> unknown @ switchSymbolicCase.impala:13:1
+; signature extern native printLF() -> unknown @ switchSymbolicCase.impala:14:1
+; signature extern const K_LOW : int @ switchSymbolicCase.impala:16:1
+; signature extern const K_IN : int @ switchSymbolicCase.impala:17:1
+; signature extern const K_HIGH : int @ switchSymbolicCase.impala:18:1
 
 ;-----------------------------------------------------------------------------
-pick:	FUNC	; signature func pick(int x) -> int @ switchSymbolicCase.impala:18:1
+pick:	FUNC	; signature func pick(int x) -> int @ switchSymbolicCase.impala:20:1
 	$r:	OUTi
 	$x:	INPi
 ;-----------------------------------------------------------------------------
 		MOVi $r #0 	; r = 0
 		SWCH $x *4 @.s0	; switch (x == 0 to 4) 
-		! LSSi #K_LOW #0 @.g2	; case K_LOW
-	.s0#K_LOW:	NOOP
-	.g2:	MOVi $r #11 	; r = 11
+		! LSSi #-1 #K_LOW @.g2	; case K_LOW
+		! FAIL case K_LOW is below the start of its switch range (0)  
+	.g2:	NOOP
+	.s0#K_LOW:	MOVi $r #11 	; r = 11
 		RETU   
-		! LSSi #K_IN #0 @.g3	; case K_IN
-	.s0#K_IN:	NOOP
-	.g3:	MOVi $r #22 	; r = 22
+		! LSSi #-1 #K_IN @.g3	; case K_IN
+		! FAIL case K_IN is below the start of its switch range (0)  
+	.g3:	NOOP
+	.s0#K_IN:	MOVi $r #22 	; r = 22
 		RETU   
-		! LSSi #K_HIGH #0 @.g4	; case K_HIGH
-	.s0#K_HIGH:	NOOP
-	.g4:	MOVi $r #77 	; r = 77
+		! LSSi #-1 #K_HIGH @.g4	; case K_HIGH
+		! FAIL case K_HIGH is below the start of its switch range (0)  
+	.g4:	NOOP
+	.s0#K_HIGH:	MOVi $r #77 	; r = 77
 		RETU   
 	.s0#3:	MOVi $r #33 	; r = 33
 		RETU   
@@ -34,23 +37,23 @@ pick:	FUNC	; signature func pick(int x) -> int @ switchSymbolicCase.impala:18:1
 
 
 ;-----------------------------------------------------------------------------
-main:	FUNC	; signature func main() -> void @ switchSymbolicCase.impala:30:1
+main:	FUNC	; signature func main() -> void @ switchSymbolicCase.impala:32:1
 		PARA *1
 ;-----------------------------------------------------------------------------
-		MOVi %2 #-1 	; printInt(pick(-1))
-		CALL &pick %1 *2	; expects pick(int) -> int @ switchSymbolicCase.impala:32:19
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ switchSymbolicCase.impala:32:20
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ switchSymbolicCase.impala:32:31
-		MOVi %2 #2 	; printInt(pick(2))
-		CALL &pick %1 *2	; expects pick(int) -> int @ switchSymbolicCase.impala:33:18
-		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ switchSymbolicCase.impala:33:19
-		CALL ^printLF %0 *1	; expects printLF() -> unknown @ switchSymbolicCase.impala:33:30
-		MOVi %2 #7 	; printInt(pick(7))
+		MOVi %2 #0 	; printInt(pick(0))
 		CALL &pick %1 *2	; expects pick(int) -> int @ switchSymbolicCase.impala:34:18
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ switchSymbolicCase.impala:34:19
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ switchSymbolicCase.impala:34:30
-		MOVi %2 #3 	; printInt(pick(3))
+		MOVi %2 #2 	; printInt(pick(2))
 		CALL &pick %1 *2	; expects pick(int) -> int @ switchSymbolicCase.impala:35:18
 		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ switchSymbolicCase.impala:35:19
 		CALL ^printLF %0 *1	; expects printLF() -> unknown @ switchSymbolicCase.impala:35:30
+		MOVi %2 #7 	; printInt(pick(7))
+		CALL &pick %1 *2	; expects pick(int) -> int @ switchSymbolicCase.impala:36:18
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ switchSymbolicCase.impala:36:19
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ switchSymbolicCase.impala:36:30
+		MOVi %2 #3 	; printInt(pick(3))
+		CALL &pick %1 *2	; expects pick(int) -> int @ switchSymbolicCase.impala:37:18
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ switchSymbolicCase.impala:37:19
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ switchSymbolicCase.impala:37:30
 		RETU   	; }

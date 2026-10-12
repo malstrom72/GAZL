@@ -1,11 +1,13 @@
 /*
-	Regression: a SYMBOLIC case value under a LITERAL range. Impala cannot tell whether the host's value falls
-	inside the window, so a value below it pasted a negative offset into the label text, and `.s0.-1` killed the
-	whole module at load ("Invalid identifier"). `switchWindow.impala` covers a symbolic RANGE; this is the
-	other half: the label is now guarded the same way, so an arm outside the window is simply unreachable.
+	Regression: a host-supplied case value under a range the source fixes. Impala cannot tell whether the host's
+	value falls inside the window. One below it pasted a negative offset into the label text, and the module failed
+	to load with the cryptic `Invalid identifier: .s0.-1`. It is a host bug, so the load must still stop, but now
+	with a sentence: a deferred `! FAIL` ahead of the label. (A host-supplied RANGE is different: there a case can
+	fall outside a narrowed window legitimately, and its label is skipped. See `switchWindow.impala`.)
 
-	What the golden pins: one `! LSSi` guard per symbolic case value, none for a literal one.
-	Expected (GAZLCmd switchSymbolicCase.gazl main K_LOW -1 K_IN 2 K_HIGH 7): 99 22 99 33
+	What the golden pins: one `! LSSi` + `! FAIL` per host-supplied case value, none for a literal one.
+	Expected (GAZLCmd switchSymbolicCase.gazl main K_LOW 0 K_IN 2 K_HIGH 7): 11 22 99 33
+	Expected load failure (GAZLCmd switchSymbolicCase.gazl main K_LOW -1 K_IN 2 K_HIGH 7): case K_LOW is below the start of its switch range (0)
 */
 const int DEBUG = 0
 extern native printInt
@@ -29,7 +31,7 @@ function pick(int x) returns int r
 
 function main()
 {
-	printInt(pick(-1)); printLF();
+	printInt(pick(0)); printLF();
 	printInt(pick(2)); printLF();
 	printInt(pick(7)); printLF();
 	printInt(pick(3)); printLF();

@@ -291,7 +291,7 @@ on its command line.
 | Non-zero initializer for an `extern struct` | E459 | 1 | the error, now: the host owns the layout |
 | `case` value outside the switch range, the range symbolic | E444 | 4 | nothing: the arm is unreachable (`docs/impala/Impala.md`, `switch`) |
 | `case` value symbolic, above a literal range | E444 | 4 | nothing: the arm is unreachable |
-| `case` value naming a host-supplied const, below a literal range | E444 | 4 | nothing: the label is guarded and the arm unreachable (`tests/impala/sources/switchSymbolicCase.impala`) |
+| `case` value naming a host-supplied const, below a literal range | E444 | 2 | `! FAIL case K is below the start of its switch range (0)` (`tests/impala/sources/switchSymbolicCase.impala`) |
 | `case` value an expression over a host-supplied const, below a literal range | E444 | 3 | `Invalid identifier: .s0.-1`: the module does not load |
 | Two `case` values equal, both symbolic | E443 | 3 | `Symbol already defined: .s0.1` |
 | Division or modulus by a constant zero | E466 | 3 | `Constant zero divisor or modulus`; a literal zero is E466 at Impala compile time |

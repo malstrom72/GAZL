@@ -6581,25 +6581,32 @@ CaseExpr    <-  Expr                                {
 
                                                         $n = $$parser.subConstInt(caseConst, baseFrom);
 
-                                                        /* A host may narrow the window from BELOW, which makes this arm
-                                                           UNREACHABLE, not wrong - the same situation as a case above the
-                                                           window, which `SWCH` already ignores harmlessly because the
-                                                           offset is only a table index it never looks up. Here the offset
-                                                           is pasted into the LABEL TEXT, so a negative one rendered
-                                                           `.s0.-4` and killed the whole module at load: one direction fell
-                                                           dead, the other refused to build. Guard the label with an
-                                                           assemble-time skip so both drop out of the configuration alike.
-                                                           A skipped line is abandoned BEFORE the label is interpreted
-                                                           (`skipUntilLabel`, GAZL.cpp), so `.s0.-4` is never constructed
-                                                           rather than constructed and rejected. Guarded when the HOST decides:
-                                                           a symbolic range, or a case value naming a host-supplied const under
-                                                           a literal one (`case K`, K valueless and the host's -1 below `0 to
-                                                           4`, failed to load with `Invalid identifier: .s0.-1`). A value fixed
-                                                           in the source is its author's: E444 where Impala reads it. */
+                                                        /* The offset is pasted into the LABEL TEXT, so a negative one rendered `.s0.-4`
+                                                           and the whole module failed to load with `Invalid identifier`. Two cases:
+                                                        
+                                                           A host-supplied RANGE may narrow the window from below, which makes this arm
+                                                           UNREACHABLE, not wrong - as a case above the window is, which `SWCH` ignores
+                                                           because the offset is only a table index it never looks up. So the label is
+                                                           guarded with an assemble-time skip (tests/impala/sources/switchWindow.impala).
+                                                           A skipped line is abandoned BEFORE the label is interpreted (`skipUntilLabel`,
+                                                           GAZL.cpp), so `.s0.-4` is never constructed.
+                                                        
+                                                           A host-supplied CASE VALUE below a range the source fixes is a host bug, and
+                                                           the load must still stop - with a sentence, as a deferred assertion (`! FAIL`,
+                                                           design/impala/TwoStageConstants.md), rather than with the label text. A value
+                                                           the source fixes is its author's: E444 where Impala reads it. */
                                                         var caseGuard;
-                                                        if (ctx !== undefined && (ctx.fromNum === undefined || $$parser.hostSupplied(caseConst))) {
+                                                        if (ctx !== undefined && ctx.fromNum === undefined) {
                                                             caseGuard = $$parser.newLabel('g');
                                                             $$parser.emit('<> <', 'i', $n, '#0', caseGuard);
+                                                        } else if (ctx !== undefined && $$parser.hostSupplied(caseConst)) {
+                                                            var caseOk = $$parser.newLabel('g');
+                                                            $$parser.emit('<> <', 'i', '#-1', $n, caseOk);   /* offset >= 0: inside the range from below */
+                                                            $$parser.emit('<> FAIL', undefined, 'case ' + $$parser.dropHash(caseConst)
+                                                                    + ' is below the start of its switch range (' + $$parser.dropHash(ctx.from) + ')',
+                                                                    undefined, undefined);
+                                                            $$parser.emit('<-?', true, caseOk, undefined, undefined);
+                                                            $$parser.metacode[$$parser.metacode.length - 1].mayRide = true;
                                                         }
 
                                                         /* create label for this case                                     */

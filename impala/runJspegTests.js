@@ -4,7 +4,8 @@ const fs = require('fs');
 const path = require('path');
 
 const { compileWithJsImpala } = require('./impalaJsCompilerRunner');
-const { gazlCmd, haveGazlCmd, parseExpectedRun, runExpected, assembleOnly, NEEDS_HOST }
+const { gazlCmd, haveGazlCmd, parseExpectedRun, runExpected, parseExpectedFailure, runExpectedFailure,
+        assembleOnly, NEEDS_HOST }
         = require('./gazlAssembleCheck');
 
 const args = process.argv.slice(2);
@@ -232,6 +233,15 @@ function main() {
                         continue;
                 }
 
+                const expectedFailure = parseExpectedFailure(source);
+                if (expectedFailure) {
+                        const stopped = runExpectedFailure(goldenPath, expectedFailure);
+                        if (stopped) {
+                                console.error(`<<< ${stopped} >>>`);
+                                errorCount += 1;
+                                continue;
+                        }
+                }
                 const failure = runExpected(goldenPath, expectedRun);
                 if (failure) {
                         console.error(`<<< ${failure} >>>`);
