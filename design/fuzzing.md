@@ -178,7 +178,9 @@ to its own script, as the shared rules above require.
   exception to this repo's rule that a `.sh` and its `.cmd` twin behave the same. The `.sh` uses clang with
   `-fsanitize=fuzzer,address` (and `undefined` on request); the `.cmd` uses MSVC's libFuzzer and ASan, because
   clang-cl is unusable for this target and MSVC has no UBSan. Both build the same fuzz target from the same sources;
-  only the engine and the available sanitizers differ. `seedTextCorpus.cmd` IS a true twin, down to matching
+  only the engine and the available sanitizers differ. In both, `CPP_OPTIONS` ADDS to the defaults, so the strict
+  lane is `CPP_OPTIONS="-fsanitize=undefined -fno-sanitize-recover=all" bash tools/buildGazlFuzz.sh`.
+  `seedTextCorpus.cmd` IS a true twin, down to matching
   `find -size -8k`'s rounding to whole KiB, which excludes a file the obvious `< 8192` test would include.
 - **The MSVC build needs `clang_rt.asan_dynamic-x86_64.dll` beside the exe**, or it exits `0xC0000135` anywhere but a
   developer prompt. `buildGazlFuzz.cmd` copies it from the Visual Studio tree; that is why it searches for it.
