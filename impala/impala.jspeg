@@ -2857,6 +2857,37 @@
         return /<[A-Za-z]>/.test(op);
     };
 
+    /* The words left in a global array from operand `&name` or `&name:k` onward, or undefined when Impala
+       cannot know them: anything but a one-dimensional array of scalars with a literal extent, a symbolic
+       offset, or a pointer that names no array at all (`copy` takes any pointer, and a pointer has no extent). */
+    $$parser.copyRoom = function (op) {
+        var m = /^&([^:]+)(?::(.+))?$/.exec(op);
+        if (m === null) return undefined;
+        var p = $$parser.ownEntry($$parser.symbols.globals, m[1]);
+        if (p === undefined || p.type !== 'A' || $$parser.isStructAtom(p.elem) || p.extent === undefined
+                || p.extent.dims !== undefined) {
+            return undefined;
+        }
+        var n = $$parser.constInt('#' + p.extent.n);
+        var k = (m[2] === undefined ? 0 : $$parser.constInt('#' + m[2]));
+        return (n === undefined || k === undefined ? undefined : n - k);
+    };
+
+    /* A LITERAL `copy` count larger than the room left in its source or destination array is refused (rule 2):
+       the VM stops only a copy that leaves memory, so one that runs past an array into its neighbour succeeds. */
+    $$parser.checkCopyCount = function (length, toOp, fromOp, sourceCode, sourceOffset) {
+        var count = $$parser.constInt(length);
+        if (count === undefined) return;
+        var sides = [ [ 'destination', toOp ], [ 'source', fromOp ] ];
+        for (var i = 0; i < sides.length; ++i) {
+            var room = $$parser.copyRoom(sides[i][1]);
+            if (room !== undefined && count > room) {
+                $$parser.fail('copy of ' + count + ' words runs past the end of its ' + sides[i][0] + ' (room for '
+                        + room + ')', sourceCode, sourceOffset, 'E467', 'copy fewer words, or start earlier');
+            }
+        }
+    };
+
     $$parser.initElemRow = function () {
         return ($$parser.initCoarseType() !== undefined ? 'DAT?' : 'DATA');
     };
@@ -3745,6 +3776,15 @@ var _sn = $$parser.strideStruct(field.elem);
             $$parser.typeError('Invalid types ({$type1} and {$type2})',
                                sourceCode, sourceOffset,
                                leftx.type, rightx.type, 'E301');
+        }
+
+        /* A LITERAL zero divisor is a number Impala knows (design/impala/TwoStageConstants.md rule 2), so it is
+           refused here rather than left to the assembler's `Constant zero divisor or modulus`. A symbolic one
+           still goes to the assembler, which decides it. */
+        if ((operator === '/' || operator === '%') && rightx.operator === ':='
+                && $$parser.isZeroWord(rightx.operands[1])) {
+            $$parser.fail((operator === '/' ? 'Division' : 'Modulus') + ' by a literal zero', sourceCode, sourceOffset,
+                    'E466', 'a divisor must not be zero');
         }
 
         /* detect (itof X) * 1.0 -> itof */
@@ -6382,14 +6422,11 @@ Copy        <-  COPY _ '('_ l:Expr FROM _ f:Expr TO _ t:Expr ')' _
                                                         }
 
                                                         var copyMeta = metaSlot($l);
-                                                        $$parser.makeMeta(
-                                                            copyMeta,
-                                                            'copy',
-                                                            '?',
-                                                            $$parser.makeRValue(toMeta, '&$%'),
-                                                            $$parser.makeRValue(fromMeta, '&$%'),
-                                                            '*' + lengthHash
-                                                        );
+                                                        var toOp   = $$parser.makeRValue(toMeta, '&$%');
+                                                        var fromOp = $$parser.makeRValue(fromMeta, '&$%');
+                                                        $$parser.checkCopyCount($length, toOp, fromOp, $$s, $$i);
+                                                        $$parser.makeMeta(copyMeta, 'copy', '?', toOp, fromOp,
+                                                                '*' + lengthHash);
 
                                                         $$parser.emitMeta(copyMeta);
                                                         $$parser.returnBack($length);

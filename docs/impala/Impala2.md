@@ -1626,6 +1626,8 @@ foo.impala:12:9: note: use a cast: (int pointer)
 | E463 | a named return value is assigned nowhere in the body, so the caller receives whatever was in the slot |
 | E464 | the layout of a body-carrying `extern struct` is needed before the definition the import closure emits later; use the opaque form and a pointer |
 | E465 | a funcptr-type cast: only a funcptr can take one, and not between funcptr types of different shape |
+| E466 | division or modulus by a literal zero (a symbolic zero is left to the assembler) |
+| E467 | a literal `copy` count larger than the room left in a global source or destination array |
 
 E418, E424 and E425 are **not allocated to anything that fires**. They were reserved for extern-struct
 guards that were never needed once the features shipped (`design/impala/StructLayoutConstants.md` records the

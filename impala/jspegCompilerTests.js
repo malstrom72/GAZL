@@ -2358,8 +2358,6 @@ console.log("impala.jspeg compiler never bounds-checks ADDRESS formation");
 		["an untyped source promises nothing to break", "copy (4 from &global gu[0] to &global gf[0]);"],
 		["an untyped destination, likewise", "copy (4 from &global gf[0] to &global gu[0]);"],
 		["a cast is the escape hatch", "copy (4 from (pointer) &global gi[0] to &global gf[0]);"],
-		["a length past the destination extent is the programmer's, as with memcpy",
-			"copy (64 from &global gi[0] to &global gi[4]);"],
 	]) {
 		expectCompileOutcome("copy element type", label,
 			decls + "function main() { " + body + " }\n", null);
@@ -2370,6 +2368,38 @@ console.log("impala.jspeg compiler never bounds-checks ADDRESS formation");
 	expectCompileOutcome("copy element type", "two untyped spellings do not contradict each other",
 		"global array gu[8]\nfunction main() locals array a[4] { copy (4 from a to &global gu[0]); }\n", null);
 	console.log("impala.jspeg compiler checks copy's element types, and only on a contradiction");
+
+	// A LITERAL count larger than the room left in a global array is E467 (it used to be "the programmer's, as
+	// with memcpy"; the VM stops only a copy that leaves memory, so one into the neighbour succeeded silently).
+	// Anything Impala cannot measure stays unchecked: a symbolic count, a pointer, a symbolic offset.
+	for (const [label, body] of [
+		["past the destination", "copy (64 from &global gi[0] to &global gi[4]);"],
+		["past the source", "copy (5 from &global gi[4] to &global gu[0]);"],
+	]) {
+		expectCompileOutcome("copy count", label, decls + "function main() { " + body + " }\n", "E467");
+	}
+	for (const [label, body] of [
+		["exactly the room left", "copy (4 from &global gi[4] to &global gu[4]);"],
+		["a symbolic count", "copy (N from &global gi[0] to &global gu[0]);"],
+		["a pointer has no extent", "copy (64 from global gp to global gq);"],
+	]) {
+		expectCompileOutcome("copy count", label, "const int N\nglobal pointer gp\nglobal pointer gq\n" + decls
+				+ "function main() { " + body + " }\n", null);
+	}
+	console.log("impala.jspeg compiler refuses a literal copy count larger than a global array's room");
+
+	for (const [label, expr, error] of [
+		["integer division", "i / 0", "E466"],
+		["modulus", "i % 0", "E466"],
+		["float division", "f / 0.0", "E466"],
+		["a hex zero", "i / 0x0", "E466"],
+		["a symbolic zero is the assembler's", "i / Z", null],
+		["a non-zero literal", "i / 2", null],
+	]) {
+		expectCompileOutcome("zero divisor", label, "const int Z\nfunction main() locals int i, float f, int r, float q "
+				+ "{ i = 1; f = 1.0; " + (expr.charAt(0) === 'f' ? "q" : "r") + " = " + expr + "; }\n", error);
+	}
+	console.log("impala.jspeg compiler refuses a literal zero divisor");
 }
 
 // The `; else` detector must not fire on the shapes that legitimately put a `;` or an `else` nearby.
