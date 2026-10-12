@@ -167,7 +167,7 @@ std::string program(const std::string& body) {
 	(null, the sign boundary, the top of the address space). `layout` decides where the edges are.
 */
 std::vector<UInt> targets(const Layout& layout) {
-	const UInt edges[] = { 0, layout.globalsSize, layout.rwSize(), MEMORY_SIZE };
+	const UInt edges[] = { 0, layout.globalsSize, layout.rwSize(), READABLE_SIZE, MEMORY_SIZE };	// reads end at the guard
 	std::vector<UInt> t;
 	for (size_t e = 0; e < sizeof (edges) / sizeof (*edges); ++e) {
 		for (int d = -1; d <= 1; ++d) t.push_back(MEMORY_OFFSET + edges[e] + (UInt)d);
@@ -381,7 +381,7 @@ std::vector<Probe> generate(const Layout& L) {
 		std::vector<std::pair<UInt, UInt> > pairs;
 		const UInt dsts[] = { MEMORY_OFFSET, MEMORY_OFFSET + rw - small, MEMORY_OFFSET + rw - small + 1
 				, MEMORY_OFFSET - 1, 0xFFFFFFFFu };
-		const UInt srcs[] = { MEMORY_OFFSET + MEMORY_SIZE - small, MEMORY_OFFSET + MEMORY_SIZE - small + 1
+		const UInt srcs[] = { MEMORY_OFFSET + READABLE_SIZE - small, MEMORY_OFFSET + READABLE_SIZE - small + 1
 				, MEMORY_OFFSET, MEMORY_OFFSET - 1, 0x80000000u };
 		for (size_t d = 0; d < 5; ++d) for (size_t s = 0; s < 5; ++s) pairs.push_back(std::make_pair(dsts[d], srcs[s]));
 		for (size_t k = 0; k < pairs.size(); ++k) {
@@ -672,11 +672,13 @@ int sweep(int engineCount) {
 		Layout layout = base;
 		Probe p;
 		bool assembled = false;
-		for (int tries = 0; tries < 4; ++tries) {
+		bool stable = false;
+		for (int tries = 0; tries < 4 && !stable; ++tries) {
 			p = generate(layout)[n];
 			Layout got = Layout();
 			assembled = assemble(m, p.source, got, error);
-			if (!assembled || got == layout) break;
+			if (!assembled) break;
+			stable = (got == layout);
 			layout = got;
 		}
 		Totals& t = totals[p.form];
@@ -700,6 +702,8 @@ int sweep(int engineCount) {
 			} else if (!p.allConst) {
 				problems.push_back("refused: " + error);
 			}
+		} else if (!stable) {
+			problems.push_back("the layout never settled, so the probe's edges would be the wrong ones");
 		} else {
 			if (p.fromEnd) {
 				// A first run learns where `ar` is; the index is then set relative to the end of the data stack.
