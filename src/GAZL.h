@@ -363,7 +363,7 @@ class Processor {
 	protected:	const Instruction* codeBase;
 	protected:	UInt functionCount;
 	protected:	const UInt* functionTable;																				// Maps function ordinal -> code offset; a function pointer is `FUNCTION_OFFSET + ordinal`.
-	protected:	UInt memorySize;
+	protected:	UInt memorySize;																						// One less than the memory given: the last word is the assembler's zero guard, so no checked read reaches it.
 	protected:	Value* memoryBase;
 	protected:	UInt rwMemorySize;
 	protected:	Value* dataStackBase;
