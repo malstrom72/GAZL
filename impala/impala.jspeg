@@ -2846,6 +2846,14 @@
         return $$parser.coarseType($$parser.initTarget);
     };
 
+    /* Does `op` carry a compile-time scratch anywhere - a bare `<A>`, or the trailing `<A>` of a compound
+       operand such as `&board:<A>` (the address of a shaped-array element) or `#<A>`? A data row that holds
+       one must hold nothing else, or `declare` cannot hand the scratch back: returnBack reads only a whole
+       operand or its LAST token, so `DATA &board:<A> #4` leaked `<A>` and died on the boundary assert. */
+    $$parser.carriesScratch = function (op) {
+        return /<[A-Za-z]>/.test(op);
+    };
+
     $$parser.initElemRow = function () {
         return ($$parser.initCoarseType() !== undefined ? 'DAT?' : 'DATA');
     };
@@ -2952,7 +2960,7 @@
            `InitList` has always had this rule; the buffered path was written without it. */
         var line = '';
         for (var i = 0; i < ops.length; ++i) {
-            if (line !== '' && (ops[i].charAt(0) === '<' || line.charAt(0) === '<'
+            if (line !== '' && ($$parser.carriesScratch(ops[i]) || $$parser.carriesScratch(line)
                     || (line + ' ' + ops[i]).length >= 55)) {
                 $$parser.declare(row, 'globals', undefined, type, true, line, sourceCode, sourceOffset);
                 line = '';
@@ -5491,8 +5499,8 @@ InitList    <-  '{' _                                                 { $d = ' '
                                                                             var xType = next.type, constant = next.op;
 
                                                                             /* decide if we need to flush DATA */
-                                                                            if (  constant[0] === '<'
-                                                                              || $d[1] === '<'
+                                                                            if (  $$parser.carriesScratch(constant)
+                                                                              || $$parser.carriesScratch($d)
                                                                               || ($d + ' ' + constant).length >= 55) {
 
                                                                                 $$parser.declare(
