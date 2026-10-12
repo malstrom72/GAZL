@@ -291,18 +291,19 @@ on its command line.
 | Non-zero initializer for an `extern struct` | E459 | 1 | the error, now: the host owns the layout |
 | `case` value outside the switch range, the range symbolic | E444 | 4 | nothing: the arm is unreachable (`docs/impala/Impala.md`, `switch`) |
 | `case` value symbolic, above a literal range | E444 | 4 | nothing: the arm is unreachable |
-| `case` value symbolic, below a literal range | E444 | 3 | `Invalid identifier: .s0.-1`: the module does not load |
+| `case` value naming a host-supplied const, below a literal range | E444 | 4 | nothing: the label is guarded and the arm unreachable (`tests/impala/sources/switchSymbolicCase.impala`) |
+| `case` value an expression over a host-supplied const, below a literal range | E444 | 3 | `Invalid identifier: .s0.-1`: the module does not load |
 | Two `case` values equal, both symbolic | E443 | 3 | `Symbol already defined: .s0.1` |
-| Division or modulus by a constant zero | none | 3 | `Constant zero divisor or modulus`; Impala does not check even a literal `0` |
-| `copy` count larger than its source or destination | none | 4 | nothing; Impala does not check even a literal count, and the VM stops only a copy that leaves memory |
+| Division or modulus by a constant zero | E466 | 3 | `Constant zero divisor or modulus`; a literal zero is E466 at Impala compile time |
+| `copy` count larger than its source or destination | E467 | 4 | nothing; a literal count is E467 against a global array's room, but the VM stops only a copy that leaves memory |
 
 Candidates, none of them decided:
 
-- A symbolic `case` value below a literal range should be guarded the way a case under a symbolic range already
-  is (`tests/impala/sources/switchWindow.impala`): today the whole module fails to load.
+- A `case` value that is an expression over a host-supplied const (`case K + 1`) below a literal range still makes
+  the module fail to load. Impala cannot tell from the folded `<A>` whether a host const entered it.
 - Four assembler messages name something the user never wrote (`.z.a`, `.s0.1`, `.s0.-1`) or say "incompatible
   types" for a negative number. A deferred `! FAIL` placed first would read better.
-- A literal zero divisor and a literal `copy` count are numbers Impala knows (rule 2), and neither is checked.
+- A character-literal `case` value (`case '+':`) gets no E443 or E444 check: `constInt` does not read `#'+'`.
 
 
 ## Why this follows from "stay a transliterator"
