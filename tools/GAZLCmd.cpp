@@ -216,6 +216,21 @@ int testCallback(Processor* p) {
 	return 0;
 }
 
+/*
+	`input` without the console: what `input` does when the line read is empty. A fuzz target must not read stdin,
+	or a replay depends on how the build was started and can block waiting for a line.
+*/
+static Status fuzzInput(Processor* vpu) {
+	vpu->resetTimeOut(0x7FFFFFFF);
+	Value* params = vpu->accessParams(3);
+	if (params == 0) return DATA_STACK_OVERFLOW;
+	Value* bp = vpu->accessMemory(params[2].p, params[1].i + 1);
+	if (bp == 0) return ACCESS_VIOLATION;
+	bp[0].i = 0;
+	params[0].i = 0;
+	return OK;
+}
+
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size) {
 	memset(memory, 0, sizeof memory);																					// zeroed as in a fresh process, so no crash depends on the previous input
 	memset(code, 0, sizeof code);
@@ -225,7 +240,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size) {
 		Symbols globals;
 
 		static const NativeFunc NATIVE_TABLE[] = {
-			abort, abort, input, gazlAtan2, gazlSqrt, gazlLog, testMul, testCallback
+			abort, abort, fuzzInput, gazlAtan2, gazlSqrt, gazlLog, testMul, testCallback
 		};
 
 		static const char* NATIVE_NAMES[] = {
@@ -317,11 +332,15 @@ int main(int argc, const char* argv[]) {
 		if (argv[i][0] == '@') {
 			FILE* listFile = fopen(argv[i] + 1, "r");
 			if (listFile == 0) { perror(argv[i] + 1); return EXIT_FAILURE; }
-			char line[1024];
-			while (fgets(line, sizeof line, listFile) != 0) {
-				size_t n = strlen(line);
-				while (n > 0 && (line[n - 1] == '\n' || line[n - 1] == '\r')) line[--n] = 0;	// tolerate either line ending
-				if (n > 0) doOne(line);
+			std::string line;					// any length: a fixed buffer split a long path into two wrong ones
+			for (int c = fgetc(listFile); ; c = fgetc(listFile)) {
+				if (c != EOF && c != '\n') {
+					if (c != '\r') line += static_cast<char>(c);		// tolerate either line ending
+					continue;
+				}
+				if (!line.empty()) doOne(line.c_str());
+				line.clear();
+				if (c == EOF) break;
 			}
 			fclose(listFile);
 			continue;
@@ -439,7 +458,12 @@ int main(int argc, const char* argv[]) {
 				} else if (strncmp(a, "--warmup", 8) == 0) {
 					benchWarmup = (a[8] == '=') ? atoi(a + 9) : benchWarmup;
 				} else if (strncmp(a, "--pin=", 6) == 0) {
-					pinCore = atoi(a + 6);
+					char* end = 0;
+					const long core = strtol(a + 6, &end, 10);
+					if (end == a + 6 || *end != 0 || core < 0 || core > 63) {
+						throw CmdException("--pin: core must be a number from 0 to 63");
+					}
+					pinCore = static_cast<int>(core);
 				} else if (strcmp(a, "--no-libm") == 0) {
 					noLibm = true;
 				} else if (strncmp(a, "--forward=", 10) == 0) {

@@ -32,6 +32,7 @@ IF %MAX_NEED% GEQ %LIMIT% (
 )
 SET /A K=%LIMIT% - %MAX_NEED%
 CALL :compiles %K%
+IF ERRORLEVEL 2 EXIT /B 1
 IF "%COMPILED%"=="1" (
 	ECHO check-nesting: Impala compiler needs at most %MAX_NEED% of %LIMIT% levels
 	EXIT /B 0
@@ -44,8 +45,10 @@ EXIT /B 1
 
 :measure
 CALL :compiles 0
+IF ERRORLEVEL 2 EXIT /B 1
 IF NOT "%COMPILED%"=="1" ECHO check-nesting: the compiler does not compile even unwrapped& EXIT /B 1
 CALL :compiles %LIMIT%
+IF ERRORLEVEL 2 EXIT /B 1
 IF "%COMPILED%"=="1" ECHO check-nesting: wrapper consumed no depth, probe invalid& EXIT /B 1
 SET /A LO=0
 SET /A HI=%LIMIT%
@@ -54,6 +57,7 @@ SET /A SPAN=%HI% - %LO%
 IF %SPAN% LEQ 1 GOTO bisectDone
 SET /A MID=(%LO% + %HI%) / 2
 CALL :compiles %MID%
+IF ERRORLEVEL 2 EXIT /B 1
 IF "%COMPILED%"=="1" (SET /A LO=%MID%) ELSE (SET /A HI=%MID%)
 GOTO bisect
 :bisectDone
@@ -69,6 +73,13 @@ IF %1 GTR 0 FOR /L %%I IN (1,1,%1) DO >>"%F%" ECHO {
 TYPE "%SRC%" >> "%F%"
 IF %1 GTR 0 FOR /L %%I IN (1,1,%1) DO >>"%F%" ECHO }
 "%NUXJS%" "%F%" > "%WORK%\out.txt" 2>&1
-SET COMPILED=1
-FINDSTR /C:"Internal compiler limitations reached" "%WORK%\out.txt" >NUL && SET COMPILED=0
-EXIT /B 0
+IF NOT ERRORLEVEL 1 (
+	SET COMPILED=1
+	EXIT /B 0
+)
+SET COMPILED=0
+FINDSTR /C:"Internal compiler limitations reached" "%WORK%\out.txt" >NUL && EXIT /B 0
+REM Any other failure is not an answer about depth; counting it as "compiled" would pass the gate on a crash.
+ECHO check-nesting: the probe failed for another reason:
+TYPE "%WORK%\out.txt"
+EXIT /B 2

@@ -35,7 +35,8 @@ A change lands on the highest branch it belongs to, through a pull request, and 
 a time down the chain: `main` into `Impala2`, `Impala2` into `GAZL2`, `GAZL2` into `jit-compiler`. Each
 branch contains everything above it, and a conflict is resolved once, at the step where it appears.
 `tools/cascade.sh` (or `.cmd`) reports which steps are behind; with `--merge` it carries them out, each
-through a pull request and CI.
+through a pull request and CI. `--to <branch>` ends the chain early: while GAZL2 and jit-compiler are on hold
+(since 2026-10-12), use `--to Impala2`.
 
 **Shared files.** `CodingStyle.md`, `fuzzing.md` (both above their "Local additions") and
 `tools/BuildCpp.sh` / `.cmd` are shared with other repositories and must match on every branch.

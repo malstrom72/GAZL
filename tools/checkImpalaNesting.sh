@@ -38,12 +38,16 @@ compiles() {						# $1 = K wrapper blocks; 0 = compiled, 1 = hit the nesting lim
 	cat "$SRC" >> "$f"
 	i=0
 	while [ "$i" -lt "$k" ]; do printf '}\n' >> "$f"; i=$((i + 1)); done
-	local out
-	out=$("./$NUXJS" "$f" 2>&1 || true)			# NOT piped into grep: grep -q exits early, SIGPIPEs NuXJS, and
-	case "$out" in									# pipefail then reports the match as a failure to match
+	local out status=0
+	out=$("./$NUXJS" "$f" 2>&1) || status=$?		# NOT piped into grep: grep -q exits early, SIGPIPEs NuXJS, and
+	[ "$status" = 0 ] && return 0					# pipefail then reports the match as a failure to match
+	case "$out" in
 		*"Internal compiler limitations reached"*) return 1;;
 	esac
-	return 0
+	# Any other failure is not an answer about depth; counting it as "compiled" would pass the gate on a crash.
+	echo "check-nesting: the probe failed for another reason (exit $status):" >&2
+	echo "$out" | head -5 >&2
+	exit 1
 }
 
 if [ "$measure" = 1 ]; then
