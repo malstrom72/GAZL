@@ -218,10 +218,10 @@ int testCallback(Processor* p) {
 
 /*
 	`input` without the console: what `input` does when the line read is empty. A fuzz target must not read stdin,
-	or a replay depends on how the build was started and can block waiting for a line.
+	or a replay depends on how the build was started and can block waiting for a line. Unlike `input` it leaves the
+	fuel alone: refilling it let a program that calls `input` in a loop run forever, past the target's step limit.
 */
 static Status fuzzInput(Processor* vpu) {
-	vpu->resetTimeOut(0x7FFFFFFF);
 	Value* params = vpu->accessParams(3);
 	if (params == 0) return DATA_STACK_OVERFLOW;
 	Value* bp = vpu->accessMemory(params[2].p, params[1].i + 1);

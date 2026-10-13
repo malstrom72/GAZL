@@ -23,6 +23,7 @@ clean on a current engine and reproduces its defect on the commit before the fix
 | `foriVarLimitAtIntMax`        | the same, with a variable limit                                          |
 | `peekIndexOverflowsInt`       | `PEEK`'s bounds check summed a biased address in `Int`, overflowing it   |
 | `pokeIndexOverflowsInt`       | the same, for `POKE`                                                     |
+| `swchSizeOverflowsInt`        | `SWCH *2147483647` computed its table size as `Int + 1`, a signed overflow (UBSan catches it) |
 
 Only inputs for FIXED defects belong here. An input for a defect that is still open goes somewhere else until the
 fix lands, or it aborts a strict run while the corpus is still loading.

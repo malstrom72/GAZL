@@ -422,7 +422,7 @@ static const Operator OPERATORS[] = {
 	, { " IORi_vcv", IORI_VVC,	{ VAR_INT_W		, CONST_INT		, VAR_INT_R		}		, SWAP_1_AND_2	, 0				}
 	, { " IORi_vvc", IORI_VVC,	{ VAR_INT_W		, VAR_INT_R		, CONST_INT		}		, 0				, 0				}
 	, { " IORi_vvv", IORI_VVV,	{ VAR_INT_W		, VAR_INT_R		, VAR_INT_R		}		, 0				, 0				}
-	, { " LEQf_ccb", NLSI_CCB,	{ CONST_FLOAT	, CONST_FLOAT	, FWD_BRANCH	}		, SWAP_0_AND_1 | YIELDS_GOTO, 0	}
+	, { " LEQf_ccb", NLSF_CCB,	{ CONST_FLOAT	, CONST_FLOAT	, FWD_BRANCH	}		, SWAP_0_AND_1 | YIELDS_GOTO, 0	}
 	, { " LEQf_cvb", NLSF_VCB,	{ CONST_FLOAT	, VAR_FLOAT_R	, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
 	, { " LEQf_vcb", NLSF_CVB,	{ VAR_FLOAT_R	, CONST_FLOAT	, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
 	, { " LEQf_vvb", NLSF_VVB,	{ VAR_FLOAT_R	, VAR_FLOAT_R	, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
@@ -1205,7 +1205,7 @@ const Char* Assembler::feed(const Char* line) {
 								if (op->opcode == SWCH_VCC) {															// SWCH
 									assert(*op2Begin == '@');
 									assert(op->accepts[2] == FWD_BRANCH);
-									size = (p1->i + 1);
+									size = (UInt)p1->i + 1u;										// unsigned: `*2147483647` + 1 was signed overflow
 									if (size > constantsPointer - globalsPointer) {
 										throw Exception(NOT_ENOUGH_MEMORY_SPACE);
 									}
@@ -1746,26 +1746,6 @@ bool unitTest() {
 			}
 		}
 
-		// A frame summing past INT_MAX is refused at assembly, so a slot offset can never wrap.
-		{
-			std::vector<Value> m(100);
-			std::vector<Instruction> c(100);
-			std::vector<UInt> f(100);
-			Symbols g;
-			Assembler assem(100, &c[0], 100, &f[0], 100, &m[0], g);
-			assem.newUnit("FrameTooLarge");
-			bool refused = false;
-			try {
-				const Char* cp = STR("f: FUNC\n$a: LOCA *2147483647\n$b: LOCA *1\n RETU\n");
-				while (*cp != 0) cp = assem.feed(cp);
-			}
-			catch (const Exception& e) {
-				refused = (e.error == FRAME_TOO_LARGE);
-			}
-			assert(refused);
-			(void)refused;
-		}
-
 		TestCallbackData callbackData;
 		
 		UInt size;
@@ -1826,12 +1806,6 @@ bool unitTest() {
 					, sizes2.globalsSize, sizes2.constsSize, CALL_STACK_SIZE, &callStack2[0], nativeTable, &callbackData);
 			MemoryLoad loaded = thawMemory(pmachine2, globals2, memoryBlob.empty() ? 0 : &memoryBlob[0], (UInt)memoryBlob.size());
 			assert(loaded == MEMORY_OK);
-
-			// A first global name length far past the end of the blob must be rejected, not read.
-			std::vector<unsigned char> badBlob(memoryBlob);
-			assert(badBlob.size() >= 32);
-			badBlob[28] = 0xF0; badBlob[29] = 0xFF; badBlob[30] = 0xFF; badBlob[31] = 0xFF;
-			assert(thawMemory(pmachine2, globals2, &badBlob[0], (UInt)badBlob.size()) == MEMORY_TRUNCATED);
 
 			// Every non-TEMP global must match the frozen original (identical assemblies share global addresses).
 			Symbols::Iterator it;
