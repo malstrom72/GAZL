@@ -44,6 +44,8 @@
 	the probe function's own frame at the bottom of the data stack, which the program writes itself.
 
 	The memory a native reaches through `accessConstMemory` and `accessMemory` is swept too, by the same rule.
+	So are two refusals a host relies on: a frame past INT_MAX at assembly, and a truncated or corrupt blob in
+	`thawMemory`.
 
 	Built with GAZL_JIT, every probe also runs through the JIT, checked against the same oracle (not against the
 	interpreter), unless the host forbids executable memory. Exits non-zero on any failure.
@@ -648,6 +650,68 @@ int sweepNativeAccess() {
 	return failures;
 }
 
+/*
+	Two refusals at the edges a host reaches: a frame summing past INT_MAX is refused at assembly, so a slot offset
+	can never wrap, and `thawMemory` rejects every truncated blob and a name length running past the end of the
+	blob, without reading past it. Returns the number of failures, each one printed.
+*/
+int sweepFrameAndThaw() {
+	int failures = 0;
+	{
+		Machine m;
+		bool refused = false;
+		try {
+			Assembler assem(CODE_SIZE, &m.code[0], FUNCTION_COUNT, &m.functionTable[0], MEMORY_SIZE, m.memory()
+					, m.symbols);
+			assem.newUnit("frame");
+			const Char* cp = "f: FUNC\n$a: LOCA *2147483647\n$b: LOCA *1\n RETU\n";
+			while (*cp != 0) cp = assem.feed(cp);
+		}
+		catch (const Exception& e) {
+			refused = (e.error == FRAME_TOO_LARGE);
+		}
+		if (!refused) {
+			std::printf("FAIL frame: a frame past INT_MAX was not refused with FRAME_TOO_LARGE\n");
+			++failures;
+		}
+	}
+
+	Machine m;
+	Layout layout = Layout();
+	std::string error;
+	if (!assemble(m, program(""), layout, error)) {
+		std::printf("thaw: baseline program refused: %s\n", error.c_str());
+		return failures + 1;
+	}
+	Processor processor(m.sizes.codeSize, &m.code[0], m.sizes.functionCount, &m.functionTable[0], MEMORY_SIZE
+			, m.memory(), m.sizes.globalsSize, m.sizes.constsSize, CALL_STACK_SIZE, &m.callStack[0], 0);
+	std::vector<unsigned char> blob(freezeMemorySize(processor, m.symbols));
+	freezeMemory(processor, m.symbols, &blob[0], (UInt)blob.size());
+	int probes = 1;											// the frame above
+	if (thawMemory(processor, m.symbols, &blob[0], (UInt)blob.size()) != MEMORY_OK) {
+		std::printf("FAIL thaw: the intact blob was rejected\n");
+		++failures;
+	}
+	++probes;
+	for (size_t n = 1; n < blob.size(); ++n) {
+		const std::vector<unsigned char> prefix(blob.begin(), blob.begin() + n);	// exactly `n` bytes, nothing after
+		if (thawMemory(processor, m.symbols, &prefix[0], (UInt)n) == MEMORY_OK) {
+			std::printf("FAIL thaw: a blob cut to %d bytes was accepted\n", (int)n);
+			++failures;
+		}
+		++probes;
+	}
+	std::vector<unsigned char> bad(blob);
+	bad[28] = 0xF0; bad[29] = 0xFF; bad[30] = 0xFF; bad[31] = 0xFF;		// the first global's name length
+	if (thawMemory(processor, m.symbols, &bad[0], (UInt)bad.size()) != MEMORY_TRUNCATED) {
+		std::printf("FAIL thaw: a name length past the end of the blob was not rejected as truncated\n");
+		++failures;
+	}
+	++probes;
+	std::printf("frame and thaw: %d probes, %d failed\n", probes, failures);
+	return failures;
+}
+
 struct Totals { int probes; int failures; };
 
 int sweep(int engineCount) {
@@ -751,6 +815,6 @@ int main() {
 		std::printf("bounds sweep: this host forbids executable memory; the JIT is NOT swept\n");
 	}
 #endif
-	const int nativeFailures = sweepNativeAccess();
-	return (sweep(engineCount) != 0 || nativeFailures != 0) ? 1 : 0;
+	const int hostFailures = sweepNativeAccess() + sweepFrameAndThaw();
+	return (sweep(engineCount) != 0 || hostFailures != 0) ? 1 : 0;
 }

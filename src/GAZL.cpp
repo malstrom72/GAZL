@@ -1737,26 +1737,6 @@ bool unitTest() {
 			}
 		}
 
-		// A frame summing past INT_MAX is refused at assembly, so a slot offset can never wrap.
-		{
-			std::vector<Value> m(100);
-			std::vector<Instruction> c(100);
-			std::vector<UInt> f(100);
-			Symbols g;
-			Assembler assem(100, &c[0], 100, &f[0], 100, &m[0], g);
-			assem.newUnit("FrameTooLarge");
-			bool refused = false;
-			try {
-				const Char* cp = STR("f: FUNC\n$a: LOCA *2147483647\n$b: LOCA *1\n RETU\n");
-				while (*cp != 0) cp = assem.feed(cp);
-			}
-			catch (const Exception& e) {
-				refused = (e.error == FRAME_TOO_LARGE);
-			}
-			assert(refused);
-			(void)refused;
-		}
-
 		TestCallbackData callbackData;
 		
 		UInt size;
@@ -1817,12 +1797,6 @@ bool unitTest() {
 					, sizes2.globalsSize, sizes2.constsSize, CALL_STACK_SIZE, &callStack2[0], nativeTable, &callbackData);
 			MemoryLoad loaded = thawMemory(pmachine2, globals2, memoryBlob.empty() ? 0 : &memoryBlob[0], (UInt)memoryBlob.size());
 			assert(loaded == MEMORY_OK);
-
-			// A first global name length far past the end of the blob must be rejected, not read.
-			std::vector<unsigned char> badBlob(memoryBlob);
-			assert(badBlob.size() >= 32);
-			badBlob[28] = 0xF0; badBlob[29] = 0xFF; badBlob[30] = 0xFF; badBlob[31] = 0xFF;
-			assert(thawMemory(pmachine2, globals2, &badBlob[0], (UInt)badBlob.size()) == MEMORY_TRUNCATED);
 
 			// Every non-TEMP global must match the frozen original (identical assemblies share global addresses).
 			Symbols::Iterator it;
