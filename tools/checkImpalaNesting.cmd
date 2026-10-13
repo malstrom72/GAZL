@@ -20,14 +20,14 @@ MKDIR "%WORK%" 2>NUL
 REM The limit is NuXJS's, so read it from the vendored source rather than restating it here. Through a temp file: a
 REM FOR /F over a FINDSTR command line carrying quotes does not survive cmd's parser.
 SET LIMIT=
-FINDSTR /C:"const Int32 MAX_NESTED_COMPILE_DEPTH" externals\NuXJS\src\NuXJS.cpp > "%WORK%\limit.txt"
+FINDSTR /C:"const Int32 STANDARD_MAX_NESTED_COMPILE_DEPTH" externals\NuXJS\src\NuXJS.h > "%WORK%\limit.txt"
 FOR /F "tokens=5 delims=; " %%A IN (%WORK%\limit.txt) DO IF NOT DEFINED LIMIT SET LIMIT=%%A
-IF NOT DEFINED LIMIT ECHO check-nesting: could not read MAX_NESTED_COMPILE_DEPTH from the vendored NuXJS& EXIT /B 1
+IF NOT DEFINED LIMIT ECHO check-nesting: could not read the nesting limit from the vendored NuXJS& EXIT /B 1
 
 IF "%MEASURE%"=="1" GOTO measure
 
 IF %MAX_NEED% GEQ %LIMIT% (
-	ECHO check-nesting: NuXJS's MAX_NESTED_COMPILE_DEPTH is %LIMIT%, at or below the %MAX_NEED% this project allows
+	ECHO check-nesting: NuXJS's nesting limit is %LIMIT%, at or below the %MAX_NEED% this project allows
 	EXIT /B 1
 )
 SET /A K=%LIMIT% - %MAX_NEED%

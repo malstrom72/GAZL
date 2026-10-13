@@ -140,7 +140,6 @@ inline GCItem::~GCItem() { if (_gcList != 0) { _gcList->relinquish(this); } }
 
 const int MAX_POOLED_SIZE = 1024;
 const int POOL_SIZE_GRANULARITY = 16;
-const UInt32 MAX_SINGLE_ALLOCATION_SIZE = 2147483648U;
 
 /**
 	Heap manages memory allocation for all GCItems. It keeps track of allocated blocks and owns the GC lists used during
@@ -157,6 +156,7 @@ class Heap {
 		UInt32 count() const { return allocatedCount; }
 		size_t size() const { return allocatedSize; }
 		size_t pooled() const { return pooledSize; }
+		void setMaxAllocationSize(size_t maxSize) { assert(maxSize <= 0x7FFFFFFF); maxAllocationSize = maxSize; }		// 2 GB at most: string lengths and offsets are 32-bit
 		void gc();
 		virtual ~Heap();
 		friend void gcMark(Heap& heap, const GCItem* item);
@@ -170,6 +170,7 @@ class Heap {
 		UInt32 allocatedCount;
 		size_t allocatedSize;
 		size_t pooledSize;
+		size_t maxAllocationSize;
 		GCList managedListA;
 		GCList managedListB;
 		GCList rootList;
@@ -397,7 +398,9 @@ class Value {
 		Value(UInt32 number) : type(NUMBER_TYPE) { var.number = number; }
 		Value(double number) : type(NUMBER_TYPE) { var.number = number; }
 		Value(const String* string) : type(STRING_TYPE) { var.string = string; }
+		Value(String* string) : type(STRING_TYPE) { var.string = string; }
 		Value(Object* object) : type(OBJECT_TYPE) { var.object = object; }
+		template<class T> Value(T* object) : type(OBJECT_TYPE) { var.object = object; }	// else a bool
 
 		bool isUndefined() const { return type == UNDEFINED_TYPE; }
 		bool isNull() const { return type == NULL_TYPE; }
@@ -465,8 +468,8 @@ class Value {
 		Value(const void* v); // N/A. Just to avoid unwanted casting of a pointer to bool.
 };
 
-typedef Byte Flags; // FIX : turn into enum
-const Flags EXISTS_FLAG = 1; // FIX : turn these into enum, that's ok
+typedef Byte Flags;
+const Flags EXISTS_FLAG = 1;
 const Flags READ_ONLY_FLAG = 2;
 const Flags DONT_ENUM_FLAG = 4;
 const Flags DONT_DELETE_FLAG = 8;
@@ -808,15 +811,14 @@ class JSArray : public LazyJSObject<Object> {
 		virtual const String* getClassName() const;	// &A_RRAY_STRING
 		virtual JSArray* asArray();
 		virtual Object* getPrototype(Runtime& rt) const;
-		// FIX : toString too?
 		virtual Flags getOwnProperty(Runtime& rt, const Value& key, Value* v) const;
 		virtual bool setOwnProperty(Runtime& rt, const Value& key, const Value& v, Flags flags = STANDARD_FLAGS);
 		virtual bool updateOwnProperty(Runtime& rt, const Value& key, const Value& v);
 		virtual bool deleteOwnProperty(Runtime& rt, const Value& key);
 		virtual Enumerator* getOwnPropertyEnumerator(Runtime& rt) const;
 		void pushElements(Runtime& rt, Int32 count, const Value* elements);
-		UInt32 getLength() const { return length; }	// fix: make virtual and have for all objects?
-		bool updateLength(UInt32 newLength);	// fix: make virtual and have for all objects?
+		UInt32 getLength() const { return length; }
+		void updateLength(UInt32 newLength);
 		Value getElement(Runtime& rt, UInt32 index) const;
 		bool setElement(Runtime& rt, UInt32 index, const Value& v);
 
@@ -827,7 +829,7 @@ class JSArray : public LazyJSObject<Object> {
 		UInt32 length;
 		Vector<Value> denseVector;
 		virtual void gcMarkReferences(Heap& heap) const {
-			const_cast<JSArray*>(this)->denseVector.shrink(); // FIX : split into two different gc-things? it really *is* different to just mark stuff and actively shrink / compress stuff
+			const_cast<JSArray*>(this)->denseVector.shrink();
 			gcMark(heap, denseVector.begin(), denseVector.end());
 			super::gcMarkReferences(heap);
 		}
@@ -840,8 +842,11 @@ class JSArray : public LazyJSObject<Object> {
 class Constants : public GCItem, public Vector<Value> {
 	public:
 		typedef GCItem super;
-		Constants(GCList& gcList) : super(gcList), Vector<Value>(&gcList.getHeap())
-				, stringIndexes(&gcList.getHeap()), otherIndexes(&gcList.getHeap()) { }
+		Constants(GCList& gcList) : super(gcList), Vector<Value>(&gcList.getHeap()), stringIndexes(&gcList.getHeap()) {
+			for (int i = 0; i < 64; ++i) {
+				otherIndexes[i] = ~0U;
+			}
+		}
 
 		UInt32 findOrAdd(const Value& constant);
 
@@ -854,12 +859,11 @@ class Constants : public GCItem, public Vector<Value> {
 		virtual void gcMarkReferences(Heap& heap) const {
 			gcMark(heap, begin(), end());
 			stringIndexes = Table(&heap);
-			otherIndexes = Vector<UInt32>(&heap);
 			super::gcMarkReferences(heap);
 		}
 
 		mutable Table stringIndexes;			// string constant -> its index in this list
-		mutable Vector<UInt32> otherIndexes;	// indexes of the non-strings worth scanning
+		UInt32 otherIndexes[64];				// the most recently used non-strings, most recent last, ~0U when unused
 };
 
 /**
@@ -893,7 +897,7 @@ class SourceCodeUnit : public GCItem {
 **/
 class Code : public Object {
 	friend class FunctionScope;
-	friend class Compiler; // FIX : maybe not one day?
+	friend class Compiler;
 	
 	public:
 		typedef Object super;
@@ -974,7 +978,6 @@ class Function : public Object {
 
 typedef Value (*NativeFunction)(Runtime&, Processor&, UInt32, const Value*, Object*);
 
-// FIX : overkill?
 template<class F> struct FunctorAdapter : public Function {
 	typedef Function super;
 	FunctorAdapter(const F& f) : f(f) { }
@@ -1006,20 +1009,26 @@ class Scope : public GCItem {
 	public:
 		typedef GCItem super;
 		Scope(GCList& gcList, Scope* parentScope);
-		virtual Flags readVar(Runtime& rt, const String* name, Value* v, Value* implicitThis) const;
-		virtual void writeVar(Runtime& rt, const String* name, const Value& v);
-		virtual bool deleteVar(Runtime& rt, const String* name);
-		virtual void declareVar(Runtime& rt, const String* name, const Value& initValue, bool dontDelete);
+		Flags readVar(Runtime& rt, const String* name, Value* v, Value* implicitThis) const;
+		void writeVar(Runtime& rt, const String* name, const Value& v);
+		bool deleteVar(Runtime& rt, const String* name);
+		void declareVar(Runtime& rt, const String* name, const Value& initValue, bool dontDelete);
 		Value* getLocalsPointer() const { return localsPointer; }
 		Scope* getParentScope() const { return parentScope; }
 		void makeClosure() const;
 		void leave() { if (deleteOnPop) { delete this; } }
-		
+
 	protected:
 		Scope* const parentScope;
 		Value* localsPointer; // Pointer is offset so that negative indexes addresses local variables and positive indexes addresses arguments.
 		mutable bool deleteOnPop;
-		
+
+		// This scope only. readVar etc. walk the chain with these, in a loop, since script can make it arbitrarily deep.
+		virtual Flags readLocalVar(Runtime& rt, const String* name, Value* v, Value* implicitThis) const; // NONEXISTENT if not here
+		virtual bool writeLocalVar(Runtime& rt, const String* name, const Value& v);	// false if not here
+		virtual bool deleteLocalVar(Runtime& rt, const String* name, bool& result);		// false if not here
+		virtual bool declareLocalVar(Runtime& rt, const String* name, const Value& initValue, bool& dontDelete); // false to pass it on
+
 		virtual void gcMarkReferences(Heap& heap) const {
 			gcMark(heap, parentScope);
 			super::gcMarkReferences(heap);
@@ -1078,6 +1087,8 @@ class Error : public LazyJSObject<Object> {
 		const String* getErrorName() const { assert(name != 0); return name; }	// never 0
 		const String* getErrorMessage() const { return message; };	// can be 0
 		const String* getStackString() const { return stack; }	// can be 0
+		const Code::SourceLocation& getCompilePosition() const { return compilePosition; }
+		void setCompilePosition(const Code::SourceLocation& position) { compilePosition = position; }
 	
 	protected:
 		virtual void constructCompleteObject(Runtime& rt) const;
@@ -1087,10 +1098,12 @@ class Error : public LazyJSObject<Object> {
 		const String* name; 	// may get updated by script code
 		const String* message; 	// may get updated by script code
 		const String* stack; 		// may get updated by script code
+		Code::SourceLocation compilePosition;	// where compilation stopped, if it did: fileName is 0 otherwise
 		virtual void gcMarkReferences(Heap& heap) const {
 			gcMark(heap, name);
 			gcMark(heap, message);
 			gcMark(heap, stack);
+			gcMark(heap, compilePosition.fileName);
 			super::gcMarkReferences(heap);
 		}
 };
@@ -1141,14 +1154,14 @@ class FunctionScope : public Scope {
 		typedef Scope super;
 
 		FunctionScope(GCList& gcList, JSFunction* function, UInt32 argc, const Value* argv);
-		virtual Flags readVar(Runtime& rt, const String* name, Value* v, Value* implicitThis) const;
-		virtual void writeVar(Runtime& rt, const String* name, const Value& v);
-		virtual bool deleteVar(Runtime& rt, const String* name);
-		virtual void declareVar(Runtime& rt, const String* name, const Value& initValue, bool dontDelete);
 		JSObject* getDynamicVars(Runtime& rt) const;
 	   	virtual ~FunctionScope();	// At destruction we detach any created Arguments object (copying all values and severing the connection to the FunctionScope, in order to prevent "memory leaks".)
 
 	protected:
+		virtual Flags readLocalVar(Runtime& rt, const String* name, Value* v, Value* implicitThis) const;
+		virtual bool writeLocalVar(Runtime& rt, const String* name, const Value& v);
+		virtual bool deleteLocalVar(Runtime& rt, const String* name, bool& result);
+		virtual bool declareLocalVar(Runtime& rt, const String* name, const Value& initValue, bool& dontDelete);
 		JSFunction* const function;
 		const UInt32 passedArgumentsCount;
 		Vector<Value> locals; // Includes variables and arguments.
@@ -1167,6 +1180,7 @@ class FunctionScope : public Scope {
 class Var;
 const UInt32 STANDARD_JS_STACK_SIZE = 1024;				///< Max virtual processor stack size, should be enough for normal applications.
 const UInt32 STANDARD_CYCLES_BETWEEN_AUTO_GC = 1024;	///< Number of virtual processor cycles between each check for GC.
+const Int32 STANDARD_MAX_NESTED_COMPILE_DEPTH = 128;	// see "Nesting limits" in NuXJS Documentation.md
 const UInt32 MAX_CROSS_CALL_RECURSION = 64;				///< Max number of recursive calls from C++ to JS to prevent C++ stack overflow.
 const Int32 CHECK_TIMEOUT_INTERVAL = 1024;				///< Minimum number of auto-gc cycles between each timeout check against clock-on-the-wall.
 const Int32 MAX_PROTOTYPE_CHAIN_LENGTH = 32;			///< Limit prototype chain depth. Too deep chain could cause C++ stack overflow.
@@ -1188,10 +1202,10 @@ class Runtime : public GCItem {
 		struct GlobalScope : public Scope {
 			typedef Scope super;
 			GlobalScope(GCList& gcList);
-			virtual Flags readVar(Runtime& rt, const String* name, Value* v, Value* implicitThis) const;
-			virtual void writeVar(Runtime& rt, const String* name, const Value& v);
-			virtual bool deleteVar(Runtime& rt, const String* name);
-			virtual void declareVar(Runtime& rt, const String* name, const Value& initValue, bool dontDelete);
+			virtual bool declareLocalVar(Runtime& rt, const String* name, const Value& initValue, bool& dontDelete);
+			virtual Flags readLocalVar(Runtime& rt, const String* name, Value* v, Value* implicitThis) const;
+			virtual bool writeLocalVar(Runtime& rt, const String* name, const Value& v);
+			virtual bool deleteLocalVar(Runtime& rt, const String* name, bool& result);
 		};
 	
 		struct ErrorPrototype;
@@ -1210,6 +1224,7 @@ class Runtime : public GCItem {
 
 		void setGlobalObject(Object* newGlobals);		///< Assign a new global object. By default the global object is a standard JSObject.
 		void setStackSize(UInt32 maxValuesOnStack);		///< Sets the stack size used by the Processor constructor. Default stack size is 1024 elements (see above) which should be sufficient for normal use.
+		void setMaxNestedCompileDepth(Int32 maxDepth);	// for a smaller C++ stack; the standard library needs 33 and JSON.parse 64
 		void setMemoryCap(size_t maxBytesUsed);			///< Sets an absolute limit on memory allocated by this run-time. Checked after each GC. If more memory than this is in use an exception is thrown.
 		void resetTimeOut(Int32 timeOutSeconds);		///< Sets a time-out after which an exception is thrown (by checkTimeOut() which is called from runUntilReturn()).
 		void noTimeOut();								///< Disables the time-out (default).
@@ -1250,6 +1265,7 @@ class Runtime : public GCItem {
 		GlobalScope globalScope;
 		Object* globalObject;
 		UInt32 stackSize;
+		Int32 maxNestedCompileDepth;
 		UInt32 callNestCounter;
 		UInt32 checkTimeOutCounter;
 		clock_t timeOut;
@@ -1303,13 +1319,14 @@ struct ScriptException : public Exception {
 	static void throwError(Heap& heap, ErrorType type, const String* message = 0);
 	static void throwError(Heap& heap, ErrorType type, const char* message);
 	ScriptException(Heap& heap, const Value& value) throw();
-	virtual const char* what() const throw() { return utf8String.c_str(); }
+	virtual const char* what() const throw() { return (fallback != 0 ? fallback : utf8String.c_str()); }
 	Error* asErrorObject() const { return value.asError(); }
-	const char* getStackTrace() const;
+	const char* getStackTrace() const throw();
 	virtual ~ScriptException() throw() { }
 
 	Value value;
 	std::string utf8String;
+	const char* fallback;		// "out of memory" if utf8String could not be built, else 0
 	mutable std::string stackTrace;
 };
 
@@ -1369,7 +1386,6 @@ class AccessorBase {
 
 	protected:
 		template<class F> struct VarFunctorAdapter;
-		template<class F> struct VarMemberFunctionAdapter;
 		AccessorBase(Runtime& rt) : rt(rt) { }
 		virtual Value get() const = 0;
 		virtual Var call(int argc, const Value* argv) const = 0;
@@ -1380,7 +1396,10 @@ class AccessorBase {
 		Value makeValue(const std::wstring& s) const { return new(rt.getHeap()) String(rt.getHeap().managed(), s); }
 		Value makeValue(const NativeFunction& f) const { return new(rt.getHeap()) FunctorAdapter<NativeFunction>(rt.getHeap().managed(), f); }
 		Value makeValue(const VarFunction& f) const;
-		template<class C> Value makeValue(Var (C::*const& cppMethod)(Runtime& rt, const Var& thisObject, const VarList& args)) const;
+		// An unbound member function would convert to bool and store `true`: naming a type no class has refuses it.
+		template<class C> Value makeValue(Var (C::*const&)(Runtime&, const Var&, const VarList&)) const {
+			return typename C::BindMemberFunctionsAsVarOfRuntimeObjectAndMethod();
+		}
 		Runtime& rt;
 };
 template<> inline bool AccessorBase::to<bool>() const { return get().toBool(); }	// operator bool() is ambiguous and notoriously dangerous so we left it out. Use var.to<bool>() instead.
@@ -1485,7 +1504,6 @@ class AccessorBase::const_iterator : public GCItem {
 		}
 };
 
-// FIX : why template?
 template<class F> struct AccessorBase::VarFunctorAdapter : public ExtensibleFunction {
 	typedef ExtensibleFunction super;
 	VarFunctorAdapter(GCList& gcList, const F& f) : super(gcList), f(f) { }
@@ -1523,7 +1541,6 @@ inline Value AccessorBase::makeValue(const VarFunction& f) const {
 	return new(rt.getHeap()) VarFunctorAdapter<VarFunction>(rt.getHeap().managed(), f);
 }
 
-// FIX : vvv I think there should be a getLength() in Object*
 inline UInt32 AccessorBase::size() const {
 	const JSArray* a = get().asArray();
 	return (a != 0 ? a->getLength() : static_cast<Int32>(operator[](&LENGTH_STRING)));
@@ -1557,24 +1574,6 @@ template<typename T> Var operator+(const AccessorBase& l, const T& r) {
 	return Var(l.rt, l.get().add(l.rt.getHeap(), l.makeValue(r)));
 }
 
-template<class C> struct AccessorBase::VarMemberFunctionAdapter : public ExtensibleFunction {
-	typedef ExtensibleFunction super;
-	VarMemberFunctionAdapter(GCList& gcList, Var (C::*const &cppMethod)(Runtime& rt, const Var& thisObject, const VarList& args))
-			: super(gcList), cppMethod(cppMethod) { }
-	virtual Value invoke(Runtime& rt, Processor&, UInt32 argc, const Value* argv, Object* thisObject) {
-		C* me = reinterpret_cast<C*>(thisObject);
-		if ((me->C::getClassName()) != (me->getClassName())) {
-			ScriptException::throwError(rt.getHeap(), TYPE_ERROR, "Invalid class");
-		}
-		assert(isA<C>(thisObject));
-		return (me->*cppMethod)(rt, Var(rt, thisObject), VarList(rt, argc, argv));
-	}
-	Var (C::*cppMethod)(Runtime& rt, const Var& thisObject, const VarList& args);
-};
-template<class C> Value AccessorBase::makeValue(Var (C::*const &cppMethod)(Runtime& rt, const Var& thisObject, const VarList& args)) const {
-	return new(rt.getHeap()) VarMemberFunctionAdapter<C>(rt.getHeap().managed(), cppMethod);
-}
-
 template<class C> struct BoundVarMemberFunctionAdapter : public ExtensibleFunction {
 	typedef ExtensibleFunction super;
 	BoundVarMemberFunctionAdapter(GCList& gcList, C* cppObject, Var (C::*const &cppMethod)(Runtime& rt, const Var& thisObject, const VarList& args))
@@ -1599,8 +1598,8 @@ class Processor : public GCItem {
 	public:
 		typedef GCItem super;
 	
-		enum Opcode {	// FIX : sort
-			INVALID_OP = -1 // FIX : why?!
+		enum Opcode {
+			INVALID_OP = -1 // sentinel: no opcode
 			, CONST_OP										// operand: const_index, stack: -> constant
 			, READ_LOCAL_OP									// operand: local_index, stack: -> value
 			, WRITE_LOCAL_OP								// operand: local_index, stack: value -> value
@@ -1630,7 +1629,6 @@ class Processor : public GCItem {
 			, JT_OP, JF_OP									// operand: offset, stack: boolean ->
 			, JT_OR_POP_OP, JF_OR_POP_OP					// operand: offset, stack: boolean ->				// only pops when not jumping, for logical and/or instructions
 			, POP_OP										// operand: count, stack: ... ->
-			// FIX : push back is a really bad name, it's really pop back and then push sort of
 			, PUSH_BACK_OP									// operand: count, stack: ..., back -> back
 			, REPUSH_OP										// operand: offset, stack: ..., value, ... -> ..., value, ..., value
 			, SWAP_OP
@@ -1743,7 +1741,7 @@ class Processor : public GCItem {
 		void innerRun();
 		Object* convertToObject(const Value& v, bool requireExtensible);
 		Function* asFunction(const Value& v);
-		void invokeFunction(Function* f, Int32 popCount, Int32 argc, Object* thisObject = 0); // FIX : rename, unnecessary with the same name as the public method
+		void invokeFromStack(Function* f, Int32 popCount, Int32 argc, Object* thisObject = 0);
 		void newOperation(const Int32 argc);
 		void reset();
 		void pushFrame(const Code* code, Scope* scope, Object* thisObject);
@@ -1789,9 +1787,9 @@ class Compiler : public GCItem {
 
 		enum Target { FOR_GLOBAL, FOR_FUNCTION, FOR_EVAL };
 
-		Compiler(GCList& gcList, Code* code, Target compileFor, Compiler* outer = 0);
+		Compiler(GCList& gcList, Code* code, Target compileFor, Int32 maxNestDepth, Compiler* outer = 0);
 		const Char* compile(const Char* b, const Char* e);
-		const Char* compileFunction(const Char* b, const Char* e, const String* functionName, const String* selfName); // FIX : messy, why do we have compileFor if we separate this anyhow? Maybe subclass Compiler instead?
+		const Char* compileFunction(const Char* b, const Char* e, const String* functionName, const String* selfName);
 		void compile(const String& source);
 		void getStopPosition(UInt32& offset, UInt32& lineNumber, UInt32& columnNumber) const;
 
@@ -1829,7 +1827,7 @@ class Compiler : public GCItem {
 			Int32 stackDepth;
 		};
 
-		/// RAII guard bounding compile-time recursion depth; throws a RangeError if `MAX_NESTED_COMPILE_DEPTH` is reached.
+		/// RAII guard bounding compile-time recursion depth; throws a RangeError once maxNestDepth is reached.
 		struct NestGuard {
 			NestGuard(Compiler& compiler);
 			~NestGuard();
@@ -1913,6 +1911,7 @@ class Compiler : public GCItem {
 		Heap& heap;
 		Code* const code;
 		const Target compilingFor;
+		const Int32 maxNestDepth;
 		Compiler& root;			// the outermost compiler: it counts the nesting and holds the position of a compilation error
 		CodeSection setupSection; ///< function declarations (and vars in eval code), inserted at top of function when finalizing
 		CodeSection mainSection;
@@ -1922,28 +1921,13 @@ class Compiler : public GCItem {
 		const Char* sourceUnitBase;
 		CodeSection* currentSection;
 		bool acceptInOperator;
-		int withScopeCounter; // FIX : if we have a Context object instead as "this" we could create a new one with a simple flag for this instead of yucky counter
+		int withScopeCounter;
 		int nestCounter;			// used in the root compiler only
 
 		virtual void gcMarkReferences(Heap& heap) const {
 			gcMark(heap, code);
 			super::gcMarkReferences(heap);
 		}
-};
-
-/*
-	The ScriptException that `Runtime::compileGlobalCode` and `compileEvalCode` throw for source that does not compile,
-	extended with the filename and the offset, line and column where compilation stopped.
-*/
-struct CompilationError : public ScriptException {
-	CompilationError(const ScriptException& sourceException, const String* filename, const Compiler& fromCompiler)
-			: ScriptException(sourceException), filename(filename) {
-		fromCompiler.getStopPosition(offset, lineNumber, columnNumber);
-	}
-	const String* filename;
-	UInt32 offset;
-	UInt32 lineNumber;
-	UInt32 columnNumber;
 };
 
 } /* namespace NuXJS */
