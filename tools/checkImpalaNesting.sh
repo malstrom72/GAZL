@@ -2,7 +2,7 @@
 # Fail when the generated Impala compiler's compile-time NESTING need grows toward NuXJS's limit.
 #
 # Why this exists: the Impala compiler is a generated JSPEG parser, so its nesting comes from the grammar and moves
-# when the grammar does. NuXJS bounds compile recursion with MAX_NESTED_COMPILE_DEPTH; when it was lowered to 48,
+# when the grammar does. NuXJS bounds compile recursion with a nesting limit; when it was lowered to 48,
 # GAZL stopped building entirely, with no warning beforehand. Nothing measured the need until this script.
 #
 # How it measures without touching NuXJS: each nested `{ }` block costs exactly one level (the NestGuard in
@@ -22,11 +22,11 @@ measure=0
 [ -x "$NUXJS" ] || { echo "check-nesting: $NUXJS not built; run the build first" >&2; exit 1; }
 [ -f "$SRC" ] || { echo "check-nesting: $SRC not generated; run BuildImpala first" >&2; exit 1; }
 
-# The limit is NuXJS's, so read it from the vendored source rather than restating it here.
-LIMIT=$(sed 's/\r$//' externals/NuXJS/src/NuXJS.cpp \
-		| sed -n 's/^const Int32 MAX_NESTED_COMPILE_DEPTH = \([0-9]*\);.*$/\1/p' | head -1)
+# The limit is NuXJS's default, which the REPL keeps, so read it from the vendored source rather than restating it.
+LIMIT=$(sed 's/\r$//' externals/NuXJS/src/NuXJS.h \
+		| sed -n 's/^const Int32 STANDARD_MAX_NESTED_COMPILE_DEPTH = \([0-9]*\);.*$/\1/p' | head -1)
 case "$LIMIT" in
-	''|*[!0-9]*) echo "check-nesting: could not read MAX_NESTED_COMPILE_DEPTH from the vendored NuXJS" >&2; exit 1;;
+	''|*[!0-9]*) echo "check-nesting: could not read the nesting limit from the vendored NuXJS" >&2; exit 1;;
 esac
 
 rm -rf "$WORK"; mkdir -p "$WORK"
@@ -63,7 +63,7 @@ if [ "$measure" = 1 ]; then
 fi
 
 if [ "$MAX_NEED" -ge "$LIMIT" ]; then
-	echo "check-nesting: NuXJS's MAX_NESTED_COMPILE_DEPTH is $LIMIT, at or below the $MAX_NEED this project allows" >&2
+	echo "check-nesting: NuXJS's nesting limit is $LIMIT, at or below the $MAX_NEED this project allows" >&2
 	exit 1
 fi
 
