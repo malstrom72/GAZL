@@ -413,7 +413,7 @@ static const Operator OPERATORS[] = {
 	, { " IORi_vcv", IORI_VVC,	{ VAR_INT_W		, CONST_INT		, VAR_INT_R		}		, SWAP_1_AND_2	, 0				}
 	, { " IORi_vvc", IORI_VVC,	{ VAR_INT_W		, VAR_INT_R		, CONST_INT		}		, 0				, 0				}
 	, { " IORi_vvv", IORI_VVV,	{ VAR_INT_W		, VAR_INT_R		, VAR_INT_R		}		, 0				, 0				}
-	, { " LEQf_ccb", NLSI_CCB,	{ CONST_FLOAT	, CONST_FLOAT	, FWD_BRANCH	}		, SWAP_0_AND_1 | YIELDS_GOTO, 0	}
+	, { " LEQf_ccb", NLSF_CCB,	{ CONST_FLOAT	, CONST_FLOAT	, FWD_BRANCH	}		, SWAP_0_AND_1 | YIELDS_GOTO, 0	}
 	, { " LEQf_cvb", NLSF_VCB,	{ CONST_FLOAT	, VAR_FLOAT_R	, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
 	, { " LEQf_vcb", NLSF_CVB,	{ VAR_FLOAT_R	, CONST_FLOAT	, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
 	, { " LEQf_vvb", NLSF_VVB,	{ VAR_FLOAT_R	, VAR_FLOAT_R	, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
@@ -1775,6 +1775,74 @@ bool unitTest() {
 			}
 			assert(refused);
 			(void)refused;
+		}
+
+		/*
+			A float compare-and-branch on two constants is folded at assembly (the `_ccb` rows) and must branch exactly
+			as the same compare does at run time. LEQf was once folded as an INT compare of the bit patterns, so
+			`LEQf #-1.0 #-2.0` branched. Every float compare, over negatives, both zeros, infinity and NaN: each case
+			stores the folded outcome and the run-time one side by side, and they must agree.
+		*/
+		{
+			static const Char* const OPS[] = { STR("EQUf"), STR("NEQf"), STR("LSSf"), STR("GEQf"), STR("GRTf")
+					, STR("LEQf") };
+			static const Char* const VALUES[] = { STR("#-2.0"), STR("#-1.0"), STR("#-0.0"), STR("#0.0"), STR("#1.0")
+					, STR("#<A>"), STR("#<B>") };														// <A> = +inf, <B> = NaN
+			const int OP_COUNT = sizeof (OPS) / sizeof (*OPS);
+			const int VALUE_COUNT = sizeof (VALUES) / sizeof (*VALUES);
+			const int CASES = OP_COUNT * VALUE_COUNT * VALUE_COUNT;
+			Char buffer[33];
+			std::basic_string<Char> s = STR("res: GLOB *");
+			s += int2string(CASES * 2, 10, 1, buffer);
+			s += STR("\n ! ADDf <A> #3.4028234e38 #3.4028234e38\n ! SUBf <B> #<A> #<A>\n");			// IEEE inf and NaN, no casts
+			s += STR("main: FUNC\n$a: LOCf\n$b: LOCf\n$r: LOCi\n");
+			int n = 0;
+			for (int o = 0; o < OP_COUNT; ++o) {
+				for (int i = 0; i < VALUE_COUNT; ++i) {
+					for (int j = 0; j < VALUE_COUNT; ++j, ++n) {
+						const std::basic_string<Char> k = int2string(n, 10, 1, buffer);
+						const std::basic_string<Char> op = OPS[o], a = VALUES[i], b = VALUES[j];
+						s += STR(" MOVi $r #0\n ") + op + STR(" ") + a + STR(" ") + b + STR(" @f") + k
+								+ STR("\n GOTO @g") + k + STR("\nf") + k + STR(": MOVi $r #1\ng") + k
+								+ STR(": POKE &res:") + int2string(n * 2, 10, 1, buffer) + STR(" $r\n");
+						s += STR(" MOVf $a ") + a + STR("\n MOVf $b ") + b + STR("\n MOVi $r #0\n ") + op
+								+ STR(" $a $b @v") + k + STR("\n GOTO @w") + k + STR("\nv") + k
+								+ STR(": MOVi $r #1\nw") + k + STR(": POKE &res:") + int2string(n * 2 + 1, 10, 1, buffer) + STR(" $r\n");
+					}
+				}
+			}
+			s += STR(" RETU\n");
+
+			std::vector<Value> m(CASES * 2 + 100);
+			std::vector<Instruction> c(CASES * 24 + 100);
+			std::vector<UInt> f(10);
+			std::vector<CallStackEntry> calls(10);
+			Symbols g;
+			ProgramSizes floatSizes = { 0, 0, 0, 0 };
+			{
+				Assembler assem((UInt)c.size(), &c[0], (UInt)f.size(), &f[0], (UInt)m.size(), &m[0], g);
+				assem.newUnit("FloatFolding");
+				const Char* cp = s.c_str();
+				while (*cp != 0) cp = assem.feed(cp);
+				assem.finalize(floatSizes);
+			}
+			Processor floatMachine(floatSizes.codeSize, &c[0], floatSizes.functionCount, &f[0], (UInt)m.size(), &m[0]
+					, floatSizes.globalsSize, floatSizes.constsSize, (UInt)calls.size(), &calls[0], nativeTable, 0);
+			Status status = floatMachine.enterCall(g.findFunction("main"));
+			assert(status == OK);
+			floatMachine.resetTimeOut(0x7FFFFFFF);
+			status = floatMachine.run();
+			assert(status == OK);
+			UInt size = 0;
+			const Value* res = floatMachine.accessConstMemory(g.findGlobal("res", size), CASES * 2);
+			assert(res != 0);
+			int disagreements = 0;
+			for (int k = 0; res != 0 && k < CASES; ++k) {
+				if (res[k * 2].i != res[k * 2 + 1].i) ++disagreements;
+			}
+			assert(disagreements == 0);
+			(void)status;
+			(void)disagreements;
 		}
 
 		TestCallbackData callbackData;
