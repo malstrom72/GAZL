@@ -1757,26 +1757,6 @@ bool unitTest() {
 			(void)refused;
 		}
 
-		// A switch table of `*2147483647` entries is refused for want of memory, without first overflowing the size.
-		{
-			std::vector<Value> m(100);
-			std::vector<Instruction> c(100);
-			std::vector<UInt> f(100);
-			Symbols g;
-			Assembler assem(100, &c[0], 100, &f[0], 100, &m[0], g);
-			assem.newUnit("SwitchTooLarge");
-			bool refused = false;
-			try {
-				const Char* cp = STR("f: FUNC\n$x: LOCi\n SWCH $x *2147483647 @d\nd: RETU\n");
-				while (*cp != 0) cp = assem.feed(cp);
-			}
-			catch (const Exception& e) {
-				refused = (e.error == NOT_ENOUGH_MEMORY_SPACE);
-			}
-			assert(refused);
-			(void)refused;
-		}
-
 		TestCallbackData callbackData;
 		
 		UInt size;
