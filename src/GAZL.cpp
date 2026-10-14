@@ -707,14 +707,18 @@ bool Symbols::lookupConstant(const Char* name, bool* isFloat, Value* value) cons
 	return true;
 }
 
+static int globalMask(bool includeTemps, bool includeInteriors) {	// a global matches when `types & mask` is exactly `ADDRESS`
+	return ADDRESS | (includeTemps ? 0 : TEMPORARY) | (includeInteriors ? 0 : INTERIOR);
+}
+
 bool Symbols::findFirstGlobal(Iterator& iterator, bool includeTemps, bool includeInteriors) const {
-	const int mask = ADDRESS | (includeTemps ? 0 : TEMPORARY) | (includeInteriors ? 0 : INTERIOR);
+	const int mask = globalMask(includeTemps, includeInteriors);
 	for (iterator = symbols.begin(); iterator != symbols.end() && (iterator->second.types & mask) != ADDRESS; ++iterator);
 	return (iterator != symbols.end());
 }
 
 bool Symbols::findNextGlobal(Iterator& iterator, bool includeTemps, bool includeInteriors) const {
-	const int mask = ADDRESS | (includeTemps ? 0 : TEMPORARY) | (includeInteriors ? 0 : INTERIOR);
+	const int mask = globalMask(includeTemps, includeInteriors);
 	for (++iterator; iterator != symbols.end() && (iterator->second.types & mask) != ADDRESS; ++iterator);
 	return (iterator != symbols.end());
 }
@@ -989,8 +993,7 @@ const Char* Assembler::feed(const Char* line) {
 							if ((e - p) > dataEnd - dataPointer) throw Exception(DATA_SECTION_FULL, dataLabel);
 							Value v;
 							v.p = (Int)(dataPointer - memoryBase + MEMORY_OFFSET);
-							declare(globals, labelBegin, labelEnd, dataLabelType | (dataLabel.empty() ? 0 : INTERIOR), v
-									, static_cast<Int>(e - p));
+							declare(globals, labelBegin, labelEnd, dataLabelType, v, static_cast<Int>(e - p));
 							while (p < e) (dataPointer++)->i = *p++;
 							return eatEOL(eatSpace(e));
 						}
@@ -1000,8 +1003,6 @@ const Char* Assembler::feed(const Char* line) {
 			case 'p':
 			case 'A':	{																								// DATi, DATf, DATp and DATA
 							if (dataPointer == 0) throw Exception(DATA_SECTION_MISSING);
-							Value v;
-							v.p = (Int)(dataPointer - memoryBase + MEMORY_OFFSET);
 							Value* const first = dataPointer;
 							int accepts = KONST;
 							switch (mnemonicBegin[3]) {
@@ -1020,8 +1021,9 @@ const Char* Assembler::feed(const Char* line) {
 								++dataPointer;
 							}
 							// Declared after the values, so the label covers exactly them: none for a line without values.
-							declare(globals, labelBegin, labelEnd, dataLabelType | (dataLabel.empty() ? 0 : INTERIOR), v
-									, (UInt)(dataPointer - first));
+							Value v;
+							v.p = (Int)(first - memoryBase + MEMORY_OFFSET);
+							declare(globals, labelBegin, labelEnd, dataLabelType, v, (UInt)(dataPointer - first));
 							return eatEOL(p);
 						}
 			
@@ -1113,7 +1115,7 @@ const Char* Assembler::feed(const Char* line) {
 							parseOperand(op0Begin, op0End, op->accepts[0], &v);
 							size = v.i;
 							dataLabel = std::string(labelBegin, labelEnd);
-							dataLabelType = op->declareTypes;
+							dataLabelType = op->declareTypes | (labelBegin != labelEnd ? INTERIOR : 0);				// labels inside a named section are interior
 							if (dataPointer != 0)
 								memset(dataPointer, 0, (dataEnd - dataPointer) * sizeof (*dataPointer));
 							if (constantsPointer - globalsPointer < size) throw Exception(NOT_ENOUGH_MEMORY_SPACE);

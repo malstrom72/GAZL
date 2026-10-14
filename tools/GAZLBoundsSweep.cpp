@@ -753,20 +753,14 @@ int sweepSnapshotEntries() {
 	const int count = sizeof (EXPECTED) / sizeof (*EXPECTED);
 
 	Machine m;
-	ProgramSizes sizes = { 0, 0, 0, 0 };
-	try {
-		Assembler assem(CODE_SIZE, &m.code[0], FUNCTION_COUNT, &m.functionTable[0], MEMORY_SIZE, m.memory(), m.symbols);
-		assem.newUnit("snapshot");
-		const Char* cp = SOURCE;
-		while (*cp != 0) cp = assem.feed(cp);
-		assem.finalize(sizes);
-	}
-	catch (const Exception& e) {
-		std::printf("FAIL snapshot entries: program refused: %s\n", e.what());
+	Layout layout = Layout();
+	std::string error;
+	if (!assemble(m, SOURCE, layout, error)) {
+		std::printf("FAIL snapshot entries: program refused: %s\n", error.c_str());
 		return 1;
 	}
-	const Processor processor(sizes.codeSize, &m.code[0], sizes.functionCount, &m.functionTable[0], MEMORY_SIZE
-			, m.memory(), sizes.globalsSize, sizes.constsSize, CALL_STACK_SIZE, &m.callStack[0], 0);
+	const Processor processor(m.sizes.codeSize, &m.code[0], m.sizes.functionCount, &m.functionTable[0], MEMORY_SIZE
+			, m.memory(), m.sizes.globalsSize, m.sizes.constsSize, CALL_STACK_SIZE, &m.callStack[0], 0);
 	std::vector<unsigned char> blob(freezeMemorySize(processor, m.symbols));
 	freezeMemory(processor, m.symbols, &blob[0], (UInt)blob.size());
 
@@ -816,22 +810,13 @@ int sweepSnapshotEntries() {
 	const int emptyCount = sizeof (EMPTY) / sizeof (*EMPTY);
 	for (int i = 0; i < emptyCount; ++i) {
 		Machine e;
-		const std::string source = std::string("\tGLOB *2\nx:\t") + EMPTY[i] + "\ny:\tDATi #5\n";
-		bool same = false;
-		try {
-			Assembler assem(CODE_SIZE, &e.code[0], FUNCTION_COUNT, &e.functionTable[0], MEMORY_SIZE, e.memory()
-					, e.symbols);
-			assem.newUnit("empty");
-			const Char* cp = source.c_str();
-			while (*cp != 0) cp = assem.feed(cp);
-			UInt xSize = 99;
-			UInt ySize = 99;
-			const Pointer x = e.symbols.findGlobal("x", xSize);
-			same = (x != NULL_POINTER && xSize == 0 && e.symbols.findGlobal("y", ySize) == x && ySize == 1);
-		}
-		catch (const Exception&) {
-		}
-		if (!same) {
+		Layout eLayout = Layout();
+		UInt xSize = 99;
+		UInt ySize = 99;
+		const bool assembled = assemble(e, std::string("\tGLOB *2\nx:\t") + EMPTY[i] + "\ny:\tDATi #5\n", eLayout
+				, error);
+		const Pointer x = e.symbols.findGlobal("x", xSize);
+		if (!assembled || x == NULL_POINTER || xSize != 0 || e.symbols.findGlobal("y", ySize) != x || ySize != 1) {
 			std::printf("FAIL snapshot entries: `x: %s` is not an empty label at `y`\n", EMPTY[i]);
 			++failures;
 		}
