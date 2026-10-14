@@ -811,8 +811,7 @@ int sweepSnapshotEntries() {
 		std::printf("FAIL snapshot entries: findGlobal no longer resolves the labels inside `state`\n");
 		++failures;
 	}
-	// A data line without values is legal and writes nothing: a label on it covers no words, and the next value
-	// lands where the label points.
+	// A data line without values is legal and writes nothing, so its label covers no words.
 	const char* const EMPTY[] = { "DATi", "DATf ; none", "DATp", "DATA" };
 	const int emptyCount = sizeof (EMPTY) / sizeof (*EMPTY);
 	for (int i = 0; i < emptyCount; ++i) {
