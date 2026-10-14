@@ -153,10 +153,14 @@ A program is one or more **units** (source files) assembled in order into one pr
 - **Shared across units:** global names, meaning data sections, functions and named constants.
 - **Reset per unit:** assembly-time variables.
 
-**Data sections.** `GLOB *n`, `TEMP *n` and `CNST *n` each declare a named section of `n` words, labelled by the
-statement's label. The data statements that follow fill it in order:
-- `DATi`, `DATf` and `DATp` write one value each; `DATA` writes several of mixed types.
+**Data sections.** `GLOB *n`, `TEMP *n` and `CNST *n` each reserve a section of `n` words. The statement's label,
+if it has one, names the whole section; a section without a label is unnamed. The data statements that follow
+fill it in order:
+- `DATi`, `DATf` and `DATp` write one or more ints, floats or pointers; `DATA` writes one or more values of mixed
+  types.
 - `DATs text` writes the rest of the line, one character per word, with trailing blanks removed.
+- A label on a data statement names the statement's first word and covers every value the statement writes (one
+  word for a statement without values).
 - Words left unfilled are 0.
 
 `TEMP` is `GLOB` that a memory snapshot skips (section 11). `CNST` sections are read-only.
@@ -302,11 +306,13 @@ the float `1.0f`, the third from a word holding a signaling NaN. A reader must p
 then compare all 28 bytes. It proves the reader decodes lengths, names, padding and words exactly as the writer
 encoded them, and that floats travel as raw bits, a NaN's payload included. Any mismatch is `MEMORY_BAD_CANARY`.
 
-**Program sections** follow, in strictly ascending ASCII order of their names. There is one for each name that
-labels writable data:
-- **a `GLOB` statement,** covering the whole section;
-- **a labelled data statement inside a `GLOB` section,** covering just the words that statement defines. Its words
-  are therefore saved twice, once in each entry.
+**Program sections** follow, in strictly ascending ASCII order of their names. Each word of writable memory is
+saved at most once, under the outermost name it has:
+- **A named `GLOB` section** is saved whole, as one entry. Labels on data statements inside it are not saved
+  separately; their words are already in the section's entry.
+- **In an unnamed `GLOB` section,** each labelled data statement is saved as its own entry, covering the words that
+  statement writes. Impala's scalar globals take this form: `GLOB *1` followed by `clock: DATi #0`.
+- **Words of an unnamed section that no label covers** have no name, and are not saved.
 
 `CNST` and `TEMP` sections, and labels inside them, are left out. A section's words are its memory exactly, 32
 bits each, whatever their type: an int as its two's-complement bits, a float as its binary32 bits, a pointer as
