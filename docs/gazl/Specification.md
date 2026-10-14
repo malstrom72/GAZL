@@ -30,12 +30,12 @@ written. So the format only ever grows:
 
 Every value is one 32-bit **word**. A word has no tag; the instruction that uses it decides its type.
 
-| type    | meaning                                                                                     |
-| ------- | ------------------------------------------------------------------------------------------- |
-| int     | two's-complement signed 32-bit integer                                                      |
-| float   | IEEE-754 binary32                                                                           |
-| pointer | `0x12345678 + n`, the word at index `n` of data memory (section 3); `0` is the null pointer |
-| funcptr | `0x56789ABC + k`, the function with ordinal `k`, in declaration order across all units      |
+| type    | meaning                                                                                                   |
+| ------- | --------------------------------------------------------------------------------------------------------- |
+| int     | two's-complement signed 32-bit integer                                                                    |
+| float   | IEEE-754 binary32                                                                                         |
+| pointer | `0x12345678 + n`, `n` words from the base of data memory (section 3), negative for constants; `0` is null |
+| funcptr | `0x56789ABC + k`, the function with ordinal `k`, in declaration order across all units                    |
 
 A word moved with `MOVE`, `PEEK`, `POKE`, `COPY`, `GETL` or `SETL` keeps its 32 bits exactly, whatever its type,
 including the bits of a float NaN.
@@ -45,30 +45,31 @@ of a word. That is what lets GAZL run unchanged on big- and little-endian hosts.
 
 ## 3. Data memory
 
-Data memory is one array of words, sized by the host. Index 0 is at pointer `0x12345678`.
+Data memory is one array of words, sized by the host. Every address is measured from the **base**, the pointer
+`0x12345678`: globals and the data stack lie at and above it, constants below it.
 
-    index 0                                                                       memorySize
-    | globals (GLOB, TEMP) | data stack ...                  | constants (CNST) | zero guard |
-    |<---------------------- writable: rwMemorySize -------->|<----------- read-only ------>|
+    pointer:  base - C                base                      base + G                          base + rw
+              | constants (CNST)      | globals (GLOB, TEMP)    | data stack ...                  | zero guard |
+              |<---- read-only ------>|<--------------------- writable: rw words ---------------->|
 
-- **Globals** are placed from index 0 upward, in declaration order.
-- **Constants** are placed from the top downward, below the zero guard. The assembler also places switch tables
-  there.
-- **The zero guard** is the last word of memory. It always holds 0, so a native scanning for a string's terminator
-  stops there. No checked read reaches it.
-- **The data stack** is everything between the globals and the constants.
+- **Globals** are placed from the base upward, in declaration order.
+- **Constants** are placed from the base downward, in declaration order: the first constant section ends just below
+  the base. The assembler also places switch tables there. `C` is the total size of the constants.
+- **The data stack** is everything above the globals, up to the zero guard.
+- **The zero guard** is the last word of memory, just above the data stack. It always holds 0, so a native scanning
+  for a string's terminator stops there. No checked read reaches it.
 
-A read must succeed exactly when its index is in `[0, memorySize - 1)`, and a write exactly when its index is in
-`[0, rwMemorySize)`. An address is `base + offset` computed with 32-bit wrap-around, so an offset can never carry
+Every address therefore depends only on the program: neither globals nor constants move when the host chooses a
+different memory size. Only the size of the data stack does.
+
+A read must succeed exactly when its pointer is in `[base - C, base + rw)`, and a write exactly when it is in
+`[base, base + rw)`. An address is `base + offset` computed with 32-bit wrap-around, so an offset can never carry
 an access around the end of memory and back in.
 
 **`COPY`** checks the whole source range for reading and the whole destination range for writing before it moves
 anything. It then copies forward, one word at a time from the lowest address up, so overlapping ranges have a
 defined result: a destination below the source copies like `memmove`, and a destination above the source, inside
 it, repeats the leading words.
-
-The absolute addresses of constants depend on the memory size the host chooses. A program must not rely on them,
-and an implementation must not assume programs don't compare them (they are ordinary pointers).
 
 ## 4. Arithmetic
 
@@ -382,5 +383,3 @@ answer.
 1. **Float literals use `pow`.** Step 3 of the literal algorithm calls the C library's `pow`, which is not
    guaranteed to round the same way everywhere. Should the exponent be applied by an exactly specified method
    (for example, repeated multiplication by 10 in binary64)? That would only change literals with an exponent.
-2. **Constant addresses depend on memory size.** Should hosts that want reproducible pointer values be told to fix
-   the memory size, or should this stay a host matter?
