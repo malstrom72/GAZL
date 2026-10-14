@@ -1,5 +1,5 @@
 @ECHO OFF
-REM BuildCpp.cmd version 2026-10-05
+REM BuildCpp.cmd version 2026-10-13
 SETLOCAL ENABLEEXTENSIONS ENABLEDELAYEDEXPANSION
 
 IF "%CPP_TARGET%"=="" SET CPP_TARGET=release
@@ -100,6 +100,9 @@ IF NOT DEFINED VCINSTALLDIR (
 			SET "range=-version [%CPP_MSVC_VERSION%,%CPP_MSVC_VERSION%]"
 		)
 		for /f "usebackq tokens=*" %%a in (`"%pfpath%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -legacy !range! -products * -property installationPath`) do set vsInstallPath=%%a
+		REM VsDevCmd.bat runs vswhere.exe from the current directory, which prints "'vswhere.exe' is not recognized"
+		REM when NoDefaultCurrentDirectoryInExePath is set, as some shells do. Putting it on PATH avoids that.
+		SET "PATH=!PATH!;%pfpath%\Microsoft Visual Studio\Installer"
 		IF EXIST "!vsInstallPath!\VC\Auxiliary\Build\vcvarsall.bat" (
 			ECHO setting up: %vcvarsConfig%
 			CALL "!vsInstallPath!\VC\Auxiliary\Build\vcvarsall.bat" %vcvarsConfig% >NUL
@@ -141,7 +144,7 @@ MKDIR "%temppath%" >NUL 2>&1
 ECHO Compiling %name% %CPP_TARGET% %CPP_EFFECTIVE_MODEL% using %CPP_COMPILER% from %VCINSTALLDIR%
 ECHO %CPP_OPTIONS% /Fe%args%
 ECHO.
-%CPP_COMPILER% %CPP_OPTIONS% /errorReport:queue /Fo"%temppath%\\" /Fe%args% >"%temppath%\buildlog.txt" 2>&1
+%CPP_COMPILER% %CPP_OPTIONS% /nologo /errorReport:queue /Fo"%temppath%\\" /Fe%args% >"%temppath%\buildlog.txt" 2>&1
 IF ERRORLEVEL 1 (
 	TYPE "%temppath%\buildlog.txt"
 	ECHO Compilation of %name% failed
@@ -149,6 +152,9 @@ IF ERRORLEVEL 1 (
 	RMDIR /Q "%temppath%" >NUL 2>&1
 	EXIT /B 1
 ) ELSE (
+	REM Show the warnings, but not the source file names and progress lines that cl prints on every build.
+	FINDSTR /V /R /I /C:"^[^ :][^:]*\.c$" /C:"^[^ :][^:]*\.cc$" /C:"^[^ :][^:]*\.cpp$" /C:"^[^ :][^:]*\.cxx$" ^
+		/C:"^Compiling\.\.\.$" /C:"^Generating code$" /C:"^Finished generating code$" "%temppath%\buildlog.txt"
 	ECHO Compiled %name%
 	DEL /Q "%temppath%\*" >NUL 2>&1
 	RMDIR /Q "%temppath%\" >NUL 2>&1
