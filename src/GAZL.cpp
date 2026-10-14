@@ -707,24 +707,27 @@ bool Symbols::lookupConstant(const Char* name, bool* isFloat, Value* value) cons
 	return true;
 }
 
-bool Symbols::findFirstGlobal(Iterator& iterator, bool includeTemps) const {
-	int mask = (includeTemps ? ADDRESS | INTERIOR : ADDRESS | TEMPORARY | INTERIOR);		// a named section, never a label inside it
+bool Symbols::findFirstGlobal(Iterator& iterator, bool includeTemps, bool includeInteriors) const {
+	const int mask = ADDRESS | (includeTemps ? 0 : TEMPORARY) | (includeInteriors ? 0 : INTERIOR);
 	for (iterator = symbols.begin(); iterator != symbols.end() && (iterator->second.types & mask) != ADDRESS; ++iterator);
 	return (iterator != symbols.end());
 }
 
-bool Symbols::findNextGlobal(Iterator& iterator, bool includeTemps) const {
-	int mask = (includeTemps ? ADDRESS | INTERIOR : ADDRESS | TEMPORARY | INTERIOR);		// a named section, never a label inside it
+bool Symbols::findNextGlobal(Iterator& iterator, bool includeTemps, bool includeInteriors) const {
+	const int mask = ADDRESS | (includeTemps ? 0 : TEMPORARY) | (includeInteriors ? 0 : INTERIOR);
 	for (++iterator; iterator != symbols.end() && (iterator->second.types & mask) != ADDRESS; ++iterator);
 	return (iterator != symbols.end());
 }
 
-const char* Symbols::getGlobalInfo(const Iterator& iterator, bool& isTemp, Pointer& address, UInt& size) const {
+GlobalInfo Symbols::getGlobalInfo(const Iterator& iterator) const {
 	assert((iterator->second.types & ADDRESS) == ADDRESS);
-	isTemp = ((iterator->second.types & TEMPORARY) != 0);
-	address = iterator->second.value.p;
-	size = iterator->second.size;
-	return iterator->first.c_str();
+	GlobalInfo info;
+	info.name = iterator->first.c_str();
+	info.address = iterator->second.value.p;
+	info.size = iterator->second.size;
+	info.isTemp = ((iterator->second.types & TEMPORARY) != 0);
+	info.isInterior = ((iterator->second.types & INTERIOR) != 0);
+	return info;
 }
 
 Assembler::Assembler(UInt maxCodeSize, Instruction* codeBase, UInt maxFunctionCount, UInt* functionTable
@@ -1517,12 +1520,9 @@ UInt freezeMemorySize(const Processor& processor, const Symbols& symbols) {
 	(void)processor;
 	UInt size = MEMORY_HEADER_SIZE;
 	Symbols::Iterator it;
-	for (bool ok = symbols.findFirstGlobal(it, false); ok; ok = symbols.findNextGlobal(it, false)) {
-		bool isTemp;
-		Pointer address;
-		UInt globalSize;
-		const char* name = symbols.getGlobalInfo(it, isTemp, address, globalSize);
-		size += 4 + (UInt)strlen(name) + 4 + globalSize * 4;	// name length + name + size + words
+	for (bool ok = symbols.findFirstGlobal(it, false, false); ok; ok = symbols.findNextGlobal(it, false, false)) {
+		const GlobalInfo info = symbols.getGlobalInfo(it);
+		size += 4 + (UInt)strlen(info.name) + 4 + info.size * 4;	// name length + name + size + words
 	}
 	return size;
 }
@@ -1535,7 +1535,7 @@ UInt freezeMemory(const Processor& processor, const Symbols& symbols, void* buff
 	unsigned char* p = start;
 	Symbols::Iterator it;
 	UInt globalCount = 0;
-	for (bool ok = symbols.findFirstGlobal(it, false); ok; ok = symbols.findNextGlobal(it, false)) ++globalCount;
+	for (bool ok = symbols.findFirstGlobal(it, false, false); ok; ok = symbols.findNextGlobal(it, false, false)) ++globalCount;
 
 	memcpy(p, MEMORY_MAGIC, 4);
 	p += 4;
@@ -1548,20 +1548,17 @@ UInt freezeMemory(const Processor& processor, const Symbols& symbols, void* buff
 	p = putMemoryWord(p, floatCanary.p);
 	p = putMemoryWord(p, globalCount);
 
-	for (bool ok = symbols.findFirstGlobal(it, false); ok; ok = symbols.findNextGlobal(it, false)) {
-		bool isTemp;
-		Pointer address;
-		UInt size;
-		const char* name = symbols.getGlobalInfo(it, isTemp, address, size);
-		assert(!isTemp);
-		const UInt nameLength = (UInt)strlen(name);
+	for (bool ok = symbols.findFirstGlobal(it, false, false); ok; ok = symbols.findNextGlobal(it, false, false)) {
+		const GlobalInfo info = symbols.getGlobalInfo(it);
+		assert(!info.isTemp && !info.isInterior);
+		const UInt nameLength = (UInt)strlen(info.name);
 		p = putMemoryWord(p, nameLength);
-		memcpy(p, name, nameLength);
+		memcpy(p, info.name, nameLength);
 		p += nameLength;
-		p = putMemoryWord(p, size);
-		const Value* source = processor.accessConstMemory(address, size);
+		p = putMemoryWord(p, info.size);
+		const Value* source = processor.accessConstMemory(info.address, info.size);
 		assert(source != 0);
-		for (UInt i = 0; i < size; ++i) p = putMemoryWord(p, source[i].p);
+		for (UInt i = 0; i < info.size; ++i) p = putMemoryWord(p, source[i].p);
 	}
 	assert((UInt)(p - start) == needed);					// Byte count must match freezeMemorySize exactly.
 	return needed;
@@ -1797,13 +1794,10 @@ bool unitTest() {
 
 			// Every non-TEMP global must match the frozen original (identical assemblies share global addresses).
 			Symbols::Iterator it;
-			for (bool ok = globals.findFirstGlobal(it, false); ok; ok = globals.findNextGlobal(it, false)) {
-				bool isTemp;
-				Pointer address;
-				UInt size;
-				globals.getGlobalInfo(it, isTemp, address, size);
-				const UInt index = address - MEMORY_OFFSET;
-				for (UInt i = 0; i < size; ++i) assert(memory2[index + i].i == memory[index + i].i);
+			for (bool ok = globals.findFirstGlobal(it, false, true); ok; ok = globals.findNextGlobal(it, false, true)) {
+				const GlobalInfo info = globals.getGlobalInfo(it);
+				const UInt index = info.address - MEMORY_OFFSET;
+				for (UInt i = 0; i < info.size; ++i) assert(memory2[index + i].i == memory[index + i].i);
 			}
 			// The restored function pointer resolves to CallBack in the fresh assembly (and equals the original ordinal).
 			UInt gpSize;
