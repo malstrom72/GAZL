@@ -159,8 +159,8 @@ fill it in order:
 - `DATi`, `DATf` and `DATp` write one or more ints, floats or pointers; `DATA` writes one or more values of mixed
   types.
 - `DATs text` writes the rest of the line, one character per word, with trailing blanks removed.
-- A label on a data statement names the statement's first word and covers every value the statement writes (one
-  word for a statement without values).
+- A label on a data statement names the statement's first word and covers exactly the values the statement
+  writes. A data statement without values is legal and writes nothing; a label on it covers no words (size 0).
 - Words left unfilled are 0.
 
 `TEMP` is `GLOB` that a memory snapshot skips (section 11). `CNST` sections are read-only.
