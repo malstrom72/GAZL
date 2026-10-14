@@ -260,65 +260,87 @@ Whatever the program text, an implementation must guarantee all of the following
 ## 11. Memory snapshot format
 
 A snapshot ("freeze") saves the values of a program's named global sections so a later run can restore them by name
-("thaw"), even after the program has been changed and re-assembled.
+("thaw"), even after the program has been changed and re-assembled. A snapshot is a payload that a host embeds in
+its own storage (a plugin state chunk, a preset file); it is not a file format of its own.
 
-**Encoding.** A snapshot is a sequence of bytes, built from two kinds of field:
-- A **word** is 4 bytes, an unsigned 32-bit value in little-endian order: bits 0-7 first, bits 24-31 last.
-- A **name** is the section's identifier, one byte per character, with no terminator and no padding. Identifiers
-  are validated at assembly (section 5), so a name only ever holds `A-Z`, `a-z`, `0-9`, `_`, `.` and `$`, and
-  never starts with a digit.
-Fields follow each other with no padding or alignment, so everything after a name may sit at any byte offset.
+**Encoding.** A snapshot is a sequence of bytes built from two kinds of field:
+- A **word** is 4 bytes holding an unsigned 32-bit value, little-endian: bits 0-7 first, bits 24-31 last.
+- A **name** is a section's identifier (section 5), one byte per character, followed by 0 to 3 zero bytes of
+  padding, so that the name and its padding together take a multiple of 4 bytes. A name of `L` bytes has
+  `(4 - L % 4) % 4` padding bytes.
 
-**Header,** 28 bytes:
+Every field starts at a multiple of 4 bytes from the start of the snapshot. A reader must still decode each word
+byte by byte, as above, and never by loading it through a pointer.
 
-| offset | size | field                                            |
-| ------ | ---- | ------------------------------------------------ |
-| 0      | 4    | magic, the bytes `G` `Z` `M` `M` (`47 5A 4D 4D`) |
-| 4      | 4    | word: snapshot format version, 1                 |
-| 8      | 4    | word: GAZL version, 1                            |
-| 12     | 4    | word: word size in bits, 32                      |
-| 16     | 4    | word: int check word, `0x01020304`               |
-| 20     | 4    | word: float check word, `0x3F800000`, 1.0f       |
-| 24     | 4    | word: `S`, the number of sections that follow    |
+**Header,** 20 bytes:
 
-**Sections.** `S` sections follow from offset 28, each directly after the previous one:
+| offset | field                                                   |
+| ------ | ------------------------------------------------------- |
+| 0      | magic, the bytes `G` `Z` `M` `M` (`47 5A 4D 4D`)        |
+| 4      | word: snapshot format version, 1                        |
+| 8      | word: GAZL version, 1                                   |
+| 12     | word: word size in bits, 32                             |
+| 16     | word: `S`, the number of sections that follow, `S >= 1` |
 
-| size  | field                                             |
-| ----- | ------------------------------------------------- |
-| 4     | word: `L`, the length of the name in bytes        |
-| `L`   | name                                              |
-| 4     | word: `N`, the size of the section in words       |
-| 4 `N` | `N` words: the section's memory, first word first |
+**Sections.** `S` sections follow from offset 20, each directly after the previous one:
 
-A section's words are its memory exactly, 32 bits each, whatever their type:
-- **an int** as its two's-complement bits;
-- **a float** as its IEEE binary32 bits, a NaN's payload included;
-- **a data pointer** as its raw value, `0x12345678 + index`;
-- **a function pointer** as `0x56789ABC + ordinal`.
+| field     | content                                                     |
+| --------- | ----------------------------------------------------------- |
+| word      | `L`, the length of the name in bytes, excluding its padding |
+| name      | `L` bytes, then the padding                                 |
+| word      | `N`, the size of the section in words                       |
+| `N` words | the section's memory, first word first                      |
 
-**What survives a restore.** Because pointers are stored raw:
+**The check section** is always the first section. It is recognised by its position, never restored, and exempt
+from the name order below. Its 28 bytes are fixed:
+
+    05 00 00 00   24 67 61 7A 6C 00 00 00   03 00 00 00   04 03 02 01   00 00 80 3F   01 00 80 7F
+    L = 5         "$gazl" + 3 padding       N = 3         0x01020304    1.0f          signaling NaN
+
+A writer must produce its words the way it produces any other section's: the first from an int, the second from
+the float `1.0f`, the third from a word holding a signaling NaN. A reader must parse it like any other section and
+then compare all 28 bytes. It proves the reader decodes lengths, names, padding and words exactly as the writer
+encoded them, and that floats travel as raw bits, a NaN's payload included. Any mismatch is `MEMORY_BAD_CANARY`.
+
+**Program sections** follow, in strictly ascending ASCII order of their names. There is one for each name that
+labels writable data:
+- **a `GLOB` statement,** covering the whole section;
+- **a labelled data statement inside a `GLOB` section,** covering just the words that statement defines. Its words
+  are therefore saved twice, once in each entry.
+
+`CNST` and `TEMP` sections, and labels inside them, are left out. A section's words are its memory exactly, 32
+bits each, whatever their type: an int as its two's-complement bits, a float as its binary32 bits, a pointer as
+its raw value.
+
+**Validation.** A reader validates the whole snapshot before restoring anything. It is rejected, with nothing
+restored, when any of the following fails, checked in this order:
+
+| check                                                                           | status                |
+| ------------------------------------------------------------------------------- | --------------------- |
+| at least 4 bytes, and the magic is right                                        | `MEMORY_BAD_MAGIC`    |
+| the header is complete                                                          | `MEMORY_TRUNCATED`    |
+| format version 1 and GAZL version 1                                             | `MEMORY_BAD_VERSION`  |
+| word size 32                                                                    | `MEMORY_BAD_WORDSIZE` |
+| every length stays inside the snapshot                                          | `MEMORY_TRUNCATED`    |
+| the check section is exactly as above                                           | `MEMORY_BAD_CANARY`   |
+| every name is a valid identifier, names ascend strictly, padding bytes are zero | `MEMORY_MALFORMED`    |
+| the snapshot ends exactly after the last section                                | `MEMORY_MALFORMED`    |
+
+`MEMORY_MALFORMED` is new; the other statuses exist today.
+
+**Restore.** Only after validation succeeds, a program section is restored when the re-assembled program has a
+writable section of the same name and size. Every other section is skipped without error.
+
+**What survives a restore.** Ints and floats always do. Pointers are stored as raw values:
 - **A data pointer** still points at the same thing only if the re-assembled program puts its target at the same
   index.
 - **A function pointer** survives only if functions are declared in the same order.
 
-Ints and floats always survive.
-
-- **Order.** Sections appear in ascending ASCII order of their names. `TEMP` sections are left out.
-- **Restore.** A section is restored only when the re-assembled program has a writable section of the same name
-  and size. Every other section is read past and skipped without error.
-- **Trailing bytes.** The reader stops after `S` sections; bytes after them are ignored (see open question 8).
-- **Check words.** The two check words are a self-check of the encoding, not a detection of the host's byte order,
-  which the explicit little-endian encoding already makes irrelevant.
-  - **The int check word** confirms that the reader reassembles bytes into words exactly as the writer split them.
-  - **The float check word** confirms that a float travels as its raw 32 bits: the writer stores the bits of its
-    own `1.0f`, and the reader compares them with the bits of its own.
-  - **What they catch:** a bug in either side's word encoding, a change in how an implementation stores floats in
-    words, or two implementations that disagree. All of these would otherwise load wrong values silently.
-- **Rejection.** A wrong magic, version, word size or check word rejects the snapshot before anything is restored.
-  They are checked in that order, and a wrong check word gives `MEMORY_BAD_CANARY`.
-- **Truncation.** A snapshot that ends early, or whose name length runs past its end, returns `MEMORY_TRUNCATED`.
-  But sections are restored as they are read, so the sections before the break are already restored, and the one
-  being read is partly written. A host that needs all-or-nothing must thaw into a fresh processor.
+**Storing snapshots.** The format protects its structure, not its bits. A host should:
+- store the snapshot's exact byte length with it, since validation requires the reader to be given exactly the
+  bytes that were written;
+- store a checksum with it (CRC-32 at least) and verify it before calling `thawMemory`. Strongly recommended:
+  validation catches damaged lengths and names, but not a changed bit inside a section's words.
 
 ## 12. Conformance
 
@@ -350,12 +372,3 @@ answer.
 7. **Step counts.** Section 9 makes step counts observable, which binds every future engine, JIT included, to
    count exactly as the interpreter does. Confirm that, or relax it to "at least one step per backward branch and
    call".
-8. **Snapshot integrity.** The check words prove the word decoder, but nothing checks a snapshot's structure or
-   contents.
-   - **Structure.** A wrong name length that stays inside the blob desynchronises the reader. It then reads
-     garbage as names, which match nothing, so those sections are skipped. It can still return `MEMORY_OK`,
-     because trailing bytes are ignored.
-   - **Contents.** A changed bit inside a section's words is restored as is.
-   - **Options.** Requiring the reader to end exactly at the last byte catches the structural case, needs no format
-     change, and no snapshot this implementation writes would fail it. A checksum would also catch the content
-     case, but needs snapshot format version 2.
