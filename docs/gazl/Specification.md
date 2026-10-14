@@ -260,16 +260,24 @@ A snapshot ("freeze") saves the values of a program's named global sections so a
 | 4      | snapshot format version, 1                                                      |
 | 8      | GAZL version, 1                                                                 |
 | 12     | word size, 32                                                                   |
-| 16     | int canary, `0x01020304`                                                        |
-| 20     | float canary, the bits of 1.0 (`0x3F800000`)                                    |
+| 16     | int check word, `0x01020304`                                                    |
+| 20     | float check word, the bits of 1.0 (`0x3F800000`)                                |
 | 24     | number of sections that follow                                                  |
 | 28     | each section: name length, name bytes (no terminator), size in words, the words |
 
 - **Order.** Sections appear in ascending ASCII order of their names. `TEMP` sections are left out.
 - **Restore.** A section is restored only when the re-assembled program has a writable section of the same name
   and size. Every other section is skipped without error.
-- **Rejection.** A snapshot with a wrong magic, version, word size or canary is rejected as a whole. So is one that
-  ends early or whose lengths run past its end.
+- **Check words.** The two check words are a self-check of the encoding, not a detection of the host's byte order,
+  which the explicit little-endian encoding already makes irrelevant.
+  - **The int check word** confirms that the reader reassembles bytes into words exactly as the writer split them.
+  - **The float check word** confirms that a float travels as its raw 32 bits: the writer stores the bits of its
+    own `1.0f`, and the reader compares them with the bits of its own.
+  - **What they catch:** a bug in either side's word encoding, a change in how an implementation stores floats in
+    words, or two implementations that disagree. All of these would otherwise load wrong values silently.
+- **Rejection.** A snapshot is rejected as a whole when its magic, versions, word size or check words are wrong,
+  checked in that order (`MEMORY_BAD_CANARY` for the check words), or when it ends early or a length runs past
+  its end.
 
 ## 12. Conformance
 
