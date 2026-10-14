@@ -107,21 +107,29 @@ comments and string data (see open question 4).
 - **Mnemonics** are exactly four characters and case-sensitive.
 - **Separators.** Tokens are separated by spaces or tabs. A `;` starts a comment that runs to the end of the line.
 - **Quotes.** A token may contain a quoted part (`'...'` or `"..."`); spaces inside the quotes don't end it.
-- **Identifiers** start with a letter, `_`, `.` or `$`, and continue with those characters or digits. They are
-  case-sensitive.
+- **Identifiers** name everything a program declares: data sections, functions, natives, named constants, locals
+  and labels. The rule is exact, and an assembler must refuse anything else with `INVALID_IDENTIFIER`:
+  - **First character:** one of the 55 ASCII characters `A`-`Z`, `a`-`z`, `_`, `.` or `$`.
+  - **Every following character:** one of those, or an ASCII digit `0`-`9`, so 65 characters in all.
+  - **No other characters:** no other punctuation, no spaces, no bytes above 0x7F.
+  - **Length:** at least 1 character, with no upper limit.
+  - **Case:** case-sensitive, so `Gain` and `gain` are different names.
+
+  As a regular expression: `[A-Za-z_.$][A-Za-z0-9_.$]*`. A switch case label (`@sw#'B'`, see `SWCH` in
+  InstructionSet.md) is an identifier followed by `#` and a constant; the `#` part is not part of the identifier.
 
 **Operands** are classified by their first character:
 
-| prefix | operand                                                               | example                |
-| ------ | --------------------------------------------------------------------- | ---------------------- |
-| (none) | local variable, optionally `name:offset` into a local array           | `x`, `buf:3`           |
-| `%`    | transient `n`: the `n`-th word after the function's locals            | `%0`                   |
-| `#`    | constant: a literal or a named assembly-time constant                 | `#12`, `#0.5`, `#TRUE` |
-| `<`    | assembly-time variable, `<A>` to `<Z>` and the other identifier chars | `<A>`                  |
-| `&`    | address of a data section or function, optionally `:offset`           | `&table:4`, `&main`    |
-| `^`    | native function                                                       | `^print`               |
-| `@`    | branch label in the current function                                  | `@loop`, `@sw.3`       |
-| `*`    | non-negative size constant                                            | `*16`                  |
+| prefix | operand                                                         | example                |
+| ------ | --------------------------------------------------------------- | ---------------------- |
+| (none) | local variable, optionally `name:offset` into a local array     | `x`, `buf:3`           |
+| `%`    | transient `n`: the `n`-th word after the function's locals      | `%0`                   |
+| `#`    | constant: a literal or a named assembly-time constant           | `#12`, `#0.5`, `#TRUE` |
+| `<`    | assembly-time variable: any one identifier character in `<` `>` | `<A>`, `<x>`, `<0>`    |
+| `&`    | address of a data section or function, optionally `:offset`     | `&table:4`, `&main`    |
+| `^`    | native function                                                 | `^print`               |
+| `@`    | branch label in the current function                            | `@loop`, `@sw.3`       |
+| `*`    | non-negative size constant                                      | `*16`                  |
 
 **Integer literals** are decimal, or hexadecimal after a lowercase `0x`, with an optional sign. A quoted literal
 (`'AB'`) packs its characters into one int, the first character in the most significant byte used. A value outside
