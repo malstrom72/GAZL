@@ -16,7 +16,7 @@ GAZL programs are distributed as source text and assembled when they are loaded,
 written. So the format only ever grows:
 
 - A program that assembles under one GAZL 1 implementation must assemble under every later one, and run with
-  identical results, statuses and step counts.
+  identical results and statuses.
 - New instructions, new operand forms and new assembly-time constants may be added, but only where the same text
   used to be an assembly error.
 - The meaning of an accepted form never changes, and no accepted form is removed.
@@ -74,8 +74,9 @@ assembly when the divisor is a constant 0.
 
 **Floats.** Arithmetic is IEEE-754 binary32 with round-to-nearest-even. `DIVf` by zero (either sign) stops the
 program with `DIVISION_BY_ZERO`; it never produces an infinity. Infinities and NaNs can still arise from overflow
-and from operations like `inf - inf`. Denormal handling follows the host thread's floating-point environment (see
-open question 1).
+and from operations like `inf - inf`. Denormal handling follows the host thread's floating-point environment
+(flush-to-zero, denormals-are-zero), which GAZL neither sets nor restores, so a result that involves denormals may
+differ between implementations and hosts. That is accepted.
 
 **Conversions.** `fTOi` multiplies by its scale operand, then truncates toward zero; values at or beyond 2^31 in
 magnitude, and infinities, saturate to `INT_MAX` / `INT_MIN`, and NaN converts to 0. `iTOf` converts to the nearest
@@ -139,7 +140,7 @@ this algorithm, because a literal's bits are part of the program:
 3. If there is an exponent `x`, do `d = d * pow(10, x)`, in binary64.
 4. Apply the sign, and round `d` once to binary32.
 
-This is not correctly-rounded decimal conversion, and an implementation must not substitute one (see open question 2).
+This is not correctly-rounded decimal conversion, and an implementation must not substitute one (see open question 1).
 
 ## 6. Program structure
 
@@ -211,9 +212,12 @@ an interrupt.
 - **Cost.** Every executed instruction costs one step, including `FUNC` on entry. `NOOP` and assembly-time
   statements cost nothing.
 - **Exhaustion.** When the budget runs out, `run` returns `TIME_OUT` between two instructions, and the next `run`
-  continues exactly there.
-- **Consequence.** Step counts are part of observable behaviour: a program, a budget and a starting state must
-  time out at the same instruction on every implementation.
+  continues exactly there. Pausing never changes what a program computes: resumed to completion, it gives the same
+  results as an uninterrupted run.
+- **Granularity.** An implementation may check the budget at coarser points than every instruction, for example
+  once per block of straight-line code, as long as it stops within the budget plus the cost of one such block.
+  Which instruction it stops at, and the budget left at that point (`getClockCyclesLeft`), are therefore
+  implementation-defined. The reference interpreter checks before every instruction.
 
 **Natives** are host functions registered by name, so a program refers to them by name and the host maps them to
 code. A native sees the call's argument window through `accessParams`, and data memory through
@@ -252,10 +256,10 @@ Whatever the program text, an implementation must guarantee all of the following
   failing access either stops the program with a status from the table above or is refused at assembly.
 - **Isolation.** No effect outside the processor except through natives. No process-wide state is touched:
   signal handlers, the floating-point environment, global variables.
-- **Interruptibility.** Every program stops within its step budget.
-- **Determinism.** The same program, inputs, natives and budget give the same results, statuses and step counts
-  on every conforming implementation, except where this specification leaves a result unspecified, and subject
-  to open question 1.
+- **Interruptibility.** Every program stops within its step budget, plus at most one block (section 9).
+- **Determinism.** The same program, inputs and natives give the same results and statuses on every conforming
+  implementation, except where this specification leaves a result unspecified, and except for denormals
+  (section 4).
 
 ## 11. Memory snapshot format
 
@@ -370,17 +374,10 @@ An implementation conforms when it runs the following with the expected results:
 Each is a decision for the format's owner. Until one is decided, the current behaviour of `src/GAZL.cpp` is the
 answer.
 
-1. **Denormals and the FP environment.** Float results that involve denormals follow the host thread's settings
-   (flush-to-zero, denormals-are-zero), which GAZL does not set. That is the one place two conforming
-   implementations can differ. Should GAZL 1 require a fixed environment around `run`, or just record the
-   exception?
-2. **Float literals use `pow`.** Step 3 of the literal algorithm calls the C library's `pow`, which is not
+1. **Float literals use `pow`.** Step 3 of the literal algorithm calls the C library's `pow`, which is not
    guaranteed to round the same way everywhere. Should the exponent be applied by an exactly specified method
    (for example, repeated multiplication by 10 in binary64)? That would only change literals with an exponent.
-3. **`COPY` with overlap** is documented as "undefined". It is memory-safe either way. Should the result be
+2. **`COPY` with overlap** is documented as "undefined". It is memory-safe either way. Should the result be
    specified (as if copied forward word by word), or stay unspecified?
-4. **Constant addresses depend on memory size.** Should hosts that want reproducible pointer values be told to fix
+3. **Constant addresses depend on memory size.** Should hosts that want reproducible pointer values be told to fix
    the memory size, or should this stay a host matter?
-5. **Step counts.** Section 9 makes step counts observable, which binds every future engine, JIT included, to
-   count exactly as the interpreter does. Confirm that, or relax it to "at least one step per backward branch and
-   call".
