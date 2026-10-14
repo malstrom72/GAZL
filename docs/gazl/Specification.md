@@ -278,7 +278,7 @@ byte by byte, as above, and never by loading it through a pointer.
 | ------ | ------------------------------------------------------- |
 | 0      | magic, the bytes `G` `Z` `M` `M` (`47 5A 4D 4D`)        |
 | 4      | word: snapshot format version, 1                        |
-| 8      | word: GAZL version, 1                                   |
+| 8      | word: the GAZL version of the writer, 1 for GAZL 1      |
 | 12     | word: word size in bits, 32                             |
 | 16     | word: `S`, the number of sections that follow, `S >= 1` |
 
@@ -319,7 +319,7 @@ restored, when any of the following fails, checked in this order:
 | ------------------------------------------------------------------------------- | --------------------- |
 | at least 4 bytes, and the magic is right                                        | `MEMORY_BAD_MAGIC`    |
 | the header is complete                                                          | `MEMORY_TRUNCATED`    |
-| format version 1 and GAZL version 1                                             | `MEMORY_BAD_VERSION`  |
+| format version 1, and a GAZL version from 1 up to the reader's own              | `MEMORY_BAD_VERSION`  |
 | word size 32                                                                    | `MEMORY_BAD_WORDSIZE` |
 | every length stays inside the snapshot                                          | `MEMORY_TRUNCATED`    |
 | the check section is exactly as above                                           | `MEMORY_BAD_CANARY`   |
@@ -335,6 +335,15 @@ writable section of the same name and size. Every other section is skipped witho
 - **A data pointer** still points at the same thing only if the re-assembled program puts its target at the same
   index.
 - **A function pointer** survives only if functions are declared in the same order.
+
+**Layouts are not saved.** A section is identified by its name and size alone; the snapshot knows nothing of the
+types or structs a compiler laid out in it. If a program changes what a section holds without changing its name,
+for example by reordering two fields of a struct of the same size, the old words are restored into the new layout.
+Keeping a name's layout stable, or renaming the section when it changes, is the program's and the compiler's
+responsibility. A compiler that wants this checked can fold a layout hash into the names it gives sections.
+
+**Versions.** A reader accepts a snapshot from any GAZL version up to its own, because a word in memory means the
+same in GAZL 1 and GAZL 2. A GAZL version that changes what memory contents mean must say so here.
 
 **Storing snapshots.** The format protects its structure, not its bits. A host should:
 - store the snapshot's exact byte length with it, since validation requires the reader to be given exactly the
