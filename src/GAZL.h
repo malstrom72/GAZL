@@ -214,7 +214,9 @@ class Symbols {
 struct Operator;
 
 /*
-	The four sizes an assembly computes: what a program actually used, from `finalize`.
+	The four sizes an assembly computes: what a program actually used, from `finalize`. `constsSize` counts the
+	constants plus the one-word zero guard at the end of memory, so `globalsSize + constsSize` is the least memory
+	a program needs before its data stack.
 */
 struct ProgramSizes {
 	UInt codeSize;
@@ -252,6 +254,7 @@ class Assembler {
 	protected:	Value calcConstant(const Operator* op, const Char* op1Begin, const Char* op1End, const Char* op2Begin
 						, const Char* op2End);
 	protected:	void finalizeFunction();
+	protected:	Pointer makeGAZLPointer(const Value* data, bool constant) const;									/// The pointer to `data`: up from the base for globals, down from it for constants.
 	protected:	Instruction* const codeBase;
 	protected:	Instruction* const codeEnd;
 	protected:	const UInt maxFunctionCount;
@@ -269,6 +272,7 @@ class Assembler {
 	protected:	int dataLabelType;
 	protected:	Value* dataPointer;
 	protected:	Value* dataEnd;
+	protected:	bool dataIsConstant;				// The current data section is a `CNST` one, placed below the base.
 	protected:	Symbols& globals;
 	protected:	Symbols locals;
 	protected:	CompileTimeVar compileTimeVars[128];
@@ -304,6 +308,9 @@ enum {
 
 /*
 						 +-----------------------+ <- memory pointer
+						 | Constants | Read Only |
+						 |           | Memory    |
+						 |-----------|-----------| <- MEMORY_OFFSET, the base: constants below, the rest above
 						 | Globals   | RW Memory |
 						 |           |           |
 	  dataStackOffset -> |-----------|           |
@@ -312,9 +319,8 @@ enum {
       + dataStackSize -> |-----------|           |
 						 | (Data     |           |
 						 | Stack 2)  |           |
-						 |-----------|-----------| <- rwMemorySize
-						 |           | Read Only |
-						 | Constants | Memory    |
+						 |-----------|-----------| <- base + rwMemorySize
+						 | Zero guard            |
 						 +-----------------------+ <- memorySize
 
                          +--------+  +----------+  +-----------+
@@ -355,10 +361,11 @@ class Processor {
 	public:		Processor(); 																							// Default-initialized processor. It's illegal to call any methods on a default constructed processor.
 	public:		Processor(UInt codeSize, const Instruction* code, UInt functionCount, const UInt* functionTable
 						, UInt memorySize, Value* memory, UInt globalsSize, UInt constsSize, UInt ipStackSize
-						, CallStackEntry* ipStack, NativeFunc const* natives, void* userData = 0);						// higher level routine, data stack is full space between globals and constants
+						, CallStackEntry* ipStack, NativeFunc const* natives, void* userData = 0);						// higher level routine, data stack is all the space between the globals and the zero guard
 	public:		Processor(UInt codeSize, const Instruction* code, UInt functionCount, const UInt* functionTable
-						, UInt memorySize, Value* memory, UInt rwMemorySize, UInt dataStackOffset, UInt dataStackSize
-						, UInt ipStackSize, CallStackEntry* ipStack, NativeFunc const* natives, void* userData = 0);	// lower level routine, useful for running multiple processors on the same code (i.e. threads) where each processor needs its own stack
+						, UInt memorySize, Value* memory, UInt constsSize, UInt rwMemorySize, UInt dataStackOffset
+						, UInt dataStackSize, UInt ipStackSize, CallStackEntry* ipStack, NativeFunc const* natives
+						, void* userData = 0);																			// lower level routine, useful for running multiple processors on the same code (i.e. threads) where each processor needs its own stack; `rwMemorySize` and `dataStackOffset` count from the base
 	public:		void resetTimeOut(Int clockCycles); 																	// It is allowed to use `resetTimeOut(0)` from a native call to make the processor return immediately before executing it's next instruction. Alternatively if you want to suspend the processor from a native call, but retry the call when resumed (e.g. simulating a blocking call), return non-zero from the native call and the instruction pointer will not be incremented.
 	public:		const Value* accessConstMemory(Pointer pointer, UInt count) const; 										// If returning null pointer you should normally return `ACCESS_VIOLATION`
 	public:		Value* accessMemory(Pointer pointer, UInt count) const; 												// If returning null pointer you should normally return `ACCESS_VIOLATION`
@@ -374,8 +381,9 @@ class Processor {
 	protected:	UInt functionCount;
 	protected:	const UInt* functionTable;																				// Maps function ordinal -> code offset; a function pointer is `FUNCTION_OFFSET + ordinal`.
 	protected:	UInt memorySize;																						// One less than the memory given: the last word is the assembler's zero guard, so no checked read reaches it.
-	protected:	Value* memoryBase;
-	protected:	UInt rwMemorySize;
+	protected:	Value* memoryBase;																						// The lowest constant: the start of the memory given.
+	protected:	UInt constantsSize;																						// Words below the base, `MEMORY_OFFSET`: the constants, without the zero guard.
+	protected:	UInt rwMemorySize;																						// Words from the base up: globals and data stack.
 	protected:	Value* dataStackBase;
 	protected:	Value* dataStackEnd;
 	protected:	CallStackEntry* ipStackBase;
@@ -393,14 +401,14 @@ inline int Processor::getClockCyclesLeft() const { return clockCyclesLeft; }
 
 inline const Value* Processor::accessConstMemory(Pointer pointer, UInt count) const {
 	assert(memoryBase != 0);
-	return (count <= memorySize && pointer - MEMORY_OFFSET <= memorySize - count)
-			? pointer - MEMORY_OFFSET + memoryBase : 0;
+	const UInt index = pointer - (MEMORY_OFFSET - constantsSize);															// the readable range starts at the lowest constant
+	return (count <= memorySize && index <= memorySize - count) ? memoryBase + index : 0;
 }
 
 inline Value* Processor::accessMemory(Pointer pointer, UInt count) const {
 	assert(memoryBase != 0);
 	return (count <= rwMemorySize && pointer - MEMORY_OFFSET <= rwMemorySize - count)
-			? pointer - MEMORY_OFFSET + memoryBase : 0;
+			? memoryBase + constantsSize + (pointer - MEMORY_OFFSET) : 0;
 }
 
 inline Value* Processor::accessParams(UInt count) const {

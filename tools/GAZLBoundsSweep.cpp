@@ -25,11 +25,14 @@
 	Deterministic boundary sweep of every memory-accessing instruction form: PEEK, POKE, GETL, SETL and COPY, in each
 	operand form the assembler accepts, at every edge of the memory arena. Each probe is a tiny generated program
 	whose access lands just before, on, or just after an edge (start of memory, end of globals, end of writable
-	memory, end of memory, and the 32-bit wrap), and every outcome is checked against an oracle written here, not
+	memory, end of memory, the base between constants and globals, and the 32-bit wrap), and every outcome is checked
+	against an oracle written here, not
 	derived from the VM:
 
-	  - memory: an address `a` reads [0, memorySize - 1) and writes [0, rwMemorySize), counted from `MEMORY_OFFSET`,
-	    with the address arithmetic `base + index` wrapping at 32 bits. The last word is the assembler's zero guard,
+	  - memory: constants lie just below the base, `MEMORY_OFFSET`, and globals and the data stack from it up. An
+	    address reads [base - C, base + rw) and writes [base, base + rw), where C is the constants' size and rw the
+	    words from the base up, with the address arithmetic `base + index` wrapping at 32 bits. The last word, just
+	    above the data stack, is the assembler's zero guard,
 	    which stops a native scanning for a string's terminator; no checked read reaches it, so a native can tell a
 	    string that ran into it from one that ended in real memory. GETL / SETL index a local array; index `i` is in
 	    range when 0 <= i and the slot lies below the end of the data stack.
@@ -67,7 +70,7 @@ using namespace GAZL;
 
 namespace {
 
-const UInt MEMORY_SIZE = 256;					// words, the whole arena: globals, data stack and constants
+const UInt MEMORY_SIZE = 256;					// words, the whole arena: constants, globals, data stack and the zero guard
 const UInt READABLE_SIZE = MEMORY_SIZE - 1;		// all but the zero guard in the last word
 const UInt CANARY_SIZE = 64;						// canary words on each side of the arena
 const UInt FRAME_ZONE = 32;						// words at the bottom of the data stack the probe's own frame may use
@@ -78,8 +81,8 @@ const int CALL_STACK_SIZE = 16;
 enum Op { PEEK, POKE, GETL, SETL, COPY };
 
 /*
-	Where the assembler put things. Constants grow down from the top of memory and an immediate operand can add one,
-	so the layout belongs to each program, and a probe is generated against the layout its own program ends up with.
+	Where the assembler put things. Constants grow down from the base and an immediate operand can add one, so the
+	layout belongs to each program, and a probe is generated against the layout its own program ends up with.
 */
 struct Layout {
 	UInt globalsSize;
@@ -93,7 +96,10 @@ struct Layout {
 				&& outAddress == o.outAddress && gAddress == o.gAddress && cAddress == o.cAddress;
 	}
 	bool operator!=(const Layout& o) const { return !(*this == o); }
-	UInt rwSize() const { return MEMORY_SIZE - constsSize; }
+	UInt rwSize() const { return MEMORY_SIZE - constsSize; }						// words from the base up
+	UInt below() const { return constsSize - 1; }									// constant words below the base
+	UInt low() const { return MEMORY_OFFSET - below(); }							// the lowest readable pointer
+	UInt cell(UInt pointer) const { return pointer - low(); }						// the memory index of `pointer`
 };
 
 /*
@@ -164,17 +170,19 @@ std::string program(const std::string& body) {
 }
 
 /*
-	Interesting targets, as offsets from the start of memory: each side of every edge, plus pointers far outside it
-	(null, the sign boundary, the top of the address space). `layout` decides where the edges are.
+	Interesting targets, as pointers: each side of every edge, plus pointers far outside it (null, the sign boundary,
+	the top of the address space). `layout` decides where the edges are.
 */
 std::vector<UInt> targets(const Layout& layout) {
-	const UInt edges[] = { 0, layout.globalsSize, layout.rwSize(), READABLE_SIZE, MEMORY_SIZE };	// reads end at the guard
+	const UInt rw = layout.rwSize();
+	const UInt edges[] = { layout.low(), MEMORY_OFFSET, MEMORY_OFFSET + layout.globalsSize, MEMORY_OFFSET + rw
+			, MEMORY_OFFSET + rw + 1 };									// start of memory, base, end of globals, guard, end
 	std::vector<UInt> t;
 	for (size_t e = 0; e < sizeof (edges) / sizeof (*edges); ++e) {
-		for (int d = -1; d <= 1; ++d) t.push_back(MEMORY_OFFSET + edges[e] + (UInt)d);
+		for (int d = -1; d <= 1; ++d) t.push_back(edges[e] + (UInt)d);
 	}
 	t.push_back(0);
-	t.push_back(MEMORY_OFFSET - (UInt)CANARY_SIZE);
+	t.push_back(layout.low() - (UInt)CANARY_SIZE);
 	t.push_back(0x7FFFFFFFu);
 	t.push_back(0x80000000u);
 	t.push_back(0xFFFFFFFFu);
@@ -191,11 +199,12 @@ std::vector<Probe> generate(const Layout& L) {
 	const Int EXTREMES[] = { 0, 1, -1, 0x7FFFFFFF, (Int)0x80000000u };
 	const size_t EXTREME_COUNT = sizeof (EXTREMES) / sizeof (*EXTREMES);
 
-	// Pointer bases for the `ptr` forms: the start of memory, the last writable word, the end, and outside it.
+	// Pointer bases for the `ptr` forms: the start of memory, the base, the last writable word, the end, and outside.
 	std::vector<UInt> bases;
+	bases.push_back(L.low());
 	bases.push_back(MEMORY_OFFSET);
 	bases.push_back(MEMORY_OFFSET + L.rwSize() - 1);
-	bases.push_back(MEMORY_OFFSET + MEMORY_SIZE);
+	bases.push_back(MEMORY_OFFSET + L.rwSize() + 1);
 	bases.push_back(0);
 	bases.push_back(0x80000000u);
 	bases.push_back(0xFFFFFFFFu);
@@ -299,7 +308,7 @@ std::vector<Probe> generate(const Layout& L) {
 				p.inputs[1] = indexes[i];
 				p.inputs[2] = POKE_VALUE;
 				p.address = LABELS[l].pointer + (UInt)indexes[i];
-				p.refusalOk = (op == POKE && LABELS[l].pointer >= L.cAddress);		// `&address(w)` must be writable
+				p.refusalOk = (op == POKE && LABELS[l].pointer < MEMORY_OFFSET);		// `&address(w)` must be writable
 				p.value = POKE_VALUE;
 				p.what = std::string("&") + LABELS[l].name + ":" + number(LABELS[l].offset)
 						+ " index=" + number(indexes[i]);
@@ -322,7 +331,7 @@ std::vector<Probe> generate(const Layout& L) {
 		const std::string form = LABEL_ONLY_FORMS[f][0];
 		for (size_t s = 0; s < sizeof (SECTIONS) / sizeof (*SECTIONS); ++s) {
 			const UInt offsets[] = { 0, SECTIONS[s].size - 1, SECTIONS[s].size, SECTIONS[s].size + 1
-					, MEMORY_OFFSET + MEMORY_SIZE - SECTIONS[s].pointer };
+					, MEMORY_OFFSET + L.rwSize() + 1 - SECTIONS[s].pointer };						// to the end of memory
 			for (size_t o = 0; o < sizeof (offsets) / sizeof (*offsets); ++o) {
 				char body[96];
 				snprintf(body, sizeof body, LABEL_ONLY_FORMS[f][1], SECTIONS[s].name, offsets[o]);
@@ -330,7 +339,7 @@ std::vector<Probe> generate(const Layout& L) {
 				p.form = form;
 				p.op = (form[1] == 'E' ? PEEK : POKE);
 				p.allConst = true;
-				p.refusalOk = (offsets[o] >= SECTIONS[s].size || (p.op == POKE && SECTIONS[s].pointer >= L.cAddress));
+				p.refusalOk = (offsets[o] >= SECTIONS[s].size || (p.op == POKE && SECTIONS[s].pointer < MEMORY_OFFSET));
 				p.source = program(body);
 				p.inputs[2] = POKE_VALUE;
 				p.address = SECTIONS[s].pointer + offsets[o];
@@ -382,8 +391,8 @@ std::vector<Probe> generate(const Layout& L) {
 		std::vector<std::pair<UInt, UInt> > pairs;
 		const UInt dsts[] = { MEMORY_OFFSET, MEMORY_OFFSET + rw - small, MEMORY_OFFSET + rw - small + 1
 				, MEMORY_OFFSET - 1, 0xFFFFFFFFu };
-		const UInt srcs[] = { MEMORY_OFFSET + READABLE_SIZE - small, MEMORY_OFFSET + READABLE_SIZE - small + 1
-				, MEMORY_OFFSET, MEMORY_OFFSET - 1, 0x80000000u };
+		const UInt srcs[] = { MEMORY_OFFSET + rw - small, MEMORY_OFFSET + rw - small + 1, L.low(), L.low() - 1
+				, 0x80000000u };
 		for (size_t d = 0; d < 5; ++d) for (size_t s = 0; s < 5; ++s) pairs.push_back(std::make_pair(dsts[d], srcs[s]));
 		for (size_t k = 0; k < pairs.size(); ++k) {
 			Probe p = Probe();
@@ -409,7 +418,7 @@ std::vector<Probe> generate(const Layout& L) {
 			p.op = COPY;
 			p.count = count;
 			p.form = "COPY &address &address *size";					// checked at run time like the others
-			p.refusalOk = (count > rw || lp.dstPointer >= L.cAddress);
+			p.refusalOk = (count > rw || lp.dstPointer < MEMORY_OFFSET);
 			p.source = program(std::string(" COPY &") + lp.dst + " &" + lp.src + " *" + number(count) + "\n");
 			p.address = lp.dstPointer;
 			p.source2 = lp.srcPointer;
@@ -517,9 +526,9 @@ Status run(Machine& m, Engine engine) {
 	return processor.run();
 }
 
-bool inRange(UInt pointer, UInt count, UInt limit) {
-	const int64_t start = (int64_t)pointer - (int64_t)MEMORY_OFFSET;
-	return start >= 0 && start + (int64_t)count <= (int64_t)limit;
+bool inRange(UInt pointer, UInt count, UInt from, UInt size) {						// [pointer, pointer + count) in [from, from + size)
+	const int64_t start = (int64_t)pointer - (int64_t)from;
+	return start >= 0 && start + (int64_t)count <= (int64_t)size;
 }
 
 /*
@@ -531,51 +540,52 @@ std::string check(Machine& m, const Probe& p, const Layout& layout, const std::v
 	const Status status = run(m, engine);
 	const Value* mem = m.memory();
 	const UInt rw = layout.rwSize();
-	const UInt arAddress = (UInt)mem[layout.outAddress - MEMORY_OFFSET + 1].i;
+	const UInt arAddress = (UInt)mem[layout.cell(layout.outAddress) + 1].i;
 
 	// The oracle: is the access in range, which status follows, and which cells must change to what.
 	std::vector<Value> want(before);
 	std::vector<bool> known(before.size(), true);
 	const size_t g = CANARY_SIZE;
-	for (UInt i = 0; i < FRAME_ZONE; ++i) known[g + layout.globalsSize + i] = false;
-	known[g + layout.outAddress - MEMORY_OFFSET] = false;
-	known[g + layout.outAddress - MEMORY_OFFSET + 1] = false;
+	for (UInt i = 0; i < FRAME_ZONE; ++i) known[g + layout.cell(MEMORY_OFFSET + layout.globalsSize) + i] = false;
+	known[g + layout.cell(layout.outAddress)] = false;
+	known[g + layout.cell(layout.outAddress) + 1] = false;
 	bool valid = false;
 	Status failStatus = OK;
 	Int wantRead = 0;
 	bool checkRead = false;
 	switch (p.op) {
 		case PEEK:
-			valid = inRange(p.address, 1, READABLE_SIZE);
+			valid = inRange(p.address, 1, layout.low(), READABLE_SIZE);
 			failStatus = BAD_PEEK;
-			if (valid && known[g + p.address - MEMORY_OFFSET]) {
-				wantRead = before[g + p.address - MEMORY_OFFSET].i;
+			if (valid && known[g + layout.cell(p.address)]) {
+				wantRead = before[g + layout.cell(p.address)].i;
 				checkRead = true;
 			}
 			break;
 		case POKE:
-			valid = inRange(p.address, 1, rw);
+			valid = inRange(p.address, 1, MEMORY_OFFSET, rw);
 			failStatus = BAD_POKE;
-			if (valid) want[g + p.address - MEMORY_OFFSET].i = p.value;
+			if (valid) want[g + layout.cell(p.address)].i = p.value;
 			break;
 		case GETL:
 		case SETL: {
 			const UInt slot = arAddress + (UInt)p.index;
 			valid = p.index >= 0 && (int64_t)arAddress + p.index < (int64_t)(MEMORY_OFFSET + rw);
 			failStatus = (p.op == GETL ? BAD_PEEK : BAD_POKE);
-			if (valid && p.op == SETL) want[g + slot - MEMORY_OFFSET].i = p.value;
-			if (valid && p.op == GETL && known[g + slot - MEMORY_OFFSET]) {
-				wantRead = before[g + slot - MEMORY_OFFSET].i;
+			if (valid && p.op == SETL) want[g + layout.cell(slot)].i = p.value;
+			if (valid && p.op == GETL && known[g + layout.cell(slot)]) {
+				wantRead = before[g + layout.cell(slot)].i;
 				checkRead = true;
 			}
 			break;
 		}
 		case COPY: {
-			valid = inRange(p.address, p.count, rw) && inRange(p.source2, p.count, READABLE_SIZE);
+			valid = inRange(p.address, p.count, MEMORY_OFFSET, rw)
+					&& inRange(p.source2, p.count, layout.low(), READABLE_SIZE);
 			failStatus = ACCESS_VIOLATION;
 			if (valid) {
-				const UInt d = p.address - MEMORY_OFFSET;
-				const UInt s = p.source2 - MEMORY_OFFSET;
+				const UInt d = layout.cell(p.address);
+				const UInt s = layout.cell(p.source2);
 				const bool overlap = (d < s + p.count && s < d + p.count);
 				for (UInt i = 0; i < p.count; ++i) {
 					if (overlap || !known[g + s + i]) known[g + d + i] = false;
@@ -588,8 +598,8 @@ std::string check(Machine& m, const Probe& p, const Layout& layout, const std::v
 	const Status wantStatus = valid ? OK : failStatus;
 	if (p.allConst && !valid) return "assembled although out of range, status " + number(status);
 	if (status != wantStatus) return "status " + number(status) + ", want " + number(wantStatus);
-	if (checkRead && mem[layout.outAddress - MEMORY_OFFSET].i != wantRead) {
-		return "read " + number(mem[layout.outAddress - MEMORY_OFFSET].i) + ", want " + number(wantRead);
+	if (checkRead && mem[layout.cell(layout.outAddress)].i != wantRead) {
+		return "read " + number(mem[layout.cell(layout.outAddress)].i) + ", want " + number(wantRead);
 	}
 	for (size_t i = 0; i < want.size(); ++i) {
 		if (known[i] && m.buffer[i].i != want[i].i) {
@@ -617,29 +627,30 @@ int sweepNativeAccess() {
 	const Processor processor(m.sizes.codeSize, &m.code[0], m.sizes.functionCount, &m.functionTable[0], MEMORY_SIZE
 			, m.memory(), m.sizes.globalsSize, m.sizes.constsSize, CALL_STACK_SIZE, &m.callStack[0], 0);
 	const UInt rw = layout.rwSize();
-	struct Access { bool writable; UInt offset; UInt count; bool succeeds; const char* what; };
+	const UInt low = layout.low();
+	struct Access { bool writable; UInt pointer; UInt count; bool succeeds; const char* what; };
 	const Access ACCESSES[] = {
-		{ false, 0, READABLE_SIZE, true, "accessConstMemory, the whole readable region" },
-		{ false, 0, READABLE_SIZE + 1, false, "accessConstMemory, one word more (the zero guard)" },
-		{ false, 1, READABLE_SIZE, false, "accessConstMemory, the region shifted one word" },
-		{ false, READABLE_SIZE - 1, 1, true, "accessConstMemory, the last readable word" },
-		{ false, READABLE_SIZE, 1, false, "accessConstMemory, the zero guard alone" },
-		{ false, 0, 0xFFFFFFFFu, false, "accessConstMemory, a count that wraps" },
-		{ true, 0, rw, true, "accessMemory, the whole writable region" },
-		{ true, 0, rw + 1, false, "accessMemory, one word more" },
-		{ true, 1, rw, false, "accessMemory, the region shifted one word" },
-		{ true, rw - 1, 1, true, "accessMemory, the last writable word" },
-		{ true, rw, 1, false, "accessMemory, the first constant" },
-		{ true, 0, 0xFFFFFFFFu, false, "accessMemory, a count that wraps" }
+		{ false, low, READABLE_SIZE, true, "accessConstMemory, the whole readable region" },
+		{ false, low, READABLE_SIZE + 1, false, "accessConstMemory, one word more (the zero guard)" },
+		{ false, low + 1, READABLE_SIZE, false, "accessConstMemory, the region shifted one word" },
+		{ false, low - 1, 1, false, "accessConstMemory, the word below the lowest constant" },
+		{ false, low + READABLE_SIZE - 1, 1, true, "accessConstMemory, the last readable word" },
+		{ false, low + READABLE_SIZE, 1, false, "accessConstMemory, the zero guard alone" },
+		{ false, low, 0xFFFFFFFFu, false, "accessConstMemory, a count that wraps" },
+		{ true, MEMORY_OFFSET, rw, true, "accessMemory, the whole writable region" },
+		{ true, MEMORY_OFFSET, rw + 1, false, "accessMemory, one word more (the zero guard)" },
+		{ true, MEMORY_OFFSET + 1, rw, false, "accessMemory, the region shifted one word" },
+		{ true, MEMORY_OFFSET + rw - 1, 1, true, "accessMemory, the last writable word" },
+		{ true, MEMORY_OFFSET - 1, 1, false, "accessMemory, the last constant" },
+		{ true, MEMORY_OFFSET, 0xFFFFFFFFu, false, "accessMemory, a count that wraps" }
 	};
 	const int count = sizeof (ACCESSES) / sizeof (*ACCESSES);
 	int failures = 0;
 	for (int i = 0; i < count; ++i) {
 		const Access& a = ACCESSES[i];
-		const Pointer pointer = MEMORY_OFFSET + a.offset;
-		const Value* got = a.writable ? processor.accessMemory(pointer, a.count)
-				: processor.accessConstMemory(pointer, a.count);
-		const Value* want = a.succeeds ? m.memory() + a.offset : 0;
+		const Value* got = a.writable ? processor.accessMemory(a.pointer, a.count)
+				: processor.accessConstMemory(a.pointer, a.count);
+		const Value* want = a.succeeds ? m.memory() + layout.cell(a.pointer) : 0;
 		if (got != want) {
 			std::printf("FAIL native access: %s: %s\n", a.what, got == 0 ? "refused" : "granted");
 			++failures;
@@ -865,11 +876,12 @@ int sweep(int engineCount) {
 		if (!assembled) {
 			bool valid = true;
 			if (p.op == PEEK) {
-				valid = inRange(p.address, 1, READABLE_SIZE);
+				valid = inRange(p.address, 1, layout.low(), READABLE_SIZE);
 			} else if (p.op == POKE) {
-				valid = inRange(p.address, 1, rw);
+				valid = inRange(p.address, 1, MEMORY_OFFSET, rw);
 			} else if (p.op == COPY) {
-				valid = inRange(p.address, p.count, rw) && inRange(p.source2, p.count, READABLE_SIZE);
+				valid = inRange(p.address, p.count, MEMORY_OFFSET, rw)
+						&& inRange(p.source2, p.count, layout.low(), READABLE_SIZE);
 			}
 			if (p.refusalOk) {
 				// the assembler's own rule, stricter than memory: see `refusalOk`
@@ -885,14 +897,14 @@ int sweep(int engineCount) {
 				// A first run learns where `ar` is; the index is then set relative to the end of the data stack.
 				const std::vector<Value> image(m.buffer);
 				run(m, INTERPRETER);
-				const UInt arAddress = (UInt)m.memory()[layout.outAddress - MEMORY_OFFSET + 1].i;
+				const UInt arAddress = (UInt)m.memory()[layout.cell(layout.outAddress) + 1].i;
 				m.buffer = image;
 				p.index = (Int)(MEMORY_OFFSET + rw - arAddress) + p.index;
 				p.inputs[1] = p.index;
 			}
 			if (p.op == GETL || p.op == SETL) p.what = "index=" + number(p.index);
 			Value* mem = m.memory();
-			for (int i = 0; i < 3; ++i) mem[layout.inAddress - MEMORY_OFFSET + i].i = p.inputs[i];
+			for (int i = 0; i < 3; ++i) mem[layout.cell(layout.inAddress) + i].i = p.inputs[i];
 			const std::vector<Value> before(m.buffer);
 			for (int e = 0; e < engineCount; ++e) {
 				const std::string problem = check(m, p, layout, before, static_cast<Engine>(e));
