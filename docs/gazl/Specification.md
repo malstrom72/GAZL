@@ -331,16 +331,21 @@ restored, when any of the following fails, checked in this order:
 **Restore.** Only after validation succeeds, a program section is restored when the re-assembled program has a
 writable section of the same name and size. Every other section is skipped without error.
 
-**What survives a restore.** Ints and floats always do. Pointers are stored as raw values:
-- **A data pointer** still points at the same thing only if the re-assembled program puts its target at the same
-  index.
-- **A function pointer** survives only if functions are declared in the same order.
+**Data only.** A snapshot holds data and nothing else. Its meaning depends on two more parts, both the host's to
+keep with it:
+- **Code:** the GAZL source the program was assembled from.
+- **Constants:** every constant the host supplied at assembly, `extern struct` layouts included.
 
-**Layouts are not saved.** A section is identified by its name and size alone; the snapshot knows nothing of the
-types or structs a compiler laid out in it. If a program changes what a section holds without changing its name,
-for example by reordering two fields of a struct of the same size, the old words are restored into the new layout.
-Keeping a name's layout stable, or renaming the section when it changes, is the program's and the compiler's
-responsibility. A compiler that wants this checked can fold a layout hash into the names it gives sections.
+A restore is defined for a program assembled from the same code and the same constants. The re-assembly then
+rebuilds an identical layout and identical function ordinals, and every section is restored exactly, pointers
+included.
+
+Restoring into a changed program still works by name and size, but nothing more is promised:
+- the snapshot records no types and no layouts;
+- a same-size section whose layout changed receives the old words as they were;
+- data pointers and function pointers are raw values, valid only if their targets did not move.
+
+Migrating data between program versions is outside this specification.
 
 **Versions.** A reader accepts a snapshot from any GAZL version up to its own, because a word in memory means the
 same in GAZL 1 and GAZL 2. A GAZL version that changes what memory contents mean must say so here.
