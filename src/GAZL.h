@@ -159,7 +159,7 @@ struct GlobalInfo {
 	Pointer address;
 	UInt size;						// in words
 	bool isTemp;					// declared in a `TEMP` section, which a memory snapshot leaves out
-	bool isInterior;				// a data label inside a named section, whose own entry covers these words
+	bool isInterior;				// a label inside a named section, which already covers its words
 };
 
 /*
