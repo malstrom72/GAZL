@@ -92,8 +92,9 @@ calling; any other operation on it gives an unspecified, memory-safe result.
 
 ## 5. Source text
 
-A program is ASCII text, one statement per line. Lines end with LF, CR or CRLF. Bytes above 0x7F may appear only in
-comments and string data (see open question 4).
+A program is ASCII text, one statement per line. Lines end with LF, CR or CRLF. A comment may hold any bytes,
+since it is ignored; GAZL defines no encoding for them. A byte above 0x7F anywhere else, `DATs` text included, is an
+assembly error.
 
     [label:]  [!]  MNEM  [operand  [operand  [operand]]]  [; comment]
 
@@ -151,7 +152,8 @@ if it has one, names the whole section; a section without a label is unnamed. Th
 fill it in order:
 - `DATi`, `DATf` and `DATp` write one or more ints, floats or pointers; `DATA` writes one or more values of mixed
   types.
-- `DATs text` writes the rest of the line, one character per word, with trailing blanks removed.
+- `DATs text` writes the rest of the line, one ASCII character per word, with trailing blanks removed. A byte
+  above 0x7F in the text is `NON_ASCII_TEXT`. Impala emits every other character as numbers on a `DATi` line.
 - A label on a data statement names the statement's first word and covers exactly the values the statement
   writes. A data statement without values is legal and writes nothing; a label on it covers no words (size 0).
 - Words left unfilled are 0.
@@ -377,11 +379,8 @@ answer.
    (for example, repeated multiplication by 10 in binary64)? That would only change literals with an exponent.
 3. **`COPY` with overlap** is documented as "undefined". It is memory-safe either way. Should the result be
    specified (as if copied forward word by word), or stay unspecified?
-4. **`DATs` with bytes above 0x7F** stores each byte as a C `char`. That is signed on x86 and Apple arm64 but
-   unsigned on Linux arm64, so the stored word differs between hosts. Should `DATs` be ASCII-only, or define bytes
-   as unsigned?
-5. **Constant addresses depend on memory size.** Should hosts that want reproducible pointer values be told to fix
+4. **Constant addresses depend on memory size.** Should hosts that want reproducible pointer values be told to fix
    the memory size, or should this stay a host matter?
-6. **Step counts.** Section 9 makes step counts observable, which binds every future engine, JIT included, to
+5. **Step counts.** Section 9 makes step counts observable, which binds every future engine, JIT included, to
    count exactly as the interpreter does. Confirm that, or relax it to "at least one step per backward branch and
    call".
