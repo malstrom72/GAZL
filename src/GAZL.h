@@ -185,7 +185,7 @@ class Symbols {
 	public:		Pointer findGlobal(const Char* name, UInt& size) const;													/// Returns `NULL_POINTER` if not found (in which case, `size` is left untouched).
 	public:		void defineConstant(const Char* name, bool asFloat, const Value& value);
 	public:		bool lookupConstant(const Char* name, bool* isFloat, Value* value) const;
-	public:		bool findFirstGlobal(Iterator& iterator, bool includeTemps) const;
+	public:		bool findFirstGlobal(Iterator& iterator, bool includeTemps) const;										/// Writable data, each word once: every named `GLOB` (and `TEMP`), and every data label in an unnamed one.
 	public:		bool findNextGlobal(Iterator& iterator, bool includeTemps) const;
 	public:		const char* getGlobalInfo(const Iterator& iterator, bool& isTemp, Pointer& address, UInt& size) const;
 

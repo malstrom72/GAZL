@@ -712,6 +712,99 @@ int sweepFrameAndThaw() {
 	return failures;
 }
 
+/*
+	What `freezeMemory` saves for each way of naming data: a named section once and whole, a label in an unnamed
+	section over every value on its line, and nothing for unnamed words, `TEMP` or `CNST`. Each saved entry is
+	checked by name, size and words. Returns the number of failures, each one printed.
+*/
+int sweepSnapshotEntries() {
+	const char* const SOURCE =
+		"\tGLOB *1\n"						// unnamed section, labelled scalar (Impala's scalar form)
+		"clock:\tDATi #7\n"
+		"params:\tGLOB *4\n"				// named section, nothing inside (Impala's array form)
+		"state:\tGLOB *3\n"					// named section with labels inside: saved once, as `state`
+		"gain:\tDATf #0.5\n"
+		"level:\tDATi #3\n"
+		"\tGLOB *4\n"						// unnamed section without labels: nothing to save it under
+		"\tDATi #11 #12 #13 #14\n"
+		"\tGLOB *3\n"						// unnamed section, first word labelled
+		"first:\tDATi #21\n"
+		"\tDATi #22\n"
+		"\tGLOB *8\n"						// labels over several values
+		"multi:\tDATA #31 #32 #33\n"
+		"text:\tDATs abc\n"
+		"scratch:\tTEMP *2\n"				// TEMP, and a label inside it
+		"tmpval:\tDATi #41\n"
+		"table:\tCNST *2\n"					// CNST, and a label inside it
+		"entry:\tDATi #51\n"
+		"main:\tFUNC\n"
+		"v:\tLOCi\n"
+		"\tPEEK v &multi:2\n"				// a label's offset is checked against all of its values
+		"\tRETU\n";
+	struct Entry { const char* name; UInt size; UInt words[4]; };
+	const Entry EXPECTED[] = {
+		{ "clock", 1, { 7 } },
+		{ "first", 1, { 21 } },
+		{ "multi", 3, { 31, 32, 33 } },
+		{ "params", 4, { 0, 0, 0, 0 } },
+		{ "state", 3, { 0x3F000000u, 3, 0 } },
+		{ "text", 3, { 'a', 'b', 'c' } }
+	};
+	const int count = sizeof (EXPECTED) / sizeof (*EXPECTED);
+
+	Machine m;
+	ProgramSizes sizes = { 0, 0, 0, 0 };
+	try {
+		Assembler assem(CODE_SIZE, &m.code[0], FUNCTION_COUNT, &m.functionTable[0], MEMORY_SIZE, m.memory(), m.symbols);
+		assem.newUnit("snapshot");
+		const Char* cp = SOURCE;
+		while (*cp != 0) cp = assem.feed(cp);
+		assem.finalize(sizes);
+	}
+	catch (const Exception& e) {
+		std::printf("FAIL snapshot entries: program refused: %s\n", e.what());
+		return 1;
+	}
+	const Processor processor(sizes.codeSize, &m.code[0], sizes.functionCount, &m.functionTable[0], MEMORY_SIZE
+			, m.memory(), sizes.globalsSize, sizes.constsSize, CALL_STACK_SIZE, &m.callStack[0], 0);
+	std::vector<unsigned char> blob(freezeMemorySize(processor, m.symbols));
+	freezeMemory(processor, m.symbols, &blob[0], (UInt)blob.size());
+
+	struct Reader {
+		const std::vector<unsigned char>& b;
+		size_t at;
+		UInt word() {
+			const UInt w = b[at] | (b[at + 1] << 8) | (b[at + 2] << 16) | ((UInt)b[at + 3] << 24);
+			at += 4;
+			return w;
+		}
+	} r = { blob, 24 };
+	int failures = 0;
+	const UInt saved = r.word();
+	if (saved != (UInt)count) {
+		std::printf("FAIL snapshot entries: %u saved, expected %d\n", saved, count);
+		return 1;
+	}
+	for (int i = 0; i < count; ++i) {
+		const UInt length = r.word();
+		const std::string name(reinterpret_cast<const char*>(&blob[r.at]), length);
+		r.at += length;
+		const UInt size = r.word();
+		bool same = (name == EXPECTED[i].name && size == EXPECTED[i].size);
+		for (UInt w = 0; w < size; ++w) {
+			const UInt word = r.word();
+			same = same && w < 4 && word == EXPECTED[i].words[w];
+		}
+		if (!same) {
+			std::printf("FAIL snapshot entries: entry %d is %s (%u words), expected %s (%u words)\n", i, name.c_str()
+					, size, EXPECTED[i].name, EXPECTED[i].size);
+			++failures;
+		}
+	}
+	std::printf("snapshot entries: %d checked, %d failed\n", count, failures);
+	return failures;
+}
+
 struct Totals { int probes; int failures; };
 
 int sweep(int engineCount) {
@@ -815,6 +908,6 @@ int main() {
 		std::printf("bounds sweep: this host forbids executable memory; the JIT is NOT swept\n");
 	}
 #endif
-	const int hostFailures = sweepNativeAccess() + sweepFrameAndThaw();
+	const int hostFailures = sweepNativeAccess() + sweepFrameAndThaw() + sweepSnapshotEntries();
 	return (sweep(engineCount) != 0 || hostFailures != 0) ? 1 : 0;
 }

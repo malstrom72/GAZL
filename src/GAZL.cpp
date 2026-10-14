@@ -281,6 +281,7 @@ const int NATIVE			= 0x10000;
 const int COMPILE_TIME		= 0x20000;
 const int FORWARD			= 0x40000;
 const int UNCHECKED_ADDRESS	= 0x80000;					// Do *not* verify that the offset is < size of the symbol. (Some instructions shouldn't do this, like ADDp for example.)
+const int INTERIOR			= 0x100000;					// Data label inside a named section: an address, not a global of its own (the section is).
 const int FWD_ADDRESS_W		= ADDRESS_W | FORWARD;
 const int FWD_ADDRESS_R		= ADDRESS_R | FORWARD;
 const int FWD_BRANCH		= BRANCH | FORWARD;
@@ -707,13 +708,13 @@ bool Symbols::lookupConstant(const Char* name, bool* isFloat, Value* value) cons
 }
 
 bool Symbols::findFirstGlobal(Iterator& iterator, bool includeTemps) const {
-	int mask = (includeTemps ? ADDRESS : ADDRESS | TEMPORARY);
+	int mask = (includeTemps ? ADDRESS | INTERIOR : ADDRESS | TEMPORARY | INTERIOR);		// a named section, never a label inside it
 	for (iterator = symbols.begin(); iterator != symbols.end() && (iterator->second.types & mask) != ADDRESS; ++iterator);
 	return (iterator != symbols.end());
 }
 
 bool Symbols::findNextGlobal(Iterator& iterator, bool includeTemps) const {
-	int mask = (includeTemps ? ADDRESS : ADDRESS | TEMPORARY);
+	int mask = (includeTemps ? ADDRESS | INTERIOR : ADDRESS | TEMPORARY | INTERIOR);		// a named section, never a label inside it
 	for (++iterator; iterator != symbols.end() && (iterator->second.types & mask) != ADDRESS; ++iterator);
 	return (iterator != symbols.end());
 }
@@ -985,7 +986,8 @@ const Char* Assembler::feed(const Char* line) {
 							if ((e - p) > dataEnd - dataPointer) throw Exception(DATA_SECTION_FULL, dataLabel);
 							Value v;
 							v.p = (Int)(dataPointer - memoryBase + MEMORY_OFFSET);
-							declare(globals, labelBegin, labelEnd, dataLabelType, v, static_cast<Int>(e - p));
+							declare(globals, labelBegin, labelEnd, dataLabelType | (dataLabel.empty() ? 0 : INTERIOR), v
+									, static_cast<Int>(e - p));
 							while (p < e) (dataPointer++)->i = *p++;
 							return eatEOL(eatSpace(e));
 						}
@@ -997,7 +999,7 @@ const Char* Assembler::feed(const Char* line) {
 							if (dataPointer == 0) throw Exception(DATA_SECTION_MISSING);
 							Value v;
 							v.p = (Int)(dataPointer - memoryBase + MEMORY_OFFSET);
-							declare(globals, labelBegin, labelEnd, dataLabelType, v);
+							Value* const first = dataPointer;
 							int accepts = KONST;
 							switch (mnemonicBegin[3]) {
 								case 'i': accepts = CONST_INT; break;
@@ -1014,6 +1016,10 @@ const Char* Assembler::feed(const Char* line) {
 								parseOperand(b, e, accepts, dataPointer);
 								++dataPointer;
 							}
+							// Declared after the values, so the label covers every value on the line (at least one word, as
+							// before, so `&label` on a line without values stays legal).
+							declare(globals, labelBegin, labelEnd, dataLabelType | (dataLabel.empty() ? 0 : INTERIOR), v
+									, maximum((UInt)(dataPointer - first), 1u));
 							return eatEOL(p);
 						}
 			
