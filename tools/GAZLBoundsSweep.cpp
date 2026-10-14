@@ -801,7 +801,17 @@ int sweepSnapshotEntries() {
 			++failures;
 		}
 	}
-	std::printf("snapshot entries: %d checked, %d failed\n", count, failures);
+	// A label left out of the snapshot is still a name: `findGlobal` resolves it as before (hosts restore by name).
+	UInt stateSize = 0;
+	UInt gainSize = 0;
+	UInt levelSize = 0;
+	const Pointer stateAddress = m.symbols.findGlobal("state", stateSize);
+	if (m.symbols.findGlobal("gain", gainSize) != stateAddress || gainSize != 1
+			|| m.symbols.findGlobal("level", levelSize) != stateAddress + 1 || levelSize != 1) {
+		std::printf("FAIL snapshot entries: findGlobal no longer resolves the labels inside `state`\n");
+		++failures;
+	}
+	std::printf("snapshot entries: %d checked, %d failed\n", count + 1, failures);
 	return failures;
 }
 
