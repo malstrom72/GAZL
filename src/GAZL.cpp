@@ -1019,10 +1019,9 @@ const Char* Assembler::feed(const Char* line) {
 								parseOperand(b, e, accepts, dataPointer);
 								++dataPointer;
 							}
-							// Declared after the values, so the label covers every value on the line (at least one word, as
-							// before, so `&label` on a line without values stays legal).
+							// Declared after the values, so the label covers exactly them: none for a line without values.
 							declare(globals, labelBegin, labelEnd, dataLabelType | (dataLabel.empty() ? 0 : INTERIOR), v
-									, maximum((UInt)(dataPointer - first), 1u));
+									, (UInt)(dataPointer - first));
 							return eatEOL(p);
 						}
 			

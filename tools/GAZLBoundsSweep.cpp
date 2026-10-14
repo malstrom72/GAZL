@@ -811,7 +811,33 @@ int sweepSnapshotEntries() {
 		std::printf("FAIL snapshot entries: findGlobal no longer resolves the labels inside `state`\n");
 		++failures;
 	}
-	std::printf("snapshot entries: %d checked, %d failed\n", count + 1, failures);
+	// A data line without values is legal and writes nothing: a label on it covers no words, and the next value
+	// lands where the label points.
+	const char* const EMPTY[] = { "DATi", "DATf ; none", "DATp", "DATA" };
+	const int emptyCount = sizeof (EMPTY) / sizeof (*EMPTY);
+	for (int i = 0; i < emptyCount; ++i) {
+		Machine e;
+		const std::string source = std::string("\tGLOB *2\nx:\t") + EMPTY[i] + "\ny:\tDATi #5\n";
+		bool same = false;
+		try {
+			Assembler assem(CODE_SIZE, &e.code[0], FUNCTION_COUNT, &e.functionTable[0], MEMORY_SIZE, e.memory()
+					, e.symbols);
+			assem.newUnit("empty");
+			const Char* cp = source.c_str();
+			while (*cp != 0) cp = assem.feed(cp);
+			UInt xSize = 99;
+			UInt ySize = 99;
+			const Pointer x = e.symbols.findGlobal("x", xSize);
+			same = (x != NULL_POINTER && xSize == 0 && e.symbols.findGlobal("y", ySize) == x && ySize == 1);
+		}
+		catch (const Exception&) {
+		}
+		if (!same) {
+			std::printf("FAIL snapshot entries: `x: %s` is not an empty label at `y`\n", EMPTY[i]);
+			++failures;
+		}
+	}
+	std::printf("snapshot entries: %d checked, %d failed\n", count + 1 + emptyCount, failures);
 	return failures;
 }
 
