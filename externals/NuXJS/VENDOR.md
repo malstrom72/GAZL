@@ -4,8 +4,8 @@ NuXJS is Magnus Lidström's own ES5.1 JavaScript engine, BSD 2-Clause, upstream 
 <https://github.com/malstrom72/NuXJS>. It is vendored here by **file copy**, not as a submodule, so
 nothing in `.git` records which upstream revision these files came from. This file is that record.
 
-**Pinned at `b2046d499ecf88346705c06f8df01b3ad9f9cb15`** (2026-10-14, "Merge pull request #294 from
-malstrom72/version1.0.2", NuXJS 1.0.2). Take releases from `main` only. Upstream also publishes work-in-progress branches
+**Pinned at `a6e1e9eda93691cb6bb000ddd0c04b4cf04cabe2`** (2026-10-14, "Merge pull request #296 from
+malstrom72/powerOfFiveBounds", NuXJS 1.0.2 plus a fix for an unused-constant warning). Take releases from `main` only. Upstream also publishes work-in-progress branches
 (`ES51`, `codex/*`, `opcode-layout-opt-experiment`, `stepwise-gc`), and a local `NuXJS` clone sitting
 on one of those is work in progress, not a release.
 
@@ -34,7 +34,7 @@ From the repository root, with the pin above as the `..` endpoint so you can rea
 
 ```
 git clone https://github.com/malstrom72/NuXJS.git /tmp/nuxjs
-git -C /tmp/nuxjs log --oneline b2046d4..origin/main
+git -C /tmp/nuxjs log --oneline a6e1e9e..origin/main
 cp /tmp/nuxjs/LICENSE externals/NuXJS/LICENSE
 cp /tmp/nuxjs/src/NuXJS.cpp /tmp/nuxjs/src/NuXJS.h /tmp/nuxjs/src/stdlibJS.cpp externals/NuXJS/src/
 cp /tmp/nuxjs/tools/NuXJSREPL.cpp externals/NuXJS/tools/
