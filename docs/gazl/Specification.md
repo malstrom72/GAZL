@@ -62,6 +62,11 @@ A read must succeed exactly when its index is in `[0, memorySize - 1)`, and a wr
 `[0, rwMemorySize)`. An address is `base + offset` computed with 32-bit wrap-around, so an offset can never carry
 an access around the end of memory and back in.
 
+**`COPY`** checks the whole source range for reading and the whole destination range for writing before it moves
+anything. It then copies forward, one word at a time from the lowest address up, so overlapping ranges have a
+defined result: a destination below the source copies like `memmove`, and a destination above the source, inside
+it, repeats the leading words.
+
 The absolute addresses of constants depend on the memory size the host chooses. A program must not rely on them,
 and an implementation must not assume programs don't compare them (they are ordinary pointers).
 
@@ -377,7 +382,5 @@ answer.
 1. **Float literals use `pow`.** Step 3 of the literal algorithm calls the C library's `pow`, which is not
    guaranteed to round the same way everywhere. Should the exponent be applied by an exactly specified method
    (for example, repeated multiplication by 10 in binary64)? That would only change literals with an exponent.
-2. **`COPY` with overlap** is documented as "undefined". It is memory-safe either way. Should the result be
-   specified (as if copied forward word by word), or stay unspecified?
-3. **Constant addresses depend on memory size.** Should hosts that want reproducible pointer values be told to fix
+2. **Constant addresses depend on memory size.** Should hosts that want reproducible pointer values be told to fix
    the memory size, or should this stay a host matter?
