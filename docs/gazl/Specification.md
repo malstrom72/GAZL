@@ -256,7 +256,9 @@ A snapshot ("freeze") saves the values of a program's named global sections so a
 
 **Encoding.** A snapshot is a sequence of bytes, built from two kinds of field:
 - A **word** is 4 bytes, an unsigned 32-bit value in little-endian order: bits 0-7 first, bits 24-31 last.
-- A **name** is the section's identifier as ASCII bytes, case preserved, with no terminator and no padding.
+- A **name** is the section's identifier, one byte per character, with no terminator and no padding. Identifiers
+  are validated at assembly (section 5), so a name only ever holds `A-Z`, `a-z`, `0-9`, `_`, `.` and `$`, and
+  never starts with a digit.
 Fields follow each other with no padding or alignment, so everything after a name may sit at any byte offset.
 
 **Header,** 28 bytes:
