@@ -77,8 +77,6 @@ const int CALL_STACK_SIZE = 16;
 
 enum Op { PEEK, POKE, GETL, SETL, COPY };
 
-const char* const OP_NAMES[] = { "PEEK", "POKE", "GETL", "SETL", "COPY" };
-
 /*
 	Where the assembler put things. Constants grow down from the top of memory and an immediate operand can add one,
 	so the layout belongs to each program, and a probe is generated against the layout its own program ends up with.

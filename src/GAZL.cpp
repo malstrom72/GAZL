@@ -162,7 +162,6 @@ static Int stringToInt(const Char* &p, const Char* e) {
 }
 
 template<class F> F pow10(F x) { return pow(10, x); }
-static float pow10(float x) { return powf(10.0f, x); }
 
 static Float stringToFloat(const Char* &p, const Char* e) {
 	/*
@@ -242,7 +241,8 @@ enum Opcode {
 
 	, NOOP____, GLOB____, CNST____, DATA____, LOCA____, OUTP____
 	
-	, MOVE_CC_
+	, FIRST_COMPILE_TIME_OPCODE						// the assembler evaluates the opcodes from here on, never `run()`
+	, MOVE_CC_ = FIRST_COMPILE_TIME_OPCODE
 	, ABSI_CC_
 	, ADDI_CCC, SUBI_CCC, MULI_CCC, DIVI_CCC, MODI_CCC, ANDI_CCC, IORI_CCC, XORI_CCC, SHLI_CCC, SHRI_CCC, SHRU_CCC
 	, ABSF_CC_
@@ -254,7 +254,6 @@ enum Opcode {
 	, SKIP_B__, IFDF_CB_, IFND_CB_
 	, DEFI____
 };
-const int FIRST_COMPILE_TIME_OPCODE = MOVE_CC_;
 
 const int TRANSIENT			= 0x00001;
 const int VAR_INT_R			= 0x00002 | TRANSIENT;		// Readable int variable.
@@ -828,7 +827,7 @@ void Assembler::parseConstant(const Char* b, const Char* e, int accepts, Value* 
 		case '<':	{
 						if (b + 3 != e || b[2] != '>' || !isValidIdentifierChar(b[1]))
 							throw Exception(INVALID_COMPILE_TIME_VARIABLE, b, e);
-						const CompileTimeVar& cv = compileTimeVars[b[1]];
+						const CompileTimeVar& cv = compileTimeVars[(unsigned char)b[1]];
 						if ((accepts & cv.types) == 0) throw Exception(INCOMPATIBLE_COMPILE_TIME_VARIABLE_TYPE, b, e);
 						*v = cv.value;
 						break;
@@ -1077,7 +1076,7 @@ const Char* Assembler::feed(const Char* line) {
 		if ((op->accepts[0] & COMPILE_TIME) != 0) {																		// Compile-time calculation
 			if (op0End != op0Begin + 3 || *op0Begin != '<' || op0Begin[2] != '>' || !isValidIdentifierChar(op0Begin[1]))
 				throw Exception(INVALID_COMPILE_TIME_VARIABLE, op0Begin, op0End);
-			CompileTimeVar& cv = compileTimeVars[op0Begin[1]];
+			CompileTimeVar& cv = compileTimeVars[(unsigned char)op0Begin[1]];
 			cv.value = calcConstant(op, op1Begin, op1End, op2Begin, op2End);
 			cv.types = op->declareTypes;
 			if ((cv.types & CONST_INT_P) != 0 && cv.value.i < 0) cv.types &= ~CONST_INT_P;
@@ -1240,8 +1239,8 @@ const Char* Assembler::feed(const Char* line) {
 }
 
 Processor::Processor() : codeSize(0), codeBase(0), functionCount(0), functionTable(0), memorySize(0), memoryBase(0)
-		, rwMemorySize(0), dataStackBase(0), dataStackEnd(0), ipStackBase(0), ipStackEnd(0), natives(0), ip(0), dsp(0)
-		, ipsp(0), userData(0), clockCyclesLeft(0) {
+		, rwMemorySize(0), dataStackBase(0), dataStackEnd(0), ipStackBase(0), ipStackEnd(0), natives(0)
+		, clockCyclesLeft(0), ip(0), dsp(0), ipsp(0), userData(0) {
 }
 
 Processor::Processor(UInt codeSize, const Instruction* code, UInt functionCount, const UInt* functionTable
@@ -1250,8 +1249,8 @@ Processor::Processor(UInt codeSize, const Instruction* code, UInt functionCount,
 		: codeSize(codeSize), codeBase(code), functionCount(functionCount), functionTable(functionTable)
 		, memorySize(memorySize - 1), memoryBase(memory), rwMemorySize(rwMemorySize)
 		, dataStackBase(memory + dataStackOffset), dataStackEnd(memory + dataStackOffset + dataStackSize)
-		, ipStackBase(ipStack), ipStackEnd(ipStack + ipStackSize), natives(natives), ip(codeBase), dsp(dataStackBase)
-		, ipsp(ipStackBase), userData(userData), clockCyclesLeft(0x7FFFFFFFU) {
+		, ipStackBase(ipStack), ipStackEnd(ipStack + ipStackSize), natives(natives), clockCyclesLeft(0x7FFFFFFFU)
+		, ip(codeBase), dsp(dataStackBase), ipsp(ipStackBase), userData(userData) {
 	assert(rwMemorySize <= memorySize);
 	assert(dataStackOffset + dataStackSize <= rwMemorySize);
 	assert(code != 0);
@@ -1265,8 +1264,8 @@ Processor::Processor(UInt codeSize, const Instruction* code, UInt functionCount,
 		: codeSize(codeSize), codeBase(code), functionCount(functionCount), functionTable(functionTable)
 		, memorySize(memorySize - 1), memoryBase(memory), rwMemorySize(memorySize - constsSize)
 		, dataStackBase(memory + globalsSize), dataStackEnd(memory + memorySize - constsSize), ipStackBase(ipStack)
-		, ipStackEnd(ipStack + ipStackSize), natives(natives), ip(codeBase), dsp(dataStackBase), ipsp(ipStackBase)
-		, userData(userData), clockCyclesLeft(0x7FFFFFFFU) {
+		, ipStackEnd(ipStack + ipStackSize), natives(natives), clockCyclesLeft(0x7FFFFFFFU), ip(codeBase)
+		, dsp(dataStackBase), ipsp(ipStackBase), userData(userData) {
 	assert(globalsSize + constsSize <= memorySize);
 	assert(code != 0);
 	assert(memory != 0);
@@ -1691,7 +1690,8 @@ bool unitTest() {
 					|| (op.accepts[j] & (CONST_INT_P | CONST_FLOAT)) == 0 || (op.accepts[j] & FORWARD) == 0);
 			assert((op.accepts[j] & BRANCH) == 0 || (op.accepts[j] & FORWARD) != 0);
 		}
-		assert((op.otherFlags & YIELDS_CONST) == 0 || (op.opcode >= FIRST_COMPILE_TIME_OPCODE));
+		assert(((op.otherFlags & (YIELDS_CONST | YIELDS_GOTO)) != 0 || op.key[0] == '!')
+				== (op.opcode >= FIRST_COMPILE_TIME_OPCODE));
 		assert((op.otherFlags & CHECK_DIV_BY_0) == 0 || (op.accepts[2] & (CONST_FLOAT | CONST_INT)) == CONST_FLOAT || (op.accepts[2] & (CONST_FLOAT | CONST_INT)) == CONST_INT);
 		assert((op.declareTypes & FORWARD) == 0);
 	}
