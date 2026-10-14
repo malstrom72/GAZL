@@ -1249,15 +1249,16 @@ const Char* Assembler::feed(const Char* line) {
 }
 
 Processor::Processor() : codeSize(0), codeBase(0), functionCount(0), functionTable(0), memorySize(0), memoryBase(0)
-		, constantsSize(0), rwMemorySize(0), dataStackBase(0), dataStackEnd(0), ipStackBase(0), ipStackEnd(0), natives(0)
-		, clockCyclesLeft(0), ip(0), dsp(0), ipsp(0), userData(0) {
+		, constantsSize(0), readOffset(0), rwMemorySize(0), dataStackBase(0), dataStackEnd(0), ipStackBase(0)
+		, ipStackEnd(0), natives(0), clockCyclesLeft(0), ip(0), dsp(0), ipsp(0), userData(0) {
 }
 
 Processor::Processor(UInt codeSize, const Instruction* code, UInt functionCount, const UInt* functionTable
 		, UInt memorySize, Value* memory, UInt constsSize, UInt rwMemorySize, UInt dataStackOffset, UInt dataStackSize
 		, UInt ipStackSize, CallStackEntry* ipStack, NativeFunc const* natives, void* userData)
 		: codeSize(codeSize), codeBase(code), functionCount(functionCount), functionTable(functionTable)
-		, memorySize(memorySize - 1), memoryBase(memory), constantsSize(constsSize - 1), rwMemorySize(rwMemorySize)
+		, memorySize(memorySize - 1), memoryBase(memory), constantsSize(constsSize - 1)
+		, readOffset(constantsSize - MEMORY_OFFSET), rwMemorySize(rwMemorySize)
 		, dataStackBase(memory + constantsSize + dataStackOffset)
 		, dataStackEnd(memory + constantsSize + dataStackOffset + dataStackSize)
 		, ipStackBase(ipStack), ipStackEnd(ipStack + ipStackSize), natives(natives), clockCyclesLeft(0x7FFFFFFFU)
@@ -1274,7 +1275,8 @@ Processor::Processor(UInt codeSize, const Instruction* code, UInt functionCount,
 		, NativeFunc const* natives, void* userData)
 		: codeSize(codeSize), codeBase(code), functionCount(functionCount), functionTable(functionTable)
 		, memorySize(memorySize - 1), memoryBase(memory), constantsSize(constsSize - 1)
-		, rwMemorySize(memorySize - constsSize), dataStackBase(memory + constantsSize + globalsSize)
+		, readOffset(constantsSize - MEMORY_OFFSET), rwMemorySize(memorySize - constsSize)
+		, dataStackBase(memory + constantsSize + globalsSize)
 		, dataStackEnd(memory + memorySize - 1), ipStackBase(ipStack), ipStackEnd(ipStack + ipStackSize)
 		, natives(natives), clockCyclesLeft(0x7FFFFFFFU), ip(codeBase), dsp(dataStackBase), ipsp(ipStackBase)
 		, userData(userData) {
@@ -1351,8 +1353,8 @@ Int Processor::run() {
 			case PEEK_VC_:	V0 = mb[C1.p]; break;
 			case POKE_CV_:	mb[C0.p] = V1; break;
 			case POKE_CC_:	mb[C0.p] = C1; break;
-			case PEEK_VVV:	if ((ui = (UInt)V1.i + (UInt)V2.i) - MEMORY_OFFSET + constantsSize < memorySize) { V0 = mb[ui]; break; } else { err = BAD_PEEK; goto ret; }
-			case PEEK_VCV:	if ((ui = (UInt)C1.i + (UInt)V2.i) - MEMORY_OFFSET + constantsSize < memorySize) { V0 = mb[ui]; break; } else { err = BAD_PEEK; goto ret; }
+			case PEEK_VVV:	if ((ui = (UInt)V1.i + (UInt)V2.i) + readOffset < memorySize) { V0 = mb[ui]; break; } else { err = BAD_PEEK; goto ret; }
+			case PEEK_VCV:	if ((ui = (UInt)C1.i + (UInt)V2.i) + readOffset < memorySize) { V0 = mb[ui]; break; } else { err = BAD_PEEK; goto ret; }
 			case POKE_VVV:	if ((ui = (UInt)V0.i + (UInt)V1.i) - MEMORY_OFFSET < rwMemorySize) { mb[ui] = V2; break; } else { err = BAD_POKE; goto ret; }
 			case POKE_CVV:	if ((ui = (UInt)C0.i + (UInt)V1.i) - MEMORY_OFFSET < rwMemorySize) { mb[ui] = V2; break; } else { err = BAD_POKE; goto ret; }
 			case POKE_VVC:	if ((ui = (UInt)V0.i + (UInt)V1.i) - MEMORY_OFFSET < rwMemorySize) { mb[ui] = C2; break; } else { err = BAD_POKE; goto ret; }
@@ -1410,7 +1412,7 @@ Int Processor::run() {
 			case COPY_CCC:	ui = C0.i; ui2 = C1.i; goto copy;
 			copy:			if ((UInt)C2.i <= rwMemorySize && ui - MEMORY_OFFSET <= rwMemorySize - (UInt)C2.i
 									&& (UInt)C2.i <= memorySize
-									&& ui2 - MEMORY_OFFSET + constantsSize <= memorySize - (UInt)C2.i) {
+									&& ui2 + readOffset <= memorySize - (UInt)C2.i) {
 								// std::copy(&mb[ui2], &mb[ui2] + C2.i, &mb[ui]);
 								// memcpy(&mb[ui], &mb[ui2], sizeof (Value) * C2.i);
 								const Value* sp = &mb[ui2];

@@ -383,6 +383,7 @@ class Processor {
 	protected:	UInt memorySize;																						// One less than the memory given: the last word is the assembler's zero guard, so no checked read reaches it.
 	protected:	Value* memoryBase;																						// The lowest constant: the start of the memory given.
 	protected:	UInt constantsSize;																						// Words below the base, `MEMORY_OFFSET`: the constants, without the zero guard.
+	protected:	UInt readOffset;																						// `constantsSize - MEMORY_OFFSET`: a pointer plus this is its index from the lowest constant.
 	protected:	UInt rwMemorySize;																						// Words from the base up: globals and data stack.
 	protected:	Value* dataStackBase;
 	protected:	Value* dataStackEnd;
@@ -401,7 +402,7 @@ inline int Processor::getClockCyclesLeft() const { return clockCyclesLeft; }
 
 inline const Value* Processor::accessConstMemory(Pointer pointer, UInt count) const {
 	assert(memoryBase != 0);
-	const UInt index = pointer - (MEMORY_OFFSET - constantsSize);															// the readable range starts at the lowest constant
+	const UInt index = pointer + readOffset;															// the readable range starts at the lowest constant
 	return (count <= memorySize && index <= memorySize - count) ? memoryBase + index : 0;
 }
 
