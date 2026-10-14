@@ -1340,12 +1340,12 @@ Int Processor::run() {
 			case PEEK_VC_:	V0 = mb[C1.p]; break;
 			case POKE_CV_:	mb[C0.p] = V1; break;
 			case POKE_CC_:	mb[C0.p] = C1; break;
-			case PEEK_VVV:	if ((ui = (UInt)V1.i + (UInt)V2.i - MEMORY_OFFSET) < memorySize) { V0 = mb[ui + MEMORY_OFFSET]; break; } else { err = BAD_PEEK; goto ret; }
-			case PEEK_VCV:	if ((ui = (UInt)C1.i + (UInt)V2.i - MEMORY_OFFSET) < memorySize) { V0 = mb[ui + MEMORY_OFFSET]; break; } else { err = BAD_PEEK; goto ret; }
-			case POKE_VVV:	if ((ui = (UInt)V0.i + (UInt)V1.i - MEMORY_OFFSET) < rwMemorySize) { mb[ui + MEMORY_OFFSET] = V2; break; } else { err = BAD_POKE; goto ret; }
-			case POKE_CVV:	if ((ui = (UInt)C0.i + (UInt)V1.i - MEMORY_OFFSET) < rwMemorySize) { mb[ui + MEMORY_OFFSET] = V2; break; } else { err = BAD_POKE; goto ret; }
-			case POKE_VVC:	if ((ui = (UInt)V0.i + (UInt)V1.i - MEMORY_OFFSET) < rwMemorySize) { mb[ui + MEMORY_OFFSET] = C2; break; } else { err = BAD_POKE; goto ret; }
-			case POKE_CVC:	if ((ui = (UInt)C0.i + (UInt)V1.i - MEMORY_OFFSET) < rwMemorySize) { mb[ui + MEMORY_OFFSET] = C2; break; } else { err = BAD_POKE; goto ret; }
+			case PEEK_VVV:	if ((ui = (UInt)V1.i + (UInt)V2.i) - MEMORY_OFFSET < memorySize) { V0 = mb[ui]; break; } else { err = BAD_PEEK; goto ret; }
+			case PEEK_VCV:	if ((ui = (UInt)C1.i + (UInt)V2.i) - MEMORY_OFFSET < memorySize) { V0 = mb[ui]; break; } else { err = BAD_PEEK; goto ret; }
+			case POKE_VVV:	if ((ui = (UInt)V0.i + (UInt)V1.i) - MEMORY_OFFSET < rwMemorySize) { mb[ui] = V2; break; } else { err = BAD_POKE; goto ret; }
+			case POKE_CVV:	if ((ui = (UInt)C0.i + (UInt)V1.i) - MEMORY_OFFSET < rwMemorySize) { mb[ui] = V2; break; } else { err = BAD_POKE; goto ret; }
+			case POKE_VVC:	if ((ui = (UInt)V0.i + (UInt)V1.i) - MEMORY_OFFSET < rwMemorySize) { mb[ui] = C2; break; } else { err = BAD_POKE; goto ret; }
+			case POKE_CVC:	if ((ui = (UInt)C0.i + (UInt)V1.i) - MEMORY_OFFSET < rwMemorySize) { mb[ui] = C2; break; } else { err = BAD_POKE; goto ret; }
 			case GETL_VVV:	if ((Int)(ui2 = (UInt)(dataStackEnd - dsp - C1.i)) > 0 && (ui = V2.i) < ui2) { V0 = (dsp + C1.i)[ui]; break; } else { err = BAD_PEEK; goto ret; };
 			case SETL_VVV:	if ((Int)(ui2 = (UInt)(dataStackEnd - dsp - C0.i)) > 0 && (ui = V1.i) < ui2) { (dsp + C0.i)[ui] = V2; break; } else { err = BAD_POKE; goto ret; };
 			case SETL_VVC:	if ((Int)(ui2 = (UInt)(dataStackEnd - dsp - C0.i)) > 0 && (ui = V1.i) < ui2) { (dsp + C0.i)[ui] = C2; break; } else { err = BAD_POKE; goto ret; };
@@ -1393,16 +1393,16 @@ Int Processor::run() {
 			case DIVF_VCV:	CHECK_FLOAT_DIV_BY_ZERO(V2.f); V0.f = C1.f / V2.f; break;
 			case FTOI_VVC:	V0.i = ftoi(V1.f * C2.f); break;
 			case ITOF_VVC:	V0.f = (Float)(V1.i) * C2.f; break;
-			case COPY_VVC:	ui = V0.i - MEMORY_OFFSET; ui2 = V1.i - MEMORY_OFFSET; goto copy;
-			case COPY_VCC:	ui = V0.i - MEMORY_OFFSET; ui2 = C1.i - MEMORY_OFFSET; goto copy;
-			case COPY_CVC:	ui = C0.i - MEMORY_OFFSET; ui2 = V1.i - MEMORY_OFFSET; goto copy;
-			case COPY_CCC:	ui = C0.i - MEMORY_OFFSET; ui2 = C1.i - MEMORY_OFFSET; goto copy;
-			copy:			if ((UInt)C2.i <= rwMemorySize && ui <= rwMemorySize - (UInt)C2.i
-									&& (UInt)C2.i <= memorySize && ui2 <= memorySize - (UInt)C2.i) {
-								// std::copy(&mb[ui2 + MEMORY_OFFSET], &mb[ui2 + MEMORY_OFFSET] + C2.i, &mb[ui + MEMORY_OFFSET]);
-								// memcpy(&mb[ui + MEMORY_OFFSET], &mb[ui2 + MEMORY_OFFSET], sizeof (Value) * C2.i);
-								const Value* sp = &mb[ui2 + MEMORY_OFFSET];
-								Value* dp = &mb[ui + MEMORY_OFFSET];
+			case COPY_VVC:	ui = V0.i; ui2 = V1.i; goto copy;
+			case COPY_VCC:	ui = V0.i; ui2 = C1.i; goto copy;
+			case COPY_CVC:	ui = C0.i; ui2 = V1.i; goto copy;
+			case COPY_CCC:	ui = C0.i; ui2 = C1.i; goto copy;
+			copy:			if ((UInt)C2.i <= rwMemorySize && ui - MEMORY_OFFSET <= rwMemorySize - (UInt)C2.i
+									&& (UInt)C2.i <= memorySize && ui2 - MEMORY_OFFSET <= memorySize - (UInt)C2.i) {
+								// std::copy(&mb[ui2], &mb[ui2] + C2.i, &mb[ui]);
+								// memcpy(&mb[ui], &mb[ui2], sizeof (Value) * C2.i);
+								const Value* sp = &mb[ui2];
+								Value* dp = &mb[ui];
 								Value* ep = dp + C2.i;
 								while (dp < ep) *dp++= *sp++;
 								break;
