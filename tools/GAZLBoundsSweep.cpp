@@ -52,6 +52,7 @@
 */
 
 #include <cstdio>
+#include <stdint.h>
 #include <cstring>
 #include <cstdlib>
 #include <string>
@@ -118,15 +119,15 @@ struct Probe {
 	Int value;						// POKE / SETL: the value written
 };
 
-std::string number(long long v) {
+std::string number(int64_t v) {
 	char buffer[32];
-	std::snprintf(buffer, sizeof buffer, "%lld", v);
+	snprintf(buffer, sizeof buffer, "%.0f", (double)v);				// exact: every value here is far below 2^53
 	return buffer;
 }
 
 std::string hex(UInt v) {
 	char buffer[16];
-	std::snprintf(buffer, sizeof buffer, "0x%08X", v);
+	snprintf(buffer, sizeof buffer, "0x%08X", v);
 	return buffer;
 }
 
@@ -262,7 +263,7 @@ std::vector<Probe> generate(const Layout& L) {
 		for (size_t x = 0; x < EXTREME_COUNT; ++x) {
 			for (size_t i = 0; i < T.size(); ++i) {
 				char body[96];
-				std::snprintf(body, sizeof body, IMMEDIATE_INDEX_FORMS[f][1], number(EXTREMES[x]).c_str());
+				snprintf(body, sizeof body, IMMEDIATE_INDEX_FORMS[f][1], number(EXTREMES[x]).c_str());
 				Probe p = Probe();
 				p.form = form;
 				p.op = (form[1] == 'E' ? PEEK : POKE);
@@ -291,7 +292,7 @@ std::vector<Probe> generate(const Layout& L) {
 			const std::vector<Int> indexes = IndexSet::make(LABELS[l].pointer, T, EXTREMES, EXTREME_COUNT);
 			for (size_t i = 0; i < indexes.size(); ++i) {
 				char body[96];
-				std::snprintf(body, sizeof body, LABEL_INDEX_FORMS[f][1], LABELS[l].name, LABELS[l].offset);
+				snprintf(body, sizeof body, LABEL_INDEX_FORMS[f][1], LABELS[l].name, LABELS[l].offset);
 				Probe p = Probe();
 				p.form = form;
 				p.op = op;
@@ -326,7 +327,7 @@ std::vector<Probe> generate(const Layout& L) {
 					, MEMORY_OFFSET + MEMORY_SIZE - SECTIONS[s].pointer };
 			for (size_t o = 0; o < sizeof (offsets) / sizeof (*offsets); ++o) {
 				char body[96];
-				std::snprintf(body, sizeof body, LABEL_ONLY_FORMS[f][1], SECTIONS[s].name, offsets[o]);
+				snprintf(body, sizeof body, LABEL_ONLY_FORMS[f][1], SECTIONS[s].name, offsets[o]);
 				Probe p = Probe();
 				p.form = form;
 				p.op = (form[1] == 'E' ? PEEK : POKE);
@@ -519,8 +520,8 @@ Status run(Machine& m, Engine engine) {
 }
 
 bool inRange(UInt pointer, UInt count, UInt limit) {
-	const long long start = (long long)pointer - (long long)MEMORY_OFFSET;
-	return start >= 0 && start + (long long)count <= (long long)limit;
+	const int64_t start = (int64_t)pointer - (int64_t)MEMORY_OFFSET;
+	return start >= 0 && start + (int64_t)count <= (int64_t)limit;
 }
 
 /*
@@ -562,7 +563,7 @@ std::string check(Machine& m, const Probe& p, const Layout& layout, const std::v
 		case GETL:
 		case SETL: {
 			const UInt slot = arAddress + (UInt)p.index;
-			valid = p.index >= 0 && (long long)arAddress + p.index < (long long)(MEMORY_OFFSET + rw);
+			valid = p.index >= 0 && (int64_t)arAddress + p.index < (int64_t)(MEMORY_OFFSET + rw);
 			failStatus = (p.op == GETL ? BAD_PEEK : BAD_POKE);
 			if (valid && p.op == SETL) want[g + slot - MEMORY_OFFSET].i = p.value;
 			if (valid && p.op == GETL && known[g + slot - MEMORY_OFFSET]) {
@@ -594,9 +595,9 @@ std::string check(Machine& m, const Probe& p, const Layout& layout, const std::v
 	}
 	for (size_t i = 0; i < want.size(); ++i) {
 		if (known[i] && m.buffer[i].i != want[i].i) {
-			const long long cell = (long long)i - (long long)g;
+			const int64_t cell = (int64_t)i - (int64_t)g;
 			return "cell " + number(cell) + " is " + hex((UInt)m.buffer[i].i) + ", want " + hex((UInt)want[i].i)
-					+ (cell < 0 || cell >= (long long)MEMORY_SIZE ? " (outside memory)" : "");
+					+ (cell < 0 || cell >= (int64_t)MEMORY_SIZE ? " (outside memory)" : "");
 		}
 	}
 	return "";
