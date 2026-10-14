@@ -176,6 +176,7 @@ const int CODE_MEMORY_SIZE = 128 * 1024;
 const int FUNCTION_TABLE_SIZE = CODE_MEMORY_SIZE;	// A function is at least one instruction, so this can never overflow.
 const int CALL_STACK_SIZE = 2048;
 
+#if !defined(LIBFUZZ) && !defined(LIBFUZZ_STANDALONE)			// the fuzz drivers declare their own tables
 static const NativeFunc NATIVE_TABLE[] = {
 	abort, assertFail, printInt, printFloat, print, printLF, input, gazlAtan2, gazlSqrt, gazlLog, gazlExit,
 	forwardNative<0>, forwardNative<1>, forwardNative<2>, forwardNative<3>,							// --forward slots;
@@ -187,6 +188,7 @@ static const char* NATIVE_NAMES[] = {
 };
 
 const int FIRST_FORWARD_INDEX = 11;						// index of forwardNative<0> in NATIVE_TABLE
+#endif
 
 static Value memory[DATA_MEMORY_SIZE];
 static Instruction code[CODE_MEMORY_SIZE];
@@ -279,8 +281,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size) {
 			}
 		}
 	}
-	catch (GAZL::Exception& x) {
-		// std::cerr << "Exception: " << x.what() << std::endl;
+	catch (GAZL::Exception&) {
 		return 0;
 	}
   	return 0;  // Non-zero return values are reserved for future use.
