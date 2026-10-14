@@ -152,6 +152,17 @@ inline Exception::Exception(AssemblerError error, const std::string& detail) : e
 inline Exception::~Exception() throw() { }																				// (GCC requires explicit destructor with one that has throw().)
 
 /*
+	What `Symbols::getGlobalInfo` reports about one name of writable data.
+*/
+struct GlobalInfo {
+	const char* name;				// valid as long as the `Symbols` it came from
+	Pointer address;
+	UInt size;						// in words
+	bool isTemp;					// declared in a `TEMP` section, which a memory snapshot leaves out
+	bool isInterior;				// a label inside a named section, which already covers its words
+};
+
+/*
 	Symbol table shared between assembler and processor.
 
 	Stores function and global definitions, constants and manages forward references during assembly.
@@ -185,9 +196,9 @@ class Symbols {
 	public:		Pointer findGlobal(const Char* name, UInt& size) const;													/// Returns `NULL_POINTER` if not found (in which case, `size` is left untouched).
 	public:		void defineConstant(const Char* name, bool asFloat, const Value& value);
 	public:		bool lookupConstant(const Char* name, bool* isFloat, Value* value) const;
-	public:		bool findFirstGlobal(Iterator& iterator, bool includeTemps) const;
-	public:		bool findNextGlobal(Iterator& iterator, bool includeTemps) const;
-	public:		const char* getGlobalInfo(const Iterator& iterator, bool& isTemp, Pointer& address, UInt& size) const;
+	public:		bool findFirstGlobal(Iterator& iterator, bool includeTemps, bool includeInteriors) const;										/// Names of writable data: named sections, and labels on data statements (see `GlobalInfo`).
+	public:		bool findNextGlobal(Iterator& iterator, bool includeTemps, bool includeInteriors) const;
+	public:		GlobalInfo getGlobalInfo(const Iterator& iterator) const;
 
 	protected:	bool lookup(const Char* nameBegin, const Char* nameEnd, int acceptedTypes, int& types, Value& value, UInt& size) const;
 	protected:	void define(const std::string& name, int types, Value value, UInt size = 1);
