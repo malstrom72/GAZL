@@ -81,17 +81,10 @@ open question 1).
 magnitude, and infinities, saturate to `INT_MAX` / `INT_MIN`, and NaN converts to 0. `iTOf` converts to the nearest
 float, then multiplies by its scale operand.
 
-**Float comparisons** branch as follows when either operand is NaN:
-
-| instruction    | branches on NaN |
-| -------------- | --------------- |
-| `EQUf`         | no              |
-| `NEQf`         | yes             |
-| `LSSf`, `GRTf` | no              |
-| `LEQf`, `GEQf` | **yes**         |
-
-`LEQf a b` is defined as "not `b < a`" and `GEQf a b` as "not `a < b`". This differs from C's `<=` and `>=`, and
-an implementation must follow it.
+**Float comparisons.** `EQUf` and `NEQf` follow IEEE-754: a NaN is unequal to everything, itself included. So
+`NEQf x x @L` branches exactly when `x` is NaN, and that is the supported way to test for one. When either operand
+of `LSSf`, `LEQf`, `GRTf` or `GEQf` is NaN, whether it branches is unspecified. Today's interpreter branches for
+`LEQf` and `GEQf` and not for `LSSf` and `GRTf`, but programs must not rely on that.
 
 **Pointers.** `ADDp` and `SUBp` add or subtract an int, wrapping modulo 2^32. `DIFp` is the difference in words.
 Pointer comparisons compare the two words as **signed** ints. A function pointer supports only `EQUp`, `NEQp` and
@@ -186,8 +179,8 @@ A statement prefixed with `!` runs while the program is assembled and generates 
 - `! FAIL text` stops assembly with the text.
 
 An ordinary instruction whose operands are all constants is evaluated at assembly instead. Its result must be
-**exactly** what the same instruction would produce at run time. That includes NaN branches, wrap-around and
-`fTOi` saturation. A run-time error, such as a constant division by zero, becomes an assembly error.
+**exactly** what the same instruction would produce at run time. That includes wrap-around and `fTOi`
+saturation. A run-time error, such as a constant division by zero, becomes an assembly error.
 
 ## 8. Calls
 
@@ -259,7 +252,8 @@ Whatever the program text, an implementation must guarantee all of the following
   signal handlers, the floating-point environment, global variables.
 - **Interruptibility.** Every program stops within its step budget.
 - **Determinism.** The same program, inputs, natives and budget give the same results, statuses and step counts
-  on every conforming implementation, subject to open question 1.
+  on every conforming implementation, except where this specification leaves a result unspecified, and subject
+  to open question 1.
 
 ## 11. Memory snapshot format
 
@@ -386,9 +380,8 @@ answer.
 4. **`DATs` with bytes above 0x7F** stores each byte as a C `char`. That is signed on x86 and Apple arm64 but
    unsigned on Linux arm64, so the stored word differs between hosts. Should `DATs` be ASCII-only, or define bytes
    as unsigned?
-5. **`LEQf` / `GEQf` on NaN** branch, unlike C. Section 4 makes the current behaviour normative; confirm it.
-6. **Constant addresses depend on memory size.** Should hosts that want reproducible pointer values be told to fix
+5. **Constant addresses depend on memory size.** Should hosts that want reproducible pointer values be told to fix
    the memory size, or should this stay a host matter?
-7. **Step counts.** Section 9 makes step counts observable, which binds every future engine, JIT included, to
+6. **Step counts.** Section 9 makes step counts observable, which binds every future engine, JIT included, to
    count exactly as the interpreter does. Confirm that, or relax it to "at least one step per backward branch and
    call".
