@@ -223,7 +223,6 @@ class Assembler {
 	public:		void newUnit(const Char* unitName); // Begin assembling a new source unit.
 	public:		const Char* feed(const Char* line); // Assemble a single line and return pointer to the next.
 	public:		void finalize(ProgramSizes& sizes); // Finish assembly and report memory usage. `sizes.functionCount` is the number of entries filled in `functionTable`.
-	public:		void finalize(UInt& codeSize, UInt& globalsSize, UInt& constsSize, UInt& functionCount); // Positional form of `finalize`; prefer the `ProgramSizes` overload.
 
 	protected:	struct CompileTimeVar {
 					int types;

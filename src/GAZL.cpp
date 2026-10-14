@@ -891,15 +891,6 @@ void Assembler::finalize(ProgramSizes& sizes) {
 	sizes.constsSize = (UInt)(memoryEnd - constantsPointer);
 }
 
-void Assembler::finalize(UInt& codeSize, UInt& globalsSize, UInt& constsSize, UInt& functionCount) {
-	ProgramSizes sizes;
-	finalize(sizes);
-	codeSize = sizes.codeSize;
-	globalsSize = sizes.globalsSize;
-	constsSize = sizes.constsSize;
-	functionCount = sizes.functionCount;
-}
-
 void Assembler::newUnit(const Char* unitName) {
 	(void)unitName;
 	if (!skipUntilLabel.empty()) throw Exception(MISSING_COMPILE_TIME_LABEL, skipUntilLabel);
