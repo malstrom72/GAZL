@@ -563,7 +563,12 @@ void randomSeed() {
 	srand(seed);
 }
 
+void printVersion() {
+	std::cout << "NuXJS " << NUXJS_VERSION / 100 << '.' << NUXJS_VERSION / 10 % 10 << '.' << NUXJS_VERSION % 10 << std::endl;
+}
+
 void printUsage() {
+	printVersion();
 	std::cout << "Usage: NuXJS [options] [script.js [arguments...]]" << std::endl
 			<< "Options:" << std::endl
 			<< "  -s: suppress the interactive '=<result>' echo" << std::endl
@@ -574,6 +579,7 @@ void printUsage() {
 			<< "  -P, --pin <core>: run on that CPU core only, for steadier timings (not on macOS)" << std::endl
 			<< "  -G, --gc-every-cycle: collect garbage after every instruction, to expose unrooted values (slow)" << std::endl
 			<< "  -E, --legacy-exceptions: use legacy exception output" << std::endl
+			<< "  -v, --version: show the NuXJS version" << std::endl
 			<< "  -h, --help: show this usage" << std::endl
 			<< std::endl
 			<< "NuXJS options must appear before the script file name." << std::endl
@@ -798,6 +804,10 @@ int replMain(int argc, const char* argv[]) {
 			}
 			else if (strcmp(argv[argi], "--legacy-exceptions") == 0 || strcmp(argv[argi], "-E") == 0) {
 				legacyExceptions = true;
+			}
+			else if (strcmp(argv[argi], "--version") == 0 || strcmp(argv[argi], "-v") == 0) {
+				printVersion();
+				return 0;
 			}
 			else if (strcmp(argv[argi], "--help") == 0 || strcmp(argv[argi], "-h") == 0) {
 				printUsage();
