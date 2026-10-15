@@ -22,9 +22,12 @@ written. So the format only ever grows:
 - The meaning of an accepted form never changes, and no accepted form is removed.
 - One exception: a form whose execution could break the sandbox may start being refused at assembly. That has
   happened once (frames past `INT_MAX`, `FRAME_TOO_LARGE`), and must be recorded in this section when it happens.
-- Programs can test the version at assembly with `#GAZL_VERSION` (1) and `#GAZL_WORD_SIZE` (32), which every
-  implementation predefines.
-- An incompatible GAZL would be GAZL 2, with a different `#GAZL_VERSION`.
+- Every implementation predefines `#GAZL_VERSION`, the version of the engine, and `#GAZL_WORD_SIZE` (32). A GAZL 1
+  engine reports 1.
+- Later versions are supersets, not replacements. A GAZL 2 engine reports 2 and assembles every GAZL 1 program
+  unchanged; its additions are mnemonics that GAZL 1 refuses, used inside `GAZL #2` ... `GAZL #1` regions. A program
+  that needs a later version tests for it at assembly, with `! GEQi #GAZL_VERSION #2 @label`, rather than for an
+  exact value.
 
 ## 2. Values
 
