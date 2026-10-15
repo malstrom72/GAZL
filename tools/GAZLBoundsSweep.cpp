@@ -835,6 +835,51 @@ int sweepSnapshotEntries() {
 	return failures;
 }
 
+/*
+	The assembler's error for `source`, or -1 when it assembles.
+*/
+int assemblyError(const std::string& source) {
+	Machine m;
+	try {
+		Assembler assem(CODE_SIZE, &m.code[0], FUNCTION_COUNT, &m.functionTable[0], MEMORY_SIZE, m.memory(), m.symbols);
+		assem.newUnit("text");
+		const Char* cp = source.c_str();
+		while (*cp != 0) cp = assem.feed(cp);
+		ProgramSizes sizes = { 0, 0, 0, 0 };
+		assem.finalize(sizes);
+	}
+	catch (const Exception& e) {
+		return e.error;
+	}
+	return -1;
+}
+
+/*
+	Source text is ASCII: a byte above 0x7F in `DATs` text or in a quoted literal is refused, while a comment may
+	hold any bytes. Returns the number of failures, each one printed.
+*/
+int sweepTextEncoding() {
+	struct Case { const char* what; const char* source; int error; };
+	const Case CASES[] = {
+		{ "DATs with a byte above 0x7F", "\tGLOB *4\n\tDATs abc\xE5\n", NON_ASCII_TEXT },
+		{ "a quoted literal with a byte above 0x7F", "\tGLOB *1\n\tDATi #'\xE5'\n", NON_ASCII_TEXT },
+		{ "a comment with bytes above 0x7F", "\tGLOB *1\n\tDATi #1 ; \xE5\xE4\xF6 \xC3\xA5\n; \xFF\n", -1 },
+		{ "ASCII DATs text", "\tGLOB *3\n\tDATs abc\n", -1 },
+		{ "an ASCII quoted literal", "\tGLOB *1\n\tDATi #'AB'\n", -1 }
+	};
+	const int count = sizeof (CASES) / sizeof (*CASES);
+	int failures = 0;
+	for (int i = 0; i < count; ++i) {
+		const int error = assemblyError(CASES[i].source);
+		if (error != CASES[i].error) {
+			std::printf("FAIL text encoding: %s gave error %d, expected %d\n", CASES[i].what, error, CASES[i].error);
+			++failures;
+		}
+	}
+	std::printf("text encoding: %d checked, %d failed\n", count, failures);
+	return failures;
+}
+
 struct Totals { int probes; int failures; };
 
 int sweep(int engineCount) {
@@ -939,6 +984,6 @@ int main() {
 		std::printf("bounds sweep: this host forbids executable memory; the JIT is NOT swept\n");
 	}
 #endif
-	const int hostFailures = sweepNativeAccess() + sweepFrameAndThaw() + sweepSnapshotEntries();
+	const int hostFailures = sweepNativeAccess() + sweepFrameAndThaw() + sweepSnapshotEntries() + sweepTextEncoding();
 	return (sweep(engineCount) != 0 || hostFailures != 0) ? 1 : 0;
 }

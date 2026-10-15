@@ -85,6 +85,7 @@ const char* ASSEMBLER_ERROR_TEXTS[] = {
 	/* , NOT_ENOUGH_FUNCTION_SPACE					*/	, "Not enough space for function table"
 	/* , LABEL_ON_FUNCTION							*/	, "Branch target lands on a FUNC"
 	/* , FRAME_TOO_LARGE								*/	, "Frame too large"
+	/* , NON_ASCII_TEXT								*/	, "Non-ASCII character in text"
 };
 
 // --- defined integer / FTOI semantics, shared by Processor::run() and calcConstant() so the
@@ -149,8 +150,16 @@ static Int stringToInt(const Char* &p, const Char* e) {
 		case '-': ++p; sign = -1; break;
 	}
 	switch (p < e ? *p : 0) {
-		case '\'':	while (++p < e && *p != '\'') i = (i << 8) | (*p & 0xFFU); if (p < e) ++p; break;
-		case '\"':	while (++p < e && *p != '\"') i = (i << 8) | (*p & 0xFFU); if (p < e) ++p; break;
+		case '\'':
+		case '\"':	{
+						const Char quote = *p;
+						while (++p < e && *p != quote) {
+							if ((*p & 0x80) != 0) throw Exception(NON_ASCII_TEXT);
+							i = (i << 8) | (*p & 0xFFU);
+						}
+						if (p < e) ++p;
+						break;
+					}
 		case '0':	if (*++p == 'x') {
 						while (++p < e && ((*p >= '0' && *p <= '9') || (*p >= 'A' && *p <= 'F') || (*p >= 'a' && *p <= 'f')))
 							i = (i << 4) + (*p <= '9' ? *p - '0' : (*p & ~0x20) - ('A' - 10));
@@ -1010,6 +1019,9 @@ const Char* Assembler::feed(const Char* line) {
 							while (e > p && (*(e - 1) == ' ' || *(e - 1) == '\t')) --e;
 							if ((e - p) == 0) throw Exception(MISSING_OPERAND);
 							if ((e - p) > dataEnd - dataPointer) throw Exception(DATA_SECTION_FULL, dataLabel);
+							for (const Char* c = p; c < e; ++c) {
+								if ((*c & 0x80) != 0) throw Exception(NON_ASCII_TEXT, p, e);
+							}
 							Value v;
 							v.p = makeGAZLPointer(dataPointer, dataIsConstant);
 							declare(globals, labelBegin, labelEnd, dataLabelType, v, static_cast<Int>(e - p));
