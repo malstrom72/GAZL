@@ -89,8 +89,8 @@ assembly when the divisor is a constant 0.
 - **No finite-math assumption.** An implementation must not assume that values are finite or that a NaN equals
   itself: `NEQf x x` must branch for a NaN, and infinities must compare and convert as specified. An implementation
   compiled with options that break this (`-ffast-math`, `-Ofast`, `/fp:fast`) does not conform.
-- **Division by zero.** `DIVf` by zero (either sign) stops the program with `DIVISION_BY_ZERO`; it never produces an
-  infinity. Infinities and NaNs can still arise from overflow and from operations like `inf - inf`.
+- **Division by zero** follows IEEE-754 too: `DIVf` by a zero of either sign gives an infinity of the matching sign,
+  and `0 / 0` gives NaN, at run time and at assembly alike. Only integer division stops the program.
 - **NaN bits.** A NaN computed by an instruction is a quiet NaN, but its sign and payload are unspecified, because
   hardware differs: x86 produces `0xFFC00000` where ARM produces `0x7FC00000`, and the two pick differently between
   two NaN operands. A NaN that is only moved keeps its bits exactly (section 2).
@@ -191,7 +191,10 @@ fill it in order:
 
 A statement prefixed with `!` runs while the program is assembled and generates no code:
 - `! DEFi`, `! DEFf` and `! DEFp` define a named constant: the statement's label.
-- `! MOVi <A> #1`, `! ADDi <A> <A> #2` and so on compute into assembly-time variables.
+- `! MOVi <A> #1`, `! ADDi <A> <A> #2` and so on compute into assembly-time variables. A variable's name is exactly
+  one identifier character (section 5) between `<` and `>`, so there are 65 of them. Names are case-sensitive: `<a>`
+  and `<A>` are different variables. All are cleared at the start of each unit, and reading one that the unit has not
+  set, or as a different type than it holds, is an assembly error.
 - `! IFDF`, `! IFND`, the compare-and-branch forms and `! GOTO` skip forward to a label. Skipping is forward only;
   a skip that never reaches its label fails the unit.
 - `! FAIL text` stops assembly with the text.
@@ -264,7 +267,7 @@ what happens next:
 | `BAD_CALL`            | -4    | call through a value that is not a function pointer             |
 | `DATA_STACK_OVERFLOW` | -5    | a frame does not fit in the data stack                          |
 | `IP_STACK_OVERFLOW`   | -6    | call depth exceeds the call stack                               |
-| `DIVISION_BY_ZERO`    | -7    | `DIVi`, `MODi` or `DIVf` by zero                                |
+| `DIVISION_BY_ZERO`    | -7    | `DIVi` or `MODi` by zero                                        |
 | `ACCESS_VIOLATION`    | -8    | `COPY` outside memory, or a native refused an access            |
 | `ABORTED`             | -9    | a native reports unexpected termination                         |
 | `TERMINATED`          | -10   | a native reports expected termination (e.g. `exit`)             |
