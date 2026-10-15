@@ -724,8 +724,8 @@ int sweepFrameAndThaw() {
 
 /*
 	What `freezeMemory` saves for each way of naming data: a named section once and whole, a label in an unnamed
-	section over every value on its line, and nothing for unnamed words, `TEMP` or `CNST`. Each saved entry is
-	checked by name, size and words. Returns the number of failures, each one printed.
+	section from its line to the next label or the section's end, and nothing for `TEMP` or `CNST`. Each saved
+	entry is checked by name, size and words. Returns the number of failures, each one printed.
 */
 int sweepSnapshotEntries() {
 	const char* const SOURCE =
@@ -735,7 +735,7 @@ int sweepSnapshotEntries() {
 		"state:\tGLOB *3\n"					// named section with labels inside: saved once, as `state`
 		"gain:\tDATf #0.5\n"
 		"level:\tDATi #3\n"
-		"\tGLOB *3\n"						// unnamed section, first word labelled
+		"\tGLOB *3\n"						// unnamed section: the label covers the unlabelled line after it too
 		"first:\tDATi #21\n"
 		"\tDATi #22\n"
 		"\tGLOB *8\n"						// labels over several values
@@ -749,14 +749,14 @@ int sweepSnapshotEntries() {
 		"v:\tLOCi\n"
 		"\tPEEK v &multi:2\n"				// a label's offset is checked against all of its values
 		"\tRETU\n";
-	struct Entry { const char* name; UInt size; UInt words[4]; };
+	struct Entry { const char* name; UInt size; UInt words[8]; };
 	const Entry EXPECTED[] = {
 		{ "clock", 1, { 7 } },
-		{ "first", 1, { 21 } },
+		{ "first", 3, { 21, 22, 0 } },
 		{ "multi", 3, { 31, 32, 33 } },
 		{ "params", 4, { 0, 0, 0, 0 } },
 		{ "state", 3, { 0x3F000000u, 3, 0 } },
-		{ "text", 3, { 'a', 'b', 'c' } }
+		{ "text", 5, { 'a', 'b', 'c', 0, 0 } }
 	};
 	const int count = sizeof (EXPECTED) / sizeof (*EXPECTED);
 
@@ -795,7 +795,7 @@ int sweepSnapshotEntries() {
 		bool same = (name == EXPECTED[i].name && size == EXPECTED[i].size);
 		for (UInt w = 0; w < size; ++w) {
 			const UInt word = r.word();
-			same = same && w < 4 && word == EXPECTED[i].words[w];
+			same = same && w < 8 && word == EXPECTED[i].words[w];
 		}
 		if (!same) {
 			std::printf("FAIL snapshot entries: entry %d is %s (%u words), expected %s (%u words)\n", i, name.c_str()
@@ -809,7 +809,7 @@ int sweepSnapshotEntries() {
 	UInt levelSize = 0;
 	const Pointer stateAddress = m.symbols.findGlobal("state", stateSize);
 	if (m.symbols.findGlobal("gain", gainSize) != stateAddress || gainSize != 1
-			|| m.symbols.findGlobal("level", levelSize) != stateAddress + 1 || levelSize != 1) {
+			|| m.symbols.findGlobal("level", levelSize) != stateAddress + 1 || levelSize != 2) {
 		std::printf("FAIL snapshot entries: findGlobal no longer resolves the labels inside `state`\n");
 		++failures;
 	}
@@ -824,7 +824,7 @@ int sweepSnapshotEntries() {
 		const bool assembled = assemble(e, std::string("\tGLOB *2\nx:\t") + EMPTY[i] + "\ny:\tDATi #5\n", eLayout
 				, error);
 		const Pointer x = e.symbols.findGlobal("x", xSize);
-		if (!assembled || x == NULL_POINTER || xSize != 0 || e.symbols.findGlobal("y", ySize) != x || ySize != 1) {
+		if (!assembled || x == NULL_POINTER || xSize != 0 || e.symbols.findGlobal("y", ySize) != x || ySize != 2) {
 			std::printf("FAIL snapshot entries: `x: %s` is not an empty label at `y`\n", EMPTY[i]);
 			++failures;
 		}
@@ -891,7 +891,8 @@ int sweepUnnamedSections() {
 		{ "an unnamed TEMP without data", "\tTEMP *1\n", UNNAMED_DATA_SECTION },
 		{ "a named section", "s:\tGLOB *1\n\tDATi #0\n", -1 },
 		{ "an unnamed section with a labelled statement", "\tGLOB *1\na:\tDATi #0\n", -1 },
-		{ "an unnamed section labelled on a later statement", "\tGLOB *2\n\tDATi #0\nb:\tDATi #0\n", -1 }
+		{ "data before the first label of an unnamed section", "\tGLOB *2\n\tDATi #0\nb:\tDATi #0\n"
+				, UNNAMED_DATA_SECTION }
 	};
 	const int count = sizeof (CASES) / sizeof (*CASES);
 	int failures = 0;
@@ -902,7 +903,21 @@ int sweepUnnamedSections() {
 			++failures;
 		}
 	}
-	std::printf("unnamed sections: %d checked, %d failed\n", count, failures);
+	// A label covers the unlabelled statements after it, up to the next label or the end of the section.
+	Machine m;
+	Layout layout = Layout();
+	std::string error;
+	UInt sSize = 0;
+	UInt tSize = 0;
+	const bool assembled = assemble(m, "\tGLOB *20\ns:\tDATs blahblah\n\tDATi #10\n\tDATs yaddayadda\nt:\tDATi #1\n"
+			, layout, error);
+	const Pointer sAddress = m.symbols.findGlobal("s", sSize);
+	if (!assembled || sAddress == NULL_POINTER || sSize != 19 || m.symbols.findGlobal("t", tSize) != sAddress + 19
+			|| tSize != 1) {
+		std::printf("FAIL unnamed sections: a label does not cover the unlabelled lines after it (%s)\n", error.c_str());
+		++failures;
+	}
+	std::printf("unnamed sections: %d checked, %d failed\n", count + 1, failures);
 	return failures;
 }
 

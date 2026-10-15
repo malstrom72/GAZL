@@ -87,7 +87,7 @@ const char* ASSEMBLER_ERROR_TEXTS[] = {
 	/* , LABEL_ON_FUNCTION							*/	, "Branch target lands on a FUNC"
 	/* , FRAME_TOO_LARGE								*/	, "Frame too large"
 	/* , NON_ASCII_TEXT								*/	, "Non-ASCII character in text"
-	/* , UNNAMED_DATA_SECTION						*/	, "Data section has no name and no labelled data"
+	/* , UNNAMED_DATA_SECTION						*/	, "Unnamed data section must start with a labelled data statement"
 };
 
 // --- defined integer / FTOI semantics, shared by Processor::run() and calcConstant() so the
@@ -881,8 +881,8 @@ Assembler::Assembler(UInt maxCodeSize, Instruction* codeBase, UInt maxFunctionCo
 		: codeBase(codeBase), codeEnd(codeBase + maxCodeSize), maxFunctionCount(maxFunctionCount)
 		, functionTable(functionTable), memoryBase(memoryBase), memoryEnd(memoryBase + maxMemorySize)
 		, ip(codeBase), functionStart(0), functionCount(0), localsSize(0), paramsSize(0), globalsPointer(memoryBase)
-		, constantsPointer(memoryEnd), dataLabelType(0), dataPointer(0), dataEnd(0), dataIsNamed(false)
-		, dataIsConstant(false), globals(globals) {
+		, constantsPointer(memoryEnd), dataLabelType(0), dataPointer(0), dataEnd(0), dataOpenStart(0)
+		, dataIsNamed(false), dataIsConstant(false), globals(globals) {
 	for (Int i = 0; i < 128; ++i) compileTimeVars[i].types = 0;
 	Value v;
 	v.i = 0;
@@ -999,6 +999,25 @@ void Assembler::parseOperand(const Char* b, const Char* e, int accepts, Value* v
 					v->i -= localsSize;
 					break;
 	}
+}
+
+/*
+	A data label covers its own statement and everything after it, up to the next label or the end of the section. So
+	each label is declared reaching to the end of the section, and the next label shortens the previous one to end
+	where it starts. In an unnamed section, data before the first label could never be reached.
+*/
+void Assembler::noteDataStatement(const Char* labelBegin, const Char* labelEnd, const Value* first) {
+	if (labelBegin == labelEnd) {
+		if (!dataIsNamed) throw Exception(UNNAMED_DATA_SECTION);
+		return;
+	}
+	if (!dataOpenLabel.empty()) {
+		const Symbols::SymbolMap::iterator it = globals.symbols.find(dataOpenLabel);
+		if (it != globals.symbols.end()) it->second.size = static_cast<UInt>(first - dataOpenStart);
+	}
+	dataIsNamed = true;
+	dataOpenLabel = std::string(labelBegin, labelEnd);
+	dataOpenStart = first;
 }
 
 Pointer Assembler::makeGAZLPointer(const Value* data, bool constant) const {
@@ -1164,8 +1183,9 @@ const Char* Assembler::feed(const Char* line) {
 							}
 							Value v;
 							v.p = makeGAZLPointer(dataPointer, dataIsConstant);
-							declare(globals, labelBegin, labelEnd, dataLabelType, v, static_cast<Int>(e - p));
-							dataIsNamed = dataIsNamed || labelBegin != labelEnd;
+							declare(globals, labelBegin, labelEnd, dataLabelType, v
+									, static_cast<UInt>(dataEnd - dataPointer));
+							noteDataStatement(labelBegin, labelEnd, dataPointer);
 							while (p < e) (dataPointer++)->i = *p++;
 							return eatEOL(eatSpace(e));
 						}
@@ -1192,11 +1212,10 @@ const Char* Assembler::feed(const Char* line) {
 								parseOperand(b, e, accepts, dataPointer);
 								++dataPointer;
 							}
-							// Declared after the values, so the label covers exactly them: none for a line without values.
 							Value v;
 							v.p = makeGAZLPointer(first, dataIsConstant);
-							declare(globals, labelBegin, labelEnd, dataLabelType, v, (UInt)(dataPointer - first));
-							dataIsNamed = dataIsNamed || labelBegin != labelEnd;
+							declare(globals, labelBegin, labelEnd, dataLabelType, v, static_cast<UInt>(dataEnd - first));
+							noteDataStatement(labelBegin, labelEnd, first);
 							return eatEOL(p);
 						}
 			
@@ -1294,6 +1313,7 @@ const Char* Assembler::feed(const Char* line) {
 								memset(dataPointer, 0, (dataEnd - dataPointer) * sizeof (*dataPointer));
 							}
 							dataIsNamed = (labelBegin != labelEnd);
+							dataOpenLabel.clear();
 							if (constantsPointer - globalsPointer < size) throw Exception(NOT_ENOUGH_MEMORY_SPACE);
 							if (op->opcode == GLOB____) {
 								dataPointer = globalsPointer;
