@@ -85,6 +85,7 @@ const char* ASSEMBLER_ERROR_TEXTS[] = {
 	/* , NOT_ENOUGH_FUNCTION_SPACE					*/	, "Not enough space for function table"
 	/* , LABEL_ON_FUNCTION							*/	, "Branch target lands on a FUNC"
 	/* , FRAME_TOO_LARGE								*/	, "Frame too large"
+	/* , NON_ASCII_TEXT								*/	, "Non-ASCII character in text"
 };
 
 // --- defined integer / FTOI semantics, shared by Processor::run() and calcConstant() so the
@@ -149,8 +150,16 @@ static Int stringToInt(const Char* &p, const Char* e) {
 		case '-': ++p; sign = -1; break;
 	}
 	switch (p < e ? *p : 0) {
-		case '\'':	while (++p < e && *p != '\'') i = (i << 8) | (*p & 0xFFU); if (p < e) ++p; break;
-		case '\"':	while (++p < e && *p != '\"') i = (i << 8) | (*p & 0xFFU); if (p < e) ++p; break;
+		case '\'':
+		case '\"':	{
+						const Char quote = *p;
+						while (++p < e && *p != quote) {
+							if ((*p & 0x80) != 0) throw Exception(NON_ASCII_TEXT);
+							i = (i << 8) | (*p & 0xFFU);
+						}
+						if (p < e) ++p;
+						break;
+					}
 		case '0':	if (*++p == 'x') {
 						while (++p < e && ((*p >= '0' && *p <= '9') || (*p >= 'A' && *p <= 'F') || (*p >= 'a' && *p <= 'f')))
 							i = (i << 4) + (*p <= '9' ? *p - '0' : (*p & ~0x20) - ('A' - 10));
@@ -747,7 +756,8 @@ Assembler::Assembler(UInt maxCodeSize, Instruction* codeBase, UInt maxFunctionCo
 		: codeBase(codeBase), codeEnd(codeBase + maxCodeSize), maxFunctionCount(maxFunctionCount)
 		, functionTable(functionTable), memoryBase(memoryBase), memoryEnd(memoryBase + maxMemorySize)
 		, ip(codeBase), functionStart(0), functionCount(0), localsSize(0), paramsSize(0), globalsPointer(memoryBase)
-		, constantsPointer(memoryEnd), dataLabelType(0), dataPointer(0), dataEnd(0), globals(globals) {
+		, constantsPointer(memoryEnd), dataLabelType(0), dataPointer(0), dataEnd(0), dataIsConstant(false)
+		, globals(globals) {
 	for (Int i = 0; i < 128; ++i) compileTimeVars[i].types = 0;
 	Value v;
 	v.i = 0;
@@ -866,11 +876,22 @@ void Assembler::parseOperand(const Char* b, const Char* e, int accepts, Value* v
 	}
 }
 
+Pointer Assembler::makeGAZLPointer(const Value* data, bool constant) const {
+	if (constant) {
+		assert(data >= constantsPointer && data <= memoryEnd - 1);
+		return MEMORY_OFFSET - (Pointer)(memoryEnd - 1 - data);						// counted down from the zero guard
+	} else {
+		assert(data >= memoryBase && data <= globalsPointer);
+		return MEMORY_OFFSET + (Pointer)(data - memoryBase);
+	}
+}
+
 void Assembler::finalizeFunction() {
 	assert(functionStart != 0);
 	assert(functionStart->opcode == FUNC_CC_);
-	if (ip == codeBase || (ip[-1].opcode != RETU_C__ && ip[-1].opcode != GOTO_B__))
+	if (ip == codeBase || (ip[-1].opcode != RETU_C__ && ip[-1].opcode != GOTO_B__)) {
 		throw Exception(MISSING_RETURN_INSTRUCTION);
+	}
 	/*
 		A jump or switch may never reach a `FUNC` (`FUNC` is `CALL`-only). Branch targets resolve to local `BRANCH`
 		labels; a label left at the function boundary `ip` (a trailing elided `NOOP`) is where the next `FUNC` lands.
@@ -892,6 +913,14 @@ void Assembler::finalize(ProgramSizes& sizes) {
 	newUnit(0);
 	if (dataPointer != 0) memset(dataPointer, 0, (dataEnd - dataPointer) * sizeof (*dataPointer));
 	globals.resolveForwardRefs();
+	// Constants were placed downward from the top during assembly, with addresses counted down from the base.
+	// Moving them to just below the globals puts every word at its address; nothing needs patching.
+	const UInt constantsSize = (UInt)(memoryEnd - 1 - constantsPointer);		// the top word is the zero guard
+	if (constantsSize != 0) {
+		const std::vector<Value> constants(constantsPointer, memoryEnd - 1);
+		memmove(memoryBase + constantsSize, memoryBase, (globalsPointer - memoryBase) * sizeof (Value));
+		memcpy(memoryBase, &constants[0], constantsSize * sizeof (Value));
+	}
 	sizes.codeSize = (UInt)(ip - codeBase);
 	sizes.functionCount = this->functionCount;
 	sizes.globalsSize = (UInt)(globalsPointer - memoryBase);
@@ -999,8 +1028,11 @@ const Char* Assembler::feed(const Char* line) {
 							while (e > p && (*(e - 1) == ' ' || *(e - 1) == '\t')) --e;
 							if ((e - p) == 0) throw Exception(MISSING_OPERAND);
 							if ((e - p) > dataEnd - dataPointer) throw Exception(DATA_SECTION_FULL, dataLabel);
+							for (const Char* c = p; c < e; ++c) {
+								if ((*c & 0x80) != 0) throw Exception(NON_ASCII_TEXT, p, e);
+							}
 							Value v;
-							v.p = (Int)(dataPointer - memoryBase + MEMORY_OFFSET);
+							v.p = makeGAZLPointer(dataPointer, dataIsConstant);
 							declare(globals, labelBegin, labelEnd, dataLabelType, v, static_cast<Int>(e - p));
 							while (p < e) (dataPointer++)->i = *p++;
 							return eatEOL(eatSpace(e));
@@ -1030,7 +1062,7 @@ const Char* Assembler::feed(const Char* line) {
 							}
 							// Declared after the values, so the label covers exactly them: none for a line without values.
 							Value v;
-							v.p = (Int)(first - memoryBase + MEMORY_OFFSET);
+							v.p = makeGAZLPointer(first, dataIsConstant);
 							declare(globals, labelBegin, labelEnd, dataLabelType, v, (UInt)(dataPointer - first));
 							return eatEOL(p);
 						}
@@ -1123,7 +1155,7 @@ const Char* Assembler::feed(const Char* line) {
 							parseOperand(op0Begin, op0End, op->accepts[0], &v);
 							size = v.i;
 							dataLabel = std::string(labelBegin, labelEnd);
-							dataLabelType = op->declareTypes | (labelBegin != labelEnd ? INTERIOR : 0);				// labels inside a named section are interior
+							dataLabelType = op->declareTypes | (labelBegin != labelEnd ? INTERIOR : 0);					// labels inside a named section are interior
 							if (dataPointer != 0)
 								memset(dataPointer, 0, (dataEnd - dataPointer) * sizeof (*dataPointer));
 							if (constantsPointer - globalsPointer < size) throw Exception(NOT_ENOUGH_MEMORY_SPACE);
@@ -1136,12 +1168,13 @@ const Char* Assembler::feed(const Char* line) {
 							}
 							assert(globalsPointer <= constantsPointer);
 							dataEnd = dataPointer + size;
-							v.p = (Int)(dataPointer - memoryBase + MEMORY_OFFSET);
+							dataIsConstant = (op->opcode != GLOB____);
+							v.p = makeGAZLPointer(dataPointer, dataIsConstant);
 							declare(globals, labelBegin, labelEnd, op->declareTypes, v, size);
 							break;
 					
 			case FUNC_CC_:	if (functionCount >= maxFunctionCount) throw Exception(NOT_ENOUGH_FUNCTION_SPACE);			// FUNC
-							v.p = (Int)(FUNCTION_OFFSET + functionCount);		// A function pointer is its stable declaration-order ordinal (not a code offset), resolved through `functionTable` at call time.
+							v.p = (Int)(FUNCTION_OFFSET + functionCount);
 							functionTable[functionCount] = (UInt)(ip - codeBase);
 							++functionCount;
 							declare(globals, labelBegin, labelEnd, op->declareTypes, v);
@@ -1158,7 +1191,7 @@ const Char* Assembler::feed(const Char* line) {
 							v.i = 1;
 							parseOperand(op0Begin, op0End, op->accepts[0], &v);
 							size = v.i;
-							if (size > 0x7FFFFFFFu - localsSize) throw Exception(FRAME_TOO_LARGE);							// slot offsets must fit an Int
+							if (size > 0x7FFFFFFFu - localsSize) throw Exception(FRAME_TOO_LARGE);						// slot offsets must fit an Int
 							v.i = localsSize;
 							declare(locals, labelBegin, labelEnd, op->declareTypes, v, size);
 							localsSize += size;
@@ -1205,13 +1238,13 @@ const Char* Assembler::feed(const Char* line) {
 								if (op->opcode == SWCH_VCC) {															// SWCH
 									assert(*op2Begin == '@');
 									assert(op->accepts[2] == FWD_BRANCH);
-									size = (UInt)p1->i + 1u;										// unsigned: `*2147483647` + 1 was signed overflow
+									size = static_cast<UInt>(p1->i) + 1u;
 									if (size > constantsPointer - globalsPointer) {
 										throw Exception(NOT_ENOUGH_MEMORY_SPACE);
 									}
 									Value v;
 									constantsPointer -= size;
-									v.p = (Int)(constantsPointer - memoryBase + MEMORY_OFFSET);
+									v.p = makeGAZLPointer(constantsPointer, true);
 									p2->i = v.i;
 									locals.registerSwitch(op2Begin + 1, op2End, p1->i, constantsPointer
 											, -(Int)(ip - codeBase));
@@ -1239,19 +1272,21 @@ const Char* Assembler::feed(const Char* line) {
 }
 
 Processor::Processor() : codeSize(0), codeBase(0), functionCount(0), functionTable(0), memorySize(0), memoryBase(0)
-		, rwMemorySize(0), dataStackBase(0), dataStackEnd(0), ipStackBase(0), ipStackEnd(0), natives(0)
-		, clockCyclesLeft(0), ip(0), dsp(0), ipsp(0), userData(0) {
+		, constantsSize(0), readOffset(0), rwMemorySize(0), dataStackBase(0), dataStackEnd(0), ipStackBase(0)
+		, ipStackEnd(0), natives(0), clockCyclesLeft(0), ip(0), dsp(0), ipsp(0), userData(0) {
 }
 
 Processor::Processor(UInt codeSize, const Instruction* code, UInt functionCount, const UInt* functionTable
-		, UInt memorySize, Value* memory, UInt rwMemorySize, UInt dataStackOffset, UInt dataStackSize, UInt ipStackSize
-		, CallStackEntry* ipStack, NativeFunc const* natives, void* userData)
+		, UInt memorySize, Value* memory, UInt constsSize, UInt rwMemorySize, UInt dataStackOffset, UInt dataStackSize
+		, UInt ipStackSize, CallStackEntry* ipStack, NativeFunc const* natives, void* userData)
 		: codeSize(codeSize), codeBase(code), functionCount(functionCount), functionTable(functionTable)
-		, memorySize(memorySize - 1), memoryBase(memory), rwMemorySize(rwMemorySize)
-		, dataStackBase(memory + dataStackOffset), dataStackEnd(memory + dataStackOffset + dataStackSize)
+		, memorySize(memorySize - 1), memoryBase(memory), constantsSize(constsSize - 1)
+		, readOffset(constantsSize - MEMORY_OFFSET), rwMemorySize(rwMemorySize)
+		, dataStackBase(memory + constantsSize + dataStackOffset)
+		, dataStackEnd(memory + constantsSize + dataStackOffset + dataStackSize)
 		, ipStackBase(ipStack), ipStackEnd(ipStack + ipStackSize), natives(natives), clockCyclesLeft(0x7FFFFFFFU)
 		, ip(codeBase), dsp(dataStackBase), ipsp(ipStackBase), userData(userData) {
-	assert(rwMemorySize <= memorySize);
+	assert(constsSize >= 1 && constsSize - 1 + rwMemorySize <= memorySize - 1);
 	assert(dataStackOffset + dataStackSize <= rwMemorySize);
 	assert(code != 0);
 	assert(memory != 0);
@@ -1262,11 +1297,13 @@ Processor::Processor(UInt codeSize, const Instruction* code, UInt functionCount,
 		, UInt memorySize, Value* memory, UInt globalsSize, UInt constsSize, UInt ipStackSize, CallStackEntry* ipStack
 		, NativeFunc const* natives, void* userData)
 		: codeSize(codeSize), codeBase(code), functionCount(functionCount), functionTable(functionTable)
-		, memorySize(memorySize - 1), memoryBase(memory), rwMemorySize(memorySize - constsSize)
-		, dataStackBase(memory + globalsSize), dataStackEnd(memory + memorySize - constsSize), ipStackBase(ipStack)
-		, ipStackEnd(ipStack + ipStackSize), natives(natives), clockCyclesLeft(0x7FFFFFFFU), ip(codeBase)
-		, dsp(dataStackBase), ipsp(ipStackBase), userData(userData) {
-	assert(globalsSize + constsSize <= memorySize);
+		, memorySize(memorySize - 1), memoryBase(memory), constantsSize(constsSize - 1)
+		, readOffset(constantsSize - MEMORY_OFFSET), rwMemorySize(memorySize - constsSize)
+		, dataStackBase(memory + constantsSize + globalsSize)
+		, dataStackEnd(memory + memorySize - 1), ipStackBase(ipStack), ipStackEnd(ipStack + ipStackSize)
+		, natives(natives), clockCyclesLeft(0x7FFFFFFFU), ip(codeBase), dsp(dataStackBase), ipsp(ipStackBase)
+		, userData(userData) {
+	assert(constsSize >= 1 && globalsSize + constsSize <= memorySize);			// `constsSize` includes the zero guard
 	assert(code != 0);
 	assert(memory != 0);
 	assert(ipStack != 0);
@@ -1278,8 +1315,8 @@ Processor::Processor(UInt codeSize, const Instruction* code, UInt functionCount,
 #define C0 (ip->p0)
 #define C1 (ip->p1)
 #define C2 (ip->p2)
-	#define CHECK_INT_DIV_BY_ZERO(v) if (v == 0) { err = DIVISION_BY_ZERO; goto ret; }
-	#define CHECK_FLOAT_DIV_BY_ZERO(v) if (v == 0) { err = DIVISION_BY_ZERO; goto ret; }
+#define CHECK_INT_DIV_BY_ZERO(v) if (v == 0) { err = DIVISION_BY_ZERO; goto ret; }
+#define CHECK_FLOAT_DIV_BY_ZERO(v) if (v == 0) { err = DIVISION_BY_ZERO; goto ret; }
 
 Int Processor::run() {
 	assert(codeBase != 0);
@@ -1288,26 +1325,26 @@ Int Processor::run() {
 	const Instruction* ip = this->ip;
 	Value* dsp = this->dsp;
 	CallStackEntry* ipsp = this->ipsp;
-	Value* const mb = memoryBase - MEMORY_OFFSET;
+	Value* const mb = memoryBase + constantsSize - MEMORY_OFFSET;														// mb[pointer] is the word at `pointer`
 	UInt ui, ui2;
 	Int nativeError;
 	Int err = TIME_OUT;
 
 	assert(ip != 0);
 	assert(dsp != 0);
-	assert(ipsp > ipStackBase && ipsp <= ipStackEnd); // If this blows it probably means you are trying to continue GAZL after it has returned to your native caller. You need to setup a new call with enterCall().
+	assert(ipsp > ipStackBase && ipsp <= ipStackEnd); 	// If this blows it probably means you are trying to continue GAZL after it has returned to your native caller. You need to setup a new call with enterCall().
 	
 	while (--clockCyclesLeft >= 0) {
 		switch (ip->opcode) {
 			case FUNC_CC_:	if ((UInt)C0.i + (UInt)C1.i > (UInt)(dataStackEnd - dsp)) { err = DATA_STACK_OVERFLOW; goto ret; } dsp += (UInt)(C0.i); break;
-			case CALL_VVC:	ui = V0.p - FUNCTION_OFFSET;						// ui = function ordinal
+		case CALL_VVC:	ui = V0.p - FUNCTION_OFFSET;																	// ui = function ordinal
 							if (ui >= functionCount) { err = BAD_CALL; goto ret; }
-							ui = functionTable[ui];						// ui = code offset
+						ui = functionTable[ui];																			// ui = code offset
 							assert((codeBase + ui)->opcode == FUNC_CC_);
 							goto call;
-			case CALL_CVC:	ui = C0.p - FUNCTION_OFFSET;						// ui = function ordinal (constant, validated at assembly)
+			case CALL_CVC:	ui = C0.p - FUNCTION_OFFSET;																// ui = function ordinal (constant, validated at assembly)
 							assert(ui < functionCount);
-							ui = functionTable[ui];						// ui = code offset
+							ui = functionTable[ui];																		// ui = code offset
 							assert((codeBase + ui)->opcode == FUNC_CC_);
 							goto call;
 			call:			if (ipsp >= ipStackEnd) { err = IP_STACK_OVERFLOW; goto ret; }
@@ -1323,7 +1360,7 @@ Int Processor::run() {
 							if ((nativeError = (*natives[C0.i])(this)) != 0) { err = nativeError; goto ret; }
 							clockCyclesLeft = this->clockCyclesLeft;
 							if (this->ip != ip) {																		// the native called pushCall(): continue in the last-pushed callee
-								assert(this->ipsp > ipsp && this->ipsp[-1].dsp != 0);	// plain pushCall frames on top
+								assert(this->ipsp > ipsp && this->ipsp[-1].dsp != 0);									// plain pushCall frames on top
 								ipsp = this->ipsp;
 								dsp = this->dsp;
 								ip = this->ip;
@@ -1339,8 +1376,8 @@ Int Processor::run() {
 			case PEEK_VC_:	V0 = mb[C1.p]; break;
 			case POKE_CV_:	mb[C0.p] = V1; break;
 			case POKE_CC_:	mb[C0.p] = C1; break;
-			case PEEK_VVV:	if ((ui = (UInt)V1.i + (UInt)V2.i) - MEMORY_OFFSET < memorySize) { V0 = mb[ui]; break; } else { err = BAD_PEEK; goto ret; }
-			case PEEK_VCV:	if ((ui = (UInt)C1.i + (UInt)V2.i) - MEMORY_OFFSET < memorySize) { V0 = mb[ui]; break; } else { err = BAD_PEEK; goto ret; }
+			case PEEK_VVV:	if ((ui = (UInt)V1.i + (UInt)V2.i) + readOffset < memorySize) { V0 = mb[ui]; break; } else { err = BAD_PEEK; goto ret; }
+			case PEEK_VCV:	if ((ui = (UInt)C1.i + (UInt)V2.i) + readOffset < memorySize) { V0 = mb[ui]; break; } else { err = BAD_PEEK; goto ret; }
 			case POKE_VVV:	if ((ui = (UInt)V0.i + (UInt)V1.i) - MEMORY_OFFSET < rwMemorySize) { mb[ui] = V2; break; } else { err = BAD_POKE; goto ret; }
 			case POKE_CVV:	if ((ui = (UInt)C0.i + (UInt)V1.i) - MEMORY_OFFSET < rwMemorySize) { mb[ui] = V2; break; } else { err = BAD_POKE; goto ret; }
 			case POKE_VVC:	if ((ui = (UInt)V0.i + (UInt)V1.i) - MEMORY_OFFSET < rwMemorySize) { mb[ui] = C2; break; } else { err = BAD_POKE; goto ret; }
@@ -1397,7 +1434,8 @@ Int Processor::run() {
 			case COPY_CVC:	ui = C0.i; ui2 = V1.i; goto copy;
 			case COPY_CCC:	ui = C0.i; ui2 = C1.i; goto copy;
 			copy:			if ((UInt)C2.i <= rwMemorySize && ui - MEMORY_OFFSET <= rwMemorySize - (UInt)C2.i
-									&& (UInt)C2.i <= memorySize && ui2 - MEMORY_OFFSET <= memorySize - (UInt)C2.i) {
+									&& (UInt)C2.i <= memorySize
+									&& ui2 + readOffset <= memorySize - (UInt)C2.i) {
 								// std::copy(&mb[ui2], &mb[ui2] + C2.i, &mb[ui]);
 								// memcpy(&mb[ui], &mb[ui2], sizeof (Value) * C2.i);
 								const Value* sp = &mb[ui2];
@@ -1409,7 +1447,7 @@ Int Processor::run() {
 								err = ACCESS_VIOLATION;
 								goto ret;
 							}
-			case FORi_VVB:	V0.i = iadd(V0.i, 1); if (V0.i < V1.i) { ip += C2.i; continue; }; break;		// iadd, not ++: a counter already at INT_MAX made `++` signed-overflow UB. Wrap is unchanged, and FORp maps here too
+			case FORi_VVB:	V0.i = iadd(V0.i, 1); if (V0.i < V1.i) { ip += C2.i; continue; }; break;					// iadd, not ++: a counter already at INT_MAX made `++` signed-overflow UB. Wrap is unchanged, and FORp maps here too
 			case FORi_VCB:	V0.i = iadd(V0.i, 1); if (V0.i < C1.i) { ip += C2.i; continue; }; break;
 			case LSSI_VVB:	if (V0.i < V1.i) { ip += C2.i; continue; }; break;
 			case LSSI_VCB:	if (V0.i < C1.i) { ip += C2.i; continue; }; break;
@@ -1457,25 +1495,25 @@ ret:
 
 Status Processor::enterCall(Pointer functionPointer) {
 	assert(codeBase != 0);
-	UInt ui = functionPointer - FUNCTION_OFFSET;						// ui = function ordinal
+	UInt ui = functionPointer - FUNCTION_OFFSET;																		// ui = function ordinal
 	if (ui >= functionCount) return BAD_CALL;
-	ui = functionTable[ui];										// ui = code offset
+	ui = functionTable[ui];																								// ui = code offset
 	assert((codeBase + ui)->opcode == FUNC_CC_);
 	if (ipsp + 2 > ipStackEnd) return IP_STACK_OVERFLOW;
 	ipsp->ip = this->ip;
 	ipsp++->dsp = this->dsp;
 	ipsp->ip = this->ip;
-	ipsp++->dsp = 0;			// Mark return to native caller.
+ipsp++->dsp = 0;																										// Mark return to native caller.
 	this->ip = codeBase + ui;
 	return OK;
 }
 
 /*
-	pushCall(); the contract is in GAZL.h. The first push in a native call returns to the `^call`'s continuation and restores the
-	caller's frame base (undoing the window advance CALL_NVC performed for the native); every further push chains: its
-	frame resumes at the previously pushed target, so the calls run last-pushed-first, each RETU flowing into the next.
-	Frames store the resume point MINUS ONE because RETU restores and then the dispatch loop increments (`++ip`); for a
-	chain frame that minus-one address is never executed, only incremented over.
+	pushCall(); the contract is in GAZL.h. The first push in a native call returns to the `^call`'s continuation and
+	restores the caller's frame base (undoing the window advance CALL_NVC performed for the native); every further
+	push chains: its frame resumes at the previously pushed target, so the calls run last-pushed-first, each RETU
+	flowing into the next. Frames store the resume point MINUS ONE because RETU restores and then the dispatch loop
+	increments (`++ip`); for a chain frame that minus-one address is never executed, only incremented over.
 */
 Value* Processor::pushCall(Pointer functionPointer) {
 	assert(codeBase != 0);
@@ -1507,11 +1545,11 @@ Value* Processor::pushCall(Pointer functionPointer) {
 	data stack, call stack and instruction pointer hold nothing that needs saving.
 */
 const UInt MEMORY_FORMAT_VERSION = 1;
-const UInt MEMORY_INT_CANARY = 0x01020304;						// Detects endianness / format bugs on thaw.
-const UInt MEMORY_HEADER_SIZE = 4 + 6 * 4;						// Magic + { format version, GAZL version, word size, int canary, float canary, global count }.
+const UInt MEMORY_INT_CANARY = 0x01020304;							// Detects endianness / format bugs on thaw.
+const UInt MEMORY_HEADER_SIZE = 4 + 6 * 4;							// Magic + { format version, GAZL version, word size, int canary, float canary, global count }.
 static const char MEMORY_MAGIC[4] = { 'G', 'Z', 'M', 'M' };
 
-static unsigned char* putMemoryWord(unsigned char* p, UInt v) {	// Writes a 32-bit little-endian word.
+static unsigned char* putMemoryWord(unsigned char* p, UInt v) {		// Writes a 32-bit little-endian word.
 	p[0] = static_cast<unsigned char>(v);
 	p[1] = static_cast<unsigned char>(v >> 8);
 	p[2] = static_cast<unsigned char>(v >> 16);
@@ -1520,7 +1558,7 @@ static unsigned char* putMemoryWord(unsigned char* p, UInt v) {	// Writes a 32-b
 }
 
 static const unsigned char* getMemoryWord(const unsigned char* p, const unsigned char* end, UInt& value, bool& ok) {
-	if (end - p < 4) { ok = false; value = 0; return p; }		// Truncated: stop reading, leave `ok` false.
+	if (end - p < 4) { ok = false; value = 0; return p; }			// Truncated: stop reading, leave `ok` false.
 	value = (UInt)p[0] | ((UInt)p[1] << 8) | ((UInt)p[2] << 16) | ((UInt)p[3] << 24);
 	return p + 4;
 }
@@ -1538,7 +1576,7 @@ UInt freezeMemorySize(const Processor& processor, const Symbols& symbols) {
 
 UInt freezeMemory(const Processor& processor, const Symbols& symbols, void* buffer, UInt bufferSize) {
 	const UInt needed = freezeMemorySize(processor, symbols);
-	if (buffer == 0 || bufferSize < needed) return needed;	// Too small: write nothing, tell the caller the required size.
+	if (buffer == 0 || bufferSize < needed) return needed;			// Too small: write nothing, tell the caller the required size.
 
 	unsigned char* const start = static_cast<unsigned char*>(buffer);
 	unsigned char* p = start;
@@ -1549,7 +1587,7 @@ UInt freezeMemory(const Processor& processor, const Symbols& symbols, void* buff
 	memcpy(p, MEMORY_MAGIC, 4);
 	p += 4;
 	Value floatCanary;
-	floatCanary.f = 1.0f;										// Detects a divergent float bit-layout on thaw.
+	floatCanary.f = 1.0f;											// Detects a divergent float bit-layout on thaw.
 	p = putMemoryWord(p, MEMORY_FORMAT_VERSION);
 	p = putMemoryWord(p, (UInt)VERSION);
 	p = putMemoryWord(p, (UInt)WORD_SIZE);
@@ -1569,7 +1607,7 @@ UInt freezeMemory(const Processor& processor, const Symbols& symbols, void* buff
 		assert(source != 0);
 		for (UInt i = 0; i < info.size; ++i) p = putMemoryWord(p, source[i].p);
 	}
-	assert((UInt)(p - start) == needed);					// Byte count must match freezeMemorySize exactly.
+	assert((UInt)(p - start) == needed);							// Byte count must match freezeMemorySize exactly.
 	return needed;
 }
 
@@ -1806,7 +1844,7 @@ bool unitTest() {
 			Symbols::Iterator it;
 			for (bool ok = globals.findFirstGlobal(it, false, true); ok; ok = globals.findNextGlobal(it, false, true)) {
 				const GlobalInfo info = globals.getGlobalInfo(it);
-				const UInt index = info.address - MEMORY_OFFSET;
+				const UInt index = info.address - MEMORY_OFFSET + (sizes.constsSize - 1);			// the buffer starts with the constants
 				for (UInt i = 0; i < info.size; ++i) assert(memory2[index + i].i == memory[index + i].i);
 			}
 			// The restored function pointer resolves to CallBack in the fresh assembly (and equals the original ordinal).
