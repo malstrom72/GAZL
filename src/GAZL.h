@@ -440,6 +440,7 @@ enum MemoryLoad {
 UInt freezeMemorySize(const Processor& processor, const Symbols& symbols);												// Exact byte count a freeze will occupy.
 UInt freezeMemory(const Processor& processor, const Symbols& symbols, void* buffer, UInt bufferSize);					// Writes the blob; returns the size (writes nothing and returns the needed size if `bufferSize` is too small).
 MemoryLoad thawMemory(Processor& processor, const Symbols& symbols, const void* buffer, UInt bufferSize);				// Restores non-TEMP globals by name into an already-assembled Processor.
+Float parseFloat(const Char*& p, const Char* e);																		// Reads a float literal at `p`, advancing it, rounded to the nearest float, ties to even.
 
 #if !defined(NDEBUG)
 bool unitTest();
