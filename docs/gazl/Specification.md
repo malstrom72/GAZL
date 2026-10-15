@@ -87,8 +87,8 @@ assembly when the divisor is a constant 0.
   wider format (x87 extended precision) or fusing instructions (a multiply and an add contracted into one FMA) is
   not allowed, in the interpreter, at assembly or in a JIT.
 - **No finite-math assumption.** An implementation must not assume that values are finite or that a NaN equals
-  itself: `NEQf x x` must branch for a NaN, and infinities must compare and convert as specified. One built with
-  optimizations that break this (`-ffast-math`, `-Ofast`, `/fp:fast`) does not conform.
+  itself: `NEQf x x` must branch for a NaN, and infinities must compare and convert as specified. An implementation
+  compiled with options that break this (`-ffast-math`, `-Ofast`, `/fp:fast`) does not conform.
 - **Division by zero.** `DIVf` by zero (either sign) stops the program with `DIVISION_BY_ZERO`; it never produces an
   infinity. Infinities and NaNs can still arise from overflow and from operations like `inf - inf`.
 - **NaN bits.** A NaN computed by an instruction is a quiet NaN, but its sign and payload are unspecified, because
