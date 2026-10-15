@@ -52,10 +52,10 @@ std::string Big::toDecimal() const {
 	}
 	if (chunks.empty()) return "0";
 	char buffer[16];
-	sprintf(buffer, "%u", chunks.back());
+	snprintf(buffer, sizeof (buffer), "%u", chunks.back());
 	std::string result(buffer);
 	for (size_t i = chunks.size() - 1; i-- > 0;) {
-		sprintf(buffer, "%09u", chunks[i]);
+		snprintf(buffer, sizeof (buffer), "%09u", chunks[i]);
 		result += buffer;
 	}
 	return result;
@@ -91,7 +91,7 @@ static std::string scientific(const std::string& plain) {														// "d.ddd
 	std::string mantissa = digits.substr(first);
 	while (mantissa.size() > 1 && mantissa[mantissa.size() - 1] == '0') mantissa.erase(mantissa.size() - 1);
 	char buffer[16];
-	sprintf(buffer, "e%d", exponent);
+	snprintf(buffer, sizeof (buffer), "e%d", exponent);
 	return mantissa.substr(0, 1) + "." + (mantissa.size() > 1 ? mantissa.substr(1) : "0") + buffer;
 }
 
@@ -143,7 +143,7 @@ static void testFloat(UInt bits) {
 	float f;
 	memcpy(&f, &bits, sizeof (f));
 	char buffer[64];
-	sprintf(buffer, "%.9g", f);
+	snprintf(buffer, sizeof (buffer), "%.9g", f);
 	std::string short9(buffer);
 	if (short9.find_first_of(".e") == std::string::npos) short9 += ".0";
 	check(short9, bits);
