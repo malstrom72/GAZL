@@ -1004,7 +1004,8 @@ void Assembler::parseOperand(const Char* b, const Char* e, int accepts, Value* v
 /*
 	A data label covers its own statement and everything after it, up to the next label or the end of the section. So
 	each label is declared reaching to the end of the section, and the next label shortens the previous one to end
-	where it starts. In an unnamed section, data before the first label could never be reached.
+	where it starts. In an unnamed section, data before the first label would belong to no name, so a snapshot could
+	not save it.
 */
 void Assembler::noteDataStatement(const Char* labelBegin, const Char* labelEnd, const Value* first) {
 	if (labelBegin == labelEnd) {

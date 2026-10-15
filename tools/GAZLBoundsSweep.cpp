@@ -879,8 +879,9 @@ int sweepTextEncoding() {
 }
 
 /*
-	A data section that has no name and no labelled data statement can never be reached, so the assembler refuses
-	it, when the next section opens or at `finalize`. Returns the number of failures, each one printed.
+	Data in an unnamed section before its first label belongs to no name, so a snapshot could not save it, and the
+	assembler refuses it: at the statement, or for a section with no data, when the next section opens or at
+	`finalize`. Returns the number of failures, each one printed.
 */
 int sweepUnnamedSections() {
 	struct Case { const char* what; const char* source; int error; };
