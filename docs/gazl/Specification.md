@@ -60,7 +60,8 @@ Data memory is one array of words, sized by the host. Every address is measured 
   for a string's terminator stops there. No checked read reaches it.
 
 Every address therefore depends only on the program: neither globals nor constants move when the host chooses a
-different memory size. Only the size of the data stack does.
+different memory size. Only the size of the data stack does. The host must provide at least `C + G + 1` words,
+the constants, the globals and the zero guard; every word beyond that is data stack.
 
 A read must succeed exactly when its pointer is in `[base - C, base + rw)`, and a write exactly when it is in
 `[base, base + rw)`. An address is `base + offset` computed with 32-bit wrap-around, so an offset can never carry
@@ -383,3 +384,11 @@ answer.
 1. **Float literals use `pow`.** Step 3 of the literal algorithm calls the C library's `pow`, which is not
    guaranteed to round the same way everywhere. Should the exponent be applied by an exactly specified method
    (for example, repeated multiplication by 10 in binary64)? That would only change literals with an exponent.
+2. **The snapshot format is decided but not implemented.** Section 11 is the format to build. Today's
+   `freezeMemory` / `thawMemory` write and read an earlier layout of the same idea:
+   - the two check words sit in the header rather than in a `$gazl` check section, and there is no NaN word;
+   - names are not padded, and sections follow the assembler's own order rather than ascending names;
+   - the reader accepts only its own GAZL version;
+   - it restores while it parses, so a truncated snapshot restores the sections before the damage, and there is
+     no `MEMORY_MALFORMED`.
+   No snapshots exist yet that must stay readable, so the implementation can switch to section 11 directly.
