@@ -18,6 +18,9 @@ bash tools/test-fuzz.sh
 # Every memory instruction form at every edge of the memory arena, against an oracle (tools/GAZLBoundsSweep.cpp).
 bash tools/test-bounds.sh
 
+# Float literals round correctly, sampled across every float (tools/GAZLFloatLiteralTest.cpp).
+bash tools/test-float-literals.sh
+
 # Build Impala
 bash tools/BuildImpala.sh
 

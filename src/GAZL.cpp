@@ -23,6 +23,7 @@
 
 #include "GAZL.h"
 #include <math.h>
+#include <stdint.h>
 #include <string.h>
 #include <stdlib.h>
 #include <string>
@@ -167,42 +168,174 @@ static Int stringToInt(const Char* &p, const Char* e) {
 					} /* else continue */
 		default:	for (; p < e && *p >= '0' && *p <= '9'; ++p) i = i * 10 + (*p - '0'); break;
 	}
-	return (Int)(sign < 0 ? 0u - i : i);									// negate in UNSIGNED: `(Int)i * -1` is signed-overflow UB at i == 2^31, the literal -2147483648
+	return (Int)(sign < 0 ? 0u - i : i);																	// negate in UNSIGNED: `(Int)i * -1` is signed-overflow UB at i == 2^31, the literal -2147483648
 }
 
-template<class F> F pow10(F x) { return pow(10, x); }
+/**
+	An unsigned integer of up to 1024 bits, enough for the exact comparisons in `parseFloat`.
+**/
+class ExactInt {
+	public:		explicit ExactInt(UInt value) : size(1) { words[0] = value; }
+	public:		void multiplyAdd(UInt factor, UInt addend);													/// `this` = `this` * `factor` + `addend`
+	public:		void multiplyByPowerOfTen(int power);
+	public:		void shiftLeft(int bits);
+	public:		int compare(const ExactInt& other) const;													/// -1, 0 or 1
+	protected:	enum { MAX_WORDS = 32 };
+	protected:	int size;																					// words in use, the top one non-zero unless the value is 0
+	protected:	UInt words[MAX_WORDS];																		// least significant first
+};
 
-static Float stringToFloat(const Char* &p, const Char* e) {
-	/*
-		Accumulate in double, convert to Float once at the end. Accumulating directly in float32
-		diverges across compilers: `d * 10 + digit` loses precision at each step near the float
-		range limit, and clang contracts it to a single-rounded fmadd while MSVC emits mul+add
-		(two roundings) -- so e.g. "2147483647.0" parsed to 2^31 on one and 2^31-128 on the other.
-		A <=15-digit integer is exact in double (so contraction cannot change it), and the single
-		closing double->float conversion is correctly rounded and identical on every target.
-	*/
-	double d = 0;
-	double sign = 1;
+void ExactInt::multiplyAdd(UInt factor, UInt addend) {
+	uint64_t carry = addend;
+	for (int i = 0; i < size; ++i) {
+		carry += static_cast<uint64_t>(words[i]) * factor;
+		words[i] = static_cast<UInt>(carry);
+		carry >>= 32;
+	}
+	if (carry != 0) {
+		assert(size < MAX_WORDS);
+		words[size++] = static_cast<UInt>(carry);
+	}
+}
+
+void ExactInt::multiplyByPowerOfTen(int power) {
+	static const UInt SMALL_POWERS[9] = { 1, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000 };
+	for (; power >= 9; power -= 9) multiplyAdd(1000000000, 0);
+	multiplyAdd(SMALL_POWERS[power], 0);
+}
+
+void ExactInt::shiftLeft(int bits) {
+	const int wordShift = bits / 32;
+	const int bitShift = bits % 32;
+	assert(size + wordShift + 1 <= MAX_WORDS);
+	words[size + wordShift] = 0;
+	for (int i = size - 1; i >= 0; --i) {
+		if (bitShift != 0) words[i + wordShift + 1] |= words[i] >> (32 - bitShift);
+		words[i + wordShift] = words[i] << bitShift;
+	}
+	for (int i = 0; i < wordShift; ++i) words[i] = 0;
+	size += wordShift + 1;
+	while (size > 1 && words[size - 1] == 0) --size;
+}
+
+int ExactInt::compare(const ExactInt& other) const {
+	if (size != other.size) return (size < other.size ? -1 : 1);
+	for (int i = size - 1; i >= 0; --i) {
+		if (words[i] != other.words[i]) return (words[i] < other.words[i] ? -1 : 1);
+	}
+	return 0;
+}
+
+/*
+	Compares the decimal `digits` * 10^`power`, plus a non-zero `tail` below its last digit if `tail` is set, with
+	the midpoint between the positive floats with bits `bits` and `bits + 1`: -1 below, 0 on it, 1 above.
+*/
+static int compareWithMidpoint(const ExactInt& digits, int power, bool tail, UInt bits) {
+	const UInt field = bits >> 23;
+	const UInt mantissa = (field != 0 ? (bits & 0x7FFFFF) | 0x800000 : bits);
+	const int exponent = static_cast<int>(field != 0 ? field : 1) - 150;										// the float is `mantissa` * 2^`exponent`
+	ExactInt left(digits);
+	ExactInt right(2 * mantissa + 1);																			// the midpoint is `right` * 2^(`exponent` - 1)
+	if (power >= 0) left.multiplyByPowerOfTen(power);
+	else right.multiplyByPowerOfTen(-power);
+	if (exponent >= 1) right.shiftLeft(exponent - 1);
+	else left.shiftLeft(1 - exponent);
+	const int comparison = left.compare(right);
+	return (comparison == 0 && tail ? 1 : comparison);
+}
+
+/*
+	The bits of a positive float within a step or so of `value`, built from its binary exponent and mantissa with
+	integer operations only, so that a flush-to-zero floating-point environment cannot move it.
+*/
+static UInt approximateFloatBits(double value) {
+	if (!(value > 0.0)) return 0;
+	if (value >= 4.0e38) return 0x7F800000;
+	int exponent;
+	const UInt mantissa = static_cast<UInt>(frexp(value, &exponent) * 16777216.0);								// `value` = `mantissa` * 2^(`exponent` - 24)
+	if (exponent + 126 >= 255) return 0x7F800000;
+	if (exponent + 126 >= 1) return (static_cast<UInt>(exponent + 126) << 23) | (mantissa & 0x7FFFFF);
+	const int shift = -(exponent + 125);																			// subnormal: count steps of 2^-149
+	return (shift >= 32 ? 0 : mantissa >> shift);
+}
+
+/*
+	Reads a float literal, `[sign] digits [. digits] [e exponent]`, and rounds its exact decimal value to the nearest
+	float, ties to even. A double gives a candidate within a step or so; exact comparisons with the midpoints next
+	to it then move it to the correctly rounded result. A float midpoint has at most 113 significant digits, so the
+	first `MAX_DIGITS` decide every comparison, and the rest only count as a non-zero `tail`. The exact midpoint
+	comparison comes from Numbstrict's `parseReal` (https://github.com/malstrom72/Numbstrict), cut down to float.
+*/
+Float parseFloat(const Char*& p, const Char* e) {
+	const int MAX_DIGITS = 120;
+	const int MAX_APPROXIMATE_DIGITS = 17;
+	bool negative = false;
 	switch (p < e ? *p : 0) {
-		case '+': ++p; sign = 1; break;
-		case '-': ++p; sign = -1; break;
+		case '+': ++p; break;
+		case '-': ++p; negative = true; break;
 	}
+	ExactInt digits(0);
+	int count = 0;																									// significant digits in `digits`
+	int power = 0;																									// the value is `digits` * 10^`power` (+ `tail`)
+	bool tail = false;
+	double approximate = 0.0;
+	int approximateCount = 0;
 	if (p < e && *p >= '0' && *p <= '9') {
+		bool fraction = false;
 		do {
-			d = d * 10 + (*p - '0');
-		} while (++p < e && *p >= '0' && *p <= '9');
-		if (p + 1 < e && *p == '.' && p[1] >= '0' && p[1] <= '9') {
+			const UInt digit = static_cast<UInt>(*p - '0');
+			if (count == 0 && digit == 0) {																			// leading zero
+				if (fraction) --power;
+			} else if (count < MAX_DIGITS) {
+				digits.multiplyAdd(10, digit);
+				++count;
+				if (fraction) --power;
+				if (approximateCount < MAX_APPROXIMATE_DIGITS) {
+					approximate = approximate * 10.0 + digit;
+					++approximateCount;
+				}
+			} else {
+				if (!fraction) ++power;
+				tail = tail || (digit != 0);
+			}
 			++p;
-			double f = 1;
-			do {
-				d += (*p - '0') * (f *= 0.1);
-			} while (++p < e && *p >= '0' && *p <= '9');
-		}
+			if (!fraction && p + 1 < e && *p == '.' && p[1] >= '0' && p[1] <= '9') {
+				fraction = true;
+				++p;
+			}
+		} while (p < e && *p >= '0' && *p <= '9');
 		if (p + 1 < e && (*p == 'E' || *p == 'e')) {
-			d *= pow10((double)(stringToInt(++p, e)));
+			const Int exponent = stringToInt(++p, e);
+			power += (exponent < -100000 ? -100000 : exponent > 100000 ? 100000 : exponent);					// far beyond any float
 		}
 	}
-	return static_cast<Float>(d * sign);
+	UInt bits;
+	const int lead = power + count - 1;																				// decimal exponent of the leading digit
+	if (count == 0 || lead < -46) {																					// below 1e-46, under half the least float
+		bits = 0;
+	} else if (lead > 38) {																							// 1e39 or more
+		bits = 0x7F800000;
+	} else {
+		int scale = power + count - approximateCount;
+		for (; scale > 0; --scale) approximate *= 10.0;
+		double divisor = 1.0;
+		for (; scale < 0; ++scale) divisor *= 10.0;
+		bits = approximateFloatBits(approximate / divisor);
+		while (bits < 0x7F800000) {
+			const int comparison = compareWithMidpoint(digits, power, tail, bits);
+			if (comparison < 0 || (comparison == 0 && (bits & 1) == 0)) break;
+			++bits;
+		}
+		while (bits > 0) {
+			const int comparison = compareWithMidpoint(digits, power, tail, bits - 1);
+			if (comparison > 0 || (comparison == 0 && ((bits - 1) & 1) != 0)) break;
+			--bits;
+		}
+	}
+	Float value;
+	bits |= (negative ? 0x80000000U : 0U);
+	memcpy(&value, &bits, sizeof (value));
+	return value;
 }
 
 static Char* int2string(Int i, int radix, int minLength, Char buffer[33]) {
@@ -818,7 +951,7 @@ void Assembler::parseConstant(const Char* b, const Char* e, int accepts, Value* 
 							if (v->i < 0 && (accepts & CONST_INT_N) == 0) throw Exception(NEGATIVE_VALUE_NOT_ACCEPTED, b, e);
 						} else {
 							p = b;
-							v->f = stringToFloat(p, e);
+							v->f = parseFloat(p, e);
 							if (p != e) throw Exception(INVALID_NUMERICAL_LITERAL, p, e);
 							if ((accepts & CONST_FLOAT) == 0) throw Exception(DID_NOT_EXPECT_CONSTANT_FLOAT, p, e);
 						}
@@ -1494,7 +1627,7 @@ Status Processor::enterCall(Pointer functionPointer) {
 	ipsp->ip = this->ip;
 	ipsp++->dsp = this->dsp;
 	ipsp->ip = this->ip;
-ipsp++->dsp = 0;																										// Mark return to native caller.
+	ipsp++->dsp = 0;																									// Mark return to native caller.
 	this->ip = codeBase + ui;
 	return OK;
 }
