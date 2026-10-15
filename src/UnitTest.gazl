@@ -2067,11 +2067,9 @@ DEFINED_POINTER: ! DEFp    &gArray:3
 ;
 ; Float literal parsing: correctly rounded and identical on every compiler
 ;
-; stringToFloat must round the decimal literal to the nearest float (it accumulates in double, then converts once),
-; NOT accumulate directly in float32 -- the latter diverged across compilers (clang contracts `d*10+digit` to a
-; single-rounded fmadd, MSVC emits mul+add), e.g. 2147483647.0 parsed to 2^31 on one and 2^31-128 on the other.
-; These compile-time comparisons pin the correctly-rounded result: each literal is not exactly representable and
-; must round to the neighbouring power of two.
+; parseFloat rounds a literal's exact decimal value to the nearest float, ties to even, on every compiler (an older
+; parser accumulated in floating point and diverged across compilers, then rounded exact ties the wrong way).
+; These compile-time comparisons pin the correctly rounded result: each literal is not exactly representable.
 ;
 ;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 
@@ -2081,6 +2079,12 @@ okFParse0: NOOP
  EQUf      #16777217.0      #16777216.0      @okFParse1     ; 2^24+1 not representable -> rounds (to even) to 2^24
  GOTO      @fail
 okFParse1: NOOP
+ EQUf      #2180774.875     #2180775.0       @okFParse2     ; a tie between 2180774.75 and 2180775: to the even one
+ GOTO      @fail
+okFParse2: NOOP
+ EQUf      #1135055.5625    #1135055.5       @okFParse3     ; a tie between 1135055.5 and 1135055.625: to the even one
+ GOTO      @fail
+okFParse3: NOOP
 
     done:               POKE &global.pointer &consts.done
                         RETU

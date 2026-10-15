@@ -27,6 +27,10 @@ REM Every memory instruction form at every edge of the memory arena, against an 
 CALL tools\test-bounds.cmd
 IF ERRORLEVEL 1 EXIT /B 1
 
+REM Float literals round correctly, sampled across every float (tools\GAZLFloatLiteralTest.cpp).
+CALL tools\test-float-literals.cmd
+IF ERRORLEVEL 1 EXIT /B 1
+
 REM Build Impala
 CALL tools\BuildImpala.cmd
 IF ERRORLEVEL 1 EXIT /B 1
