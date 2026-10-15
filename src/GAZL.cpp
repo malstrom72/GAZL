@@ -921,6 +921,9 @@ void Assembler::finalize(ProgramSizes& sizes) {
 		memmove(memoryBase + constantsSize, memoryBase, (globalsPointer - memoryBase) * sizeof (Value));
 		memcpy(memoryBase, &constants[0], constantsSize * sizeof (Value));
 	}
+	// Poison the data stack, so a local read before its first write gets 0xDEADBEEF rather than a plausible value.
+	Value* const stackEnd = memoryEnd - 1;
+	for (Value* p = memoryBase + constantsSize + (globalsPointer - memoryBase); p < stackEnd; ++p) p->p = 0xDEADBEEF;
 	sizes.codeSize = (UInt)(ip - codeBase);
 	sizes.functionCount = this->functionCount;
 	sizes.globalsSize = (UInt)(globalsPointer - memoryBase);
