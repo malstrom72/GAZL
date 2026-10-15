@@ -44,3 +44,10 @@ uses references. Changing it breaks hosts, so it waits for a version bump.
 
 There is no host call to reserve space on the GAZL data stack, for a native that needs scratch memory GAZL code
 can see. `accessParams` covers arguments only.
+
+## C-style casts outside the dispatch loop
+
+Casts are written `static_cast<Int>(v)`, not `(Int)v`, everywhere except the tight VM loop in `Processor::run` and
+its operand macros, where the short form stays. `src/GAZL.cpp` still has about 58 C-style casts,
+most of them in the assembler, `finalize` and the snapshot code. Convert them in one pass, leaving `run()` and its
+macros alone, so the pass changes no generated code there.
