@@ -173,6 +173,8 @@ fill it in order:
 - A label on a data statement names the statement's first word and covers exactly the values the statement
   writes. A data statement without values is legal and writes nothing; a label on it covers no words (size 0).
 - Words left unfilled are 0.
+- A section must be reachable: if it has no label and none of its data statements has one, it is an assembly error
+  (`UNNAMED_DATA_SECTION`).
 
 `TEMP` is `GLOB` that a memory snapshot skips (section 11). `CNST` sections are read-only.
 
@@ -347,21 +349,19 @@ saved at most once, under the outermost name it has:
 bits each, whatever their type: an int as its two's-complement bits, a float as its binary32 bits, a pointer as
 its raw value.
 
-**Validation.** A reader validates the whole snapshot before restoring anything. It is rejected, with nothing
-restored, when any of the following fails, checked in this order:
+**Validation.** A reader validates the whole snapshot before restoring anything. On the first problem below, looked
+for in this order, it restores nothing and returns that problem's status:
 
-| check                                                                           | status                |
-| ------------------------------------------------------------------------------- | --------------------- |
-| at least 4 bytes, and the magic is right                                        | `MEMORY_BAD_MAGIC`    |
-| the header is complete                                                          | `MEMORY_TRUNCATED`    |
-| format version 1, and a GAZL version from 1 up to the reader's own              | `MEMORY_BAD_VERSION`  |
-| word size 32                                                                    | `MEMORY_BAD_WORDSIZE` |
-| every length stays inside the snapshot                                          | `MEMORY_TRUNCATED`    |
-| the check section is exactly as above                                           | `MEMORY_BAD_CANARY`   |
-| every name is a valid identifier, names ascend strictly, padding bytes are zero | `MEMORY_MALFORMED`    |
-| the snapshot ends exactly after the last section                                | `MEMORY_MALFORMED`    |
-
-`MEMORY_MALFORMED` is new; the other statuses exist today.
+| problem                                                                              | status                |
+| ------------------------------------------------------------------------------------ | --------------------- |
+| fewer than 4 bytes, or the magic is wrong                                            | `MEMORY_BAD_MAGIC`    |
+| the header is incomplete                                                             | `MEMORY_TRUNCATED`    |
+| the format version is not 1, or the GAZL version is 0 or above the reader's own      | `MEMORY_BAD_VERSION`  |
+| the word size is not 32                                                              | `MEMORY_BAD_WORDSIZE` |
+| a length runs past the end of the snapshot                                           | `MEMORY_TRUNCATED`    |
+| the check section differs from the one above                                         | `MEMORY_BAD_CANARY`   |
+| a name is not a valid identifier, names do not ascend strictly, or padding is not 0  | `MEMORY_MALFORMED`    |
+| bytes follow the last section                                                        | `MEMORY_MALFORMED`    |
 
 **Restore.** Only after validation succeeds, a program section is restored when the re-assembled program has a
 writable section of the same name and size. Every other section is skipped without error.
@@ -369,11 +369,11 @@ writable section of the same name and size. Every other section is skipped witho
 **Data only.** A snapshot holds data and nothing else. Its meaning depends on two more parts, both the host's to
 keep with it:
 - **Code:** the GAZL source the program was assembled from.
-- **Constants:** every constant the host supplied at assembly, `extern struct` layouts included.
+- **Constants:** every constant the host supplied at assembly.
 
 A restore is defined for a program assembled from the same code and the same constants. The re-assembly then
-rebuilds an identical layout and identical function ordinals, and every section is restored exactly, pointers
-included.
+rebuilds an identical layout and identical function ordinals (section 2), and every section is restored exactly,
+pointers included.
 
 Restoring into a changed program still works by name and size, but nothing more is promised:
 - the snapshot records no types and no layouts;
