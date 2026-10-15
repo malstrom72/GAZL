@@ -298,6 +298,9 @@ A snapshot ("freeze") saves the values of a program's named global sections so a
 ("thaw"), even after the program has been changed and re-assembled. A snapshot is a payload that a host embeds in
 its own storage (a plugin state chunk, a preset file); it is not a file format of its own.
 
+This format is decided but not implemented yet: today's `freezeMemory` / `thawMemory` write an earlier layout of the
+same idea (open question 2).
+
 **Encoding.** A snapshot is a sequence of bytes built from two kinds of field:
 - A **word** is 4 bytes holding an unsigned 32-bit value, little-endian: bits 0-7 first, bits 24-31 last.
 - A **name** is a section's identifier (section 5), one byte per character, followed by 0 to 3 zero bytes of
