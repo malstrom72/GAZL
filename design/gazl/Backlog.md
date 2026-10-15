@@ -57,6 +57,9 @@ macros alone, so the pass changes no generated code there.
 `SEEK :offset [*extent]` (GAZL 2 only) needs another design pass before GAZL 2 is final:
 - `:offset` is measured from the section start, but reads like a relative jump of `offset` words. The base should
   be explicit, or the mnemonic clearer.
+- It does not really seek. It never leaves the current section, and `*extent` fences the `DAT` rows that follow
+  into an even smaller range, so it opens a part of the section and fills it. A name like `PART`, `SLOT` or `AREA`
+  would say that.
 - The common case, zeros and then more data, would be simpler as plain data, for example `DATz *n` (n zero words),
   leaving absolute placement to what Impala 2 really needs: struct fields at offsets the host decides.
 - Data label extents (a label covers up to the next label or the end of its section, from #135) must become
