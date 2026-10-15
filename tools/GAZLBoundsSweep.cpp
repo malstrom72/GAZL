@@ -735,8 +735,6 @@ int sweepSnapshotEntries() {
 		"state:\tGLOB *3\n"					// named section with labels inside: saved once, as `state`
 		"gain:\tDATf #0.5\n"
 		"level:\tDATi #3\n"
-		"\tGLOB *4\n"						// unnamed section without labels: nothing to save it under
-		"\tDATi #11 #12 #13 #14\n"
 		"\tGLOB *3\n"						// unnamed section, first word labelled
 		"first:\tDATi #21\n"
 		"\tDATi #22\n"
@@ -863,9 +861,9 @@ int sweepTextEncoding() {
 	const Case CASES[] = {
 		{ "DATs with a byte above 0x7F", "\tGLOB *4\n\tDATs abc\xE5\n", NON_ASCII_TEXT },
 		{ "a quoted literal with a byte above 0x7F", "\tGLOB *1\n\tDATi #'\xE5'\n", NON_ASCII_TEXT },
-		{ "a comment with bytes above 0x7F", "\tGLOB *1\n\tDATi #1 ; \xE5\xE4\xF6 \xC3\xA5\n; \xFF\n", -1 },
-		{ "ASCII DATs text", "\tGLOB *3\n\tDATs abc\n", -1 },
-		{ "an ASCII quoted literal", "\tGLOB *1\n\tDATi #'AB'\n", -1 }
+		{ "a comment with bytes above 0x7F", "t:\tGLOB *1\n\tDATi #1 ; \xE5\xE4\xF6 \xC3\xA5\n; \xFF\n", -1 },
+		{ "ASCII DATs text", "t:\tGLOB *3\n\tDATs abc\n", -1 },
+		{ "an ASCII quoted literal", "t:\tGLOB *1\n\tDATi #'AB'\n", -1 }
 	};
 	const int count = sizeof (CASES) / sizeof (*CASES);
 	int failures = 0;
@@ -877,6 +875,34 @@ int sweepTextEncoding() {
 		}
 	}
 	std::printf("text encoding: %d checked, %d failed\n", count, failures);
+	return failures;
+}
+
+/*
+	A data section that has no name and no labelled data statement can never be reached, so the assembler refuses
+	it, when the next section opens or at `finalize`. Returns the number of failures, each one printed.
+*/
+int sweepUnnamedSections() {
+	struct Case { const char* what; const char* source; int error; };
+	const Case CASES[] = {
+		{ "an unnamed GLOB with unlabelled data", "\tGLOB *1\n\tDATi #0\n", UNNAMED_DATA_SECTION },
+		{ "an unnamed GLOB followed by another section", "\tGLOB *1\n\tDATi #0\nb:\tGLOB *1\n", UNNAMED_DATA_SECTION },
+		{ "an unnamed CNST with unlabelled data", "\tCNST *1\n\tDATi #0\n", UNNAMED_DATA_SECTION },
+		{ "an unnamed TEMP without data", "\tTEMP *1\n", UNNAMED_DATA_SECTION },
+		{ "a named section", "s:\tGLOB *1\n\tDATi #0\n", -1 },
+		{ "an unnamed section with a labelled statement", "\tGLOB *1\na:\tDATi #0\n", -1 },
+		{ "an unnamed section labelled on a later statement", "\tGLOB *2\n\tDATi #0\nb:\tDATi #0\n", -1 }
+	};
+	const int count = sizeof (CASES) / sizeof (*CASES);
+	int failures = 0;
+	for (int i = 0; i < count; ++i) {
+		const int error = assemblyError(CASES[i].source);
+		if (error != CASES[i].error) {
+			std::printf("FAIL unnamed sections: %s gave error %d, expected %d\n", CASES[i].what, error, CASES[i].error);
+			++failures;
+		}
+	}
+	std::printf("unnamed sections: %d checked, %d failed\n", count, failures);
 	return failures;
 }
 
@@ -984,6 +1010,7 @@ int main() {
 		std::printf("bounds sweep: this host forbids executable memory; the JIT is NOT swept\n");
 	}
 #endif
-	const int hostFailures = sweepNativeAccess() + sweepFrameAndThaw() + sweepSnapshotEntries() + sweepTextEncoding();
+	const int hostFailures = sweepNativeAccess() + sweepFrameAndThaw() + sweepSnapshotEntries() + sweepTextEncoding()
+			+ sweepUnnamedSections();
 	return (sweep(engineCount) != 0 || hostFailures != 0) ? 1 : 0;
 }

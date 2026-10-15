@@ -87,6 +87,7 @@ const char* ASSEMBLER_ERROR_TEXTS[] = {
 	/* , LABEL_ON_FUNCTION							*/	, "Branch target lands on a FUNC"
 	/* , FRAME_TOO_LARGE								*/	, "Frame too large"
 	/* , NON_ASCII_TEXT								*/	, "Non-ASCII character in text"
+	/* , UNNAMED_DATA_SECTION						*/	, "Data section has no name and no labelled data"
 };
 
 // --- defined integer / FTOI semantics, shared by Processor::run() and calcConstant() so the
@@ -880,8 +881,8 @@ Assembler::Assembler(UInt maxCodeSize, Instruction* codeBase, UInt maxFunctionCo
 		: codeBase(codeBase), codeEnd(codeBase + maxCodeSize), maxFunctionCount(maxFunctionCount)
 		, functionTable(functionTable), memoryBase(memoryBase), memoryEnd(memoryBase + maxMemorySize)
 		, ip(codeBase), functionStart(0), functionCount(0), localsSize(0), paramsSize(0), globalsPointer(memoryBase)
-		, constantsPointer(memoryEnd), dataLabelType(0), dataPointer(0), dataEnd(0), dataIsConstant(false)
-		, globals(globals) {
+		, constantsPointer(memoryEnd), dataLabelType(0), dataPointer(0), dataEnd(0), dataIsNamed(false)
+		, dataIsConstant(false), globals(globals) {
 	for (Int i = 0; i < 128; ++i) compileTimeVars[i].types = 0;
 	Value v;
 	v.i = 0;
@@ -1035,7 +1036,10 @@ void Assembler::finalizeFunction() {
 
 void Assembler::finalize(ProgramSizes& sizes) {
 	newUnit(0);
-	if (dataPointer != 0) memset(dataPointer, 0, (dataEnd - dataPointer) * sizeof (*dataPointer));
+	if (dataPointer != 0) {
+		if (!dataIsNamed) throw Exception(UNNAMED_DATA_SECTION);
+		memset(dataPointer, 0, (dataEnd - dataPointer) * sizeof (*dataPointer));
+	}
 	globals.resolveForwardRefs();
 	// Constants were placed downward from the top during assembly, with addresses counted down from the base.
 	// Moving them to just below the globals puts every word at its address; nothing needs patching.
@@ -1161,6 +1165,7 @@ const Char* Assembler::feed(const Char* line) {
 							Value v;
 							v.p = makeGAZLPointer(dataPointer, dataIsConstant);
 							declare(globals, labelBegin, labelEnd, dataLabelType, v, static_cast<Int>(e - p));
+							dataIsNamed = dataIsNamed || labelBegin != labelEnd;
 							while (p < e) (dataPointer++)->i = *p++;
 							return eatEOL(eatSpace(e));
 						}
@@ -1191,6 +1196,7 @@ const Char* Assembler::feed(const Char* line) {
 							Value v;
 							v.p = makeGAZLPointer(first, dataIsConstant);
 							declare(globals, labelBegin, labelEnd, dataLabelType, v, (UInt)(dataPointer - first));
+							dataIsNamed = dataIsNamed || labelBegin != labelEnd;
 							return eatEOL(p);
 						}
 			
@@ -1283,8 +1289,11 @@ const Char* Assembler::feed(const Char* line) {
 							size = v.i;
 							dataLabel = std::string(labelBegin, labelEnd);
 							dataLabelType = op->declareTypes | (labelBegin != labelEnd ? INTERIOR : 0);					// labels inside a named section are interior
-							if (dataPointer != 0)
+							if (dataPointer != 0) {
+								if (!dataIsNamed) throw Exception(UNNAMED_DATA_SECTION);
 								memset(dataPointer, 0, (dataEnd - dataPointer) * sizeof (*dataPointer));
+							}
+							dataIsNamed = (labelBegin != labelEnd);
 							if (constantsPointer - globalsPointer < size) throw Exception(NOT_ENOUGH_MEMORY_SPACE);
 							if (op->opcode == GLOB____) {
 								dataPointer = globalsPointer;

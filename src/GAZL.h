@@ -127,7 +127,8 @@ enum AssemblerError {
 	, LABEL_ON_FUNCTION = 33
 	, FRAME_TOO_LARGE = 34
 	, NON_ASCII_TEXT = 35
-	, ASSEMBLER_ERROR_COUNT = 36
+	, UNNAMED_DATA_SECTION = 36
+	, ASSEMBLER_ERROR_COUNT = 37
 };
 
 extern const char* ASSEMBLER_ERROR_TEXTS[];
@@ -273,6 +274,7 @@ class Assembler {
 	protected:	int dataLabelType;
 	protected:	Value* dataPointer;
 	protected:	Value* dataEnd;
+	protected:	bool dataIsNamed;																						// The current data section, or a data statement in it, has a label.
 	protected:	bool dataIsConstant;																					// The current data section is a `CNST` one, placed below the base.
 	protected:	Symbols& globals;
 	protected:	Symbols locals;
