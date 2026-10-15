@@ -79,11 +79,22 @@ it, repeats the leading words.
 and `INT_MIN % -1` is 0. Division or modulo by zero stops the program with `DIVISION_BY_ZERO`, and is refused at
 assembly when the divisor is a constant 0.
 
-**Floats.** Arithmetic is IEEE-754 binary32 with round-to-nearest-even. `DIVf` by zero (either sign) stops the
-program with `DIVISION_BY_ZERO`; it never produces an infinity. Infinities and NaNs can still arise from overflow
-and from operations like `inf - inf`. Denormal handling follows the host thread's floating-point environment
-(flush-to-zero, denormals-are-zero), which GAZL neither sets nor restores, so a result that involves denormals may
-differ between implementations and hosts. That is accepted.
+**Floats.** Arithmetic is IEEE-754 binary32 with round-to-nearest-even, infinities and NaNs included.
+- **One rounding per instruction.** Each instruction's result is rounded to binary32 exactly once. Computing in a
+  wider format (x87 extended precision) or fusing instructions (a multiply and an add contracted into one FMA) is
+  not allowed, in the interpreter, at assembly or in a JIT.
+- **No finite-math assumption.** An implementation must not assume that values are finite or that a NaN equals
+  itself: `NEQf x x` must branch for a NaN, and infinities must compare and convert as specified. One built with
+  optimizations that break this (`-ffast-math`, `-Ofast`, `/fp:fast`) does not conform.
+- **Division by zero.** `DIVf` by zero (either sign) stops the program with `DIVISION_BY_ZERO`; it never produces an
+  infinity. Infinities and NaNs can still arise from overflow and from operations like `inf - inf`.
+- **NaN bits.** A NaN computed by an instruction is a quiet NaN, but its sign and payload are unspecified, because
+  hardware differs: x86 produces `0xFFC00000` where ARM produces `0x7FC00000`, and the two pick differently between
+  two NaN operands. A NaN that is only moved keeps its bits exactly (section 2).
+- **Signed zero.** `-0.0` equals `0.0` in `EQUf` and `NEQf`. `ABSf` of `-0.0` is `0.0`, and `fTOi` of either is 0.
+- **Denormals** follow the host thread's floating-point environment (flush-to-zero, denormals-are-zero), which GAZL
+  neither sets nor restores, so a result that involves denormals may differ between implementations and hosts. That
+  is accepted.
 
 **Conversions.** `fTOi` multiplies by its scale operand, then truncates toward zero; values at or beyond 2^31 in
 magnitude, and infinities, saturate to `INT_MAX` / `INT_MIN`, and NaN converts to 0. `iTOf` converts to the nearest
@@ -138,16 +149,10 @@ assembly error.
 32 bits wraps. A literal that parses completely as an integer is an int, so a float operand needs a float literal:
 `#1.0`, not `#1`.
 
-**Float literals** have the form `[sign] digits [. digits] [e exponent]`. Their value must be exactly the result of
-this algorithm, because a literal's bits are part of the program:
-
-1. Accumulate the integer digits in IEEE binary64: `d = d * 10 + digit`.
-2. For the fractional digits, keep a binary64 factor `f = 1`, and for each digit do `f = f * 0.1`, then
-   `d = d + digit * f`.
-3. If there is an exponent `x`, do `d = d * pow(10, x)`, in binary64.
-4. Apply the sign, and round `d` once to binary32.
-
-This is not correctly-rounded decimal conversion, and an implementation must not substitute one (see open question 1).
+**Float literals** have the form `[sign] digits [. digits] [e exponent]`. Their value is the literal's exact decimal
+value rounded to the nearest float, ties to even: correctly rounded conversion, independent of any C library. The
+same rule sends a value too large for a float to infinity and a value too small to zero, keeping the literal's
+sign. There is no literal for infinity or NaN.
 
 ## 6. Program structure
 
@@ -226,10 +231,19 @@ an interrupt.
   Which instruction it stops at, and the budget left at that point (`getClockCyclesLeft`), are therefore
   implementation-defined. The reference interpreter checks before every instruction.
 
+**The floating-point environment** belongs to the host thread, and GAZL neither sets nor restores it (section 10).
+So the host must run GAZL, assembly included, with:
+- **floating-point exceptions masked,** the default. An unmasked trap turns an ordinary `inf - inf` into a hardware
+  exception that no implementation can contain, so the sandbox (section 10) does not hold without this;
+- **round-to-nearest-even,** the default. Another rounding mode changes results and assembly-time constants.
+
+Flush-to-zero and denormals-are-zero may be set either way (section 4).
+
 **Natives** are host functions registered by name, so a program refers to them by name and the host maps them to
 code. A native sees the call's argument window through `accessParams`, and data memory through
-`accessConstMemory` / `accessMemory`, which grant exactly the ranges in section 3. What it returns decides what
-happens next:
+`accessConstMemory` / `accessMemory`, which grant exactly the ranges in section 3. A native's own arithmetic
+(`sqrt`, `log` and so on) is the host's, and its precision is outside this specification. What it returns decides
+what happens next:
 - **0** continues after the `CALL`.
 - **Non-zero** makes `run` return that status with the `CALL` not yet completed, so the next `run` calls the
   native again. That is how a native blocks until something is ready.
@@ -267,6 +281,8 @@ Whatever the program text, an implementation must guarantee all of the following
 - **Determinism.** The same program, inputs and natives give the same results and statuses on every conforming
   implementation, except where this specification leaves a result unspecified, and except for denormals
   (section 4).
+
+These hold as long as the host keeps the floating-point environment required in section 9.
 
 ## 11. Memory snapshot format
 
@@ -381,9 +397,9 @@ An implementation conforms when it runs the following with the expected results:
 Each is a decision for the format's owner. Until one is decided, the current behaviour of `src/GAZL.cpp` is the
 answer.
 
-1. **Float literals use `pow`.** Step 3 of the literal algorithm calls the C library's `pow`, which is not
-   guaranteed to round the same way everywhere. Should the exponent be applied by an exactly specified method
-   (for example, repeated multiplication by 10 in binary64)? That would only change literals with an exponent.
+1. **Float literals are correctly rounded from #130 on.** Before it, the reference implementation accumulated the
+   digits in binary64 and scaled them with `pow`, which rounded some literals differently from section 5, mostly
+   exact ties such as `2180774.875`. None of the float literals in existing GAZL or Impala sources changes value.
 2. **The snapshot format is decided but not implemented.** Section 11 is the format to build. Today's
    `freezeMemory` / `thawMemory` write and read an earlier layout of the same idea:
    - the two check words sit in the header rather than in a `$gazl` check section, and there is no NaN word;
