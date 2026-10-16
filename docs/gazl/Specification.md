@@ -268,42 +268,27 @@ run time and are checked against the end of the data stack (`BAD_PEEK`, `BAD_POK
 
 ## 9. Execution and the host
 
-**Starting.** The host assembles the units, creates a processor over the code and memory, and calls a function with
-`enterCall`. Then it calls `run` until `run` returns something other than `TIME_OUT`. `enterCall` may be called
-again at any time, even while a program is suspended; it pushes a new call on top, which is how a host delivers
-an interrupt.
+The host assembles the units, creates a processor, starts a call with `enterCall`, and calls `run` until it returns
+something other than `TIME_OUT`. `enterCall` may also be called while a program is suspended: it pushes a new call
+on top, which is how a host delivers an interrupt.
 
-**The step budget.** The host gives `run` a budget of steps (`resetTimeOut`).
-- **Cost.** Every executed instruction costs one step, including `FUNC` on entry. `NOOP` and assembly-time
-  statements cost nothing.
-- **Exhaustion.** When the budget runs out, `run` returns `TIME_OUT` between two instructions, and the next `run`
-  continues exactly there. Pausing never changes what a program computes: resumed to completion, it gives the same
-  results as an uninterrupted run.
-- **Granularity.** An implementation may check the budget at coarser points than every instruction, for example
-  once per block of straight-line code, as long as it stops within the budget plus the cost of one such block.
-  Which instruction it stops at, and the budget left at that point (`getClockCyclesLeft`), are therefore
-  implementation-defined. The reference interpreter checks before every instruction.
+**Step budget.** `run` executes at most the budget set with `resetTimeOut`, one step per instruction (`FUNC`
+included; `NOOP` and assembly-time statements are free), then returns `TIME_OUT`. The next `run` continues exactly
+there, and pausing never changes what a program computes. An implementation may check the budget only once per block
+of straight-line code, as long as it stops within the budget plus one block; where it stops, and the budget left
+(`getClockCyclesLeft`), are then implementation-defined.
 
-**The floating-point environment** belongs to the host thread, and GAZL neither sets nor restores it (section 10).
-So the host must run GAZL, assembly included, with:
-- **floating-point exceptions masked,** the default. An unmasked trap turns an ordinary `inf - inf` into a hardware
-  exception that no implementation can contain, so the sandbox (section 10) does not hold without this;
-- **round-to-nearest-even,** the default. Another rounding mode changes results and assembly-time constants.
+**Floating-point environment.** GAZL neither sets nor restores the host thread's environment, so the host must run
+GAZL, assembly included, with floating-point exceptions masked (otherwise an ordinary `inf - inf` traps, and the
+sandbox of section 10 does not hold) and with round-to-nearest-even. Flush-to-zero may be either way (section 4).
 
-Flush-to-zero and denormals-are-zero may be set either way (section 4).
+**Natives** are host functions, registered by name. A native reaches its arguments through `accessParams` and memory
+through `accessConstMemory` / `accessMemory`, which grant exactly the ranges of section 3; its own arithmetic is the
+host's. It returns 0 to continue after the `CALL`, or a status that `run` then returns with the `CALL` not yet done,
+so the next `run` calls the native again: that is how a native blocks. From inside a native, `resetTimeOut(0)` makes
+`run` return `TIME_OUT` before the next instruction, and `pushCall` runs a GAZL function in place of returning.
 
-**Natives** are host functions registered by name, so a program refers to them by name and the host maps them to
-code. A native sees the call's argument window through `accessParams`, and data memory through
-`accessConstMemory` / `accessMemory`, which grant exactly the ranges in section 3. A native's own arithmetic
-(`sqrt`, `log` and so on) is the host's, and its precision is outside this specification. What it returns decides
-what happens next:
-- **0** continues after the `CALL`.
-- **Non-zero** makes `run` return that status with the `CALL` not yet completed, so the next `run` calls the
-  native again. That is how a native blocks until something is ready.
-- **`resetTimeOut(0)`** from inside a native makes `run` return `TIME_OUT` before the next instruction.
-- **`pushCall`** from inside a native runs a GAZL function in place of returning from the native.
-
-**Statuses** returned by `run`. Positive values are free for hosts' own natives:
+**Statuses** returned by `run`; positive values are free for natives:
 
 | status                | value | meaning                                                         |
 | --------------------- | ----- | --------------------------------------------------------------- |
@@ -319,8 +304,8 @@ what happens next:
 | `ABORTED`             | -9    | a native reports unexpected termination                         |
 | `TERMINATED`          | -10   | a native reports expected termination (e.g. `exit`)             |
 
-After an error status the processor still points at the failing instruction, so running it again fails again. A
-host recovers by starting a new call.
+After an error the processor still points at the failing instruction, so running it again fails again; a host
+recovers by starting a new call.
 
 ## 10. The sandbox
 
