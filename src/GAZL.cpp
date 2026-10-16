@@ -734,7 +734,7 @@ const char* Exception::what() const throw() {
 	return whatString.c_str();
 }
 
-Symbols::Symbol* Symbols::define(const std::string& name, int types, Value value, UInt reach) {
+Symbols::Symbol* Symbols::define(const std::string& name, int types, Value value, UInt size) {
 	const Char* nameBegin = name.data();
 	const Char* nameEnd = nameBegin + name.size();
 	if (!isValidIdentifier(nameBegin, nameEnd)) throw Exception(INVALID_IDENTIFIER, name);
@@ -743,7 +743,7 @@ Symbols::Symbol* Symbols::define(const std::string& name, int types, Value value
 	if ((types & CONST_INT_N) != 0 && value.i >= 0) types &= ~CONST_INT_N;
 	SymbolMap::iterator it = symbols.find(name);
 	if (it != symbols.end()) throw Exception(SYMBOL_ALREADY_DEFINED, name);
-	return &symbols.insert(it, std::pair<std::string, Symbol>(name, Symbol(types, value, reach)))->second;
+	return &symbols.insert(it, std::pair<std::string, Symbol>(name, Symbol(types, value, size)))->second;
 }
 
 void Symbols::registerSwitch(const Char* labelBegin, const Char* labelEnd, UInt switchSize
@@ -762,7 +762,8 @@ void Symbols::resolve(const Reference& ref, const Symbol& symbol) {
 		throw Exception(OFFSET_OUT_OF_BOUNDS, ref.label);
 	}
 	if (symbol.types != BRANCH && (ref.accepts & UNCHECKED_ADDRESS) == 0
-			&& (ref.offset < -static_cast<Int>(symbol.before) || ref.offset >= static_cast<Int>(symbol.reach))) {
+			&& (ref.offset < -static_cast<Int>(symbol.sectionOffset)
+			|| ref.offset >= static_cast<Int>(symbol.sectionSize - symbol.sectionOffset))) {				// `sectionOffset + offset` in [0, sectionSize), without a sum that can wrap
 		throw Exception(OFFSET_OUT_OF_BOUNDS, ref.label);
 	}
 	if (ref.offset == 0) *ref.storage = symbol.value;
@@ -887,7 +888,6 @@ Assembler::Assembler(UInt maxCodeSize, Instruction* codeBase, UInt maxFunctionCo
 		, functionTable(functionTable), memoryBase(memoryBase), memoryEnd(memoryBase + maxMemorySize)
 		, ip(codeBase), functionStart(0), functionCount(0), localsSize(0), paramsSize(0), globalsPointer(memoryBase)
 		, constantsPointer(memoryEnd), dataLabelType(0), dataPointer(0), sectionBegin(0), dataEnd(0), dataOwner(0)
-		, dataOwnerStart(0)
 		, dataIsConstant(false), globals(globals) {
 	for (Int i = 0; i < 128; ++i) compileTimeVars[i].types = 0;
 	Value v;
@@ -903,7 +903,7 @@ Assembler::Assembler(UInt maxCodeSize, Instruction* codeBase, UInt maxFunctionCo
 }
 
 Symbols::Symbol* Assembler::declare(Symbols& where, const Char* labelBegin, const Char* labelEnd, int types, Value value
-		, UInt reach) {
+		, UInt size) {
 	assert((types & FORWARD) == 0);
 	if (labelBegin == labelEnd) return 0;
 	const Char* p = reinterpret_cast<const Char*>(memchr(labelBegin, '#', labelEnd - labelBegin));
@@ -917,7 +917,7 @@ Symbols::Symbol* Assembler::declare(Symbols& where, const Char* labelBegin, cons
 		name += '.';
 		name += int2string(v.i, 10, 1, buffer);
 	}
-	return where.define(name, types, value, reach);
+	return where.define(name, types, value, size);
 }
 
 int Assembler::operatorCompare(const void* a, const void* b) {
@@ -1021,17 +1021,17 @@ void Assembler::settleFrame() {
 	for (Symbols::SymbolMap::iterator it = locals.symbols.begin(); it != locals.symbols.end(); ++it) {
 		Symbols::Symbol& local = it->second;
 		if ((local.types & ANY_VAR) != 0) {
-			local.before = static_cast<UInt>(local.value.i);
-			local.reach = localsSize - static_cast<UInt>(local.value.i);
+			local.sectionOffset = static_cast<UInt>(local.value.i);
+			local.sectionSize = localsSize;
 		}
 	}
 }
 
 /*
-	A data label owns its word and everything after it, up to the next label or the end of the section, and reaches to
-	the end of the section; a section's own label is simply its first. So each label is declared owning to the end,
-	and the next one ends what the previous one owns. Data before an unnamed section's first label would belong to no
-	name, so freezing could not save it.
+	A data label owns its word and everything after it, up to the next label or the end of the section, and an offset
+	on it may reach any word of the section; a section's own label is simply its first. So each label is declared
+	owning to the end, and the next one ends what the previous one owns. Data before an unnamed section's first label
+	would belong to no name, so freezing could not save it.
 */
 void Assembler::declareData(const Char* labelBegin, const Char* labelEnd, const Value* first) {
 	if (labelBegin == labelEnd) {
@@ -1041,11 +1041,11 @@ void Assembler::declareData(const Char* labelBegin, const Char* labelEnd, const 
 	Value v;
 	v.p = makeGAZLPointer(first, dataIsConstant);
 	Symbols::Symbol* const owner = declare(globals, labelBegin, labelEnd, dataLabelType, v
-			, static_cast<UInt>(dataEnd - first));
-	owner->before = static_cast<UInt>(first - sectionBegin);
-	if (dataOwner != 0) dataOwner->owned = static_cast<UInt>(first - dataOwnerStart);
+			, static_cast<UInt>(dataEnd - sectionBegin));
+	owner->sectionOffset = static_cast<UInt>(first - sectionBegin);
+	owner->owned = static_cast<UInt>(dataEnd - first);
+	if (dataOwner != 0) dataOwner->owned = owner->sectionOffset - dataOwner->sectionOffset;
 	dataOwner = owner;
-	dataOwnerStart = first;
 }
 
 Pointer Assembler::makeGAZLPointer(const Value* data, bool constant) const {

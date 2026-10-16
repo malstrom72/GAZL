@@ -177,12 +177,12 @@ struct GlobalInfo {
 class Symbols {
 	friend class Assembler;
 	protected:	struct Symbol {
-					Symbol(int types, Value value, UInt reach) : types(types), value(value), before(0), reach(reach)
-							, owned(reach) { }
+					Symbol(int types, Value value, UInt size) : types(types), value(value), sectionOffset(0)
+							, sectionSize(size), owned(size) { }
 					int types;
 					Value value;
-					UInt before;																		// For data and locals, the words of its section or frame before it: the lowest offset is `-before`.
-					UInt reach;																			// For data and locals, the words from it to the end of its section or frame: offsets stay below this.
+					UInt sectionOffset;																	// For data, its word in its section; for a local, its word in the frame.
+					UInt sectionSize;																	// For data, its section's size; for a local, the frame's parameters and locals. `sectionOffset + k` must stay inside.
 					UInt owned;																			// For data, the words owned: to the next label.
 				};
 
@@ -212,7 +212,7 @@ class Symbols {
 	public:		bool getGlobalInfo(const Char* name, GlobalInfo& info) const;													// Returns false, with `info` cleared, if `name` is not data.
 
 	protected:	bool lookup(const Char* nameBegin, const Char* nameEnd, int acceptedTypes, int& types, Value& value) const;
-	protected:	Symbol* define(const std::string& name, int types, Value value, UInt reach = 1);
+	protected:	Symbol* define(const std::string& name, int types, Value value, UInt size = 1);
 	protected:	void link(const Char* labelBegin, const Char* labelEnd, Value* storage, int accepts, Int offset = 0);
 	protected:	void registerSwitch(const Char* labelBegin, const Char* labelEnd, UInt switchSize, Value* storage, Int offset = 0);
 	protected:	void resolveForwardRefs();
@@ -254,7 +254,7 @@ class Assembler {
 				};
 
 	protected:	Symbols::Symbol* declare(Symbols& where, const Char* labelBegin, const Char* labelEnd, int types, Value value
-						, UInt reach = 1);
+						, UInt size = 1);
 	protected:	static int operatorCompare(const void* a, const void* b);
 	protected:	static int nativeDefinitionCompare(const void* a, const void* b);
 	protected:	static Char parseOperandType(const Char* b, const Char* e);
@@ -288,7 +288,6 @@ class Assembler {
 	protected:	Value* sectionBegin;																					// The current data section's first word.
 	protected:	Value* dataEnd;
 	protected:	Symbols::Symbol* dataOwner;																				// The current section's latest label, owning to its end for now; null while it has none.
-	protected:	const Value* dataOwnerStart;																			// Where `dataOwner` starts.
 	protected:	bool dataIsConstant;																					// The current data section is a `CNST` one, placed below the base.
 	protected:	Symbols& globals;
 	protected:	Symbols locals;
