@@ -733,7 +733,7 @@ const char* Exception::what() const throw() {
 	return whatString.c_str();
 }
 
-void Symbols::define(const std::string& name, int types, Value value, UInt size) {
+Symbols::Symbol* Symbols::define(const std::string& name, int types, Value value, UInt size) {
 	const Char* nameBegin = name.data();
 	const Char* nameEnd = nameBegin + name.size();
 	if (!isValidIdentifier(nameBegin, nameEnd)) throw Exception(INVALID_IDENTIFIER, name);
@@ -742,7 +742,7 @@ void Symbols::define(const std::string& name, int types, Value value, UInt size)
 	if ((types & CONST_INT_N) != 0 && value.i >= 0) types &= ~CONST_INT_N;
 	SymbolMap::iterator it = symbols.find(name);
 	if (it != symbols.end()) throw Exception(SYMBOL_ALREADY_DEFINED, name);
-	symbols.insert(it, std::pair<std::string, Symbol>(name, Symbol(types, value, size)));
+	return &symbols.insert(it, std::pair<std::string, Symbol>(name, Symbol(types, value, size)))->second;
 }
 
 void Symbols::registerSwitch(const Char* labelBegin, const Char* labelEnd, UInt switchSize
@@ -879,7 +879,7 @@ GlobalInfo Symbols::getGlobalInfo(const Iterator& iterator) const {
 
 bool Symbols::getGlobalInfo(const Char* name, GlobalInfo& info) const {
 	const Iterator it = symbols.find(name);
-	if (it == symbols.end() || (it->second.types & ADDRESS) != ADDRESS) {
+	if (it == symbols.end() || (it->second.types & globalMask(true)) != ADDRESS) {
 		const GlobalInfo none = { 0, NULL_POINTER, 0, 0, false };
 		info = none;
 		return false;
@@ -893,8 +893,8 @@ Assembler::Assembler(UInt maxCodeSize, Instruction* codeBase, UInt maxFunctionCo
 		: codeBase(codeBase), codeEnd(codeBase + maxCodeSize), maxFunctionCount(maxFunctionCount)
 		, functionTable(functionTable), memoryBase(memoryBase), memoryEnd(memoryBase + maxMemorySize)
 		, ip(codeBase), functionStart(0), functionCount(0), localsSize(0), paramsSize(0), globalsPointer(memoryBase)
-		, constantsPointer(memoryEnd), dataLabelType(0), dataPointer(0), dataEnd(0), dataOpenStart(0)
-		, dataIsNamed(false), dataIsConstant(false), globals(globals) {
+		, constantsPointer(memoryEnd), dataLabelType(0), dataPointer(0), dataEnd(0), dataOwner(0), dataOwnerStart(0)
+		, dataIsConstant(false), globals(globals) {
 	for (Int i = 0; i < 128; ++i) compileTimeVars[i].types = 0;
 	Value v;
 	v.i = 0;
@@ -908,9 +908,10 @@ Assembler::Assembler(UInt maxCodeSize, Instruction* codeBase, UInt maxFunctionCo
 	globals.define(GAZL_MEMORY_SIZE_STRING, CONST_INT_P, v, 1);
 }
 
-void Assembler::declare(Symbols& where, const Char* labelBegin, const Char* labelEnd, int types, Value value, UInt size) {
+Symbols::Symbol* Assembler::declare(Symbols& where, const Char* labelBegin, const Char* labelEnd, int types, Value value
+		, UInt size) {
 	assert((types & FORWARD) == 0);
-	if (labelBegin == labelEnd) return;
+	if (labelBegin == labelEnd) return 0;
 	const Char* p = reinterpret_cast<const Char*>(memchr(labelBegin, '#', labelEnd - labelBegin));
 	if (p == 0) p = labelEnd;
 	std::string name(labelBegin, p);
@@ -922,7 +923,7 @@ void Assembler::declare(Symbols& where, const Char* labelBegin, const Char* labe
 		name += '.';
 		name += int2string(v.i, 10, 1, buffer);
 	}
-	where.define(name, types, value, size);
+	return where.define(name, types, value, size);
 }
 
 int Assembler::operatorCompare(const void* a, const void* b) {
@@ -1014,23 +1015,23 @@ void Assembler::parseOperand(const Char* b, const Char* e, int accepts, Value* v
 }
 
 /*
-	A label owns its own word and everything after it, up to the next label or the end of the section, and reaches to
-	the end of the section. So each label is declared owning to the end, and the next label shortens what the
-	previous one owns, the section's own label included. In an unnamed section, data before the first label would
-	belong to no name, so freezing could not save it.
+	A data label owns its word and everything after it, up to the next label or the end of the section, and reaches to
+	the end of the section; a section's own label is simply its first. So each label is declared owning to the end,
+	and the next one ends what the previous one owns. Data before an unnamed section's first label would belong to no
+	name, so freezing could not save it.
 */
-void Assembler::noteDataStatement(const Char* labelBegin, const Char* labelEnd, const Value* first) {
+void Assembler::declareData(const Char* labelBegin, const Char* labelEnd, const Value* first) {
 	if (labelBegin == labelEnd) {
-		if (!dataIsNamed) throw Exception(UNNAMED_DATA_SECTION);
+		if (dataOwner == 0) throw Exception(UNNAMED_DATA_SECTION);
 		return;
 	}
-	if (!dataOpenLabel.empty()) {
-		const Symbols::SymbolMap::iterator it = globals.symbols.find(dataOpenLabel);
-		if (it != globals.symbols.end()) it->second.owned = static_cast<UInt>(first - dataOpenStart);
-	}
-	dataIsNamed = true;
-	dataOpenLabel = std::string(labelBegin, labelEnd);
-	dataOpenStart = first;
+	Value v;
+	v.p = makeGAZLPointer(first, dataIsConstant);
+	Symbols::Symbol* const owner = declare(globals, labelBegin, labelEnd, dataLabelType, v
+			, static_cast<UInt>(dataEnd - first));
+	if (dataOwner != 0) dataOwner->owned = static_cast<UInt>(first - dataOwnerStart);
+	dataOwner = owner;
+	dataOwnerStart = first;
 }
 
 Pointer Assembler::makeGAZLPointer(const Value* data, bool constant) const {
@@ -1069,7 +1070,7 @@ void Assembler::finalizeFunction() {
 void Assembler::finalize(ProgramSizes& sizes) {
 	newUnit(0);
 	if (dataPointer != 0) {
-		if (!dataIsNamed) throw Exception(UNNAMED_DATA_SECTION);
+		if (dataOwner == 0) throw Exception(UNNAMED_DATA_SECTION);
 		memset(dataPointer, 0, (dataEnd - dataPointer) * sizeof (*dataPointer));
 	}
 	globals.resolveForwardRefs();
@@ -1194,11 +1195,7 @@ const Char* Assembler::feed(const Char* line) {
 							for (const Char* c = p; c < e; ++c) {
 								if ((*c & 0x80) != 0) throw Exception(NON_ASCII_TEXT, p, e);
 							}
-							Value v;
-							v.p = makeGAZLPointer(dataPointer, dataIsConstant);
-							declare(globals, labelBegin, labelEnd, dataLabelType, v
-									, static_cast<UInt>(dataEnd - dataPointer));
-							noteDataStatement(labelBegin, labelEnd, dataPointer);
+							declareData(labelBegin, labelEnd, dataPointer);
 							while (p < e) (dataPointer++)->i = *p++;
 							return eatEOL(eatSpace(e));
 						}
@@ -1225,10 +1222,7 @@ const Char* Assembler::feed(const Char* line) {
 								parseOperand(b, e, accepts, dataPointer);
 								++dataPointer;
 							}
-							Value v;
-							v.p = makeGAZLPointer(first, dataIsConstant);
-							declare(globals, labelBegin, labelEnd, dataLabelType, v, static_cast<UInt>(dataEnd - first));
-							noteDataStatement(labelBegin, labelEnd, first);
+							declareData(labelBegin, labelEnd, first);
 							return eatEOL(p);
 						}
 			
@@ -1322,11 +1316,10 @@ const Char* Assembler::feed(const Char* line) {
 							dataLabel = std::string(labelBegin, labelEnd);
 							dataLabelType = op->declareTypes;
 							if (dataPointer != 0) {
-								if (!dataIsNamed) throw Exception(UNNAMED_DATA_SECTION);
+								if (dataOwner == 0) throw Exception(UNNAMED_DATA_SECTION);
 								memset(dataPointer, 0, (dataEnd - dataPointer) * sizeof (*dataPointer));
 							}
-							dataIsNamed = (labelBegin != labelEnd);
-							dataOpenLabel.clear();
+							dataOwner = 0;
 							if (constantsPointer - globalsPointer < size) throw Exception(NOT_ENOUGH_MEMORY_SPACE);
 							if (op->opcode == GLOB____) {
 								dataPointer = globalsPointer;
@@ -1338,12 +1331,7 @@ const Char* Assembler::feed(const Char* line) {
 							assert(globalsPointer <= constantsPointer);
 							dataEnd = dataPointer + size;
 							dataIsConstant = (op->opcode != GLOB____);
-							v.p = makeGAZLPointer(dataPointer, dataIsConstant);
-							declare(globals, labelBegin, labelEnd, op->declareTypes, v, size);
-							if (dataIsNamed) {
-								dataOpenLabel = dataLabel;													// a section's name is its first label
-								dataOpenStart = dataPointer;
-							}
+							if (labelBegin != labelEnd) declareData(labelBegin, labelEnd, dataPointer);
 							break;
 					
 			case FUNC_CC_:	if (functionCount >= maxFunctionCount) throw Exception(NOT_ENOUGH_FUNCTION_SPACE);			// FUNC
@@ -1716,11 +1704,8 @@ Value* Processor::pushCall(Pointer functionPointer) {
 */
 const UInt MEMORY_FORMAT_VERSION = 1;
 const UInt MEMORY_HEADER_SIZE = 20;									// magic, format version, GAZL version, word size, entry count
+const UInt MEMORY_CHECK_SIZE = 28;									// the check entry: "$gazl" and three words
 static const char MEMORY_MAGIC[4] = { 'G', 'Z', 'M', 'M' };
-static const char MEMORY_CHECK_NAME[] = "$gazl";
-const UInt MEMORY_CHECK_INT = 0x01020304;
-const UInt MEMORY_CHECK_NAN = 0x7F800001;								// a signaling NaN, which a float load could quieten
-const UInt MEMORY_CHECK_SIZE = 28;
 
 static unsigned char* putMemoryWord(unsigned char* p, UInt v) {		// Writes a 32-bit little-endian word.
 	p[0] = static_cast<unsigned char>(v);
@@ -1747,6 +1732,46 @@ static unsigned char* putMemoryEntry(unsigned char* p, const char* name, UInt le
 	return p;
 }
 
+static unsigned char* putMemoryCheck(unsigned char* p) {			/// writes the check entry, exactly as any other entry
+	Value check[3];
+	check[0].p = 0x01020304;
+	check[1].f = 1.0f;
+	check[2].p = 0x7F800001;										// a signaling NaN, which a float load could quieten
+	unsigned char* const next = putMemoryEntry(p, "$gazl", 5, check, 3);
+	assert(next == p + MEMORY_CHECK_SIZE);
+	return next;
+}
+
+struct MemoryEntry {
+	const unsigned char* name;
+	UInt length;
+	UInt count;
+	const unsigned char* words;
+	const unsigned char* next;
+};
+
+/*
+	Reads the entry at `p`, or returns false when its lengths run past `end`.
+*/
+static bool getMemoryEntry(const unsigned char* p, const unsigned char* end, MemoryEntry& entry) {
+	if (end - p < 4) return false;
+	entry.length = getMemoryWord(p);
+	entry.name = p + 4;
+	if (static_cast<size_t>(end - entry.name) < static_cast<size_t>(entry.length) + memoryPadding(entry.length) + 4) {
+		return false;
+	}
+	entry.words = entry.name + entry.length + memoryPadding(entry.length) + 4;
+	entry.count = getMemoryWord(entry.words - 4);
+	if (static_cast<size_t>(end - entry.words) / 4 < entry.count) return false;
+	entry.next = entry.words + static_cast<size_t>(entry.count) * 4;
+	return true;
+}
+
+static int compareMemoryNames(const void* a, size_t aLength, const void* b, size_t bLength) {	/// byte order, then length
+	const int order = memcmp(a, b, minimum(aLength, bLength));
+	return (order != 0 ? order : (aLength < bLength ? -1 : (aLength > bLength ? 1 : 0)));
+}
+
 /*
 	The owners of the `GLOB` sections that own at least one word, in ascending name order (the order of `Symbols`).
 */
@@ -1759,10 +1784,7 @@ static void findMemoryOwners(const Symbols& symbols, std::vector<GlobalInfo>& ow
 	}
 }
 
-UInt freezeMemorySize(const Processor& processor, const Symbols& symbols) {
-	(void)processor;
-	std::vector<GlobalInfo> owners;
-	findMemoryOwners(symbols, owners);
+static UInt frozenSize(const std::vector<GlobalInfo>& owners) {
 	UInt size = MEMORY_HEADER_SIZE + MEMORY_CHECK_SIZE;
 	for (size_t i = 0; i < owners.size(); ++i) {
 		const UInt length = static_cast<UInt>(strlen(owners[i].name));
@@ -1771,37 +1793,39 @@ UInt freezeMemorySize(const Processor& processor, const Symbols& symbols) {
 	return size;
 }
 
-UInt freezeMemory(const Processor& processor, const Symbols& symbols, void* buffer, UInt bufferSize) {
-	const UInt needed = freezeMemorySize(processor, symbols);
-	if (buffer == 0 || bufferSize < needed) return needed;			// Too small: write nothing, tell the caller the required size.
+UInt freezeMemorySize(const Processor& processor, const Symbols& symbols) {
+	(void)processor;
 	std::vector<GlobalInfo> owners;
 	findMemoryOwners(symbols, owners);
+	return frozenSize(owners);
+}
+
+UInt freezeMemory(const Processor& processor, const Symbols& symbols, void* buffer, UInt bufferSize) {
+	std::vector<GlobalInfo> owners;
+	findMemoryOwners(symbols, owners);
+	const UInt needed = frozenSize(owners);
+	if (buffer == 0 || bufferSize < needed) return needed;			// Too small: write nothing, tell the caller the required size.
 
 	unsigned char* const start = static_cast<unsigned char*>(buffer);
-	unsigned char* p = start;
-	memcpy(p, MEMORY_MAGIC, 4);
-	p = putMemoryWord(p + 4, MEMORY_FORMAT_VERSION);
+	memcpy(start, MEMORY_MAGIC, 4);
+	unsigned char* p = putMemoryWord(start + 4, MEMORY_FORMAT_VERSION);
 	p = putMemoryWord(p, static_cast<UInt>(VERSION));
 	p = putMemoryWord(p, static_cast<UInt>(WORD_SIZE));
 	p = putMemoryWord(p, static_cast<UInt>(owners.size()) + 1);
-	Value check[3];
-	check[0].p = MEMORY_CHECK_INT;
-	check[1].f = 1.0f;
-	check[2].p = MEMORY_CHECK_NAN;
-	p = putMemoryEntry(p, MEMORY_CHECK_NAME, 5, check, 3);
+	p = putMemoryCheck(p);
 	for (size_t i = 0; i < owners.size(); ++i) {
 		const Value* words = processor.accessConstMemory(owners[i].address, owners[i].owned);
 		assert(words != 0);
 		p = putMemoryEntry(p, owners[i].name, static_cast<UInt>(strlen(owners[i].name)), words, owners[i].owned);
 	}
-	assert(static_cast<UInt>(p - start) == needed);					// Byte count must match freezeMemorySize exactly.
+	assert(static_cast<UInt>(p - start) == needed);					// Byte count must match `frozenSize` exactly.
 	return needed;
 }
 
 /*
-	Thawing reads the input three times: once for lengths, once for the check entry, once for names and padding, so
-	that each problem is reported in the order of the specification's validation table, and nothing is restored
-	unless all of it is valid. Only then are entries and owners, both in ascending name order, merged.
+	Thawing reads every entry once, then checks them in the order of the specification's validation table, so that
+	nothing is restored unless all of it is valid. Only then are entries and owners, both in ascending name order,
+	merged in one walk.
 */
 MemoryLoad thawMemory(Processor& processor, const Symbols& symbols, const void* buffer, UInt bufferSize
 		, bool prefix) {
@@ -1815,91 +1839,58 @@ MemoryLoad thawMemory(Processor& processor, const Symbols& symbols, const void* 
 		return MEMORY_BAD_VERSION;
 	}
 	if (getMemoryWord(start + 12) != static_cast<UInt>(WORD_SIZE)) return MEMORY_BAD_WORDSIZE;
-	const UInt entryCount = getMemoryWord(start + 16);
 
+	std::vector<MemoryEntry> entries;
 	const unsigned char* p = start + MEMORY_HEADER_SIZE;
-	for (UInt e = 0; e < entryCount; ++e) {
-		if (end - p < 4) return MEMORY_TRUNCATED;
-		const UInt length = getMemoryWord(p);
-		p += 4;
-		if (static_cast<size_t>(end - p) < static_cast<size_t>(length) + memoryPadding(length) + 4) {
-			return MEMORY_TRUNCATED;
-		}
-		p += length + memoryPadding(length);
-		const UInt count = getMemoryWord(p);
-		p += 4;
-		if (static_cast<size_t>(end - p) / 4 < count) return MEMORY_TRUNCATED;
-		p += static_cast<size_t>(count) * 4;
+	for (UInt e = getMemoryWord(start + 16); e > 0; --e) {
+		MemoryEntry entry;
+		if (!getMemoryEntry(p, end, entry)) return MEMORY_TRUNCATED;
+		entries.push_back(entry);
+		p = entry.next;
 	}
-	const unsigned char* const entriesEnd = p;
 
-	static const unsigned char CHECK_ENTRY[MEMORY_CHECK_SIZE] = {
-		5, 0, 0, 0, '$', 'g', 'a', 'z', 'l', 0, 0, 0, 3, 0, 0, 0
-		, 0x04, 0x03, 0x02, 0x01, 0x00, 0x00, 0x80, 0x3F, 0x01, 0x00, 0x80, 0x7F
-	};
-	p = start + MEMORY_HEADER_SIZE;
-	if (entryCount == 0 || static_cast<size_t>(end - p) < MEMORY_CHECK_SIZE
-			|| memcmp(p, CHECK_ENTRY, MEMORY_CHECK_SIZE) != 0) {
+	unsigned char check[MEMORY_CHECK_SIZE];
+	putMemoryCheck(check);
+	const unsigned char* const first = start + MEMORY_HEADER_SIZE;
+	if (entries.empty() || entries[0].next != first + MEMORY_CHECK_SIZE
+			|| memcmp(first, check, MEMORY_CHECK_SIZE) != 0) {
 		return MEMORY_BAD_CANARY;
 	}
-	p += MEMORY_CHECK_SIZE;
 
-	const Char* previous = 0;
-	UInt previousLength = 0;
-	for (UInt e = 1; e < entryCount; ++e) {
-		const UInt length = getMemoryWord(p);
-		const Char* const name = reinterpret_cast<const Char*>(p + 4);
-		if (!isValidIdentifier(name, name + length)) return MEMORY_MALFORMED;
-		for (UInt i = 0; i < memoryPadding(length); ++i) {
-			if (p[4 + length + i] != 0) return MEMORY_MALFORMED;
+	for (size_t e = 1; e < entries.size(); ++e) {
+		const MemoryEntry& entry = entries[e];
+		const Char* const name = reinterpret_cast<const Char*>(entry.name);
+		if (!isValidIdentifier(name, name + entry.length)) return MEMORY_MALFORMED;
+		for (UInt i = 0; i < memoryPadding(entry.length); ++i) {
+			if (entry.name[entry.length + i] != 0) return MEMORY_MALFORMED;
 		}
-		if (previous != 0) {
-			const int order = memcmp(previous, name, minimum(previousLength, length));
-			if (order > 0 || (order == 0 && previousLength >= length)) return MEMORY_MALFORMED;
+		if (e > 1 && compareMemoryNames(entries[e - 1].name, entries[e - 1].length, entry.name, entry.length) >= 0) {
+			return MEMORY_MALFORMED;
 		}
-		previous = name;
-		previousLength = length;
-		p += 4 + length + memoryPadding(length);
-		p += 4 + static_cast<size_t>(getMemoryWord(p)) * 4;
 	}
-	assert(p == entriesEnd);
-	if (entriesEnd != end) return MEMORY_MALFORMED;
+	if (p != end) return MEMORY_MALFORMED;
 
 	std::vector<GlobalInfo> owners;
 	findMemoryOwners(symbols, owners);
 	bool exact = true;
-	const unsigned char* entry = start + MEMORY_HEADER_SIZE + MEMORY_CHECK_SIZE;
+	size_t e = 1;
 	size_t o = 0;
-	while (entry != end || o != owners.size()) {											// one merged walk: step the lower name, or both
-		std::string name;
-		UInt count = 0;
-		const unsigned char* words = entry;
-		if (entry != end) {
-			const UInt length = getMemoryWord(entry);
-			name.assign(reinterpret_cast<const char*>(entry + 4), length);
-			words = entry + 4 + length + memoryPadding(length) + 4;
-			count = getMemoryWord(words - 4);
-		}
-		const int order = (entry == end ? 1 : (o == owners.size() ? -1 : name.compare(owners[o].name)));
-		if (order > 0) {																	// an owner with no entry: left unchanged
+	while (e < entries.size() || o < owners.size()) {											// one merged walk: step the lower name, or both
+		const int order = (e == entries.size() ? 1 : (o == owners.size() ? -1
+				: compareMemoryNames(entries[e].name, entries[e].length, owners[o].name, strlen(owners[o].name))));
+		if (order != 0) {
 			exact = false;
-			++o;
+			if (order < 0) ++e;																	// an entry with no owner: dropped
+			else ++o;																			// an owner with no entry: left unchanged
 			continue;
 		}
-		if (order < 0) {																	// an entry with no owner: dropped
-			exact = false;
-		} else {																			// the same name: restored
-			const GlobalInfo& owner = owners[o++];
-			UInt restored = owner.owned;
-			if (count != owner.owned) {
-				exact = false;
-				restored = (prefix ? minimum(count, owner.owned) : 0);
-			}
-			Value* const destination = processor.accessMemory(owner.address, owner.owned);
-			assert(destination != 0);
-			for (UInt i = 0; i < restored; ++i) destination[i].p = getMemoryWord(words + i * 4);
-		}
-		entry = words + static_cast<size_t>(count) * 4;
+		const MemoryEntry& entry = entries[e++];												// the same name: restored
+		const GlobalInfo& owner = owners[o++];
+		exact = exact && entry.count == owner.owned;
+		const UInt restored = (entry.count == owner.owned || prefix ? minimum(entry.count, owner.owned) : 0);
+		Value* const destination = processor.accessMemory(owner.address, owner.owned);
+		assert(destination != 0);
+		for (UInt i = 0; i < restored; ++i) destination[i].p = getMemoryWord(entry.words + i * 4);
 	}
 	return (exact ? MEMORY_OK : MEMORY_MISMATCH);
 }
@@ -2097,7 +2088,7 @@ bool unitTest() {
 			for (bool ok = globals.findFirstGlobal(it, false); ok; ok = globals.findNextGlobal(it, false)) {
 				const GlobalInfo info = globals.getGlobalInfo(it);
 				const UInt index = info.address - MEMORY_OFFSET + (sizes.constsSize - 1);			// the buffer starts with the constants
-				for (UInt i = 0; i < info.size; ++i) assert(memory2[index + i].i == memory[index + i].i);
+				for (UInt i = 0; i < info.owned; ++i) assert(memory2[index + i].i == memory[index + i].i);
 			}
 			// The restored function pointer resolves to CallBack in the fresh assembly (and equals the original ordinal).
 			UInt gpSize;

@@ -205,7 +205,7 @@ class Symbols {
 	public:		bool getGlobalInfo(const Char* name, GlobalInfo& info) const;													// Returns false, with `info` cleared, if `name` is not writable data.
 
 	protected:	bool lookup(const Char* nameBegin, const Char* nameEnd, int acceptedTypes, int& types, Value& value, UInt& size) const;
-	protected:	void define(const std::string& name, int types, Value value, UInt size = 1);
+	protected:	Symbol* define(const std::string& name, int types, Value value, UInt size = 1);
 	protected:	void link(const Char* labelBegin, const Char* labelEnd, Value* storage, int accepts, Int offset = 0);
 	protected:	void registerSwitch(const Char* labelBegin, const Char* labelEnd, UInt switchSize, Value* storage, Int offset = 0);
 	protected:	void resolveForwardRefs();
@@ -246,7 +246,8 @@ class Assembler {
 					Value value;
 				};
 
-	protected:	void declare(Symbols& where, const Char* labelBegin, const Char* labelEnd, int types, Value value, UInt size = 1);
+	protected:	Symbols::Symbol* declare(Symbols& where, const Char* labelBegin, const Char* labelEnd, int types, Value value
+						, UInt size = 1);
 	protected:	static int operatorCompare(const void* a, const void* b);
 	protected:	static int nativeDefinitionCompare(const void* a, const void* b);
 	protected:	static Char parseOperandType(const Char* b, const Char* e);
@@ -258,7 +259,7 @@ class Assembler {
 	protected:	Value calcConstant(const Operator* op, const Char* op1Begin, const Char* op1End, const Char* op2Begin
 						, const Char* op2End);
 	protected:	void finalizeFunction();
-	protected:	void noteDataStatement(const Char* labelBegin, const Char* labelEnd, const Value* first);				// Settle label extents.
+	protected:	void declareData(const Char* labelBegin, const Char* labelEnd, const Value* first);						// Declare a data label at `first`, and end what the previous one owns there.
 	protected:	Pointer makeGAZLPointer(const Value* data, bool constant) const;										// The pointer to `data`: up from the base for globals, down from it for constants.
 	protected:	Instruction* const codeBase;
 	protected:	Instruction* const codeEnd;
@@ -277,9 +278,8 @@ class Assembler {
 	protected:	int dataLabelType;
 	protected:	Value* dataPointer;
 	protected:	Value* dataEnd;
-	protected:	std::string dataOpenLabel;																				// The section's latest label, owning to its end for now.
-	protected:	const Value* dataOpenStart;																				// Where `dataOpenLabel` starts.
-	protected:	bool dataIsNamed;																						// The current data section, or a data statement in it, has a label.
+	protected:	Symbols::Symbol* dataOwner;																				// The current section's latest label, owning to its end for now; null while it has none.
+	protected:	const Value* dataOwnerStart;																			// Where `dataOwner` starts.
 	protected:	bool dataIsConstant;																					// The current data section is a `CNST` one, placed below the base.
 	protected:	Symbols& globals;
 	protected:	Symbols locals;

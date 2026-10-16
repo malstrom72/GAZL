@@ -461,6 +461,14 @@ struct Machine {
 UInt canary(size_t i) { return 0xC0DE0000u + (UInt)i; }
 
 /*
+	A processor over the program in `m`, without natives, for the host-side sweeps; they never run it.
+*/
+Processor machineProcessor(Machine& m) {
+	return Processor(m.sizes.codeSize, &m.code[0], m.sizes.functionCount, &m.functionTable[0], MEMORY_SIZE, m.memory()
+			, m.sizes.globalsSize, m.sizes.constsSize, CALL_STACK_SIZE, &m.callStack[0], 0);
+}
+
+/*
 	Assembles `source` into `m` over a canary-filled buffer. Returns false, with the error, when the assembler
 	refuses it.
 */
@@ -624,8 +632,7 @@ int sweepNativeAccess() {
 		std::printf("native access: baseline program refused: %s\n", error.c_str());
 		return 1;
 	}
-	const Processor processor(m.sizes.codeSize, &m.code[0], m.sizes.functionCount, &m.functionTable[0], MEMORY_SIZE
-			, m.memory(), m.sizes.globalsSize, m.sizes.constsSize, CALL_STACK_SIZE, &m.callStack[0], 0);
+	const Processor processor = machineProcessor(m);
 	const UInt rw = layout.rwSize();
 	const UInt low = layout.low();
 	struct Access { bool writable; UInt pointer; UInt count; bool succeeds; const char* what; };
@@ -660,23 +667,15 @@ int sweepNativeAccess() {
 	return failures;
 }
 
-/*
-	A processor over `m`, for freezing and thawing; it never runs.
-*/
-Processor frozenProcessor(Machine& m) {
-	return Processor(m.sizes.codeSize, &m.code[0], m.sizes.functionCount, &m.functionTable[0], MEMORY_SIZE, m.memory()
-			, m.sizes.globalsSize, m.sizes.constsSize, CALL_STACK_SIZE, &m.callStack[0], 0);
-}
-
 std::vector<unsigned char> freeze(Machine& m) {
-	const Processor processor = frozenProcessor(m);
+	const Processor processor = machineProcessor(m);
 	std::vector<unsigned char> frozen(freezeMemorySize(processor, m.symbols));
 	freezeMemory(processor, m.symbols, &frozen[0], (UInt)frozen.size());
 	return frozen;
 }
 
 MemoryLoad thaw(Machine& m, const std::vector<unsigned char>& frozen, bool prefix) {
-	Processor processor = frozenProcessor(m);
+	Processor processor = machineProcessor(m);
 	return thawMemory(processor, m.symbols, frozen.empty() ? 0 : &frozen[0], (UInt)frozen.size(), prefix);
 }
 
@@ -686,7 +685,7 @@ MemoryLoad thaw(Machine& m, const std::vector<unsigned char>& frozen, bool prefi
 std::string globalWords(Machine& m, const char* name) {
 	UInt size = 0;
 	const Pointer address = m.symbols.findGlobal(name, size);
-	const Value* words = (address != NULL_POINTER ? frozenProcessor(m).accessConstMemory(address, size) : 0);
+	const Value* words = (address != NULL_POINTER ? machineProcessor(m).accessConstMemory(address, size) : 0);
 	if (words == 0) return "?";
 	std::string s;
 	for (UInt i = 0; i < size; ++i) s += (i == 0 ? "" : " ") + number(words[i].i);
@@ -909,18 +908,18 @@ int sweepFrozenEntries() {
 int sweepThawRules() {
 	int failures = 0;
 	int checks = 0;
-	const std::string FROM = "a:\tGLOB *2\n\tDATi #1 #2\nb:\tGLOB *1\n\tDATi #3\nc:\tGLOB *1\n\tDATi #4\n"
-			"main:\tFUNC\n\tRETU\n";
+	const char* const FROM = "a:\tGLOB *2\n\tDATi #1 #2\nb:\tGLOB *1\n\tDATi #3\nc:\tGLOB *1\n\tDATi #4\n";
+	const std::string MAIN = "main:\tFUNC\n\tRETU\n";
 	Machine from;
 	Layout layout = Layout();
 	std::string error;
-	if (!assemble(from, FROM, layout, error)) {
+	if (!assemble(from, FROM + MAIN, layout, error)) {
 		std::printf("FAIL thaw rules: program refused: %s\n", error.c_str());
 		return 1;
 	}
 	const std::vector<unsigned char> frozen = freeze(from);	// $gazl at 20, a at 48, b at 68, c at 84; 100 bytes
 
-	struct Invalid { const char* what; size_t at; UInt word; int cut; MemoryLoad expected; };
+	struct Invalid { const char* what; size_t at; UInt word; int cut; MemoryLoad expected; };	// `cut` < 0 adds bytes
 	const Invalid INVALID[] = {
 		{ "wrong magic", 0, 0x4D4D5A48u, 0, MEMORY_BAD_MAGIC },
 		{ "3 bytes", 0, 0, 97, MEMORY_BAD_MAGIC },
@@ -937,18 +936,20 @@ int sweepThawRules() {
 		{ "padding that is not zero", 52, 'a' | ('x' << 8), 0, MEMORY_MALFORMED },
 		{ "names out of order", 52, 'c', 0, MEMORY_MALFORMED },
 		{ "the same name twice", 72, 'a', 0, MEMORY_MALFORMED },
-		{ "bytes after the last entry", 100, 0, 0, MEMORY_MALFORMED },
+		{ "bytes after the last entry", 100, 0, -4, MEMORY_MALFORMED },
 		{ "trailing bytes and a damaged check entry", 36, 0x01020305u, -4, MEMORY_BAD_CANARY }
 	};
 	for (size_t i = 0; i < sizeof (INVALID) / sizeof (*INVALID); ++i) {
 		const Invalid& v = INVALID[i];
 		std::vector<unsigned char> bad(frozen);
-		if (v.cut > 0) bad.resize(bad.size() - v.cut);
-		if (v.cut < 0 || v.at >= bad.size()) bad.resize(bad.size() + 4, 0);
-		if (v.at < bad.size() && v.cut == 0) putWord(bad, v.at, v.word);
-		if (v.cut < 0) putWord(bad, v.at, v.word);
+		if (v.cut > 0) {
+			bad.resize(bad.size() - v.cut);
+		} else {
+			bad.resize(bad.size() - v.cut, 0);
+			putWord(bad, v.at, v.word);
+		}
 		Machine to;
-		assemble(to, FROM, layout, error);
+		assemble(to, FROM + MAIN, layout, error);
 		Value* const memory = to.memory();
 		for (UInt w = 0; w < MEMORY_SIZE; ++w) memory[w].i = 99;
 		const MemoryLoad got = thaw(to, bad, true);
@@ -964,36 +965,34 @@ int sweepThawRules() {
 
 	struct Restore { const char* what; const char* to; bool prefix; MemoryLoad expected; const char* words; };
 	const Restore RESTORES[] = {
-		{ "the same program", FROM.c_str(), false, MEMORY_OK, "1 2|3|4" },
+		{ "the same program", FROM, false, MEMORY_OK, "1 2|3|4|?" },
 		{ "a larger owner, prefix", "a:\tGLOB *3\n\tDATi #7 #7 #7\nb:\tGLOB *1\n\tDATi #7\nc:\tGLOB *1\n\tDATi #7\n"
-				, true, MEMORY_MISMATCH, "1 2 7|3|4" },
+				, true, MEMORY_MISMATCH, "1 2 7|3|4|?" },
 		{ "a larger owner, skip", "a:\tGLOB *3\n\tDATi #7 #7 #7\nb:\tGLOB *1\n\tDATi #7\nc:\tGLOB *1\n\tDATi #7\n"
-				, false, MEMORY_MISMATCH, "7 7 7|3|4" },
+				, false, MEMORY_MISMATCH, "7 7 7|3|4|?" },
 		{ "a smaller owner, prefix", "a:\tGLOB *1\n\tDATi #7\nb:\tGLOB *1\n\tDATi #7\nc:\tGLOB *1\n\tDATi #7\n"
-				, true, MEMORY_MISMATCH, "1|3|4" },
+				, true, MEMORY_MISMATCH, "1|3|4|?" },
 		{ "an entry with no owner", "a:\tGLOB *2\n\tDATi #7 #7\nc:\tGLOB *1\n\tDATi #7\n"
-				, false, MEMORY_MISMATCH, "1 2|?|4" },
+				, false, MEMORY_MISMATCH, "1 2|?|4|?" },
 		{ "an owner with no entry", "a:\tGLOB *2\n\tDATi #7 #7\nb:\tGLOB *1\n\tDATi #7\nc:\tGLOB *1\n\tDATi #7\n"
 				"d:\tGLOB *1\n\tDATi #7\n", false, MEMORY_MISMATCH, "1 2|3|4|7" },
 		{ "an owner moved into a TEMP section", "a:\tGLOB *2\n\tDATi #7 #7\nb:\tTEMP *1\n\tDATi #7\nc:\tGLOB *1\n"
-				"\tDATi #7\n", false, MEMORY_MISMATCH, "1 2|7|4" },
+				"\tDATi #7\n", false, MEMORY_MISMATCH, "1 2|7|4|?" },
 		{ "a label that owns nothing", "s:\tGLOB *2\na:\tDATi #7 #7\nb:\tGLOB *1\n\tDATi #7\nc:\tGLOB *1\n\tDATi #7\n"
-				, false, MEMORY_OK, "1 2|3|4" }
+				, false, MEMORY_OK, "1 2|3|4|?" }
 	};
 	const char* const NAMES[] = { "a", "b", "c", "d" };
 	for (size_t i = 0; i < sizeof (RESTORES) / sizeof (*RESTORES); ++i) {
 		const Restore& r = RESTORES[i];
 		Machine to;
-		if (!assemble(to, std::string(r.to) + (strstr(r.to, "main:") != 0 ? "" : "main:\tFUNC\n\tRETU\n"), layout
-				, error)) {
+		if (!assemble(to, r.to + MAIN, layout, error)) {
 			std::printf("FAIL thaw rules: %s: program refused: %s\n", r.what, error.c_str());
 			++failures;
 			continue;
 		}
 		const MemoryLoad got = thaw(to, frozen, r.prefix);
 		std::string words;
-		const int nameCount = (strstr(r.to, "d:") != 0 ? 4 : 3);
-		for (int n = 0; n < nameCount; ++n) words += (n == 0 ? "" : "|") + globalWords(to, NAMES[n]);
+		for (int n = 0; n < 4; ++n) words += (n == 0 ? "" : "|") + globalWords(to, NAMES[n]);
 		if (got != r.expected || words != r.words) {
 			std::printf("FAIL thaw rules: %s gave status %d and %s, expected %d and %s\n", r.what, (int)got
 					, words.c_str(), (int)r.expected, r.words);
@@ -1090,7 +1089,14 @@ int sweepUnnamedSections() {
 		std::printf("FAIL unnamed sections: a label does not cover the unlabelled lines after it (%s)\n", error.c_str());
 		++failures;
 	}
-	std::printf("unnamed sections: %d checked, %d failed\n", count + 1, failures);
+	// A label with a `#` part is declared as `name.n`, and the next label still ends what it owns.
+	Machine h;
+	if (!assemble(h, "h:\tGLOB *4\nx#1:\tDATi #1\ny:\tDATi #2\n", layout, error) || ownedWords(h.symbols, "h") != 0
+			|| ownedWords(h.symbols, "x.1") != 1 || ownedWords(h.symbols, "y") != 3) {
+		std::printf("FAIL unnamed sections: a `#` label does not end where the next label starts (%s)\n", error.c_str());
+		++failures;
+	}
+	std::printf("unnamed sections: %d checked, %d failed\n", count + 2, failures);
 	return failures;
 }
 
