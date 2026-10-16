@@ -663,7 +663,8 @@ int sweepNativeAccess() {
 /*
 	Two refusals at the edges a host reaches: a frame summing past INT_MAX is refused at assembly, so a slot offset
 	can never wrap, and `thawMemory` rejects every truncated blob and a name length running past the end of the
-	blob, without reading past it. Returns the number of failures, each one printed.
+	blob, without reading past it, and any change to the canaries that self-check its word encoding. Returns the
+	number of failures, each one printed.
 */
 int sweepFrameAndThaw() {
 	int failures = 0;
@@ -718,6 +719,15 @@ int sweepFrameAndThaw() {
 		++failures;
 	}
 	++probes;
+	for (int i = 16; i < 24; ++i) {												// each byte of the int and float canaries
+		std::vector<unsigned char> flipped(blob);
+		flipped[i] ^= 0x01;
+		if (thawMemory(processor, m.symbols, &flipped[0], (UInt)flipped.size()) != MEMORY_BAD_CANARY) {
+			std::printf("FAIL thaw: a blob with canary byte %d changed was not rejected\n", i);
+			++failures;
+		}
+		++probes;
+	}
 	std::printf("frame and thaw: %d probes, %d failed\n", probes, failures);
 	return failures;
 }
