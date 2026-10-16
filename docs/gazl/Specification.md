@@ -410,8 +410,9 @@ The status says whether the snapshot fitted the program exactly:
 - A restored word is its raw bits. Snapshots record no types, layouts or pointer targets, so pointers in restored
   data are valid only when the program was assembled from the same code and constants by the same implementation,
   and a pointer into the data stack is never valid.
-- The format checks its own structure, not whether its bytes are intact. The host is responsible for storing a
-  snapshot so that it comes back unchanged, for example by saving its byte length and a checksum along with it.
+- The format checks its own structure, not whether its bytes are intact. The host is responsible for giving the
+  reader exactly the bytes the writer produced, no more and no fewer, for example by storing their count and a
+  checksum of them.
 
 ## 12. Conformance
 
