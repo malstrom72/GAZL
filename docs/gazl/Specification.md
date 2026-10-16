@@ -5,7 +5,7 @@ that runs every existing program with identical results. It defines the machine 
 the host interface and the memory snapshot format. The per-instruction reference is
 [InstructionSet.md](InstructionSet.md); the conformance suite is [`src/UnitTest.gazl`](../../src/UnitTest.gazl).
 Where this draft and the reference implementation disagree, the disagreement is a bug in one of them and is listed
-under [Open questions](#13-open-questions).
+under [Not yet implemented](#13-not-yet-implemented).
 
 "Must" marks a requirement on every implementation. "Unspecified" means an implementation may produce any result,
 but must stay inside the sandbox (section 10). Nothing in GAZL 1 is undefined in the C sense.
@@ -59,8 +59,7 @@ Data memory is one array of words, sized by the host. Every address is measured 
   fill them, whether the section is named or not. It has exactly the size it declares (section 6).
 - **Between sections, nothing is promised.** An implementation may place sections in any order and leave unused
   words between them, for example to align each section to 64 bits for a JIT. A pointer computed from one section
-  into another stays inside memory, but which word it reaches is unspecified. (The reference implementation places
-  sections in declaration order, with no gaps.)
+  into another stays inside memory, but which word it reaches is unspecified.
 - `C` and `G` are the space the constants and the globals take, gaps included.
 - **The data stack** is the space above the globals, up to the zero guard. With one processor, it is all of it.
 - **The zero guard** is the last word of memory, just above the data stack. It always holds 0, so a native scanning
@@ -121,8 +120,7 @@ float, then multiplies by its scale operand.
 
 **Float comparisons.** `EQUf` and `NEQf` follow IEEE-754: a NaN is unequal to everything, itself included. So
 `NEQf x x @L` branches exactly when `x` is NaN, and that is the supported way to test for one. When either operand
-of `LSSf`, `LEQf`, `GRTf` or `GEQf` is NaN, whether it branches is unspecified. Today's interpreter branches for
-`LEQf` and `GEQf` and not for `LSSf` and `GRTf`, but programs must not rely on that.
+of `LSSf`, `LEQf`, `GRTf` or `GEQf` is NaN, whether it branches is unspecified.
 
 **Pointers.** `ADDp` and `SUBp` add or subtract an int, wrapping modulo 2^32. `DIFp` is the difference in words.
 Pointer comparisons compare the two words as **signed** ints. A function pointer supports only `EQUp`, `NEQp` and
@@ -345,9 +343,6 @@ A snapshot ("freeze") saves the values of a program's writable memory by owner (
 restore them by name ("thaw"), even after the program has been changed and re-assembled. A snapshot is a payload
 that a host embeds in its own storage; it is not a file format of its own.
 
-This format is decided but not implemented yet: today's `freezeMemory` / `thawMemory` write an earlier layout of the
-same idea (open question 2).
-
 **Encoding.** A snapshot is a sequence of bytes built from two kinds of field:
 - A **word** is 4 bytes holding an unsigned 32-bit value, little-endian: bits 0-7 first, bits 24-31 last.
 - A **name** is an owner's identifier (section 5), one byte per character, followed by 0 to 3 zero bytes of
@@ -430,8 +425,8 @@ The status says whether the snapshot fitted the program exactly:
   call a function of the program that restores backwards compatibility, or discard the state by re-creating the
   processor.
 
-`MEMORY_MISMATCH` is new. A host that wants to know which names did not fit can compare the snapshot's entries with
-the program's owners itself.
+A host that wants to know which names did not fit can compare the snapshot's entries with the program's owners
+itself.
 
 **When to freeze and thaw.** Both are defined only while no processor that uses the memory is inside a call: frames
 on the data stack are not saved, and a suspended call would see its globals change under it. Several processors may
@@ -483,21 +478,19 @@ An implementation conforms when it runs the following with the expected results:
 - **The replayed fuzz inputs** in `tests/fuzz/` must neither crash the implementation nor break the sandbox.
 - **`tools/GAZLBoundsSweep.cpp`'s oracle** must agree with every memory access at every edge of memory.
 
-## 13. Open questions
+## 13. Not yet implemented
 
-Each is a decision for the format's owner. Until one is decided, the current behaviour of `src/GAZL.cpp` is the
-answer.
+Where `src/GAZL.cpp` does not yet do what this specification says:
 
-1. **Float literals are correctly rounded from #130 on.** Before it, the reference implementation accumulated the
-   digits in binary64 and scaled them with `pow`, which rounded some literals differently from section 5, mostly
-   exact ties such as `2180774.875`. None of the float literals in existing GAZL or Impala sources changes value.
-2. **The snapshot format is decided but not implemented.** Section 11 is the format to build. Today's
-   `freezeMemory` / `thawMemory` write and read an earlier layout of the same idea:
+1. **The snapshot format** (section 11). `freezeMemory` / `thawMemory` write and read an earlier layout of the same
+   idea:
    - the two check words sit in the header rather than in a `$gazl` check entry, and there is no NaN word;
    - names are not padded, and entries follow the assembler's own order rather than ascending names;
    - a named section is saved whole, and labels inside it are not saved, where section 6 makes every label an
      owner (the assembler already gives every word an owner, with data labels running to the next label);
    - the reader accepts only its own GAZL version;
    - it restores while it parses, so a truncated snapshot restores the entries before the damage, and there is
-     no `MEMORY_MALFORMED`.
+     no `MEMORY_MALFORMED`;
+   - a size mismatch is always skipped, there is no prefix policy, and there is no `MEMORY_MISMATCH`.
+
    No snapshots exist yet that must stay readable, so the implementation can switch to section 11 directly.
