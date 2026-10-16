@@ -865,15 +865,15 @@ GlobalInfo Symbols::getGlobalInfo(const Iterator& iterator) const {
 	info.name = iterator->first.c_str();
 	info.address = iterator->second.value.p;
 	info.owned = iterator->second.owned;
-	info.isTemp = ((iterator->second.types & TEMPORARY) != 0);
-	info.isConstant = ((iterator->second.types & ADDRESS_W) == 0);
+	const int types = iterator->second.types;
+	info.section = ((types & ADDRESS_W) == 0 ? CNST_SECTION : ((types & TEMPORARY) != 0 ? TEMP_SECTION : GLOB_SECTION));
 	return info;
 }
 
 bool Symbols::getGlobalInfo(const Char* name, GlobalInfo& info) const {
 	const Iterator it = symbols.find(name);
 	if (it == symbols.end() || (it->second.types & ADDRESS) == 0) {
-		const GlobalInfo none = { 0, NULL_POINTER, 0, false, false };
+		const GlobalInfo none = { 0, NULL_POINTER, 0, GLOB_SECTION };
 		info = none;
 		return false;
 	}
@@ -1801,7 +1801,7 @@ static void findMemoryOwners(const Symbols& symbols, std::vector<MemoryOwner>& o
 	Symbols::Iterator it;
 	for (bool ok = symbols.findFirstGlobal(it); ok; ok = symbols.findNextGlobal(it)) {
 		const MemoryOwner owner = { symbols.getGlobalInfo(it), static_cast<UInt>(it->first.size()) };
-		if (!owner.info.isTemp && !owner.info.isConstant && owner.info.owned != 0) owners.push_back(owner);
+		if (owner.info.section == GLOB_SECTION && owner.info.owned != 0) owners.push_back(owner);
 	}
 }
 
@@ -2108,7 +2108,7 @@ bool unitTest() {
 			Symbols::Iterator it;
 			for (bool ok = globals.findFirstGlobal(it); ok; ok = globals.findNextGlobal(it)) {
 				const GlobalInfo info = globals.getGlobalInfo(it);
-				if (info.isTemp) continue;
+				if (info.section == TEMP_SECTION) continue;
 				const UInt index = info.address - MEMORY_OFFSET + (sizes.constsSize - 1);			// the buffer starts with the constants
 				for (UInt i = 0; i < info.owned; ++i) assert(memory2[index + i].i == memory[index + i].i);
 			}

@@ -153,6 +153,12 @@ inline Exception::Exception(AssemblerError error, const Char* b, const Char* e) 
 inline Exception::Exception(AssemblerError error, const std::string& detail) : error(error), detail(detail) { assert(0 <= error && error < ASSEMBLER_ERROR_COUNT); }
 inline Exception::~Exception() throw() { }																				// (GCC requires explicit destructor with one that has throw().)
 
+enum DataSection {
+	GLOB_SECTION				// writable, and saved by freezing
+	, TEMP_SECTION				// writable, but left out of freezing
+	, CNST_SECTION				// read-only
+};
+
 /*
 	What `Symbols::getGlobalInfo` reports about one name of data: a section's label, or a label on a data statement.
 */
@@ -160,8 +166,7 @@ struct GlobalInfo {
 	const char* name;				// valid as long as the `Symbols` it came from
 	Pointer address;
 	UInt owned;						// the words it owns, to the next label: what freezing saves under its name
-	bool isTemp;					// declared in a `TEMP` section, which freezing leaves out
-	bool isConstant;				// declared in a `CNST` section: read-only, and left out of freezing too
+	DataSection section;			// the kind of section it is declared in; freezing saves `GLOB_SECTION` only
 };
 
 /*
