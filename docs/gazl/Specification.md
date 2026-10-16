@@ -2,7 +2,7 @@
 
 **DRAFT.** This document is meant to let someone who has never seen `src/GAZL.cpp` build a GAZL 1 implementation
 that runs every existing program with identical results. It defines the machine model, the source format, execution,
-the host interface and the memory snapshot format. The per-instruction reference is
+the host interface and the frozen memory format. The per-instruction reference is
 [InstructionSet.md](InstructionSet.md); the conformance suite is [`src/UnitTest.gazl`](../../src/UnitTest.gazl).
 Where this draft and the reference implementation disagree, the disagreement is a bug in one of them and is listed
 under [Not yet implemented](#13-not-yet-implemented).
@@ -200,7 +200,7 @@ statements that follow fill it in order:
 - A data statement that would write past the section's `n` words is `DATA_SECTION_FULL`. Data never spills into
   whatever follows.
 
-`TEMP` is `GLOB` that a memory snapshot skips (section 11). `CNST` sections are read-only.
+`TEMP` is `GLOB` that freezing skips (section 11). `CNST` sections are read-only.
 
 **Memory ownership.** Every word of a data section has exactly one owner, and an owner is a label: the section's
 own label, or a label on one of its data statements.
@@ -210,7 +210,7 @@ own label, or a label on one of its data statements.
 - **No owner is an error.** In an unnamed section, data before the first labelled statement would belong to no one,
   and so would every word of an unnamed section with no labelled statement: `UNNAMED_DATA_SECTION`.
 
-So every word is named by exactly one `owner:offset`, and that is what a snapshot saves (section 11). For example:
+So every word is named by exactly one `owner:offset`, and that is what freezing saves (section 11). For example:
 
     buffer: GLOB *40
             DATi #5954          ; buffer:0, the only word buffer owns
@@ -323,18 +323,18 @@ Whatever the program text, an implementation must guarantee all of the following
 
 These hold as long as the host keeps the floating-point environment required in section 9.
 
-## 11. Memory snapshot format
+## 11. Frozen memory format
 
-A snapshot ("freeze") holds the values of a program's writable memory, by owner (section 6), so that they can be
-restored by name ("thaw") into the program after it has been assembled again. A snapshot holds data only.
+Freezing saves the values of a program's writable memory, by owner (section 6), as frozen memory. Thawing restores
+them by name into the program after it has been assembled again. Frozen memory holds data only.
 
-**Encoding.** A snapshot is a sequence of bytes built from two kinds of field:
+**Encoding.** Frozen memory is a sequence of bytes built from two kinds of field:
 - A **word** is 4 bytes holding an unsigned 32-bit value, little-endian: bits 0-7 first, bits 24-31 last.
 - A **name** is an owner's identifier (section 5), one byte per character, followed by 0 to 3 zero bytes of
   padding, so that the name and its padding together take a multiple of 4 bytes. A name of `L` bytes has
   `(4 - L % 4) % 4` padding bytes.
 
-Every field starts at a multiple of 4 bytes from the start of the snapshot. Even so, thawing must decode each word
+Every field starts at a multiple of 4 bytes from the start of the frozen memory. Even so, thawing must decode each word
 byte by byte, as above, and never by loading it through a pointer.
 
 **Header,** 20 bytes:
@@ -342,7 +342,7 @@ byte by byte, as above, and never by loading it through a pointer.
 | offset | field                                                   |
 | ------ | ------------------------------------------------------- |
 | 0      | magic, the bytes `G` `Z` `M` `M` (`47 5A 4D 4D`)        |
-| 4      | word: snapshot format version, 1                        |
+| 4      | word: format version, 1                                 |
 | 8      | word: the GAZL version that froze it, 1 for GAZL 1      |
 | 12     | word: word size in bits, 32                             |
 | 16     | word: `S`, the number of entries that follow, `S >= 1`  |
@@ -373,7 +373,7 @@ saved exactly once. Owners in `CNST` and `TEMP` sections are left out. In the ex
 are `buffer` (1 word), `clock` (1 word) and `tail` (39 words). An entry's words are the raw 32 bits of memory,
 whatever they hold.
 
-**Validation.** Thawing validates the whole snapshot before restoring anything. On the first problem below, looked
+**Validation.** Thawing validates all of the frozen memory before restoring anything. On the first problem below, looked
 for in this order, nothing is restored and that problem's status is returned:
 
 | problem                                                                              | status                |
@@ -382,12 +382,12 @@ for in this order, nothing is restored and that problem's status is returned:
 | the header is incomplete                                                             | `MEMORY_TRUNCATED`    |
 | the format version is not 1, or the GAZL version is 0 or newer than the thawing GAZL | `MEMORY_BAD_VERSION`  |
 | the word size is not 32                                                              | `MEMORY_BAD_WORDSIZE` |
-| a length runs past the end of the snapshot                                           | `MEMORY_TRUNCATED`    |
+| a length runs past the end of the frozen memory                                      | `MEMORY_TRUNCATED`    |
 | the check entry differs from the one above                                           | `MEMORY_BAD_CANARY`   |
 | a name is not a valid identifier, names do not ascend strictly, or padding is not 0  | `MEMORY_MALFORMED`    |
 | bytes follow the last entry                                                          | `MEMORY_MALFORMED`    |
 
-**Restore.** Only after validation succeeds, thawing matches the snapshot's entries to the re-assembled
+**Restore.** Only after validation succeeds, thawing matches the entries to the re-assembled
 program's owners in `GLOB` sections, by name. Each name falls in exactly one case:
 - **An entry and an owner of the same size:** the words are restored.
 - **An entry and an owner of different sizes:** the host chooses, for the whole restore, between two policies.
@@ -399,15 +399,15 @@ program's owners in `GLOB` sections, by name. Each name falls in exactly one cas
 
 Restore writes nothing else: every word it does not restore keeps whatever it held before.
 
-The status says whether the snapshot fitted the program exactly:
+The status says whether the frozen memory fitted the program exactly:
 - **`MEMORY_OK`:** every entry met an owner of the same size, and every owner had an entry.
 - **`MEMORY_MISMATCH`:** anything else. The data is restored as far as the policy allows.
 
 **Conditions.**
-- A snapshot does not identify the program it came from. The host is responsible for keeping the code and constants
-  it belongs to, and for deciding which program to restore it into.
+- Frozen memory does not identify the program it came from. The host is responsible for keeping the code and
+  constants it belongs to, and for deciding which program to restore it into.
 - Freezing and thawing are defined only while no processor that uses the memory is inside a call.
-- A restored word is its raw bits. Snapshots record no types, layouts or pointer targets, so pointers in restored
+- A restored word is its raw bits. Frozen memory records no types, layouts or pointer targets, so pointers in restored
   data are valid only when the program was assembled from the same code and constants by the same implementation,
   and a pointer into the data stack is never valid.
 - The format checks its own structure, not whether its bytes are intact. When thawing, the host must supply
@@ -425,13 +425,13 @@ An implementation conforms when it runs the following with the expected results:
 
 Where `src/GAZL.cpp` does not yet do what this specification says:
 
-1. **The snapshot format** (section 11). `freezeMemory` / `thawMemory` write and read an earlier layout of the same
+1. **The frozen memory format** (section 11). `freezeMemory` / `thawMemory` write and read an earlier layout of the same
    idea:
    - the two check words sit in the header rather than in a `$gazl` check entry, and there is no NaN word;
    - names are not padded, and entries follow the assembler's own order rather than ascending names;
    - a named section is saved whole, and labels inside it are not saved, where section 6 makes every label an
      owner (the assembler already gives every word an owner, with data labels running to the next label);
-   - thawing accepts only snapshots from its own GAZL version;
-   - it restores while it parses, so a truncated snapshot restores the entries before the damage, and there is
+   - thawing accepts only frozen memory from its own GAZL version;
+   - it restores while it parses, so truncated frozen memory restores the entries before the damage, and there is
      no `MEMORY_MALFORMED`;
    - a size mismatch is always skipped, there is no prefix policy, and there is no `MEMORY_MISMATCH`.
