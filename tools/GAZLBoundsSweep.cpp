@@ -47,8 +47,8 @@
 	the probe function's own frame at the bottom of the data stack, which the program writes itself.
 
 	The memory a native reaches through `accessConstMemory` and `accessMemory` is swept too, by the same rule.
-	So are two refusals a host relies on: a frame past INT_MAX at assembly, and a truncated or corrupt blob in
-	`thawMemory`.
+	So are a frame past INT_MAX at assembly and the frozen memory format: what freezing saves, and how thawing
+	validates and restores.
 
 	Built with GAZL_JIT, every probe also runs through the JIT, checked against the same oracle (not against the
 	interpreter), unless the host forbids executable memory. Exits non-zero on any failure.
@@ -661,9 +661,47 @@ int sweepNativeAccess() {
 }
 
 /*
+	A processor over `m`, for freezing and thawing; it never runs.
+*/
+Processor frozenProcessor(Machine& m) {
+	return Processor(m.sizes.codeSize, &m.code[0], m.sizes.functionCount, &m.functionTable[0], MEMORY_SIZE, m.memory()
+			, m.sizes.globalsSize, m.sizes.constsSize, CALL_STACK_SIZE, &m.callStack[0], 0);
+}
+
+std::vector<unsigned char> freeze(Machine& m) {
+	const Processor processor = frozenProcessor(m);
+	std::vector<unsigned char> frozen(freezeMemorySize(processor, m.symbols));
+	freezeMemory(processor, m.symbols, &frozen[0], (UInt)frozen.size());
+	return frozen;
+}
+
+MemoryLoad thaw(Machine& m, const std::vector<unsigned char>& frozen, ThawPolicy policy) {
+	Processor processor = frozenProcessor(m);
+	return thawMemory(processor, m.symbols, frozen.empty() ? 0 : &frozen[0], (UInt)frozen.size(), policy);
+}
+
+/*
+	The words of the global `name` in `m`, as a list of numbers ("1 2 3"), or "?" when there is no such global.
+*/
+std::string globalWords(Machine& m, const char* name) {
+	UInt size = 0;
+	const Pointer address = m.symbols.findGlobal(name, size);
+	const Value* words = (address != NULL_POINTER ? frozenProcessor(m).accessConstMemory(address, size) : 0);
+	if (words == 0) return "?";
+	std::string s;
+	for (UInt i = 0; i < size; ++i) s += (i == 0 ? "" : " ") + number(words[i].i);
+	return s;
+}
+
+void putWord(std::vector<unsigned char>& b, size_t at, UInt v) {
+	b[at] = (unsigned char)v; b[at + 1] = (unsigned char)(v >> 8); b[at + 2] = (unsigned char)(v >> 16);
+	b[at + 3] = (unsigned char)(v >> 24);
+}
+
+/*
 	Two refusals at the edges a host reaches: a frame summing past INT_MAX is refused at assembly, so a slot offset
-	can never wrap, and `thawMemory` rejects every truncated blob and a name length running past the end of the
-	blob, without reading past it. Returns the number of failures, each one printed.
+	can never wrap, and `thawMemory` rejects every truncated input and a name length running past the end of it,
+	without reading past it. Returns the number of failures, each one printed.
 */
 int sweepFrameAndThaw() {
 	int failures = 0;
@@ -693,28 +731,27 @@ int sweepFrameAndThaw() {
 		std::printf("thaw: baseline program refused: %s\n", error.c_str());
 		return failures + 1;
 	}
-	Processor processor(m.sizes.codeSize, &m.code[0], m.sizes.functionCount, &m.functionTable[0], MEMORY_SIZE
-			, m.memory(), m.sizes.globalsSize, m.sizes.constsSize, CALL_STACK_SIZE, &m.callStack[0], 0);
-	std::vector<unsigned char> blob(freezeMemorySize(processor, m.symbols));
-	freezeMemory(processor, m.symbols, &blob[0], (UInt)blob.size());
+	const std::vector<unsigned char> frozen = freeze(m);
 	int probes = 1;											// the frame above
-	if (thawMemory(processor, m.symbols, &blob[0], (UInt)blob.size()) != MEMORY_OK) {
-		std::printf("FAIL thaw: the intact blob was rejected\n");
+	if (thaw(m, frozen, THAW_SKIP) != MEMORY_OK) {
+		std::printf("FAIL thaw: the intact frozen memory was rejected\n");
 		++failures;
 	}
 	++probes;
-	for (size_t n = 1; n < blob.size(); ++n) {
-		const std::vector<unsigned char> prefix(blob.begin(), blob.begin() + n);	// exactly `n` bytes, nothing after
-		if (thawMemory(processor, m.symbols, &prefix[0], (UInt)n) == MEMORY_OK) {
-			std::printf("FAIL thaw: a blob cut to %d bytes was accepted\n", (int)n);
+	for (size_t n = 1; n < frozen.size(); ++n) {
+		const std::vector<unsigned char> prefix(frozen.begin(), frozen.begin() + n);	// exactly `n` bytes, nothing after
+		const MemoryLoad expected = (n < 4 ? MEMORY_BAD_MAGIC : MEMORY_TRUNCATED);
+		if (thaw(m, prefix, THAW_SKIP) != expected) {
+			std::printf("FAIL thaw: frozen memory cut to %d bytes was not refused as %s\n", (int)n
+					, n < 4 ? "bad magic" : "truncated");
 			++failures;
 		}
 		++probes;
 	}
-	std::vector<unsigned char> bad(blob);
-	bad[28] = 0xF0; bad[29] = 0xFF; bad[30] = 0xFF; bad[31] = 0xFF;		// the first global's name length
-	if (thawMemory(processor, m.symbols, &bad[0], (UInt)bad.size()) != MEMORY_TRUNCATED) {
-		std::printf("FAIL thaw: a name length past the end of the blob was not rejected as truncated\n");
+	std::vector<unsigned char> bad(frozen);
+	putWord(bad, 48, 0xFFFFFFF0u);							// the first program entry's name length
+	if (thaw(m, bad, THAW_SKIP) != MEMORY_TRUNCATED) {
+		std::printf("FAIL thaw: a name length past the end was not refused as truncated\n");
 		++failures;
 	}
 	++probes;
@@ -723,19 +760,23 @@ int sweepFrameAndThaw() {
 }
 
 /*
-	What `freezeMemory` saves for each way of naming data: a named section once and whole, a label in an unnamed
-	section from its line to the next label or the section's end, and nothing for `TEMP` or `CNST`. Each saved
-	entry is checked by name, size and words. Returns the number of failures, each one printed.
+	What `freezeMemory` saves for each way of naming data (docs/gazl/Specification.md section 6): every label owns
+	the words up to the next label, a section's own label included, and a label that shares its word with a later
+	one owns none. Nothing is saved for `TEMP` or `CNST`. Checks the header, the check entry and every program entry
+	byte for byte. Returns the number of failures, each one printed.
 */
-int sweepSnapshotEntries() {
+int sweepFrozenEntries() {
 	const char* const SOURCE =
 		"\tGLOB *1\n"						// unnamed section, labelled scalar (Impala's scalar form)
 		"clock:\tDATi #7\n"
 		"params:\tGLOB *4\n"				// named section, nothing inside (Impala's array form)
-		"state:\tGLOB *3\n"					// named section with labels inside: saved once, as `state`
+		"state:\tGLOB *3\n"					// a section label sharing its word with `gain` owns nothing
 		"gain:\tDATf #0.5\n"
 		"level:\tDATi #3\n"
-		"\tGLOB *3\n"						// unnamed section: the label covers the unlabelled line after it too
+		"head:\tGLOB *3\n"					// a section label owns the words before its first inner label
+		"\tDATi #61\n"
+		"mid:\tDATi #62\n"
+		"\tGLOB *3\n"						// unnamed section: the label owns the unlabelled line after it too
 		"first:\tDATi #21\n"
 		"\tDATi #22\n"
 		"\tGLOB *8\n"						// labels over several values
@@ -750,70 +791,71 @@ int sweepSnapshotEntries() {
 		"\tPEEK v &multi:2\n"				// a label's offset is checked against all of its values
 		"\tRETU\n";
 	struct Entry { const char* name; UInt size; UInt words[8]; };
-	const Entry EXPECTED[] = {
+	const Entry EXPECTED[] = {				// ascending names
 		{ "clock", 1, { 7 } },
 		{ "first", 3, { 21, 22, 0 } },
+		{ "gain", 1, { 0x3F000000u } },
+		{ "head", 1, { 61 } },
+		{ "level", 2, { 3, 0 } },
+		{ "mid", 2, { 62, 0 } },
 		{ "multi", 3, { 31, 32, 33 } },
 		{ "params", 4, { 0, 0, 0, 0 } },
-		{ "state", 3, { 0x3F000000u, 3, 0 } },
 		{ "text", 5, { 'a', 'b', 'c', 0, 0 } }
 	};
 	const int count = sizeof (EXPECTED) / sizeof (*EXPECTED);
+	const unsigned char HEADER_AND_CHECK[20 + 28] = {
+		'G', 'Z', 'M', 'M', 1, 0, 0, 0, 1, 0, 0, 0, 32, 0, 0, 0, count + 1, 0, 0, 0
+		, 5, 0, 0, 0, '$', 'g', 'a', 'z', 'l', 0, 0, 0, 3, 0, 0, 0
+		, 0x04, 0x03, 0x02, 0x01, 0x00, 0x00, 0x80, 0x3F, 0x01, 0x00, 0x80, 0x7F
+	};
 
 	Machine m;
 	Layout layout = Layout();
 	std::string error;
 	if (!assemble(m, SOURCE, layout, error)) {
-		std::printf("FAIL snapshot entries: program refused: %s\n", error.c_str());
+		std::printf("FAIL frozen entries: program refused: %s\n", error.c_str());
 		return 1;
 	}
-	const Processor processor(m.sizes.codeSize, &m.code[0], m.sizes.functionCount, &m.functionTable[0], MEMORY_SIZE
-			, m.memory(), m.sizes.globalsSize, m.sizes.constsSize, CALL_STACK_SIZE, &m.callStack[0], 0);
-	std::vector<unsigned char> blob(freezeMemorySize(processor, m.symbols));
-	freezeMemory(processor, m.symbols, &blob[0], (UInt)blob.size());
-
-	struct Reader {
-		const std::vector<unsigned char>& b;
-		size_t at;
-		UInt word() {
-			const UInt w = b[at] | (b[at + 1] << 8) | (b[at + 2] << 16) | ((UInt)b[at + 3] << 24);
-			at += 4;
-			return w;
-		}
-	} r = { blob, 24 };
+	const std::vector<unsigned char> frozen = freeze(m);
+	if (frozen.size() < sizeof (HEADER_AND_CHECK)
+			|| memcmp(&frozen[0], HEADER_AND_CHECK, sizeof (HEADER_AND_CHECK)) != 0) {
+		std::printf("FAIL frozen entries: the header or the check entry is not the specified bytes\n");
+		return 1;
+	}
+	size_t at = sizeof (HEADER_AND_CHECK);
 	int failures = 0;
-	const UInt saved = r.word();
-	if (saved != (UInt)count) {
-		std::printf("FAIL snapshot entries: %u saved, expected %d\n", saved, count);
-		return 1;
-	}
-	for (int i = 0; i < count; ++i) {
-		const UInt length = r.word();
-		const std::string name(reinterpret_cast<const char*>(&blob[r.at]), length);
-		r.at += length;
-		const UInt size = r.word();
-		bool same = (name == EXPECTED[i].name && size == EXPECTED[i].size);
-		for (UInt w = 0; w < size; ++w) {
-			const UInt word = r.word();
-			same = same && w < 8 && word == EXPECTED[i].words[w];
+	for (int i = 0; i < count && failures == 0; ++i) {
+		std::vector<unsigned char> expected(4);
+		const UInt length = (UInt)strlen(EXPECTED[i].name);
+		putWord(expected, 0, length);
+		expected.insert(expected.end(), EXPECTED[i].name, EXPECTED[i].name + length);
+		expected.resize(expected.size() + (4 - length % 4) % 4 + 4, 0);
+		putWord(expected, expected.size() - 4, EXPECTED[i].size);
+		for (UInt w = 0; w < EXPECTED[i].size; ++w) {
+			expected.resize(expected.size() + 4);
+			putWord(expected, expected.size() - 4, EXPECTED[i].words[w]);
 		}
-		if (!same) {
-			std::printf("FAIL snapshot entries: entry %d is %s (%u words), expected %s (%u words)\n", i, name.c_str()
-					, size, EXPECTED[i].name, EXPECTED[i].size);
+		if (frozen.size() - at < expected.size() || memcmp(&frozen[at], &expected[0], expected.size()) != 0) {
+			std::printf("FAIL frozen entries: entry %d is not %s (%u words)\n", i, EXPECTED[i].name, EXPECTED[i].size);
 			++failures;
 		}
+		at += expected.size();
 	}
-	// A label left out of the snapshot is still a name: `findGlobal` resolves it as before (hosts restore by name).
+	if (failures == 0 && at != frozen.size()) {
+		std::printf("FAIL frozen entries: %d bytes follow the last expected entry\n", (int)(frozen.size() - at));
+		++failures;
+	}
+	// A label left out of the frozen memory is still a name: `findGlobal` resolves it as before.
 	UInt stateSize = 0;
 	UInt gainSize = 0;
 	UInt levelSize = 0;
 	const Pointer stateAddress = m.symbols.findGlobal("state", stateSize);
 	if (m.symbols.findGlobal("gain", gainSize) != stateAddress || gainSize != 1
 			|| m.symbols.findGlobal("level", levelSize) != stateAddress + 1 || levelSize != 2) {
-		std::printf("FAIL snapshot entries: findGlobal no longer resolves the labels inside `state`\n");
+		std::printf("FAIL frozen entries: findGlobal no longer resolves the labels inside `state`\n");
 		++failures;
 	}
-	// A data line without values is legal and writes nothing, so its label covers no words.
+	// A data line without values is legal and writes nothing, so its label owns no words.
 	const char* const EMPTY[] = { "DATi", "DATf ; none", "DATp", "DATA" };
 	const int emptyCount = sizeof (EMPTY) / sizeof (*EMPTY);
 	for (int i = 0; i < emptyCount; ++i) {
@@ -825,11 +867,114 @@ int sweepSnapshotEntries() {
 				, error);
 		const Pointer x = e.symbols.findGlobal("x", xSize);
 		if (!assembled || x == NULL_POINTER || xSize != 0 || e.symbols.findGlobal("y", ySize) != x || ySize != 2) {
-			std::printf("FAIL snapshot entries: `x: %s` is not an empty label at `y`\n", EMPTY[i]);
+			std::printf("FAIL frozen entries: `x: %s` is not an empty label at `y`\n", EMPTY[i]);
 			++failures;
 		}
 	}
-	std::printf("snapshot entries: %d checked, %d failed\n", count + 1 + emptyCount, failures);
+	std::printf("frozen entries: %d checked, %d failed\n", count + 2 + emptyCount, failures);
+	return failures;
+}
+
+/*
+	Thawing (docs/gazl/Specification.md section 11): each row of the validation table, in its order, restoring
+	nothing; then the restore rules under both policies. Returns the number of failures, each one printed.
+*/
+int sweepThawRules() {
+	int failures = 0;
+	int checks = 0;
+	const std::string FROM = "a:\tGLOB *2\n\tDATi #1 #2\nb:\tGLOB *1\n\tDATi #3\nc:\tGLOB *1\n\tDATi #4\n"
+			"main:\tFUNC\n\tRETU\n";
+	Machine from;
+	Layout layout = Layout();
+	std::string error;
+	if (!assemble(from, FROM, layout, error)) {
+		std::printf("FAIL thaw rules: program refused: %s\n", error.c_str());
+		return 1;
+	}
+	const std::vector<unsigned char> frozen = freeze(from);	// $gazl at 20, a at 48, b at 68, c at 84; 100 bytes
+
+	struct Invalid { const char* what; size_t at; UInt word; int cut; MemoryLoad expected; };
+	const Invalid INVALID[] = {
+		{ "wrong magic", 0, 0x4D4D5A48u, 0, MEMORY_BAD_MAGIC },
+		{ "3 bytes", 0, 0, 97, MEMORY_BAD_MAGIC },
+		{ "a header of 19 bytes", 0, 0, 81, MEMORY_TRUNCATED },
+		{ "format version 2", 4, 2, 0, MEMORY_BAD_VERSION },
+		{ "GAZL version 0", 8, 0, 0, MEMORY_BAD_VERSION },
+		{ "a newer GAZL version", 8, (UInt)VERSION + 1, 0, MEMORY_BAD_VERSION },
+		{ "word size 64", 12, 64, 0, MEMORY_BAD_WORDSIZE },
+		{ "one entry too many", 16, 5, 0, MEMORY_TRUNCATED },
+		{ "a word count past the end", 92, 2, 0, MEMORY_TRUNCATED },
+		{ "no entries", 16, 0, 0, MEMORY_BAD_CANARY },
+		{ "a quiet NaN in the check entry", 44, 0x7FC00000u, 0, MEMORY_BAD_CANARY },
+		{ "a name that is not an identifier", 52, '1', 0, MEMORY_MALFORMED },
+		{ "padding that is not zero", 52, 'a' | ('x' << 8), 0, MEMORY_MALFORMED },
+		{ "names out of order", 52, 'c', 0, MEMORY_MALFORMED },
+		{ "the same name twice", 72, 'a', 0, MEMORY_MALFORMED },
+		{ "bytes after the last entry", 100, 0, 0, MEMORY_MALFORMED },
+		{ "trailing bytes and a damaged check entry", 36, 0x01020305u, -4, MEMORY_BAD_CANARY }
+	};
+	for (size_t i = 0; i < sizeof (INVALID) / sizeof (*INVALID); ++i) {
+		const Invalid& v = INVALID[i];
+		std::vector<unsigned char> bad(frozen);
+		if (v.cut > 0) bad.resize(bad.size() - v.cut);
+		if (v.cut < 0 || v.at >= bad.size()) bad.resize(bad.size() + 4, 0);
+		if (v.at < bad.size() && v.cut == 0) putWord(bad, v.at, v.word);
+		if (v.cut < 0) putWord(bad, v.at, v.word);
+		Machine to;
+		assemble(to, FROM, layout, error);
+		Value* const memory = to.memory();
+		for (UInt w = 0; w < MEMORY_SIZE; ++w) memory[w].i = 99;
+		const MemoryLoad got = thaw(to, bad, THAW_PREFIX);
+		bool untouched = true;
+		for (UInt w = 0; w < MEMORY_SIZE; ++w) untouched = untouched && memory[w].i == 99;
+		if (got != v.expected || !untouched) {
+			std::printf("FAIL thaw rules: %s gave status %d%s, expected %d\n", v.what, (int)got
+					, untouched ? "" : " and restored words", (int)v.expected);
+			++failures;
+		}
+		++checks;
+	}
+
+	struct Restore { const char* what; const char* to; ThawPolicy policy; MemoryLoad expected; const char* words; };
+	const Restore RESTORES[] = {
+		{ "the same program", FROM.c_str(), THAW_SKIP, MEMORY_OK, "1 2|3|4" },
+		{ "a larger owner, prefix", "a:\tGLOB *3\n\tDATi #7 #7 #7\nb:\tGLOB *1\n\tDATi #7\nc:\tGLOB *1\n\tDATi #7\n"
+				, THAW_PREFIX, MEMORY_MISMATCH, "1 2 7|3|4" },
+		{ "a larger owner, skip", "a:\tGLOB *3\n\tDATi #7 #7 #7\nb:\tGLOB *1\n\tDATi #7\nc:\tGLOB *1\n\tDATi #7\n"
+				, THAW_SKIP, MEMORY_MISMATCH, "7 7 7|3|4" },
+		{ "a smaller owner, prefix", "a:\tGLOB *1\n\tDATi #7\nb:\tGLOB *1\n\tDATi #7\nc:\tGLOB *1\n\tDATi #7\n"
+				, THAW_PREFIX, MEMORY_MISMATCH, "1|3|4" },
+		{ "an entry with no owner", "a:\tGLOB *2\n\tDATi #7 #7\nc:\tGLOB *1\n\tDATi #7\n"
+				, THAW_SKIP, MEMORY_MISMATCH, "1 2|?|4" },
+		{ "an owner with no entry", "a:\tGLOB *2\n\tDATi #7 #7\nb:\tGLOB *1\n\tDATi #7\nc:\tGLOB *1\n\tDATi #7\n"
+				"d:\tGLOB *1\n\tDATi #7\n", THAW_SKIP, MEMORY_MISMATCH, "1 2|3|4|7" },
+		{ "an owner moved into a TEMP section", "a:\tGLOB *2\n\tDATi #7 #7\nb:\tTEMP *1\n\tDATi #7\nc:\tGLOB *1\n"
+				"\tDATi #7\n", THAW_SKIP, MEMORY_MISMATCH, "1 2|7|4" },
+		{ "a label that owns nothing", "s:\tGLOB *2\na:\tDATi #7 #7\nb:\tGLOB *1\n\tDATi #7\nc:\tGLOB *1\n\tDATi #7\n"
+				, THAW_SKIP, MEMORY_OK, "1 2|3|4" }
+	};
+	const char* const NAMES[] = { "a", "b", "c", "d" };
+	for (size_t i = 0; i < sizeof (RESTORES) / sizeof (*RESTORES); ++i) {
+		const Restore& r = RESTORES[i];
+		Machine to;
+		if (!assemble(to, std::string(r.to) + (strstr(r.to, "main:") != 0 ? "" : "main:\tFUNC\n\tRETU\n"), layout
+				, error)) {
+			std::printf("FAIL thaw rules: %s: program refused: %s\n", r.what, error.c_str());
+			++failures;
+			continue;
+		}
+		const MemoryLoad got = thaw(to, frozen, r.policy);
+		std::string words;
+		const int nameCount = (strstr(r.to, "d:") != 0 ? 4 : 3);
+		for (int n = 0; n < nameCount; ++n) words += (n == 0 ? "" : "|") + globalWords(to, NAMES[n]);
+		if (got != r.expected || words != r.words) {
+			std::printf("FAIL thaw rules: %s gave status %d and %s, expected %d and %s\n", r.what, (int)got
+					, words.c_str(), (int)r.expected, r.words);
+			++failures;
+		}
+		++checks;
+	}
+	std::printf("thaw rules: %d checked, %d failed\n", checks, failures);
 	return failures;
 }
 
@@ -1051,7 +1196,7 @@ int main() {
 		std::printf("bounds sweep: this host forbids executable memory; the JIT is NOT swept\n");
 	}
 #endif
-	const int hostFailures = sweepNativeAccess() + sweepFrameAndThaw() + sweepSnapshotEntries() + sweepTextEncoding()
-			+ sweepUnnamedSections() + sweepFunctionOffsets();
+	const int hostFailures = sweepNativeAccess() + sweepFrameAndThaw() + sweepFrozenEntries() + sweepThawRules()
+			+ sweepTextEncoding() + sweepUnnamedSections() + sweepFunctionOffsets();
 	return (sweep(engineCount) != 0 || hostFailures != 0) ? 1 : 0;
 }

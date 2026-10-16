@@ -160,7 +160,7 @@ struct GlobalInfo {
 	const char* name;				// valid as long as the `Symbols` it came from
 	Pointer address;
 	UInt size;						// in words
-	bool isTemp;					// declared in a `TEMP` section, which a memory snapshot leaves out
+	bool isTemp;					// declared in a `TEMP` section, which freezing leaves out
 	bool isInterior;				// a label inside a named section, which already covers its words
 };
 
@@ -426,24 +426,31 @@ inline Value* Processor::accessParams(UInt count) const {
 inline void* Processor::getUserData() const { return userData; }
 
 /*
-	Memory serialization ("freeze" / "thaw"). Persists a Processor's mutable, non-TEMP global memory so it can be
-	reconstructed later. Source text and compile-time constants are the caller's responsibility: to thaw, first
-	re-assemble the same source (which deterministically rebuilds identical code, layout and function ordinals), then
-	call `thawMemory`. Function pointers stored in globals survive re-assembly because they are stable ordinals.
-	Call only at a quiescent boundary (between `run()` calls, with no active GAZL call).
+	Frozen memory ("freeze" / "thaw", docs/gazl/Specification.md section 11). Freezing saves the words of every
+	owner in a `GLOB` section by name; thawing restores them by name into a re-assembled program. Code, constants and
+	which program the frozen memory belongs to are the caller's responsibility. Call only at a quiescent boundary
+	(between `run()` calls, with no active GAZL call).
 */
 enum MemoryLoad {
-	MEMORY_OK = 0				// Restored successfully.
-	, MEMORY_BAD_MAGIC = 1		// Not a GAZL memory blob.
-	, MEMORY_BAD_VERSION = 2	// Incompatible memory-format or GAZL version.
+	MEMORY_OK = 0				// Every entry met an owner of the same size, and every owner had an entry.
+	, MEMORY_BAD_MAGIC = 1		// Not frozen memory.
+	, MEMORY_BAD_VERSION = 2	// Unknown format version, or a GAZL version this one cannot thaw.
 	, MEMORY_BAD_WORDSIZE = 3	// Word size differs from this build.
-	, MEMORY_BAD_CANARY = 4		// Endianness or float bit-layout differs from this build.
-	, MEMORY_TRUNCATED = 5		// Blob ended unexpectedly.
+	, MEMORY_BAD_CANARY = 4		// The check entry is missing or differs: the encoding was damaged or misread.
+	, MEMORY_TRUNCATED = 5		// The header is incomplete, or a length runs past the end.
+	, MEMORY_MALFORMED = 6		// A name is invalid or out of order, padding is not zero, or bytes follow the last entry.
+	, MEMORY_MISMATCH = 7		// Restored as far as the policy allows, but entries and owners did not match exactly.
+};
+
+enum ThawPolicy {
+	THAW_PREFIX					// An owner and an entry of different sizes share as many leading words as both have.
+	, THAW_SKIP					// An owner and an entry of different sizes are left alone.
 };
 
 UInt freezeMemorySize(const Processor& processor, const Symbols& symbols);												// Exact byte count a freeze will occupy.
-UInt freezeMemory(const Processor& processor, const Symbols& symbols, void* buffer, UInt bufferSize);					// Writes the blob; returns the size (writes nothing and returns the needed size if `bufferSize` is too small).
-MemoryLoad thawMemory(Processor& processor, const Symbols& symbols, const void* buffer, UInt bufferSize);				// Restores non-TEMP globals by name into an already-assembled Processor.
+UInt freezeMemory(const Processor& processor, const Symbols& symbols, void* buffer, UInt bufferSize);					// Writes the frozen memory; returns its size (writes nothing and returns the needed size if `bufferSize` is too small).
+MemoryLoad thawMemory(Processor& processor, const Symbols& symbols, const void* buffer, UInt bufferSize
+		, ThawPolicy policy);																							// Validates all of `buffer`, then restores it by name; on any validation failure restores nothing.
 Float parseFloat(const Char*& p, const Char* e);																		// Reads a float literal at `p`, advancing it, rounded to the nearest float, ties to even.
 
 #if !defined(NDEBUG)

@@ -26,6 +26,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <stdlib.h>
+#include <algorithm>
 #include <string>
 #include <iostream>
 
@@ -1006,7 +1007,7 @@ void Assembler::parseOperand(const Char* b, const Char* e, int accepts, Value* v
 /*
 	A data label covers its own statement and everything after it, up to the next label or the end of the section. So
 	each label is declared reaching to the end of the section, and the next label shortens the previous one to end
-	where it starts. In an unnamed section, data before the first label would belong to no name, so a snapshot could
+	where it starts. In an unnamed section, data before the first label would belong to no name, so freezing could
 	not save it.
 */
 void Assembler::noteDataStatement(const Char* labelBegin, const Char* labelEnd, const Value* first) {
@@ -1690,21 +1691,29 @@ Value* Processor::pushCall(Pointer functionPointer) {
 }
 
 /*
-	--- Memory serialization ("freeze" / "thaw") ---
+	--- Frozen memory ("freeze" / "thaw"), docs/gazl/Specification.md section 11 ---
 
-	Persists the mutable global memory of a Processor so it can be reconstructed later. Only the writable, non-TEMP
-	globals are stored; source text and compile-time constants are the host's responsibility (thaw re-assembles them,
-	which deterministically rebuilds identical code, layout and function ordinals). The blob is engine-agnostic and
-	designed to survive compiler changes: function pointers stored in globals are stable ordinals (see FUNC), so they
-	resolve correctly through the re-assembled function table regardless of code layout.
+	Freezing saves the words of every owner in a `GLOB` section, by name: one entry per label that owns at least one
+	word, in ascending name order, after a fixed check entry. Thawing validates the whole input before it restores
+	anything, then matches entries to the re-assembled program's owners by name. Code, constants and which program
+	the frozen memory belongs to are the host's responsibility.
 
-	The caller must freeze/thaw at a quiescent boundary (between `run()` calls, with no active GAZL call), so that the
-	data stack, call stack and instruction pointer hold nothing that needs saving.
+	Call only at a quiescent boundary (between `run()` calls, with no active GAZL call), so that the data stack, call
+	stack and instruction pointer hold nothing that needs saving.
 */
 const UInt MEMORY_FORMAT_VERSION = 1;
-const UInt MEMORY_INT_CANARY = 0x01020304;							// Detects endianness / format bugs on thaw.
-const UInt MEMORY_HEADER_SIZE = 4 + 6 * 4;							// Magic + { format version, GAZL version, word size, int canary, float canary, global count }.
+const UInt MEMORY_HEADER_SIZE = 20;									// magic, format version, GAZL version, word size, entry count
 static const char MEMORY_MAGIC[4] = { 'G', 'Z', 'M', 'M' };
+static const char MEMORY_CHECK_NAME[] = "$gazl";
+const UInt MEMORY_CHECK_INT = 0x01020304;
+const UInt MEMORY_CHECK_NAN = 0x7F800001;								// a signaling NaN, which a float load could quieten
+const UInt MEMORY_CHECK_SIZE = 28;
+
+struct MemoryOwner {
+	const char* name;
+	Pointer address;
+	UInt size;																// the words it owns, not the words it reaches
+};
 
 static unsigned char* putMemoryWord(unsigned char* p, UInt v) {		// Writes a 32-bit little-endian word.
 	p[0] = static_cast<unsigned char>(v);
@@ -1714,19 +1723,61 @@ static unsigned char* putMemoryWord(unsigned char* p, UInt v) {		// Writes a 32-
 	return p + 4;
 }
 
-static const unsigned char* getMemoryWord(const unsigned char* p, const unsigned char* end, UInt& value, bool& ok) {
-	if (end - p < 4) { ok = false; value = 0; return p; }			// Truncated: stop reading, leave `ok` false.
-	value = (UInt)p[0] | ((UInt)p[1] << 8) | ((UInt)p[2] << 16) | ((UInt)p[3] << 24);
-	return p + 4;
+static UInt getMemoryWord(const unsigned char* p) {					// Reads a 32-bit little-endian word, byte by byte.
+	return static_cast<UInt>(p[0]) | (static_cast<UInt>(p[1]) << 8) | (static_cast<UInt>(p[2]) << 16)
+			| (static_cast<UInt>(p[3]) << 24);
+}
+
+static UInt memoryPadding(UInt length) { return (4 - length % 4) % 4; }		/// zero bytes after a name of `length` bytes
+
+static unsigned char* putMemoryEntry(unsigned char* p, const char* name, UInt length, const Value* words, UInt count) {
+	p = putMemoryWord(p, length);
+	memcpy(p, name, length);
+	p += length;
+	for (UInt i = memoryPadding(length); i > 0; --i) *p++ = 0;
+	p = putMemoryWord(p, count);
+	for (UInt i = 0; i < count; ++i) p = putMemoryWord(p, words[i].p);
+	return p;
+}
+
+/*
+	The owners of the `GLOB` sections, in ascending name order (the order of `Symbols`). A data label already
+	reaches only to the next label, which is what it owns. A named section's own label reaches the whole section,
+	but owns only the words before its first inner label, and none when that label shares its first word.
+*/
+static void findMemoryOwners(const Symbols& symbols, std::vector<MemoryOwner>& owners) {
+	std::vector<Pointer> inner;
+	Symbols::Iterator it;
+	for (bool ok = symbols.findFirstGlobal(it, false, true); ok; ok = symbols.findNextGlobal(it, false, true)) {
+		const GlobalInfo info = symbols.getGlobalInfo(it);
+		if (info.isInterior) inner.push_back(info.address);
+	}
+	std::sort(inner.begin(), inner.end());
+	owners.clear();
+	for (bool ok = symbols.findFirstGlobal(it, false, true); ok; ok = symbols.findNextGlobal(it, false, true)) {
+		const GlobalInfo info = symbols.getGlobalInfo(it);
+		UInt size = info.size;
+		if (!info.isInterior) {
+			const std::vector<Pointer>::const_iterator next = std::lower_bound(inner.begin(), inner.end(), info.address);
+			if (next != inner.end() && static_cast<UInt>(*next - info.address) < size) {
+				size = static_cast<UInt>(*next - info.address);
+			}
+		}
+		if (size != 0) {
+			const MemoryOwner owner = { info.name, info.address, size };
+			owners.push_back(owner);
+		}
+	}
 }
 
 UInt freezeMemorySize(const Processor& processor, const Symbols& symbols) {
 	(void)processor;
-	UInt size = MEMORY_HEADER_SIZE;
-	Symbols::Iterator it;
-	for (bool ok = symbols.findFirstGlobal(it, false, false); ok; ok = symbols.findNextGlobal(it, false, false)) {
-		const GlobalInfo info = symbols.getGlobalInfo(it);
-		size += 4 + (UInt)strlen(info.name) + 4 + info.size * 4;	// name length + name + size + words
+	std::vector<MemoryOwner> owners;
+	findMemoryOwners(symbols, owners);
+	UInt size = MEMORY_HEADER_SIZE + MEMORY_CHECK_SIZE;
+	for (size_t i = 0; i < owners.size(); ++i) {
+		const UInt length = static_cast<UInt>(strlen(owners[i].name));
+		size += 4 + length + memoryPadding(length) + 4 + owners[i].size * 4;
 	}
 	return size;
 }
@@ -1734,80 +1785,129 @@ UInt freezeMemorySize(const Processor& processor, const Symbols& symbols) {
 UInt freezeMemory(const Processor& processor, const Symbols& symbols, void* buffer, UInt bufferSize) {
 	const UInt needed = freezeMemorySize(processor, symbols);
 	if (buffer == 0 || bufferSize < needed) return needed;			// Too small: write nothing, tell the caller the required size.
+	std::vector<MemoryOwner> owners;
+	findMemoryOwners(symbols, owners);
 
 	unsigned char* const start = static_cast<unsigned char*>(buffer);
 	unsigned char* p = start;
-	Symbols::Iterator it;
-	UInt globalCount = 0;
-	for (bool ok = symbols.findFirstGlobal(it, false, false); ok; ok = symbols.findNextGlobal(it, false, false)) ++globalCount;
-
 	memcpy(p, MEMORY_MAGIC, 4);
-	p += 4;
-	Value floatCanary;
-	floatCanary.f = 1.0f;											// Detects a divergent float bit-layout on thaw.
-	p = putMemoryWord(p, MEMORY_FORMAT_VERSION);
-	p = putMemoryWord(p, (UInt)VERSION);
-	p = putMemoryWord(p, (UInt)WORD_SIZE);
-	p = putMemoryWord(p, MEMORY_INT_CANARY);
-	p = putMemoryWord(p, floatCanary.p);
-	p = putMemoryWord(p, globalCount);
-
-	for (bool ok = symbols.findFirstGlobal(it, false, false); ok; ok = symbols.findNextGlobal(it, false, false)) {
-		const GlobalInfo info = symbols.getGlobalInfo(it);
-		assert(!info.isTemp && !info.isInterior);
-		const UInt nameLength = (UInt)strlen(info.name);
-		p = putMemoryWord(p, nameLength);
-		memcpy(p, info.name, nameLength);
-		p += nameLength;
-		p = putMemoryWord(p, info.size);
-		const Value* source = processor.accessConstMemory(info.address, info.size);
-		assert(source != 0);
-		for (UInt i = 0; i < info.size; ++i) p = putMemoryWord(p, source[i].p);
+	p = putMemoryWord(p + 4, MEMORY_FORMAT_VERSION);
+	p = putMemoryWord(p, static_cast<UInt>(VERSION));
+	p = putMemoryWord(p, static_cast<UInt>(WORD_SIZE));
+	p = putMemoryWord(p, static_cast<UInt>(owners.size()) + 1);
+	Value check[3];
+	check[0].p = MEMORY_CHECK_INT;
+	check[1].f = 1.0f;
+	check[2].p = MEMORY_CHECK_NAN;
+	p = putMemoryEntry(p, MEMORY_CHECK_NAME, 5, check, 3);
+	for (size_t i = 0; i < owners.size(); ++i) {
+		const Value* words = processor.accessConstMemory(owners[i].address, owners[i].size);
+		assert(words != 0);
+		p = putMemoryEntry(p, owners[i].name, static_cast<UInt>(strlen(owners[i].name)), words, owners[i].size);
 	}
-	assert((UInt)(p - start) == needed);							// Byte count must match freezeMemorySize exactly.
+	assert(static_cast<UInt>(p - start) == needed);					// Byte count must match freezeMemorySize exactly.
 	return needed;
 }
 
-MemoryLoad thawMemory(Processor& processor, const Symbols& symbols, const void* buffer, UInt bufferSize) {
-	const unsigned char* p = static_cast<const unsigned char*>(buffer);
-	const unsigned char* const end = p + bufferSize;
-	bool ok = true;
-
-	if (bufferSize < 4 || memcmp(p, MEMORY_MAGIC, 4) != 0) return MEMORY_BAD_MAGIC;
-	p += 4;
-	UInt formatVersion, gazlVersion, wordSize, intCanary, floatCanary, globalCount;
-	p = getMemoryWord(p, end, formatVersion, ok);
-	p = getMemoryWord(p, end, gazlVersion, ok);
-	p = getMemoryWord(p, end, wordSize, ok);
-	p = getMemoryWord(p, end, intCanary, ok);
-	p = getMemoryWord(p, end, floatCanary, ok);
-	p = getMemoryWord(p, end, globalCount, ok);
-	if (!ok) return MEMORY_TRUNCATED;
-	if (formatVersion != MEMORY_FORMAT_VERSION || gazlVersion != (UInt)VERSION) return MEMORY_BAD_VERSION;
-	if (wordSize != (UInt)WORD_SIZE) return MEMORY_BAD_WORDSIZE;
-	Value expectedFloat;
-	expectedFloat.f = 1.0f;
-	if (intCanary != MEMORY_INT_CANARY || floatCanary != expectedFloat.p) return MEMORY_BAD_CANARY;
-
-	for (UInt g = 0; g < globalCount && ok; ++g) {
-		UInt nameLength;
-		p = getMemoryWord(p, end, nameLength, ok);
-		if (!ok || nameLength > (UInt)(end - p)) { ok = false; break; }
-		std::string name(reinterpret_cast<const char*>(p), nameLength);
-		p += nameLength;
-		UInt size;
-		p = getMemoryWord(p, end, size, ok);
-
-		UInt declaredSize = 0;
-		const Pointer address = symbols.findGlobal(name.c_str(), declaredSize);
-		Value* destination = (address != NULL_POINTER && declaredSize == size) ? processor.accessMemory(address, size) : 0;
-		for (UInt i = 0; i < size && ok; ++i) {
-			UInt word;
-			p = getMemoryWord(p, end, word, ok);
-			if (ok && destination != 0) destination[i].i = (Int)word;
-		}
+/*
+	Thawing reads the input three times: once for lengths, once for the check entry, once for names and padding, so
+	that each problem is reported in the order of the specification's validation table, and nothing is restored
+	unless all of it is valid. Only then are entries and owners, both in ascending name order, merged.
+*/
+MemoryLoad thawMemory(Processor& processor, const Symbols& symbols, const void* buffer, UInt bufferSize
+		, ThawPolicy policy) {
+	const unsigned char* const start = static_cast<const unsigned char*>(buffer);
+	const unsigned char* const end = start + bufferSize;
+	if (bufferSize < 4 || memcmp(start, MEMORY_MAGIC, 4) != 0) return MEMORY_BAD_MAGIC;
+	if (bufferSize < MEMORY_HEADER_SIZE) return MEMORY_TRUNCATED;
+	const UInt gazlVersion = getMemoryWord(start + 8);
+	if (getMemoryWord(start + 4) != MEMORY_FORMAT_VERSION || gazlVersion == 0
+			|| gazlVersion > static_cast<UInt>(VERSION)) {
+		return MEMORY_BAD_VERSION;
 	}
-	return ok ? MEMORY_OK : MEMORY_TRUNCATED;
+	if (getMemoryWord(start + 12) != static_cast<UInt>(WORD_SIZE)) return MEMORY_BAD_WORDSIZE;
+	const UInt entryCount = getMemoryWord(start + 16);
+
+	const unsigned char* p = start + MEMORY_HEADER_SIZE;
+	for (UInt e = 0; e < entryCount; ++e) {
+		if (end - p < 4) return MEMORY_TRUNCATED;
+		const UInt length = getMemoryWord(p);
+		p += 4;
+		if (static_cast<size_t>(end - p) < static_cast<size_t>(length) + memoryPadding(length) + 4) {
+			return MEMORY_TRUNCATED;
+		}
+		p += length + memoryPadding(length);
+		const UInt count = getMemoryWord(p);
+		p += 4;
+		if (static_cast<size_t>(end - p) / 4 < count) return MEMORY_TRUNCATED;
+		p += static_cast<size_t>(count) * 4;
+	}
+	const unsigned char* const entriesEnd = p;
+
+	static const unsigned char CHECK_ENTRY[MEMORY_CHECK_SIZE] = {
+		5, 0, 0, 0, '$', 'g', 'a', 'z', 'l', 0, 0, 0, 3, 0, 0, 0
+		, 0x04, 0x03, 0x02, 0x01, 0x00, 0x00, 0x80, 0x3F, 0x01, 0x00, 0x80, 0x7F
+	};
+	p = start + MEMORY_HEADER_SIZE;
+	if (entryCount == 0 || static_cast<size_t>(end - p) < MEMORY_CHECK_SIZE
+			|| memcmp(p, CHECK_ENTRY, MEMORY_CHECK_SIZE) != 0) {
+		return MEMORY_BAD_CANARY;
+	}
+	p += MEMORY_CHECK_SIZE;
+
+	const Char* previous = 0;
+	UInt previousLength = 0;
+	for (UInt e = 1; e < entryCount; ++e) {
+		const UInt length = getMemoryWord(p);
+		const Char* const name = reinterpret_cast<const Char*>(p + 4);
+		if (!isValidIdentifier(name, name + length)) return MEMORY_MALFORMED;
+		for (UInt i = 0; i < memoryPadding(length); ++i) {
+			if (p[4 + length + i] != 0) return MEMORY_MALFORMED;
+		}
+		if (previous != 0) {
+			const int order = memcmp(previous, name, minimum(previousLength, length));
+			if (order > 0 || (order == 0 && previousLength >= length)) return MEMORY_MALFORMED;
+		}
+		previous = name;
+		previousLength = length;
+		p += 4 + length + memoryPadding(length);
+		p += 4 + static_cast<size_t>(getMemoryWord(p)) * 4;
+	}
+	assert(p == entriesEnd);
+	if (entriesEnd != end) return MEMORY_MALFORMED;
+
+	std::vector<MemoryOwner> owners;
+	findMemoryOwners(symbols, owners);
+	bool exact = true;
+	size_t o = 0;
+	p = start + MEMORY_HEADER_SIZE + MEMORY_CHECK_SIZE;
+	for (UInt e = 1; e < entryCount; ++e) {
+		const UInt length = getMemoryWord(p);
+		const std::string name(reinterpret_cast<const char*>(p + 4), length);
+		p += 4 + length + memoryPadding(length);
+		const UInt count = getMemoryWord(p);
+		const unsigned char* const words = p + 4;
+		p = words + static_cast<size_t>(count) * 4;
+		while (o < owners.size() && name.compare(owners[o].name) > 0) {
+			exact = false;															// an owner with no entry: left unchanged
+			++o;
+		}
+		if (o == owners.size() || name.compare(owners[o].name) != 0) {
+			exact = false;															// an entry with no owner: dropped
+			continue;
+		}
+		const MemoryOwner& owner = owners[o++];
+		UInt restored = owner.size;
+		if (count != owner.size) {
+			exact = false;
+			restored = (policy == THAW_PREFIX ? minimum(count, owner.size) : 0);
+		}
+		Value* const destination = processor.accessMemory(owner.address, owner.size);
+		assert(destination != 0);
+		for (UInt i = 0; i < restored; ++i) destination[i].p = getMemoryWord(words + i * 4);
+	}
+	if (o != owners.size()) exact = false;
+	return (exact ? MEMORY_OK : MEMORY_MISMATCH);
 }
 
 #if !defined(NDEBUG)
@@ -1994,7 +2094,8 @@ bool unitTest() {
 
 			Processor pmachine2(sizes2.codeSize, &cody2[0], sizes2.functionCount, &functionTable2[0], MEMORY_SIZE, &memory2[0]
 					, sizes2.globalsSize, sizes2.constsSize, CALL_STACK_SIZE, &callStack2[0], nativeTable, &callbackData);
-			MemoryLoad loaded = thawMemory(pmachine2, globals2, memoryBlob.empty() ? 0 : &memoryBlob[0], (UInt)memoryBlob.size());
+			MemoryLoad loaded = thawMemory(pmachine2, globals2, memoryBlob.empty() ? 0 : &memoryBlob[0]
+					, (UInt)memoryBlob.size(), THAW_SKIP);
 			assert(loaded == MEMORY_OK);
 
 			// Every non-TEMP global must match the frozen original (identical assemblies share global addresses).

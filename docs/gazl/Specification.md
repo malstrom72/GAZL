@@ -204,7 +204,8 @@ statements that follow fill it in order:
 own label, or a label on one of its data statements.
 - **The last label owns.** A word belongs to the last label at or before it in its section. An owner's words run
   from its own word up to the next label, or to the end of the section, unfilled words included.
-- **Labels on the same word.** The later one in the source owns the words; the earlier one owns none.
+- **Labels on the same word.** The later one in the source owns the words; the earlier one owns none, and is not
+  an owner.
 - **No owner is an error.** In an unnamed section, data before the first labelled statement would belong to no one,
   and so would every word of an unnamed section with no labelled statement: `UNNAMED_DATA_SECTION`.
 
@@ -381,7 +382,7 @@ for in this order, nothing is restored and that problem's status is returned:
 | the format version is not 1, or the GAZL version is 0 or newer than the thawing GAZL | `MEMORY_BAD_VERSION`  |
 | the word size is not 32                                                              | `MEMORY_BAD_WORDSIZE` |
 | a length runs past the end of the frozen memory                                      | `MEMORY_TRUNCATED`    |
-| the check entry differs from the one above                                           | `MEMORY_BAD_CANARY`   |
+| the check entry is missing, or differs from the one above                            | `MEMORY_BAD_CANARY`   |
 | a name is not a valid identifier, names do not ascend strictly, or padding is not 0  | `MEMORY_MALFORMED`    |
 | bytes follow the last entry                                                          | `MEMORY_MALFORMED`    |
 
@@ -422,16 +423,6 @@ An implementation conforms when it runs the following with the expected results:
 
 Where `src/GAZL.cpp` does not yet do what this specification says:
 
-1. **The frozen memory format** (section 11). `freezeMemory` / `thawMemory` write and read an earlier layout of the same
-   idea:
-   - the two check words sit in the header rather than in a `$gazl` check entry, and there is no NaN word;
-   - names are not padded, and entries follow the assembler's own order rather than ascending names;
-   - a named section is saved whole, and labels inside it are not saved, where section 6 makes every label an
-     owner (the assembler already gives every word an owner, with data labels running to the next label);
-   - thawing accepts only frozen memory from its own GAZL version;
-   - it restores while it parses, so truncated frozen memory restores the entries before the damage, and there is
-     no `MEMORY_MALFORMED`;
-   - a size mismatch is always skipped, there is no prefix policy, and there is no `MEMORY_MISMATCH`.
-2. **Accesses through a label inside a section** (section 5). `&label:k` in `PEEK`, `POKE` or `COPY` is checked
+1. **Accesses through a label inside a section** (section 5). `&label:k` in `PEEK`, `POKE` or `COPY` is checked
    against the words up to the next label, not against the end of the section, so an access that reaches a later
    label's words is `OFFSET_OUT_OF_BOUNDS`. Accesses through a section's name are checked against the whole section.
