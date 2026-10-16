@@ -439,18 +439,13 @@ enum MemoryLoad {
 	, MEMORY_BAD_CANARY = 4		// The check entry is missing or differs: the encoding was damaged or misread.
 	, MEMORY_TRUNCATED = 5		// The header is incomplete, or a length runs past the end.
 	, MEMORY_MALFORMED = 6		// A name is invalid or out of order, padding is not zero, or bytes follow the last entry.
-	, MEMORY_MISMATCH = 7		// Restored as far as the policy allows, but entries and owners did not match exactly.
-};
-
-enum ThawPolicy {
-	THAW_PREFIX					// An owner and an entry of different sizes share as many leading words as both have.
-	, THAW_SKIP					// An owner and an entry of different sizes are left alone.
+	, MEMORY_MISMATCH = 7		// Restored as far as `prefix` allows, but entries and owners did not match exactly.
 };
 
 UInt freezeMemorySize(const Processor& processor, const Symbols& symbols);												// Exact byte count a freeze will occupy.
 UInt freezeMemory(const Processor& processor, const Symbols& symbols, void* buffer, UInt bufferSize);					// Writes the frozen memory; returns its size (writes nothing and returns the needed size if `bufferSize` is too small).
 MemoryLoad thawMemory(Processor& processor, const Symbols& symbols, const void* buffer, UInt bufferSize
-		, ThawPolicy policy);																							// Validates all of `buffer`, then restores it by name; on any validation failure restores nothing.
+		, bool prefix);																								// Validates all of `buffer`, then restores it by name; on any validation failure restores nothing. An owner and an entry of different sizes share as many leading words as both have if `prefix`, and are left alone if not.
 Float parseFloat(const Char*& p, const Char* e);																		// Reads a float literal at `p`, advancing it, rounded to the nearest float, ties to even.
 
 #if !defined(NDEBUG)

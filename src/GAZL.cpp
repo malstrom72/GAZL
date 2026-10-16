@@ -1815,7 +1815,7 @@ UInt freezeMemory(const Processor& processor, const Symbols& symbols, void* buff
 	unless all of it is valid. Only then are entries and owners, both in ascending name order, merged.
 */
 MemoryLoad thawMemory(Processor& processor, const Symbols& symbols, const void* buffer, UInt bufferSize
-		, ThawPolicy policy) {
+		, bool prefix) {
 	const unsigned char* const start = static_cast<const unsigned char*>(buffer);
 	const unsigned char* const end = start + bufferSize;
 	if (bufferSize < 4 || memcmp(start, MEMORY_MAGIC, 4) != 0) return MEMORY_BAD_MAGIC;
@@ -1900,7 +1900,7 @@ MemoryLoad thawMemory(Processor& processor, const Symbols& symbols, const void* 
 		UInt restored = owner.size;
 		if (count != owner.size) {
 			exact = false;
-			restored = (policy == THAW_PREFIX ? minimum(count, owner.size) : 0);
+			restored = (prefix ? minimum(count, owner.size) : 0);
 		}
 		Value* const destination = processor.accessMemory(owner.address, owner.size);
 		assert(destination != 0);
@@ -2095,7 +2095,7 @@ bool unitTest() {
 			Processor pmachine2(sizes2.codeSize, &cody2[0], sizes2.functionCount, &functionTable2[0], MEMORY_SIZE, &memory2[0]
 					, sizes2.globalsSize, sizes2.constsSize, CALL_STACK_SIZE, &callStack2[0], nativeTable, &callbackData);
 			MemoryLoad loaded = thawMemory(pmachine2, globals2, memoryBlob.empty() ? 0 : &memoryBlob[0]
-					, (UInt)memoryBlob.size(), THAW_SKIP);
+					, (UInt)memoryBlob.size(), false);
 			assert(loaded == MEMORY_OK);
 
 			// Every non-TEMP global must match the frozen original (identical assemblies share global addresses).

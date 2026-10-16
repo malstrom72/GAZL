@@ -675,9 +675,9 @@ std::vector<unsigned char> freeze(Machine& m) {
 	return frozen;
 }
 
-MemoryLoad thaw(Machine& m, const std::vector<unsigned char>& frozen, ThawPolicy policy) {
+MemoryLoad thaw(Machine& m, const std::vector<unsigned char>& frozen, bool prefix) {
 	Processor processor = frozenProcessor(m);
-	return thawMemory(processor, m.symbols, frozen.empty() ? 0 : &frozen[0], (UInt)frozen.size(), policy);
+	return thawMemory(processor, m.symbols, frozen.empty() ? 0 : &frozen[0], (UInt)frozen.size(), prefix);
 }
 
 /*
@@ -733,7 +733,7 @@ int sweepFrameAndThaw() {
 	}
 	const std::vector<unsigned char> frozen = freeze(m);
 	int probes = 1;											// the frame above
-	if (thaw(m, frozen, THAW_SKIP) != MEMORY_OK) {
+	if (thaw(m, frozen, false) != MEMORY_OK) {
 		std::printf("FAIL thaw: the intact frozen memory was rejected\n");
 		++failures;
 	}
@@ -741,7 +741,7 @@ int sweepFrameAndThaw() {
 	for (size_t n = 1; n < frozen.size(); ++n) {
 		const std::vector<unsigned char> prefix(frozen.begin(), frozen.begin() + n);	// exactly `n` bytes, nothing after
 		const MemoryLoad expected = (n < 4 ? MEMORY_BAD_MAGIC : MEMORY_TRUNCATED);
-		if (thaw(m, prefix, THAW_SKIP) != expected) {
+		if (thaw(m, prefix, false) != expected) {
 			std::printf("FAIL thaw: frozen memory cut to %d bytes was not refused as %s\n", (int)n
 					, n < 4 ? "bad magic" : "truncated");
 			++failures;
@@ -750,7 +750,7 @@ int sweepFrameAndThaw() {
 	}
 	std::vector<unsigned char> bad(frozen);
 	putWord(bad, 48, 0xFFFFFFF0u);							// the first program entry's name length
-	if (thaw(m, bad, THAW_SKIP) != MEMORY_TRUNCATED) {
+	if (thaw(m, bad, false) != MEMORY_TRUNCATED) {
 		std::printf("FAIL thaw: a name length past the end was not refused as truncated\n");
 		++failures;
 	}
@@ -924,7 +924,7 @@ int sweepThawRules() {
 		assemble(to, FROM, layout, error);
 		Value* const memory = to.memory();
 		for (UInt w = 0; w < MEMORY_SIZE; ++w) memory[w].i = 99;
-		const MemoryLoad got = thaw(to, bad, THAW_PREFIX);
+		const MemoryLoad got = thaw(to, bad, true);
 		bool untouched = true;
 		for (UInt w = 0; w < MEMORY_SIZE; ++w) untouched = untouched && memory[w].i == 99;
 		if (got != v.expected || !untouched) {
@@ -935,23 +935,23 @@ int sweepThawRules() {
 		++checks;
 	}
 
-	struct Restore { const char* what; const char* to; ThawPolicy policy; MemoryLoad expected; const char* words; };
+	struct Restore { const char* what; const char* to; bool prefix; MemoryLoad expected; const char* words; };
 	const Restore RESTORES[] = {
-		{ "the same program", FROM.c_str(), THAW_SKIP, MEMORY_OK, "1 2|3|4" },
+		{ "the same program", FROM.c_str(), false, MEMORY_OK, "1 2|3|4" },
 		{ "a larger owner, prefix", "a:\tGLOB *3\n\tDATi #7 #7 #7\nb:\tGLOB *1\n\tDATi #7\nc:\tGLOB *1\n\tDATi #7\n"
-				, THAW_PREFIX, MEMORY_MISMATCH, "1 2 7|3|4" },
+				, true, MEMORY_MISMATCH, "1 2 7|3|4" },
 		{ "a larger owner, skip", "a:\tGLOB *3\n\tDATi #7 #7 #7\nb:\tGLOB *1\n\tDATi #7\nc:\tGLOB *1\n\tDATi #7\n"
-				, THAW_SKIP, MEMORY_MISMATCH, "7 7 7|3|4" },
+				, false, MEMORY_MISMATCH, "7 7 7|3|4" },
 		{ "a smaller owner, prefix", "a:\tGLOB *1\n\tDATi #7\nb:\tGLOB *1\n\tDATi #7\nc:\tGLOB *1\n\tDATi #7\n"
-				, THAW_PREFIX, MEMORY_MISMATCH, "1|3|4" },
+				, true, MEMORY_MISMATCH, "1|3|4" },
 		{ "an entry with no owner", "a:\tGLOB *2\n\tDATi #7 #7\nc:\tGLOB *1\n\tDATi #7\n"
-				, THAW_SKIP, MEMORY_MISMATCH, "1 2|?|4" },
+				, false, MEMORY_MISMATCH, "1 2|?|4" },
 		{ "an owner with no entry", "a:\tGLOB *2\n\tDATi #7 #7\nb:\tGLOB *1\n\tDATi #7\nc:\tGLOB *1\n\tDATi #7\n"
-				"d:\tGLOB *1\n\tDATi #7\n", THAW_SKIP, MEMORY_MISMATCH, "1 2|3|4|7" },
+				"d:\tGLOB *1\n\tDATi #7\n", false, MEMORY_MISMATCH, "1 2|3|4|7" },
 		{ "an owner moved into a TEMP section", "a:\tGLOB *2\n\tDATi #7 #7\nb:\tTEMP *1\n\tDATi #7\nc:\tGLOB *1\n"
-				"\tDATi #7\n", THAW_SKIP, MEMORY_MISMATCH, "1 2|7|4" },
+				"\tDATi #7\n", false, MEMORY_MISMATCH, "1 2|7|4" },
 		{ "a label that owns nothing", "s:\tGLOB *2\na:\tDATi #7 #7\nb:\tGLOB *1\n\tDATi #7\nc:\tGLOB *1\n\tDATi #7\n"
-				, THAW_SKIP, MEMORY_OK, "1 2|3|4" }
+				, false, MEMORY_OK, "1 2|3|4" }
 	};
 	const char* const NAMES[] = { "a", "b", "c", "d" };
 	for (size_t i = 0; i < sizeof (RESTORES) / sizeof (*RESTORES); ++i) {
@@ -963,7 +963,7 @@ int sweepThawRules() {
 			++failures;
 			continue;
 		}
-		const MemoryLoad got = thaw(to, frozen, r.policy);
+		const MemoryLoad got = thaw(to, frozen, r.prefix);
 		std::string words;
 		const int nameCount = (strstr(r.to, "d:") != 0 ? 4 : 3);
 		for (int n = 0; n < nameCount; ++n) words += (n == 0 ? "" : "|") + globalWords(to, NAMES[n]);
