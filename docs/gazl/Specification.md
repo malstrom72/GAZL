@@ -74,16 +74,11 @@ A read must succeed exactly when its pointer is in `[base - C, base + rw)`, and 
 `[base, base + rw)`. An address is `base + offset` computed with 32-bit wrap-around, so an offset can never carry
 an access around the end of memory and back in.
 
-**Several processors in one memory.** A host may run several processors over one program and one memory, for
-example one per thread.
-- **What they share:** the constants and the globals, so a global written by one is seen by the others.
-- **What each has of its own:** its call stack, and its own part of the data stack, a range above the globals that
-  the host assigns. Every frame lives in the part of the processor running the call.
-- **What is checked:** each processor's accesses are checked against the memory as above, not against its own part.
-  One processor can therefore read and write another's part of the data stack through a pointer; the sandbox
-  protects the host, not processors from each other.
-- **What the host is responsible for:** running processors concurrently, and synchronizing their access to shared
-  globals. GAZL does none of it.
+**Several processors in one memory.** A host may run several processors over one program and one memory. They
+share the constants and the globals. Each has its own call stack and its own part of the data stack, a range above
+the globals assigned by the host. Accesses are checked against the whole memory, not against a processor's own part:
+the sandbox protects the host, not processors from each other. Scheduling and synchronization are the host's
+responsibility.
 
 **`COPY`** checks the whole source range for reading and the whole destination range for writing before it moves
 anything. It then copies forward, one word at a time from the lowest address up, so overlapping ranges have a
@@ -176,10 +171,13 @@ assembly error.
 32 bits wraps. A literal that parses completely as an integer is an int, so a float operand needs a float literal:
 `#1.0`, not `#1`.
 
-**Float literals** have the form `[sign] digits [. digits] [e exponent]`. Their value is the literal's exact decimal
-value rounded to the nearest float, ties to even: correctly rounded conversion, independent of any C library. The
-same rule sends a value too large for a float to infinity and a value too small to zero, keeping the literal's
-sign. There is no literal for infinity or NaN.
+**Float literals** have the form `[sign] digits [. digits] [e [sign] digits]`, with `e` or `E`. Their value is the
+literal's exact decimal value rounded to the nearest float, ties to even: correctly rounded conversion, independent
+of any C library. The same rule sends a value too large for a float to infinity and a value too small to zero,
+keeping the literal's sign. There is no literal for infinity or NaN.
+
+**Predefined names.** `&NULL` is the null pointer. `#GAZL_VERSION` is the version of the engine (section 1),
+`#GAZL_WORD_SIZE` is 32, and `#GAZL_MEMORY_SIZE` is the size of data memory in words, as given to the assembler.
 
 ## 6. Program structure
 
@@ -387,8 +385,8 @@ for in this order, nothing is restored and that problem's status is returned:
 | a name is not a valid identifier, names do not ascend strictly, or padding is not 0  | `MEMORY_MALFORMED`    |
 | bytes follow the last entry                                                          | `MEMORY_MALFORMED`    |
 
-**Restore.** Only after validation succeeds, thawing matches the entries to the re-assembled
-program's owners in `GLOB` sections, by name. Each name falls in exactly one case:
+**Restore.** Only after validation succeeds, thawing matches the entries to the re-assembled program's owners in
+`GLOB` sections, by name. Each name falls in exactly one case:
 - **An entry and an owner of the same size:** the words are restored.
 - **An entry and an owner of different sizes:** the host chooses, for the whole restore, between two policies.
   - *Prefix:* the owner's first words are filled from the entry's first words, as many as both have. If the owner
@@ -434,3 +432,6 @@ Where `src/GAZL.cpp` does not yet do what this specification says:
    - it restores while it parses, so truncated frozen memory restores the entries before the damage, and there is
      no `MEMORY_MALFORMED`;
    - a size mismatch is always skipped, there is no prefix policy, and there is no `MEMORY_MISMATCH`.
+2. **Accesses through a label inside a section** (section 5). `&label:k` in `PEEK`, `POKE` or `COPY` is checked
+   against the words up to the next label, not against the end of the section, so an access that reaches a later
+   label's words is `OFFSET_OUT_OF_BOUNDS`. Accesses through a section's name are checked against the whole section.
