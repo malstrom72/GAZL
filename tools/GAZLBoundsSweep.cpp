@@ -707,8 +707,8 @@ void putWord(std::vector<unsigned char>& b, size_t at, UInt v) {
 
 /*
 	Two refusals at the edges a host reaches: a frame summing past INT_MAX is refused at assembly, so a slot offset
-	can never wrap, and `thawMemory` rejects every truncated input and a name length running past the end of it,
-	without reading past it. Returns the number of failures, each one printed.
+	can never wrap, and `thawMemory` rejects frozen memory cut at every length, without reading past it. Returns the
+	number of failures, each one printed.
 */
 int sweepFrameAndThaw() {
 	int failures = 0;
@@ -755,13 +755,6 @@ int sweepFrameAndThaw() {
 		}
 		++probes;
 	}
-	std::vector<unsigned char> bad(frozen);
-	putWord(bad, 48, 0xFFFFFFF0u);							// the first program entry's name length
-	if (thaw(m, bad, false) != MEMORY_TRUNCATED) {
-		std::printf("FAIL thaw: a name length past the end was not refused as truncated\n");
-		++failures;
-	}
-	++probes;
 	std::printf("frame and thaw: %d probes, %d failed\n", probes, failures);
 	return failures;
 }
@@ -927,6 +920,7 @@ int sweepThawRules() {
 		{ "a newer GAZL version", 8, (UInt)VERSION + 1, 0, MEMORY_BAD_VERSION },
 		{ "word size 64", 12, 64, 0, MEMORY_BAD_WORDSIZE },
 		{ "one entry too many", 16, 5, 0, MEMORY_TRUNCATED },
+		{ "a name length past the end", 48, 0xFFFFFFF0u, 0, MEMORY_TRUNCATED },
 		{ "a word count past the end", 92, 2, 0, MEMORY_TRUNCATED },
 		{ "no entries", 16, 0, 0, MEMORY_BAD_CANARY },
 		{ "a quiet NaN in the check entry", 44, 0x7FC00000u, 0, MEMORY_BAD_CANARY },
@@ -961,23 +955,20 @@ int sweepThawRules() {
 		++checks;
 	}
 
-	struct Restore { const char* what; const char* to; bool prefix; MemoryLoad expected; const char* words; };
+	struct Restore { const char* what; std::string to; bool prefix; MemoryLoad expected; const char* words; };
+	const std::string B_AND_C = "b:\tGLOB *1\n\tDATi #7\nc:\tGLOB *1\n\tDATi #7\n";			// as frozen, but holding 7s
 	const Restore RESTORES[] = {
 		{ "the same program", FROM, false, MEMORY_OK, "1 2|3|4|?" },
-		{ "a larger owner, prefix", "a:\tGLOB *3\n\tDATi #7 #7 #7\nb:\tGLOB *1\n\tDATi #7\nc:\tGLOB *1\n\tDATi #7\n"
-				, true, MEMORY_MISMATCH, "1 2 7|3|4|?" },
-		{ "a larger owner, skip", "a:\tGLOB *3\n\tDATi #7 #7 #7\nb:\tGLOB *1\n\tDATi #7\nc:\tGLOB *1\n\tDATi #7\n"
-				, false, MEMORY_MISMATCH, "7 7 7|3|4|?" },
-		{ "a smaller owner, prefix", "a:\tGLOB *1\n\tDATi #7\nb:\tGLOB *1\n\tDATi #7\nc:\tGLOB *1\n\tDATi #7\n"
-				, true, MEMORY_MISMATCH, "1|3|4|?" },
-		{ "an entry with no owner", "a:\tGLOB *2\n\tDATi #7 #7\nc:\tGLOB *1\n\tDATi #7\n"
-				, false, MEMORY_MISMATCH, "1 2|?|4|?" },
-		{ "an owner with no entry", "a:\tGLOB *2\n\tDATi #7 #7\nb:\tGLOB *1\n\tDATi #7\nc:\tGLOB *1\n\tDATi #7\n"
-				"d:\tGLOB *1\n\tDATi #7\n", false, MEMORY_MISMATCH, "1 2|3|4|7" },
+		{ "a larger owner, prefix", "a:\tGLOB *3\n\tDATi #7 #7 #7\n" + B_AND_C, true, MEMORY_MISMATCH, "1 2 7|3|4|?" },
+		{ "a larger owner, skip", "a:\tGLOB *3\n\tDATi #7 #7 #7\n" + B_AND_C, false, MEMORY_MISMATCH, "7 7 7|3|4|?" },
+		{ "a smaller owner, prefix", "a:\tGLOB *1\n\tDATi #7\n" + B_AND_C, true, MEMORY_MISMATCH, "1|3|4|?" },
+		{ "an entry with no owner", "a:\tGLOB *2\n\tDATi #7 #7\nc:\tGLOB *1\n\tDATi #7\n", false, MEMORY_MISMATCH
+				, "1 2|?|4|?" },
+		{ "an owner with no entry", "a:\tGLOB *2\n\tDATi #7 #7\n" + B_AND_C + "d:\tGLOB *1\n\tDATi #7\n", false
+				, MEMORY_MISMATCH, "1 2|3|4|7" },
 		{ "an owner moved into a TEMP section", "a:\tGLOB *2\n\tDATi #7 #7\nb:\tTEMP *1\n\tDATi #7\nc:\tGLOB *1\n"
 				"\tDATi #7\n", false, MEMORY_MISMATCH, "1 2|7|4|?" },
-		{ "a label that owns nothing", "s:\tGLOB *2\na:\tDATi #7 #7\nb:\tGLOB *1\n\tDATi #7\nc:\tGLOB *1\n\tDATi #7\n"
-				, false, MEMORY_OK, "1 2|3|4|?" }
+		{ "a label that owns nothing", "s:\tGLOB *2\na:\tDATi #7 #7\n" + B_AND_C, false, MEMORY_OK, "1 2|3|4|?" }
 	};
 	const char* const NAMES[] = { "a", "b", "c", "d" };
 	for (size_t i = 0; i < sizeof (RESTORES) / sizeof (*RESTORES); ++i) {

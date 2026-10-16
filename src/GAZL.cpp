@@ -822,10 +822,10 @@ void Symbols::registerNative(const Char* name, Int index) {
 }
 
 Pointer Symbols::findGlobal(const Char* name, UInt& size) const {
-	const SymbolMap::const_iterator it = symbols.find(name);
-	if (it == symbols.end() || (it->second.types & ADDRESS) == 0) return NULL_POINTER;
-	size = it->second.size;
-	return it->second.value.p;
+	GlobalInfo info;
+	if (!getGlobalInfo(name, info)) return NULL_POINTER;
+	size = info.size;
+	return info.address;
 }
 
 Pointer Symbols::findFunction(const Char* name) const {
