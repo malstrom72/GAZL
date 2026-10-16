@@ -159,7 +159,7 @@ inline Exception::~Exception() throw() { }																				// (GCC requires e
 struct GlobalInfo {
 	const char* name;				// valid as long as the `Symbols` it came from
 	Pointer address;
-	UInt size;						// the words an access through it reaches, to the end of its section
+	UInt reach;						// the words an access through it reaches, to the end of its section
 	UInt owned;						// the words it owns, to the next label: what freezing saves under its name
 	bool isTemp;					// declared in a `TEMP` section, which freezing leaves out
 };
@@ -172,10 +172,10 @@ struct GlobalInfo {
 class Symbols {
 	friend class Assembler;
 	protected:	struct Symbol {
-					Symbol(int types, Value value, UInt size) : types(types), value(value), size(size), owned(size) { }
+					Symbol(int types, Value value, UInt reach) : types(types), value(value), reach(reach), owned(reach) { }
 					int types;
 					Value value;
-					UInt size;																			// For data, the words an access reaches: to the end of the section.
+					UInt reach;																			// The words an offset may reach: for data, to the end of the section; for a local array, its size.
 					UInt owned;																			// For data, the words owned: to the next label.
 				};
 
@@ -196,7 +196,7 @@ class Symbols {
 				
 	public:		void registerNative(const Char* name, Int index);
 	public:		Pointer findFunction(const Char* name) const;															// Returns `NULL_POINTER` if not found.
-	public:		Pointer findGlobal(const Char* name, UInt& size) const;													// Returns `NULL_POINTER` if not found (in which case, `size` is left untouched).
+	public:		Pointer findGlobal(const Char* name, UInt& reach) const;												// Returns `NULL_POINTER` if not found (in which case, `reach` is left untouched).
 	public:		void defineConstant(const Char* name, bool asFloat, const Value& value);
 	public:		bool lookupConstant(const Char* name, bool* isFloat, Value* value) const;
 	public:		bool findFirstGlobal(Iterator& iterator, bool includeTemps) const;				// Names of writable data: named sections, and labels on data statements (see `GlobalInfo`).

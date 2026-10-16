@@ -871,11 +871,11 @@ int sweepFrozenEntries() {
 	GlobalInfo entry;
 	GlobalInfo nosuch;
 	entry.address = 1;
-	nosuch.size = 1;
+	nosuch.reach = 1;
 	if (m.symbols.getGlobalInfo("entry", entry) || entry.address != NULL_POINTER || entry.name != 0
-			|| m.symbols.getGlobalInfo("nosuch", nosuch) || nosuch.size != 0
-			|| !m.symbols.getGlobalInfo("tmpval", temp) || !temp.isTemp || temp.owned != 2 || temp.size != 2
-			|| !m.symbols.getGlobalInfo("head", head) || strcmp(head.name, "head") != 0 || head.size != 3
+			|| m.symbols.getGlobalInfo("nosuch", nosuch) || nosuch.reach != 0
+			|| !m.symbols.getGlobalInfo("tmpval", temp) || !temp.isTemp || temp.owned != 2 || temp.reach != 2
+			|| !m.symbols.getGlobalInfo("head", head) || strcmp(head.name, "head") != 0 || head.reach != 3
 			|| head.owned != 1 || head.isTemp) {
 		std::printf("FAIL frozen entries: getGlobalInfo by name reports the wrong global\n");
 		++failures;

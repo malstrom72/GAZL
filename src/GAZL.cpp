@@ -756,7 +756,7 @@ void Symbols::resolve(const Reference& ref, const Symbol& symbol) {
 	if ((symbol.types & ref.accepts) == 0) throw Exception(INCOMPATIBLE_TYPES, ref.label);
 	assert((ref.accepts == FWD_BRANCH) == (symbol.types == BRANCH));
 	assert((ref.offset < 0) == (ref.accepts == FWD_BRANCH));
-	if ((ref.accepts & UNCHECKED_ADDRESS) == 0 && ref.offset >= static_cast<Int>(symbol.size))
+	if ((ref.accepts & UNCHECKED_ADDRESS) == 0 && ref.offset >= static_cast<Int>(symbol.reach))
 		throw Exception(OFFSET_OUT_OF_BOUNDS, ref.label);
 	// A function address takes no offset: `&main:1` would name another function.
 	if ((symbol.types & FUNC) != 0 && ref.offset > 0) throw Exception(OFFSET_OUT_OF_BOUNDS, ref.label);
@@ -772,7 +772,7 @@ bool Symbols::lookup(const Char* nameBegin, const Char* nameEnd, int acceptedTyp
 	SymbolMap::const_iterator symbolIt = symbols.find(std::string(nameBegin, nameEnd));
 	if (symbolIt == symbols.end() || (symbolIt->second.types & acceptedTypes) == 0) return false;
 	types = symbolIt->second.types;
-	size = symbolIt->second.size;
+	size = symbolIt->second.reach;
 	value = symbolIt->second.value;
 	return true;
 }
@@ -817,13 +817,13 @@ void Symbols::registerNative(const Char* name, Int index) {
 	define(name, NATIVE, v, 1);
 }
 
-Pointer Symbols::findGlobal(const Char* name, UInt& size) const {
+Pointer Symbols::findGlobal(const Char* name, UInt& reach) const {
 	int types;
 	Value value;
 	const Char* nameBegin = name;
 	const Char* nameEnd = name + strlen(name);
 	if (!isValidIdentifier(nameBegin, nameEnd)) return NULL_POINTER;
-	if (!lookup(nameBegin, nameEnd, ADDRESS, types, value, size)) return NULL_POINTER;
+	if (!lookup(nameBegin, nameEnd, ADDRESS, types, value, reach)) return NULL_POINTER;
 	return value.p;
 }
 
@@ -871,7 +871,7 @@ GlobalInfo Symbols::getGlobalInfo(const Iterator& iterator) const {
 	GlobalInfo info;
 	info.name = iterator->first.c_str();
 	info.address = iterator->second.value.p;
-	info.size = iterator->second.size;
+	info.reach = iterator->second.reach;
 	info.isTemp = ((iterator->second.types & TEMPORARY) != 0);
 	info.owned = iterator->second.owned;
 	return info;
