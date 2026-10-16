@@ -399,8 +399,26 @@ for in this order, it restores nothing and returns that problem's status:
 | a name is not a valid identifier, names do not ascend strictly, or padding is not 0  | `MEMORY_MALFORMED`    |
 | bytes follow the last entry                                                          | `MEMORY_MALFORMED`    |
 
-**Restore.** Only after validation succeeds, an entry is restored when the re-assembled program has an owner of the
-same name in a `GLOB` section, owning the same number of words. Every other entry is skipped without error.
+**Restore.** Only after validation succeeds, the reader matches the snapshot's entries to the re-assembled
+program's owners in `GLOB` sections, by name. Both lists are in ascending name order, so this is one pass over the
+two. Each name falls in exactly one case:
+- **An entry and an owner of the same size:** the words are restored.
+- **An entry and an owner of different sizes:** the host chooses, for the whole restore, between two policies.
+  - *Prefix:* the owner's first words are filled from the entry's first words, as many as both have. If the owner
+    is larger, its remaining words keep their initial values; if it is smaller, the rest of the entry is dropped.
+  - *Skip:* the owner keeps its initial value, and the entry is dropped.
+- **An entry with no owner:** dropped.
+- **An owner with no entry:** keeps its initial value.
+
+The status says whether the snapshot fitted the program exactly:
+- **`MEMORY_OK`:** every entry met an owner of the same size, and every owner had an entry.
+- **`MEMORY_MISMATCH`:** anything else, even once. The data has been restored as far as the policy allows, but the
+  snapshot looks as if it belonged to a different program. The host decides what to do: run the program as it is,
+  call a function of the program that restores backwards compatibility, or discard the state by re-creating the
+  processor.
+
+`MEMORY_MISMATCH` is new. A host that wants to know which names did not fit can compare the snapshot's entries with
+the program's owners itself.
 
 **Data only.** A snapshot holds data and nothing else. Its meaning depends on two more parts, both the host's to
 keep with it:
@@ -413,9 +431,10 @@ ordinals (section 2), and every entry is restored exactly. Another implementatio
 (section 3): entries still restore by name and size, but data pointers are valid only if their targets kept their
 addresses.
 
-Restoring into a changed program still works by name and size, but nothing more is promised:
+Restoring into a changed program works by name, as above, but nothing more is promised:
 - the snapshot records no types and no layouts;
-- an owner of the same size whose meaning changed receives the old words as they were;
+- an owner whose meaning changed receives the old words as they were, and still returns `MEMORY_OK` if its size
+  did not change;
 - data pointers and function pointers are raw values, valid only if their targets did not move.
 
 Migrating data between program versions is outside this specification.
