@@ -862,18 +862,20 @@ int sweepFrozenEntries() {
 		std::printf("FAIL frozen entries: the labels in `state` do not own what they should\n");
 		++failures;
 	}
-	// By name, `getGlobalInfo` knows writable data only, `TEMP` included, and agrees with the iteration.
+	// By name, `getGlobalInfo` knows all data, `TEMP` and `CNST` included, and nothing else.
 	GlobalInfo temp;
 	GlobalInfo head;
 	GlobalInfo entry;
 	GlobalInfo nosuch;
-	entry.address = 1;
+	GlobalInfo function;
 	nosuch.owned = 1;
-	if (m.symbols.getGlobalInfo("entry", entry) || entry.address != NULL_POINTER || entry.name != 0
-			|| m.symbols.getGlobalInfo("nosuch", nosuch) || nosuch.owned != 0
-			|| !m.symbols.getGlobalInfo("tmpval", temp) || !temp.isTemp || temp.owned != 2
+	function.address = 1;
+	if (!m.symbols.getGlobalInfo("entry", entry) || !entry.isConstant || entry.isTemp || entry.owned != 2
+			|| m.symbols.getGlobalInfo("nosuch", nosuch) || nosuch.owned != 0 || nosuch.name != 0
+			|| m.symbols.getGlobalInfo("main", function) || function.address != NULL_POINTER
+			|| !m.symbols.getGlobalInfo("tmpval", temp) || !temp.isTemp || temp.isConstant || temp.owned != 2
 			|| !m.symbols.getGlobalInfo("head", head) || strcmp(head.name, "head") != 0
-			|| head.owned != 1 || head.isTemp) {
+			|| head.owned != 1 || head.isTemp || head.isConstant) {
 		std::printf("FAIL frozen entries: getGlobalInfo by name reports the wrong global\n");
 		++failures;
 	}
@@ -1140,9 +1142,9 @@ int sweepLabelReach() {
 }
 
 /*
-	A function address takes no offset, not even `:0`: `&main:1` would name whichever function was declared next.
-	Checked where the function is already known and where it is a forward reference. Returns the number of failures,
-	each one printed.
+	Only data labels and locals take an offset, not even `:0` on anything else: `&main:1` would name whichever function
+	was declared next, and `&NULL:1` no pointer at all. Checked where a function is already known and where it is a
+	forward reference. Returns the number of failures, each one printed.
 */
 int sweepFunctionOffsets() {
 	struct Case { const char* what; const char* source; int error; };
@@ -1152,6 +1154,10 @@ int sweepFunctionOffsets() {
 				, OFFSET_OUT_OF_BOUNDS },
 		{ "a zero offset on a function", "main:\tFUNC\np:\tLOCp\n\tMOVp p &main:0\n\tRETU\n", OFFSET_OUT_OF_BOUNDS },
 		{ "a negative offset on a forward function", "\tGLOB *1\nfp:\tDATp &main:-1\nmain:\tFUNC\n\tRETU\n"
+				, OFFSET_OUT_OF_BOUNDS },
+		{ "an offset on NULL", "main:\tFUNC\np:\tLOCp\n\tMOVp p &NULL:1\n\tRETU\n", OFFSET_OUT_OF_BOUNDS },
+		{ "a zero offset on NULL", "\tGLOB *1\nn:\tDATp &NULL:0\nmain:\tFUNC\n\tRETU\n", OFFSET_OUT_OF_BOUNDS },
+		{ "an offset on a named constant", "\tGLOB *1\nv:\tDATA &GAZL_VERSION:0\nmain:\tFUNC\n\tRETU\n"
 				, OFFSET_OUT_OF_BOUNDS },
 		{ "a function address without an offset", "\tGLOB *1\nfp:\tDATp &main\nmain:\tFUNC\n\tRETU\n", -1 }
 	};

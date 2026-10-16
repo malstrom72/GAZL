@@ -154,13 +154,14 @@ inline Exception::Exception(AssemblerError error, const std::string& detail) : e
 inline Exception::~Exception() throw() { }																				// (GCC requires explicit destructor with one that has throw().)
 
 /*
-	What `Symbols::getGlobalInfo` reports about one name of writable data.
+	What `Symbols::getGlobalInfo` reports about one name of data: a section's label, or a label on a data statement.
 */
 struct GlobalInfo {
 	const char* name;				// valid as long as the `Symbols` it came from
 	Pointer address;
 	UInt owned;						// the words it owns, to the next label: what freezing saves under its name
 	bool isTemp;					// declared in a `TEMP` section, which freezing leaves out
+	bool isConstant;				// declared in a `CNST` section: read-only, and left out of freezing too
 };
 
 /*
@@ -200,10 +201,10 @@ class Symbols {
 	public:		Pointer findGlobal(const Char* name, UInt& owned) const;												// `owned` is the words the label owns. Returns `NULL_POINTER` if not found (in which case, `owned` is left untouched).
 	public:		void defineConstant(const Char* name, bool asFloat, const Value& value);
 	public:		bool lookupConstant(const Char* name, bool* isFloat, Value* value) const;
-	public:		bool findFirstGlobal(Iterator& iterator, bool includeTemps) const;				// Names of writable data: named sections, and labels on data statements (see `GlobalInfo`).
-	public:		bool findNextGlobal(Iterator& iterator, bool includeTemps) const;
+	public:		bool findFirstGlobal(Iterator& iterator) const;															// Every name of data, `GLOB`, `TEMP` and `CNST` alike, in ascending order (see `GlobalInfo`).
+	public:		bool findNextGlobal(Iterator& iterator) const;
 	public:		GlobalInfo getGlobalInfo(const Iterator& iterator) const;
-	public:		bool getGlobalInfo(const Char* name, GlobalInfo& info) const;													// Returns false, with `info` cleared, if `name` is not writable data.
+	public:		bool getGlobalInfo(const Char* name, GlobalInfo& info) const;													// Returns false, with `info` cleared, if `name` is not data.
 
 	protected:	bool lookup(const Char* nameBegin, const Char* nameEnd, int acceptedTypes, int& types, Value& value) const;
 	protected:	Symbol* define(const std::string& name, int types, Value value, UInt reach = 1);

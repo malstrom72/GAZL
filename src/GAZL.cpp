@@ -422,7 +422,7 @@ const int BRANCH			= 0x08000;					// Constant positive (or zero) integer.
 const int NATIVE			= 0x10000;
 const int COMPILE_TIME		= 0x20000;
 const int FORWARD			= 0x40000;
-const int OFFSET_GIVEN		= 0x1000000;				// Written with a `:offset`, `:0` included, which a function or native does not take.
+const int OFFSET_GIVEN		= 0x1000000;				// Written with a `:offset`, `:0` included, which only data and locals take.
 const int UNCHECKED_ADDRESS	= 0x80000;					// Do *not* verify that the offset is < size of the symbol. (Some instructions shouldn't do this, like ADDp for example.)
 const int FWD_ADDRESS_W		= ADDRESS_W | FORWARD;
 const int FWD_ADDRESS_R		= ADDRESS_R | FORWARD;
@@ -757,8 +757,8 @@ void Symbols::resolve(const Reference& ref, const Symbol& symbol) {
 	if ((symbol.types & ref.accepts) == 0) throw Exception(INCOMPATIBLE_TYPES, ref.label);
 	assert((ref.accepts == FWD_BRANCH) == (symbol.types == BRANCH));
 	assert(ref.accepts != FWD_BRANCH || ref.offset < 0);											// a branch's offset is its distance back to the jump
-	// A function or native takes no offset, not even `:0`: `&main:1` would name another function.
-	if ((symbol.types & (FUNC | NATIVE)) != 0 && (ref.accepts & OFFSET_GIVEN) != 0) {
+	// Only data and locals take an offset, `:0` included: `&main:1` would name another function, `&NULL:1` no pointer.
+	if ((ref.accepts & OFFSET_GIVEN) != 0 && (symbol.types & (ADDRESS | ANY_VAR)) == 0) {
 		throw Exception(OFFSET_OUT_OF_BOUNDS, ref.label);
 	}
 	if (symbol.types != BRANCH && (ref.accepts & UNCHECKED_ADDRESS) == 0
@@ -849,36 +849,31 @@ bool Symbols::lookupConstant(const Char* name, bool* isFloat, Value* value) cons
 	return true;
 }
 
-static int globalMask(bool includeTemps) {								// a global matches when `types & mask` is exactly `ADDRESS`
-	return ADDRESS | (includeTemps ? 0 : TEMPORARY);
-}
-
-bool Symbols::findFirstGlobal(Iterator& iterator, bool includeTemps) const {
-	const int mask = globalMask(includeTemps);
-	for (iterator = symbols.begin(); iterator != symbols.end() && (iterator->second.types & mask) != ADDRESS; ++iterator);
+bool Symbols::findFirstGlobal(Iterator& iterator) const {
+	for (iterator = symbols.begin(); iterator != symbols.end() && (iterator->second.types & ADDRESS) == 0; ++iterator);
 	return (iterator != symbols.end());
 }
 
-bool Symbols::findNextGlobal(Iterator& iterator, bool includeTemps) const {
-	const int mask = globalMask(includeTemps);
-	for (++iterator; iterator != symbols.end() && (iterator->second.types & mask) != ADDRESS; ++iterator);
+bool Symbols::findNextGlobal(Iterator& iterator) const {
+	for (++iterator; iterator != symbols.end() && (iterator->second.types & ADDRESS) == 0; ++iterator);
 	return (iterator != symbols.end());
 }
 
 GlobalInfo Symbols::getGlobalInfo(const Iterator& iterator) const {
-	assert((iterator->second.types & ADDRESS) == ADDRESS);
+	assert((iterator->second.types & ADDRESS) != 0);
 	GlobalInfo info;
 	info.name = iterator->first.c_str();
 	info.address = iterator->second.value.p;
-	info.isTemp = ((iterator->second.types & TEMPORARY) != 0);
 	info.owned = iterator->second.owned;
+	info.isTemp = ((iterator->second.types & TEMPORARY) != 0);
+	info.isConstant = ((iterator->second.types & ADDRESS_W) == 0);
 	return info;
 }
 
 bool Symbols::getGlobalInfo(const Char* name, GlobalInfo& info) const {
 	const Iterator it = symbols.find(name);
-	if (it == symbols.end() || (it->second.types & globalMask(true)) != ADDRESS) {
-		const GlobalInfo none = { 0, NULL_POINTER, 0, false };
+	if (it == symbols.end() || (it->second.types & ADDRESS) == 0) {
+		const GlobalInfo none = { 0, NULL_POINTER, 0, false, false };
 		info = none;
 		return false;
 	}
@@ -1798,14 +1793,15 @@ struct MemoryOwner {
 };
 
 /*
-	The owners of the `GLOB` sections that own at least one word, in ascending name order (the order of `Symbols`).
+	The owners of the `GLOB` sections that own at least one word, in ascending name order (the order of `Symbols`):
+	every name of data except those in `TEMP` and `CNST` sections.
 */
 static void findMemoryOwners(const Symbols& symbols, std::vector<MemoryOwner>& owners) {
 	owners.clear();
 	Symbols::Iterator it;
-	for (bool ok = symbols.findFirstGlobal(it, false); ok; ok = symbols.findNextGlobal(it, false)) {
+	for (bool ok = symbols.findFirstGlobal(it); ok; ok = symbols.findNextGlobal(it)) {
 		const MemoryOwner owner = { symbols.getGlobalInfo(it), static_cast<UInt>(it->first.size()) };
-		if (owner.info.owned != 0) owners.push_back(owner);
+		if (!owner.info.isTemp && !owner.info.isConstant && owner.info.owned != 0) owners.push_back(owner);
 	}
 }
 
@@ -2110,8 +2106,9 @@ bool unitTest() {
 
 			// Every non-TEMP global must match the frozen original (identical assemblies share global addresses).
 			Symbols::Iterator it;
-			for (bool ok = globals.findFirstGlobal(it, false); ok; ok = globals.findNextGlobal(it, false)) {
+			for (bool ok = globals.findFirstGlobal(it); ok; ok = globals.findNextGlobal(it)) {
 				const GlobalInfo info = globals.getGlobalInfo(it);
+				if (info.isTemp) continue;
 				const UInt index = info.address - MEMORY_OFFSET + (sizes.constsSize - 1);			// the buffer starts with the constants
 				for (UInt i = 0; i < info.owned; ++i) assert(memory2[index + i].i == memory[index + i].i);
 			}

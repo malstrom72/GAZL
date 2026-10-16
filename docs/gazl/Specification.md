@@ -156,15 +156,15 @@ assembly error.
 | `@`    | branch label in the current function                            | `@loop`, `@sw.3`       |
 | `*`    | non-negative size constant                                      | `*16`                  |
 
-**Offsets.** `&label:k` and `local:k` take a constant `k`, negative or not.
+**Offsets.** `&label:k` and `local:k` take a constant `k`, negative or not, on data labels and locals only.
 - **Accesses are checked at assembly.** Where an instruction reads or writes the word at `&label:k` (`PEEK`,
   `POKE`, `COPY`), that word must lie within the label's section, before or after the label; it may be owned by
   another label (section 6). The word at `local:k` must lie within the frame's parameters and locals (section 6).
   Anything else is `OFFSET_OUT_OF_BOUNDS`.
 - **Addresses are not.** Where `&label:k` is only a value (`MOVp`, `ADDp`, `DIFp`, pointer compares, `FORp`,
   `DATp`, `DATA`), any offset is accepted. An access through such a pointer is checked at run time (section 3).
-- **A function or native takes no offset.** Any `:k` on one, `:0` included, is `OFFSET_OUT_OF_BOUNDS`: an offset
-  would name another function.
+- **Nothing else takes an offset.** Any `:k` on a function, a native, `&NULL` or a named constant, `:0` included,
+  is `OFFSET_OUT_OF_BOUNDS`: on a function it would name another function, and on the others it names nothing.
 
 **Integer literals** are decimal, or hexadecimal after a lowercase `0x`, with an optional sign. A quoted literal
 (`'AB'`) packs its characters into one int, the first character in the most significant byte used. A value outside
