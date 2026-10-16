@@ -205,8 +205,8 @@ class Symbols {
 	public:		GlobalInfo getGlobalInfo(const Iterator& iterator) const;
 	public:		bool getGlobalInfo(const Char* name, GlobalInfo& info) const;													// Returns false, with `info` cleared, if `name` is not writable data.
 
-	protected:	bool lookup(const Char* nameBegin, const Char* nameEnd, int acceptedTypes, int& types, Value& value, UInt& size) const;
-	protected:	Symbol* define(const std::string& name, int types, Value value, UInt size = 1);
+	protected:	bool lookup(const Char* nameBegin, const Char* nameEnd, int acceptedTypes, int& types, Value& value) const;
+	protected:	Symbol* define(const std::string& name, int types, Value value, UInt reach = 1);
 	protected:	void link(const Char* labelBegin, const Char* labelEnd, Value* storage, int accepts, Int offset = 0);
 	protected:	void registerSwitch(const Char* labelBegin, const Char* labelEnd, UInt switchSize, Value* storage, Int offset = 0);
 	protected:	void resolveForwardRefs();
@@ -248,7 +248,7 @@ class Assembler {
 				};
 
 	protected:	Symbols::Symbol* declare(Symbols& where, const Char* labelBegin, const Char* labelEnd, int types, Value value
-						, UInt size = 1);
+						, UInt reach = 1);
 	protected:	static int operatorCompare(const void* a, const void* b);
 	protected:	static int nativeDefinitionCompare(const void* a, const void* b);
 	protected:	static Char parseOperandType(const Char* b, const Char* e);

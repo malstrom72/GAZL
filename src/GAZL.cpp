@@ -734,7 +734,7 @@ const char* Exception::what() const throw() {
 	return whatString.c_str();
 }
 
-Symbols::Symbol* Symbols::define(const std::string& name, int types, Value value, UInt size) {
+Symbols::Symbol* Symbols::define(const std::string& name, int types, Value value, UInt reach) {
 	const Char* nameBegin = name.data();
 	const Char* nameEnd = nameBegin + name.size();
 	if (!isValidIdentifier(nameBegin, nameEnd)) throw Exception(INVALID_IDENTIFIER, name);
@@ -743,7 +743,7 @@ Symbols::Symbol* Symbols::define(const std::string& name, int types, Value value
 	if ((types & CONST_INT_N) != 0 && value.i >= 0) types &= ~CONST_INT_N;
 	SymbolMap::iterator it = symbols.find(name);
 	if (it != symbols.end()) throw Exception(SYMBOL_ALREADY_DEFINED, name);
-	return &symbols.insert(it, std::pair<std::string, Symbol>(name, Symbol(types, value, size)))->second;
+	return &symbols.insert(it, std::pair<std::string, Symbol>(name, Symbol(types, value, reach)))->second;
 }
 
 void Symbols::registerSwitch(const Char* labelBegin, const Char* labelEnd, UInt switchSize
@@ -772,12 +772,11 @@ void Symbols::resolve(const Reference& ref, const Symbol& symbol) {
 	}
 }
 
-bool Symbols::lookup(const Char* nameBegin, const Char* nameEnd, int acceptedTypes, int& types, Value& value, UInt& size) const {
+bool Symbols::lookup(const Char* nameBegin, const Char* nameEnd, int acceptedTypes, int& types, Value& value) const {
 	assert(isValidIdentifier(nameBegin, nameEnd));
 	SymbolMap::const_iterator symbolIt = symbols.find(std::string(nameBegin, nameEnd));
 	if (symbolIt == symbols.end() || (symbolIt->second.types & acceptedTypes) == 0) return false;
 	types = symbolIt->second.types;
-	size = symbolIt->second.reach;
 	value = symbolIt->second.value;
 	return true;
 }
@@ -832,11 +831,10 @@ Pointer Symbols::findGlobal(const Char* name, UInt& owned) const {
 Pointer Symbols::findFunction(const Char* name) const {
 	int types;
 	Value value;
-	UInt size;
 	const Char* nameBegin = name;
 	const Char* nameEnd = name + strlen(name);
 	if (!isValidIdentifier(nameBegin, nameEnd)) return NULL_POINTER;
-	if (!lookup(nameBegin, nameEnd, FUNC, types, value, size)) return NULL_POINTER;
+	if (!lookup(nameBegin, nameEnd, FUNC, types, value)) return NULL_POINTER;
 	return value.p;
 }
 
@@ -846,8 +844,7 @@ void Symbols::defineConstant(const Char* name, bool asFloat, const Value& value)
 
 bool Symbols::lookupConstant(const Char* name, bool* isFloat, Value* value) const {
 	int types;
-	UInt size;
-	if (!lookup(name, name + strlen(name), KONST, types, *value, size)) return false;
+	if (!lookup(name, name + strlen(name), KONST, types, *value)) return false;
 	*isFloat = ((types & CONST_FLOAT) != 0);
 	return true;
 }
@@ -911,7 +908,7 @@ Assembler::Assembler(UInt maxCodeSize, Instruction* codeBase, UInt maxFunctionCo
 }
 
 Symbols::Symbol* Assembler::declare(Symbols& where, const Char* labelBegin, const Char* labelEnd, int types, Value value
-		, UInt size) {
+		, UInt reach) {
 	assert((types & FORWARD) == 0);
 	if (labelBegin == labelEnd) return 0;
 	const Char* p = reinterpret_cast<const Char*>(memchr(labelBegin, '#', labelEnd - labelBegin));
@@ -925,7 +922,7 @@ Symbols::Symbol* Assembler::declare(Symbols& where, const Char* labelBegin, cons
 		name += '.';
 		name += int2string(v.i, 10, 1, buffer);
 	}
-	return where.define(name, types, value, size);
+	return where.define(name, types, value, reach);
 }
 
 int Assembler::operatorCompare(const void* a, const void* b) {
@@ -1311,7 +1308,7 @@ const Char* Assembler::feed(const Char* line) {
 								if (!isValidIdentifier(op1Begin + 1, op1End))
 									throw Exception(INVALID_IDENTIFIER, op1Begin + 1, op1End);
 								assert(op0End > op0Begin + 1);
-								if (globals.lookup(op0Begin + 1, op0End, op->accepts[0], types, v, size)
+								if (globals.lookup(op0Begin + 1, op0End, op->accepts[0], types, v)
 										== (op->opcode == IFDF_CB_)) {
 									assert(*op1Begin == '@');
 									assert(op1End > op1Begin + 1);
