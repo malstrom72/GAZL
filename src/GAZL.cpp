@@ -1757,9 +1757,8 @@ static bool getMemoryEntry(const unsigned char* p, const unsigned char* end, Mem
 	if (end - p < 4) return false;
 	entry.length = getMemoryWord(p);
 	entry.name = p + 4;
-	if (static_cast<size_t>(end - entry.name) < static_cast<size_t>(entry.length) + memoryPadding(entry.length) + 4) {
-		return false;
-	}
+	const size_t room = static_cast<size_t>(end - entry.name);
+	if (entry.length > room || room - entry.length < memoryPadding(entry.length) + 4) return false;	// no sum that can wrap
 	entry.words = entry.name + entry.length + memoryPadding(entry.length) + 4;
 	entry.count = getMemoryWord(entry.words - 4);
 	if (static_cast<size_t>(end - entry.words) / 4 < entry.count) return false;
@@ -1772,36 +1771,40 @@ static int compareMemoryNames(const void* a, size_t aLength, const void* b, size
 	return (order != 0 ? order : (aLength < bLength ? -1 : (aLength > bLength ? 1 : 0)));
 }
 
+struct MemoryOwner {
+	GlobalInfo info;
+	UInt length;															// of `info.name`
+};
+
 /*
 	The owners of the `GLOB` sections that own at least one word, in ascending name order (the order of `Symbols`).
 */
-static void findMemoryOwners(const Symbols& symbols, std::vector<GlobalInfo>& owners) {
+static void findMemoryOwners(const Symbols& symbols, std::vector<MemoryOwner>& owners) {
 	owners.clear();
 	Symbols::Iterator it;
 	for (bool ok = symbols.findFirstGlobal(it, false); ok; ok = symbols.findNextGlobal(it, false)) {
-		const GlobalInfo info = symbols.getGlobalInfo(it);
-		if (info.owned != 0) owners.push_back(info);
+		const MemoryOwner owner = { symbols.getGlobalInfo(it), static_cast<UInt>(it->first.size()) };
+		if (owner.info.owned != 0) owners.push_back(owner);
 	}
 }
 
-static UInt frozenSize(const std::vector<GlobalInfo>& owners) {
+static UInt frozenSize(const std::vector<MemoryOwner>& owners) {
 	UInt size = MEMORY_HEADER_SIZE + MEMORY_CHECK_SIZE;
 	for (size_t i = 0; i < owners.size(); ++i) {
-		const UInt length = static_cast<UInt>(strlen(owners[i].name));
-		size += 4 + length + memoryPadding(length) + 4 + owners[i].owned * 4;
+		size += 4 + owners[i].length + memoryPadding(owners[i].length) + 4 + owners[i].info.owned * 4;
 	}
 	return size;
 }
 
 UInt freezeMemorySize(const Processor& processor, const Symbols& symbols) {
 	(void)processor;
-	std::vector<GlobalInfo> owners;
+	std::vector<MemoryOwner> owners;
 	findMemoryOwners(symbols, owners);
 	return frozenSize(owners);
 }
 
 UInt freezeMemory(const Processor& processor, const Symbols& symbols, void* buffer, UInt bufferSize) {
-	std::vector<GlobalInfo> owners;
+	std::vector<MemoryOwner> owners;
 	findMemoryOwners(symbols, owners);
 	const UInt needed = frozenSize(owners);
 	if (buffer == 0 || bufferSize < needed) return needed;			// Too small: write nothing, tell the caller the required size.
@@ -1814,9 +1817,10 @@ UInt freezeMemory(const Processor& processor, const Symbols& symbols, void* buff
 	p = putMemoryWord(p, static_cast<UInt>(owners.size()) + 1);
 	p = putMemoryCheck(p);
 	for (size_t i = 0; i < owners.size(); ++i) {
-		const Value* words = processor.accessConstMemory(owners[i].address, owners[i].owned);
+		const GlobalInfo& owner = owners[i].info;
+		const Value* words = processor.accessConstMemory(owner.address, owner.owned);
 		assert(words != 0);
-		p = putMemoryEntry(p, owners[i].name, static_cast<UInt>(strlen(owners[i].name)), words, owners[i].owned);
+		p = putMemoryEntry(p, owner.name, owners[i].length, words, owner.owned);
 	}
 	assert(static_cast<UInt>(p - start) == needed);					// Byte count must match `frozenSize` exactly.
 	return needed;
@@ -1870,14 +1874,14 @@ MemoryLoad thawMemory(Processor& processor, const Symbols& symbols, const void* 
 	}
 	if (p != end) return MEMORY_MALFORMED;
 
-	std::vector<GlobalInfo> owners;
+	std::vector<MemoryOwner> owners;
 	findMemoryOwners(symbols, owners);
 	bool exact = true;
 	size_t e = 1;
 	size_t o = 0;
 	while (e < entries.size() || o < owners.size()) {											// one merged walk: step the lower name, or both
 		const int order = (e == entries.size() ? 1 : (o == owners.size() ? -1
-				: compareMemoryNames(entries[e].name, entries[e].length, owners[o].name, strlen(owners[o].name))));
+				: compareMemoryNames(entries[e].name, entries[e].length, owners[o].info.name, owners[o].length)));
 		if (order != 0) {
 			exact = false;
 			if (order < 0) ++e;																	// an entry with no owner: dropped
@@ -1885,7 +1889,7 @@ MemoryLoad thawMemory(Processor& processor, const Symbols& symbols, const void* 
 			continue;
 		}
 		const MemoryEntry& entry = entries[e++];												// the same name: restored
-		const GlobalInfo& owner = owners[o++];
+		const GlobalInfo& owner = owners[o++].info;
 		exact = exact && entry.count == owner.owned;
 		const UInt restored = (entry.count == owner.owned || prefix ? minimum(entry.count, owner.owned) : 0);
 		Value* const destination = processor.accessMemory(owner.address, owner.owned);
