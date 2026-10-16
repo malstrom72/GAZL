@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="440" viewBox="0 0 600 440" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14">
+	<title>GAZL call frames</title>
+	<style>
+		.box { stroke: #57606a; stroke-width: 1.2; }
+		.par { fill: #ddf4ff; }
+		.loc { fill: #dafbe1; }
+		.tra { fill: #fff8c5; }
+		.win { fill: #ffd8b5; }
+		.in { fill: #1f2328; }
+		.small { font-size: 12px; }
+		.note { fill: #768390; }
+		.rule { stroke: #768390; stroke-width: 1; }
+		.dash { stroke: #768390; stroke-width: 1; stroke-dasharray: 3 3; }
+	</style>
+
+	<!-- caller frame -->
+	<text class="note" x="160" y="22" text-anchor="middle" font-weight="600">Caller's frame</text>
+	<rect class="box par" x="70" y="34" width="180" height="56"/>
+	<text class="in" x="160" y="67" text-anchor="middle">Parameters</text>
+	<rect class="box loc" x="70" y="90" width="180" height="70"/>
+	<text class="in" x="160" y="130" text-anchor="middle">Locals</text>
+	<rect class="box tra" x="70" y="160" width="180" height="56"/>
+	<text class="in" x="160" y="186" text-anchor="middle">Transients</text>
+	<text class="in small" x="160" y="204" text-anchor="middle">%0 …</text>
+	<rect class="box win" x="70" y="216" width="180" height="70"/>
+	<text class="in" x="160" y="246" text-anchor="middle">%t … %t+n−1</text>
+	<text class="in small" x="160" y="266" text-anchor="middle">the call's window</text>
+
+	<!-- callee frame, starting at the caller's %t -->
+	<text class="note" x="430" y="208" text-anchor="middle" font-weight="600">Callee's frame</text>
+	<rect class="box win" x="340" y="216" width="180" height="70"/>
+	<text class="in" x="430" y="246" text-anchor="middle">Parameters</text>
+	<text class="in small" x="430" y="266" text-anchor="middle">in declaration order</text>
+	<rect class="box loc" x="340" y="286" width="180" height="70"/>
+	<text class="in" x="430" y="326" text-anchor="middle">Locals</text>
+	<rect class="box tra" x="340" y="356" width="180" height="46"/>
+	<text class="in" x="430" y="384" text-anchor="middle">Transients</text>
+
+	<!-- the window is the same words -->
+	<line class="dash" x1="250" y1="216" x2="340" y2="216"/>
+	<line class="dash" x1="250" y1="286" x2="340" y2="286"/>
+	<text class="note small" x="295" y="256" text-anchor="middle">same</text>
+	<text class="note small" x="295" y="272" text-anchor="middle">words</text>
+
+	<!-- caller frame extent -->
+	<line class="rule" x1="50" y1="36" x2="50" y2="284"/>
+	<line class="rule" x1="50" y1="36" x2="58" y2="36"/>
+	<line class="rule" x1="50" y1="284" x2="58" y2="284"/>
+	<text class="note small" x="44" y="160" text-anchor="middle" transform="rotate(-90 44 160)">counts toward the caller's frame</text>
+
+	<!-- direction -->
+	<line class="rule" x1="560" y1="40" x2="560" y2="392"/>
+	<path d="M554 384 L560 398 L566 384 Z" fill="#768390"/>
+	<text class="note small" x="574" y="216" transform="rotate(90 574 216)" text-anchor="middle">higher addresses</text>
+
+	<text class="note small" x="300" y="428" text-anchor="middle">CALL target %t *n: the caller's transients %t … %t+n−1 are the callee's parameters.</text>
+</svg>
