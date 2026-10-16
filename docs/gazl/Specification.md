@@ -82,8 +82,8 @@ example one per thread.
 - **What is checked:** each processor's accesses are checked against the memory as above, not against its own part.
   One processor can therefore read and write another's part of the data stack through a pointer; the sandbox
   protects the host, not processors from each other.
-- **What is the host's:** running processors concurrently, and synchronizing their access to shared globals. GAZL
-  does none of it.
+- **What the host is responsible for:** running processors concurrently, and synchronizing their access to shared
+  globals. GAZL does none of it.
 
 **`COPY`** checks the whole source range for reading and the whole destination range for writing before it moves
 anything. It then copies forward, one word at a time from the lowest address up, so overlapping ranges have a
@@ -283,10 +283,11 @@ GAZL, assembly included, with floating-point exceptions masked (otherwise an ord
 sandbox of section 10 does not hold) and with round-to-nearest-even. Flush-to-zero may be either way (section 4).
 
 **Natives** are host functions, registered by name. A native reaches its arguments through `accessParams` and memory
-through `accessConstMemory` / `accessMemory`, which grant exactly the ranges of section 3; its own arithmetic is the
-host's. It returns 0 to continue after the `CALL`, or a status that `run` then returns with the `CALL` not yet done,
-so the next `run` calls the native again: that is how a native blocks. From inside a native, `resetTimeOut(0)` makes
-`run` return `TIME_OUT` before the next instruction, and `pushCall` runs a GAZL function in place of returning.
+through `accessConstMemory` / `accessMemory`, which grant exactly the ranges of section 3; the precision of its own
+arithmetic is up to the host. It returns 0 to continue after the `CALL`, or a status that `run` then returns with
+the `CALL` not yet done, so the next `run` calls the native again: that is how a native blocks. From inside a
+native, `resetTimeOut(0)` makes `run` return `TIME_OUT` before the next instruction, and `pushCall` runs a GAZL
+function in place of returning.
 
 **Statuses** returned by `run`; positive values are free for natives:
 
@@ -326,7 +327,7 @@ These hold as long as the host keeps the floating-point environment required in 
 
 A snapshot ("freeze") holds the values of a program's writable memory, by owner (section 6), so that they can be
 restored by name ("thaw") into the program after it has been assembled again. A snapshot holds data only. The code
-and constants it belongs to are the host's to keep with it, and the snapshot does not identify them.
+and constants it belongs to must be kept with it by the host, and the snapshot does not identify them.
 
 **Encoding.** A snapshot is a sequence of bytes built from two kinds of field:
 - A **word** is 4 bytes holding an unsigned 32-bit value, little-endian: bits 0-7 first, bits 24-31 last.
@@ -408,8 +409,8 @@ The status says whether the snapshot fitted the program exactly:
 - A restored word is its raw bits. Snapshots record no types, layouts or pointer targets, so pointers in restored
   data are valid only when the program was assembled from the same code and constants by the same implementation,
   and a pointer into the data stack is never valid.
-- The format checks its own structure, not the integrity of its bytes. Keeping the exact length and a checksum with
-  a snapshot is the host's.
+- The format checks its own structure, not the integrity of its bytes. The host is responsible for keeping the
+  exact length and a checksum with a snapshot.
 
 ## 12. Conformance
 
