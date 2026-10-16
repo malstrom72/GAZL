@@ -202,6 +202,7 @@ class Symbols {
 	public:		bool findFirstGlobal(Iterator& iterator, bool includeTemps) const;				// Names of writable data: named sections, and labels on data statements (see `GlobalInfo`).
 	public:		bool findNextGlobal(Iterator& iterator, bool includeTemps) const;
 	public:		GlobalInfo getGlobalInfo(const Iterator& iterator) const;
+	public:		GlobalInfo getGlobalInfo(const Char* name) const;																// `address` is `NULL_POINTER` (and the sizes 0) if `name` is not writable data.
 
 	protected:	bool lookup(const Char* nameBegin, const Char* nameEnd, int acceptedTypes, int& types, Value& value, UInt& size) const;
 	protected:	void define(const std::string& name, int types, Value value, UInt size = 1);

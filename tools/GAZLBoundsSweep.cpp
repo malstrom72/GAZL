@@ -697,12 +697,8 @@ std::string globalWords(Machine& m, const char* name) {
 	The words the global `name` owns, from `getGlobalInfo`, or 99 when there is no such global.
 */
 UInt ownedWords(const Symbols& symbols, const char* name) {
-	Symbols::Iterator it;
-	for (bool ok = symbols.findFirstGlobal(it, true); ok; ok = symbols.findNextGlobal(it, true)) {
-		const GlobalInfo info = symbols.getGlobalInfo(it);
-		if (strcmp(info.name, name) == 0) return info.owned;
-	}
-	return 99;
+	const GlobalInfo info = symbols.getGlobalInfo(name);
+	return (info.address != NULL_POINTER ? info.owned : 99);
 }
 
 void putWord(std::vector<unsigned char>& b, size_t at, UInt v) {
@@ -870,6 +866,16 @@ int sweepFrozenEntries() {
 		std::printf("FAIL frozen entries: the labels in `state` do not reach and own what they should\n");
 		++failures;
 	}
+	// By name, `getGlobalInfo` knows writable data only, `TEMP` included, and agrees with the iteration.
+	const GlobalInfo temp = m.symbols.getGlobalInfo("tmpval");
+	const GlobalInfo head = m.symbols.getGlobalInfo("head");
+	if (m.symbols.getGlobalInfo("entry").address != NULL_POINTER
+			|| m.symbols.getGlobalInfo("nosuch").address != NULL_POINTER
+			|| temp.address == NULL_POINTER || !temp.isTemp || temp.owned != 2 || temp.size != 2
+			|| strcmp(head.name, "head") != 0 || head.size != 3 || head.owned != 1 || head.isTemp) {
+		std::printf("FAIL frozen entries: getGlobalInfo by name reports the wrong global\n");
+		++failures;
+	}
 	// A data line without values is legal and writes nothing, so its label owns no words.
 	const char* const EMPTY[] = { "DATi", "DATf ; none", "DATp", "DATA" };
 	const int emptyCount = sizeof (EMPTY) / sizeof (*EMPTY);
@@ -887,7 +893,7 @@ int sweepFrozenEntries() {
 			++failures;
 		}
 	}
-	std::printf("frozen entries: %d checked, %d failed\n", count + 2 + emptyCount, failures);
+	std::printf("frozen entries: %d checked, %d failed\n", count + 3 + emptyCount, failures);
 	return failures;
 }
 
