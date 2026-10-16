@@ -324,9 +324,9 @@ These hold as long as the host keeps the floating-point environment required in 
 
 ## 11. Memory snapshot format
 
-A snapshot ("freeze") saves the values of a program's writable memory by owner (section 6), so a later run can
-restore them by name ("thaw"), even after the program has been changed and re-assembled. A snapshot is a payload
-that a host embeds in its own storage; it is not a file format of its own.
+A snapshot ("freeze") holds the values of a program's writable memory, by owner (section 6), so that they can be
+restored by name ("thaw") into the program after it has been assembled again. A snapshot holds data only. The code
+and constants it belongs to are the host's to keep with it, and the snapshot does not identify them.
 
 **Encoding.** A snapshot is a sequence of bytes built from two kinds of field:
 - A **word** is 4 bytes holding an unsigned 32-bit value, little-endian: bits 0-7 first, bits 24-31 last.
@@ -362,19 +362,16 @@ the name order below. Its 28 bytes are fixed:
     05 00 00 00   24 67 61 7A 6C 00 00 00   03 00 00 00   04 03 02 01   00 00 80 3F   01 00 80 7F
     L = 5         "$gazl" + 3 padding       N = 3         0x01020304    1.0f          signaling NaN
 
-A writer must produce its words the way it produces any other entry's: the first from an int, the second from
-the float `1.0f`, the third from a word holding a signaling NaN. A reader must parse it like any other entry and
-then compare all 28 bytes. It proves the reader decodes lengths, names, padding and words exactly as the writer
-encoded them, and that floats travel as raw bits, a NaN's payload included. Any mismatch is `MEMORY_BAD_CANARY`.
+A writer produces its words the way it produces any other entry's: from the int `0x01020304`, the float `1.0f` and
+a word holding a signaling NaN. A reader parses it like any other entry and compares all 28 bytes, which checks
+that lengths, names, padding, words and float bits, a NaN's payload included, decode as they were encoded. Any
+difference is `MEMORY_BAD_CANARY`.
 
 **Program entries** follow, in strictly ascending ASCII order of their names: one for each owner in a `GLOB`
 section that owns at least one word, holding exactly the words it owns. Every word of a `GLOB` section is therefore
 saved exactly once. Owners in `CNST` and `TEMP` sections are left out. In the example of section 6, the entries
-are `buffer` (1 word), `clock` (1 word) and `tail` (39 words); Impala's arrays (`params: GLOB *4`) and scalars
-(`GLOB *1`, then `clock: DATi #0`) each give one entry.
-
-An entry's words are memory exactly, 32 bits each, whatever their type: an int as its two's-complement bits, a
-float as its binary32 bits, a pointer as its raw value.
+are `buffer` (1 word), `clock` (1 word) and `tail` (39 words). An entry's words are the raw 32 bits of memory,
+whatever they hold.
 
 **Validation.** A reader validates the whole snapshot before restoring anything. On the first problem below, looked
 for in this order, it restores nothing and returns that problem's status:
@@ -391,8 +388,7 @@ for in this order, it restores nothing and returns that problem's status:
 | bytes follow the last entry                                                          | `MEMORY_MALFORMED`    |
 
 **Restore.** Only after validation succeeds, the reader matches the snapshot's entries to the re-assembled
-program's owners in `GLOB` sections, by name. Both lists are in ascending name order, so this is one pass over the
-two. Each name falls in exactly one case:
+program's owners in `GLOB` sections, by name. Each name falls in exactly one case:
 - **An entry and an owner of the same size:** the words are restored.
 - **An entry and an owner of different sizes:** the host chooses, for the whole restore, between two policies.
   - *Prefix:* the owner's first words are filled from the entry's first words, as many as both have. If the owner
@@ -405,56 +401,15 @@ Restore writes nothing else: every word it does not restore keeps whatever it he
 
 The status says whether the snapshot fitted the program exactly:
 - **`MEMORY_OK`:** every entry met an owner of the same size, and every owner had an entry.
-- **`MEMORY_MISMATCH`:** anything else, even once. The data has been restored as far as the policy allows, but the
-  snapshot looks as if it belonged to a different program. The host decides what to do: run the program as it is,
-  call a function of the program that restores backwards compatibility, or discard the state by re-creating the
-  processor.
+- **`MEMORY_MISMATCH`:** anything else. The data is restored as far as the policy allows.
 
-A host that wants to know which names did not fit can compare the snapshot's entries with the program's owners
-itself.
-
-**When to freeze and thaw.** Both are defined only while no processor that uses the memory is inside a call: frames
-on the data stack are not saved, and a suspended call would see its globals change under it. Several processors may
-share one memory, so GAZL cannot check this; it is the host's responsibility. The usual order is to assemble, create
-the processor, thaw, and only then call the program, so that unchanged words still hold their initial values.
-
-**Untrusted snapshots.** A snapshot may come from anywhere, so a reader must treat it as untrusted. Whatever it
-holds, validation and restore never write outside the owners they restore, so the sandbox (section 10) holds. The
-restored values are untrusted as well: a program should range-check a restored value it uses as an index. Even an
-unchecked one only makes a later access fail its run-time check.
-
-**Data only.** A snapshot holds data and nothing else. Its meaning depends on two more parts, both the host's to
-keep with it:
-- **Code:** the GAZL source the program was assembled from.
-- **Constants:** every constant the host supplied at assembly.
-
-The snapshot does not identify the program it came from. Deciding which code and constants a snapshot belongs to,
-and whether to restore it into a given program at all, is the host's, in whatever way suits it.
-
-A restore is exact, pointers included, for the same program assembled by the same implementation: the same code,
-the same constants and the same engine. The re-assembly then rebuilds an identical layout and identical function
-ordinals (section 2), and every entry is restored exactly. Another implementation may lay out sections differently
-(section 3): entries still restore by name and size, but data pointers are valid only if their targets kept their
-addresses.
-
-Restoring into a changed program works by name, as above, but nothing more is promised:
-- the snapshot records no types and no layouts;
-- an owner whose meaning changed receives the old words as they were, and still returns `MEMORY_OK` if its size
-  did not change;
-- data pointers and function pointers are raw values, valid only if their targets did not move;
-- a pointer into the data stack is never valid after a restore, not even into the same program, since the frames it
-  pointed into are gone.
-
-Migrating data between program versions is outside this specification.
-
-**Versions.** A reader accepts a snapshot from any GAZL version up to its own, because a word in memory means the
-same in GAZL 1 and GAZL 2. A GAZL version that changes what memory contents mean must say so here.
-
-**Storing snapshots.** The format protects its structure, not its bits. A host should:
-- store the snapshot's exact byte length with it, since validation requires the reader to be given exactly the
-  bytes that were written;
-- store a checksum with it (CRC-32 at least) and verify it before calling `thawMemory`. Strongly recommended:
-  validation catches damaged lengths and names, but not a changed bit inside an entry's words.
+**Conditions.**
+- Freeze and thaw are defined only while no processor that uses the memory is inside a call.
+- A restored word is its raw bits. Snapshots record no types, layouts or pointer targets, so pointers in restored
+  data are valid only when the program was assembled from the same code and constants by the same implementation,
+  and a pointer into the data stack is never valid.
+- The format checks its own structure, not the integrity of its bytes. Keeping the exact length and a checksum with
+  a snapshot is the host's.
 
 ## 12. Conformance
 
@@ -477,5 +432,3 @@ Where `src/GAZL.cpp` does not yet do what this specification says:
    - it restores while it parses, so a truncated snapshot restores the entries before the damage, and there is
      no `MEMORY_MALFORMED`;
    - a size mismatch is always skipped, there is no prefix policy, and there is no `MEMORY_MISMATCH`.
-
-   No snapshots exist yet that must stay readable, so the implementation can switch to section 11 directly.
