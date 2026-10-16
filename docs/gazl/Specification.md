@@ -62,7 +62,7 @@ Data memory is one array of words, sized by the host. Every address is measured 
   into another stays inside memory, but which word it reaches is unspecified. (The reference implementation places
   sections in declaration order, with no gaps.)
 - `C` and `G` are the space the constants and the globals take, gaps included.
-- **The data stack** is everything above the globals, up to the zero guard.
+- **The data stack** is the space above the globals, up to the zero guard. With one processor, it is all of it.
 - **The zero guard** is the last word of memory, just above the data stack. It always holds 0, so a native scanning
   for a string's terminator stops there. No checked read reaches it.
 
@@ -74,6 +74,17 @@ stack.
 A read must succeed exactly when its pointer is in `[base - C, base + rw)`, and a write exactly when it is in
 `[base, base + rw)`. An address is `base + offset` computed with 32-bit wrap-around, so an offset can never carry
 an access around the end of memory and back in.
+
+**Several processors in one memory.** A host may run several processors over one program and one memory, for
+example one per thread.
+- **What they share:** the constants and the globals, so a global written by one is seen by the others.
+- **What each has of its own:** its call stack, and its own part of the data stack, a range above the globals that
+  the host assigns. A function's frames and transients live in the part of the processor that runs it.
+- **What is checked:** each processor's accesses are checked against the memory as above, not against its own part.
+  One processor can therefore read and write another's part of the data stack through a pointer; the sandbox
+  protects the host, not processors from each other.
+- **What is the host's:** running processors concurrently, and synchronizing their access to shared globals. GAZL
+  does none of it.
 
 **`COPY`** checks the whole source range for reading and the whole destination range for writing before it moves
 anything. It then copies forward, one word at a time from the lowest address up, so overlapping ranges have a
