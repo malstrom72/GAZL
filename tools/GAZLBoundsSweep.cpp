@@ -922,6 +922,31 @@ int sweepUnnamedSections() {
 	return failures;
 }
 
+/*
+	A function address takes no offset: `&main:1` would name whichever function was declared next. Checked where the
+	function is already known and where it is a forward reference. Returns the number of failures, each one printed.
+*/
+int sweepFunctionOffsets() {
+	struct Case { const char* what; const char* source; int error; };
+	const Case CASES[] = {
+		{ "an offset on a known function", "main:\tFUNC\np:\tLOCp\n\tMOVp p &main:1\n\tRETU\n", OFFSET_OUT_OF_BOUNDS },
+		{ "an offset on a forward function", "\tGLOB *1\nfp:\tDATp &main:1\nmain:\tFUNC\n\tRETU\n"
+				, OFFSET_OUT_OF_BOUNDS },
+		{ "a function address without an offset", "\tGLOB *1\nfp:\tDATp &main\nmain:\tFUNC\n\tRETU\n", -1 }
+	};
+	const int count = sizeof (CASES) / sizeof (*CASES);
+	int failures = 0;
+	for (int i = 0; i < count; ++i) {
+		const int error = assemblyError(CASES[i].source);
+		if (error != CASES[i].error) {
+			std::printf("FAIL function offsets: %s gave error %d, expected %d\n", CASES[i].what, error, CASES[i].error);
+			++failures;
+		}
+	}
+	std::printf("function offsets: %d checked, %d failed\n", count, failures);
+	return failures;
+}
+
 struct Totals { int probes; int failures; };
 
 int sweep(int engineCount) {
@@ -1027,6 +1052,6 @@ int main() {
 	}
 #endif
 	const int hostFailures = sweepNativeAccess() + sweepFrameAndThaw() + sweepSnapshotEntries() + sweepTextEncoding()
-			+ sweepUnnamedSections();
+			+ sweepUnnamedSections() + sweepFunctionOffsets();
 	return (sweep(engineCount) != 0 || hostFailures != 0) ? 1 : 0;
 }

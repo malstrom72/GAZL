@@ -759,6 +759,8 @@ void Symbols::resolve(const Reference& ref, const Symbol& symbol) {
 	assert((ref.offset < 0) == (ref.accepts == FWD_BRANCH));
 	if ((ref.accepts & UNCHECKED_ADDRESS) == 0 && ref.offset >= static_cast<Int>(symbol.size))
 		throw Exception(OFFSET_OUT_OF_BOUNDS, ref.label);
+	// A function address takes no offset: `&main:1` would name another function.
+	if ((symbol.types & FUNC) != 0 && ref.offset > 0) throw Exception(OFFSET_OUT_OF_BOUNDS, ref.label);
 	if (ref.offset == 0) *ref.storage = symbol.value;
 	else {
 		assert((symbol.types & CONST_FLOAT) == 0);
