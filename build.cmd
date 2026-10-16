@@ -31,6 +31,10 @@ REM Float literals round correctly, sampled across every float (tools\GAZLFloatL
 CALL tools\test-float-literals.cmd
 IF ERRORLEVEL 1 EXIT /B 1
 
+REM Several processors in one memory, cooperative and on threads (tools\GAZLMultiProcessorTest.cpp).
+CALL tools\test-processors.cmd
+IF ERRORLEVEL 1 EXIT /B 1
+
 REM Build Impala
 CALL tools\BuildImpala.cmd
 IF ERRORLEVEL 1 EXIT /B 1
