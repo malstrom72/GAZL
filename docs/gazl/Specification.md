@@ -51,9 +51,7 @@ of a word. That is what lets GAZL run unchanged on big- and little-endian hosts.
 Data memory is one array of words, sized by the host. Every address is measured from the **base**, the pointer
 `0x12345678`: globals and the data stack lie at and above it, constants below it.
 
-    pointer:  base - C                base                      base + G                          base + rw
-              | constants (CNST)      | globals (GLOB, TEMP)    | data stack ...                  | zero guard |
-              |<---- read-only ------>|<--------------------- writable: rw words ---------------->|
+![Data memory: constants below the base, then globals, the data stack and the zero guard](images/memory.svg)
 
 - **Globals** are placed from the base upward, and **constants** from the base downward. The assembler also places
   switch tables among the constants. `C` is the total size of the constants.
@@ -241,6 +239,8 @@ saturation. A run-time error, such as a constant division by zero, becomes an as
 they become the callee's parameters in declaration order. Output parameters are written back there, so after the
 call the caller reads its results from the same transients. The transients up to `%t + n - 1` count toward the
 caller's frame, so the window is always inside the data stack.
+
+![Call frames: the caller's transients %t to %t+n-1 are the callee's parameters](images/frames.svg)
 
 - **`&function`** calls directly.
 - **A pointer variable** calls through a function pointer. A value that is not a valid function pointer stops the
