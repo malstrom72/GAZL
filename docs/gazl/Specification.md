@@ -343,7 +343,7 @@ These hold as long as the host keeps the floating-point environment required in 
 
 A snapshot ("freeze") saves the values of a program's writable memory by owner (section 6), so a later run can
 restore them by name ("thaw"), even after the program has been changed and re-assembled. A snapshot is a payload
-that a host embeds in its own storage (a plugin state chunk, a preset file); it is not a file format of its own.
+that a host embeds in its own storage; it is not a file format of its own.
 
 This format is decided but not implemented yet: today's `freezeMemory` / `thawMemory` write an earlier layout of the
 same idea (open question 2).
@@ -438,7 +438,7 @@ on the data stack are not saved, and a suspended call would see its globals chan
 share one memory, so GAZL cannot check this; it is the host's responsibility. The usual order is to assemble, create
 the processor, thaw, and only then call the program, so that unchanged words still hold their initial values.
 
-**Untrusted snapshots.** A snapshot may come from anywhere, a preset downloaded from the web included. Whatever it
+**Untrusted snapshots.** A snapshot may come from anywhere, so a reader must treat it as untrusted. Whatever it
 holds, validation and restore never write outside the owners they restore, so the sandbox (section 10) holds. The
 restored values are untrusted as well: a program should range-check a restored value it uses as an index. Even an
 unchecked one only makes a later access fail its run-time check.
