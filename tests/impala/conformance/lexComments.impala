@@ -1,0 +1,18 @@
+/*
+	Conformance: Impala.md#comments
+	Line and block comments emit nothing, and a block comment does not nest.
+	Expected (GAZLCmd lexComments.gazl main): 7
+*/
+const int DEBUG = 1
+extern native printInt
+extern native printFloat
+extern native printLF
+
+// a line comment before a declaration
+function main()
+locals int a
+{
+	a = 3 /* inside an expression */ + 4;    // and after a statement
+	/* a block comment /* does not nest */
+	printInt(a); printLF();
+}

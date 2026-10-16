@@ -1649,11 +1649,11 @@
         return (v !== undefined ? v : (t !== undefined ? "'" + t + "'" : 'unknown'));
     }
 
+    /* Both placeholders are always filled: an undefined type reads `unknown`, as an untyped array's signature
+       row does. Filling `{$type2}` only when it was defined left the raw placeholder in the message (E422 on an
+       untyped shaped array: "int vs {$type2}"). */
     $$parser.typeError = function (desc, source, offset, type1, type2, code, hint) {
-        var message = replace(desc, '{$type1}', verboseType(type1));
-        if (type2 !== undefined) {
-            message = replace(message, '{$type2}', verboseType(type2));
-        }
+        var message = replace(replace(desc, '{$type1}', verboseType(type1)), '{$type2}', verboseType(type2));
         $$parser.fail(message, source, offset, code, hint);
     };
 
@@ -3196,7 +3196,7 @@
 
     $$parser.pushInitScalar = function (out, item, type, elem, fieldName, sourceCode, sourceOffset) {
         if (item === undefined) {
-            out.push($$parser.ZEROES[type]);                      /* omitted -> zero, and INVENTED: `out.given`
+            out.push($$parser.ZEROES[type !== undefined ? type : 'i']);   /* omitted -> zero, and INVENTED: `out.given`
                                                                      does not advance, so emitInitData may drop
                                                                      it if nothing explicit follows */
             return;
@@ -3205,7 +3205,10 @@
             $$parser.fail('Too many braces in initializer for field ' + fieldName,
                     sourceCode, sourceOffset, 'E422');
         }
-        if (item.type !== type) {
+        /* An UNTYPED element (`type` undefined: a bare `array`) takes any value, as the flat InitList does.
+           Comparing against undefined made every entry a mismatch, so no untyped SHAPED array - which only
+           this buffered path initializes - could be initialized at all. */
+        if (type !== undefined && item.type !== type) {
             $$parser.typeError('Initializer type mismatch for field ' + fieldName + ' ({$type1} vs {$type2})',
                     sourceCode, sourceOffset, item.type, type, 'E422');
         }
@@ -3308,6 +3311,58 @@
 
     $$parser.initCoarseType = function () {
         return $$parser.coarseType($$parser.initTarget);
+    };
+
+    /* Does `op` carry a compile-time scratch anywhere - a bare `<A>`, or the trailing `<A>` of a compound
+       operand such as `&board:<A>` (the address of a shaped-array element) or `#<A>`? A data row that holds
+       one must hold nothing else, or `declare` cannot hand the scratch back: returnBack reads only a whole
+       operand or its LAST token, so `DATA &board:<A> #4` leaked `<A>` and died on the boundary assert. */
+    $$parser.carriesScratch = function (op) {
+        return /<[A-Za-z]>/.test(op);
+    };
+
+    /* The words left in a global array from operand `&name` or `&name:k` onward, or undefined when Impala
+       cannot know them: anything but a one-dimensional array of scalars with a literal extent, a symbolic
+       offset, or a pointer that names no array at all (`copy` takes any pointer, and a pointer has no extent). */
+    $$parser.copyRoom = function (op) {
+        var m = /^&([^:]+)(?::(.+))?$/.exec(op);
+        if (m === null) return undefined;
+        var p = $$parser.ownEntry($$parser.symbols.globals, m[1]);
+        if (p === undefined || p.type !== 'A' || $$parser.isStructAtom(p.elem) || p.extent === undefined
+                || p.extent.dims !== undefined) {
+            return undefined;
+        }
+        var n = $$parser.constInt('#' + p.extent.n);
+        var k = (m[2] === undefined ? 0 : $$parser.constInt('#' + m[2]));
+        return (n === undefined || k === undefined ? undefined : n - k);
+    };
+
+    /* A LITERAL `copy` count larger than the room left in its source or destination array is refused (rule 2):
+       the VM stops only a copy that leaves memory, so one that runs past an array into its neighbour succeeds. */
+    $$parser.checkCopyCount = function (length, toOp, fromOp, sourceCode, sourceOffset) {
+        var count = $$parser.constInt(length);
+        if (count === undefined) return;
+        var sides = [ [ 'destination', toOp ], [ 'source', fromOp ] ];
+        for (var i = 0; i < sides.length; ++i) {
+            var room = $$parser.copyRoom(sides[i][1]);
+            if (room !== undefined && count > room) {
+                $$parser.fail('copy of ' + count + ' words runs past the end of its ' + sides[i][0] + ' (room for '
+                        + room + ')', sourceCode, sourceOffset, 'E467', 'copy fewer words, or start earlier');
+            }
+        }
+    };
+
+    /* Does `op` NAME a const the host supplies at load: a valueless const, or a name Impala has no definition
+       for? False for a literal (character literals included), for a const whose value the source fixes (the host
+       cannot redefine it), and for an assemble-time fold. A fold usually combines consts the source fixes
+       (`RANK_1 + 2`), and Impala cannot tell from the folded `<A>` whether a host-supplied one entered it, so
+       such a value is left to its author, as a fixed const is. */
+    $$parser.hostSupplied = function (op) {
+        if ($$parser.constInt(op) !== undefined || op.charCodeAt(1) === 39) return false;   /* 39: a `#'x'` literal */
+        var m = /^#([A-Za-z_][A-Za-z0-9_]*)$/.exec(op);
+        if (m === null) return false;
+        var entry = $$parser.ownEntry($$parser.symbols.defines, m[1]);
+        return entry === undefined || entry.kind === undefined;
     };
 
     $$parser.initElemRow = function () {
@@ -3460,7 +3515,7 @@
     $$parser.emitDataRows = function (words, row, type, sourceCode, sourceOffset) {
         var line = '';
         for (var i = 0; i < words.length; ++i) {
-            if (line !== '' && (words[i].charAt(0) === '<' || line.charAt(0) === '<'
+            if (line !== '' && ($$parser.carriesScratch(words[i]) || $$parser.carriesScratch(line)
                     || (line + ' ' + words[i]).length >= 55)) {
                 $$parser.declare(row, 'globals', undefined, type, true, line, sourceCode, sourceOffset);
                 line = '';
@@ -4244,6 +4299,15 @@ var _sn = $$parser.strideStruct(field.elem);
             $$parser.typeError('Invalid types ({$type1} and {$type2})',
                                sourceCode, sourceOffset,
                                leftx.type, rightx.type, 'E301');
+        }
+
+        /* A LITERAL zero divisor is a number Impala knows (design/impala/TwoStageConstants.md rule 2), so it is
+           refused here rather than left to the assembler's `Constant zero divisor or modulus`. A symbolic one
+           still goes to the assembler, which decides it. */
+        if ((operator === '/' || operator === '%') && rightx.operator === ':='
+                && $$parser.isZeroWord(rightx.operands[1])) {
+            $$parser.fail((operator === '/' ? 'Division' : 'Modulus') + ' by a literal zero', sourceCode, sourceOffset,
+                    'E466', 'a divisor must not be zero');
         }
 
         /* detect (itof X) * 1.0 -> itof */
@@ -5540,7 +5604,7 @@ inp:ArgsDecl ')'_
                 )?                                                    { /* The head/body separator is emitted at the REPLAY below, not here: an inline
                                                                            expansion appends its SCOP block to the head while the body is being parsed,
                                                                            so anything written here would end up above those declarations. */
-                                                                         $$parser.tailFn = $id;   /* in an inline body E468 throws before this is read */
+                                                                         $$parser.tailFn = $id;   /* in an inline body E470 throws before this is read */
                                                                      }
                 Block                                                 {
                                                                          /* wrap-up body */
@@ -6063,8 +6127,8 @@ InitList    <-  '{' _                                                 { $d = ' '
                                                                             var xType = next.type, constant = next.op;
 
                                                                             /* decide if we need to flush DATA */
-                                                                            if (  constant[0] === '<'
-                                                                              || $d[1] === '<'
+                                                                            if (  $$parser.carriesScratch(constant)
+                                                                              || $$parser.carriesScratch($d)
                                                                               || ($d + ' ' + constant).length >= 55) {
 
                                                                                 $$parser.declare(
@@ -6794,16 +6858,16 @@ Tail        <-  TAIL _ { $tailAt = $$i; } id:Identifier
                                                     {
                                                         if ($$s.charAt($$i) !== '(') return false;   /* pure lookahead: nothing to undo */
                                                         if ($$parser.inlineMode) {
-                                                            $$parser.fail('tail cannot be used in an inline function', $$s, $tailAt, 'E468',
+                                                            $$parser.fail('tail cannot be used in an inline function', $$s, $tailAt, 'E470',
                                                                     'an inline body expands into its caller and runs in that frame, so there is no frame of its own to reuse');
                                                         }
                                                         if (!$$parser.gazl2) {
-                                                            $$parser.fail('tail requires --gazl2', $$s, $tailAt, 'E466',
+                                                            $$parser.fail('tail requires --gazl2', $$s, $tailAt, 'E468',
                                                                     'the TAIL instruction it compiles to exists only on GAZL 2 engines');
                                                         }
                                                         if ($id !== $$parser.tailFn) {
                                                             $$parser.fail('tail can only target the enclosing function in Impala 2.0 ('
-                                                                    + $id + ' is not ' + $$parser.tailFn + ')', $$s, $tailAt, 'E467',
+                                                                    + $id + ' is not ' + $$parser.tailFn + ')', $$s, $tailAt, 'E469',
                                                                     'the window and return contracts of a cross-function tail are not checked yet - call it, or restructure into self-recursion');
                                                         }
                                                         $$parser.lookup($$, $id, false, $$s, $tailAt);
@@ -6995,14 +7059,11 @@ Copy        <-  COPY _ '('_ l:Expr FROM _ f:Expr TO _ t:Expr ')' _
                                                         }
 
                                                         var copyMeta = metaSlot($l);
-                                                        $$parser.makeMeta(
-                                                            copyMeta,
-                                                            'copy',
-                                                            '?',
-                                                            $$parser.makeRValue(toMeta, '&$%'),
-                                                            $$parser.makeRValue(fromMeta, '&$%'),
-                                                            '*' + lengthHash
-                                                        );
+                                                        var toOp   = $$parser.makeRValue(toMeta, '&$%');
+                                                        var fromOp = $$parser.makeRValue(fromMeta, '&$%');
+                                                        $$parser.checkCopyCount($length, toOp, fromOp, $$s, $$i);
+                                                        $$parser.makeMeta(copyMeta, 'copy', '?', toOp, fromOp,
+                                                                '*' + lengthHash);
 
                                                         $$parser.emitMeta(copyMeta);
                                                         $$parser.returnBack($length);
@@ -7154,11 +7215,13 @@ CaseExpr    <-  Expr                                {
                                                            assemble-time skip so both drop out of the configuration alike.
                                                            A skipped line is abandoned BEFORE the label is interpreted
                                                            (`skipUntilLabel`, GAZL.cpp), so `.s0.-4` is never constructed
-                                                           rather than constructed and rejected. Symbolic ranges only: with
-                                                           a literal range Impala knows the answer and E444 says so at
-                                                           Impala compile time, which is strictly better. */
+                                                           rather than constructed and rejected. Guarded when the HOST decides:
+                                                           a symbolic range, or a case value naming a host-supplied const under
+                                                           a literal one (`case K`, K valueless and the host's -1 below `0 to
+                                                           4`, failed to load with `Invalid identifier: .s0.-1`). A value fixed
+                                                           in the source is its author's: E444 where Impala reads it. */
                                                         var caseGuard;
-                                                        if (ctx !== undefined && ctx.fromNum === undefined) {
+                                                        if (ctx !== undefined && (ctx.fromNum === undefined || $$parser.hostSupplied(caseConst))) {
                                                             caseGuard = $$parser.newLabel('g');
                                                             $$parser.emit('<> <', 'i', $n, '#0', caseGuard);
                                                         }

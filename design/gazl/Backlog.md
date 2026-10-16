@@ -44,3 +44,24 @@ uses references. Changing it breaks hosts, so it waits for a version bump.
 
 There is no host call to reserve space on the GAZL data stack, for a native that needs scratch memory GAZL code
 can see. `accessParams` covers arguments only.
+
+## C-style casts outside the dispatch loop
+
+Casts are written `static_cast<Int>(v)`, not `(Int)v`, everywhere except the tight VM loop in `Processor::run` and
+its operand macros, where the short form stays. `src/GAZL.cpp` still has about 58 C-style casts,
+most of them in the assembler, `finalize` and the snapshot code. Convert them in one pass, leaving `run()` and its
+macros alone, so the pass changes no generated code there.
+
+## GAZL 2: rework `SEEK`
+
+`SEEK :offset [*extent]` (GAZL 2 only) needs another design pass before GAZL 2 is final:
+- `:offset` is measured from the section start, but reads like a relative jump of `offset` words. The base should
+  be explicit, or the mnemonic clearer.
+- It does not really seek. It never leaves the current section, and `*extent` fences the `DAT` rows that follow
+  into an even smaller range, so it opens a part of the section and fills it. A name like `PART`, `SLOT` or `AREA`
+  would say that.
+- The common case, zeros and then more data, would be simpler as plain data, for example `DATz *n` (n zero words),
+  leaving absolute placement to what Impala 2 really needs: struct fields at offsets the host decides.
+- Data label extents (a label covers up to the next label or the end of its section, from #135) must become
+  region-aware: regions may be opened in any offset order, so "the next label" cannot follow statement order, and
+  `SEEK` labels have their own size (the extent, or 1).

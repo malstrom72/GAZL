@@ -229,9 +229,9 @@ traps with `status -6`.
 
 It is explicit on purpose: silent tail-call elimination decides whether byte-identical source works at
 all, which is the opposite of a predictable cost model. And it is deliberately narrow in 2.0: the target
-must be the enclosing function (`E467` - the GAZL `TAIL` instruction is general, but cross-function
-contract checking is future compiler work), it needs `--gazl2` (`E466` - the instruction exists only on
-GAZL 2 engines), and an `inline function` cannot use it (`E468`). `tail` itself stays a legal name for
+must be the enclosing function (`E469` - the GAZL `TAIL` instruction is general, but cross-function
+contract checking is future compiler work), it needs `--gazl2` (`E468` - the instruction exists only on
+GAZL 2 engines), and an `inline function` cannot use it (`E470`). `tail` itself stays a legal name for
 anything else.
 
 ## Not available

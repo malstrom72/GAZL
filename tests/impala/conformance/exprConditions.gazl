@@ -1,0 +1,57 @@
+; Compiled with Impala version 2.0
+
+; signatures version=1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ exprConditions.impala:6:1
+; signature extern native printInt() -> unknown @ exprConditions.impala:7:1
+; signature extern native printFloat() -> unknown @ exprConditions.impala:8:1
+; signature extern native printLF() -> unknown @ exprConditions.impala:9:1
+	GLOB *1
+calls:	DATi #0	; signature global calls : int @ exprConditions.impala:11:1
+
+;-----------------------------------------------------------------------------
+bump:	FUNC	; signature func bump() -> int @ exprConditions.impala:13:1
+	$r:	OUTi
+;-----------------------------------------------------------------------------
+		PEEK %0 &calls 	; global calls = global calls + 1
+		ADDi %0 %0 #1
+		POKE &calls %0 
+		MOVi $r #1 	; r = 1
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+main:	FUNC	; signature func main() -> void @ exprConditions.impala:19:1
+		PARA *1
+	$x:	LOCi
+	$ok:	LOCi
+;-----------------------------------------------------------------------------
+		MOVi $x #5 	; x = 5
+		MOVi $ok #0 	; ok = 0
+		GRTi #0 $x @.f1	; if (0 <= x && x < 10) ok = 1
+		GEQi $x #10 @.f1
+		MOVi $ok #1 	; ok = 1
+	.f1:	MOVi %1 $ok 	; printInt(ok)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ exprConditions.impala:25:14
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ exprConditions.impala:25:25
+		GEQi $x #0 @.f3	; if (x < 0 && bump() != 0) ok = 2
+		CALL &bump %0 *1	; expects bump() -> int @ exprConditions.impala:26:22
+		EQUi %0 #0 @.f3
+		MOVi $ok #2 	; ok = 2
+	.f3:	PEEK %1 &calls 	; printInt(global calls)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ exprConditions.impala:27:24
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ exprConditions.impala:27:35
+		GRTi $x #0 @.t4	; if (x > 0 || bump() != 0) ok = 3
+		CALL &bump %0 *1	; expects bump() -> int @ exprConditions.impala:28:22
+		EQUi %0 #0 @.f5
+	.t4:	MOVi $ok #3 	; ok = 3
+	.f5:	PEEK %1 &calls 	; printInt(global calls + 1)
+		ADDi %1 %1 #1
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ exprConditions.impala:29:28
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ exprConditions.impala:29:39
+		MOVi $ok #0 	; ok = 0
+		EQUi $x #4 @.f6	; if (!(x == 4)) ok = 1
+		MOVi $ok #1 	; ok = 1
+	.f6:	MOVi %1 $ok 	; printInt(ok)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ exprConditions.impala:32:14
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ exprConditions.impala:32:25
+		RETU   	; }

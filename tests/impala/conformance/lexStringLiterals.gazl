@@ -1,0 +1,36 @@
+; Compiled with Impala version 2.0
+
+; signatures version=1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ lexStringLiterals.impala:6:1
+; signature extern native printInt() -> unknown @ lexStringLiterals.impala:7:1
+; signature extern native printFloat() -> unknown @ lexStringLiterals.impala:8:1
+; signature extern native printLF() -> unknown @ lexStringLiterals.impala:9:1
+
+;-----------------------------------------------------------------------------
+main:	FUNC	; signature func main() -> void @ lexStringLiterals.impala:11:1
+		PARA *1
+	$s:	LOCp
+;-----------------------------------------------------------------------------
+		MOVp $s &.s_ABC_4d2 	; s = "A\tB\u0043"
+		PEEK %1 $s #0	; printInt(s[0])
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ lexStringLiterals.impala:15:16
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ lexStringLiterals.impala:15:27
+		PEEK %1 $s #1	; printInt(s[1])
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ lexStringLiterals.impala:16:16
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ lexStringLiterals.impala:16:27
+		PEEK %1 $s #2	; printInt(s[2])
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ lexStringLiterals.impala:17:16
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ lexStringLiterals.impala:17:27
+		PEEK %1 $s #3	; printInt(s[3])
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ lexStringLiterals.impala:18:16
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ lexStringLiterals.impala:18:27
+		PEEK %1 $s #4	; printInt(s[4])
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ lexStringLiterals.impala:19:16
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ lexStringLiterals.impala:19:27
+		RETU   	; }
+
+.s_ABC_4d2:	CNST *5
+	DATs A
+	DATi #9
+	DATs BC
+	DATi #0

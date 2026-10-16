@@ -1,0 +1,17 @@
+/*
+	Conformance: Impala.md#float-literals
+	Float literals need a digit on both sides of the point and may carry an exponent.
+	Expected (GAZLCmd lexFloatLiterals.gazl main): 1 3.25 600 0.5
+*/
+const int DEBUG = 1
+extern native printInt
+extern native printFloat
+extern native printLF
+
+function main()
+{
+	printFloat(1.0); printLF();
+	printFloat(3.25); printLF();
+	printFloat(6.0e2); printLF();
+	printFloat(5.0e-1); printLF();
+}

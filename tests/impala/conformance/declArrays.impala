@@ -1,0 +1,27 @@
+/*
+	Conformance: Impala.md#arrays
+	A shaped array subscripts every axis; an untyped array initializer may mix ints, floats and addresses.
+	Expected (GAZLCmd declArrays.gazl main): 12 2.5 7 6
+*/
+const int DEBUG = 1
+extern native printInt
+extern native printFloat
+extern native printLF
+
+global int array board[3, 4]
+global int array flat[3] = { 5, 6, 7 }
+global array initedArray[4] = { 1, 2.5, &global flat[2], 4 }
+global int array grid[2, 3] = { { 1, 2, 3 }, { 4, 5, 6 } }
+
+function main()
+locals int y, int x, int pointer p
+{
+	for (y = 0 to 3)
+		for (x = 0 to 4)
+			global board[y, x] = y * 10 + x;
+	printInt(global board[1, 2]); printLF();
+	printFloat((float) global initedArray[1]); printLF();
+	p = (int pointer) global initedArray[2];
+	printInt(*p); printLF();
+	printInt(global grid[1, 2]); printLF();
+}

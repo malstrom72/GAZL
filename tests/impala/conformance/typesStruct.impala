@@ -1,0 +1,33 @@
+/*
+	Conformance: Impala.md#struct
+	Nested struct fields through `.` and `->`, a named initializer, whole-struct assignment and `sizeof`.
+	Expected (GAZLCmd typesStruct.gazl main): 15 1 2 7 15
+*/
+const int DEBUG = 1
+extern native printInt
+extern native printFloat
+extern native printLF
+
+struct Point { int x; int y }
+struct Body { Point pos; float mass; int array tags[4] }
+
+global Body b
+global Point origin = { x: 1, y: 2 }
+
+function move(Body pointer bp, int dx)
+{
+	bp->pos.x = bp->pos.x + dx;
+}
+
+function main()
+locals Body copyOfB
+{
+	global b.pos.x = 10;
+	move(&global b, 5);
+	printInt(global b.pos.x); printLF();
+	printInt(global origin.x); printLF();
+	printInt(global origin.y); printLF();
+	printInt(sizeof(Body)); printLF();
+	copyOfB = global b;
+	printInt(copyOfB.pos.x); printLF();
+}

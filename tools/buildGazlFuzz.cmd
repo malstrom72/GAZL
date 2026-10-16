@@ -18,7 +18,8 @@ REM   - both _DISABLE_*_ANNOTATION defines, or linking fails on `annotate_string
 SETLOCAL ENABLEEXTENSIONS
 CD /D %~dp0
 IF NOT EXIST ..\output MKDIR ..\output
-SET "CPP_OPTIONS=/fsanitize=fuzzer /fsanitize=address /Zi /U NDEBUG /D _DISABLE_STRING_ANNOTATION /D _DISABLE_VECTOR_ANNOTATION /D LIBFUZZ"
+REM CPP_OPTIONS ADDS to these defaults, as in the .sh.
+SET "CPP_OPTIONS=/fsanitize=fuzzer /fsanitize=address /Zi /U NDEBUG /D _DISABLE_STRING_ANNOTATION /D _DISABLE_VECTOR_ANNOTATION /D LIBFUZZ %CPP_OPTIONS%"
 CALL BuildCpp.cmd release x64 ..\output\GAZLFuzz.exe -I.. GAZLCmd.cpp ..\src\GAZL.cpp || GOTO error
 
 REM ASan links against a DLL that lives in the MSVC toolchain, not beside the exe, so the fuzzer exits

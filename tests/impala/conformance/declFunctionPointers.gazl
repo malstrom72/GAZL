@@ -1,0 +1,47 @@
+; Compiled with Impala version 2.0
+
+; signatures version=1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ declFunctionPointers.impala:6:1
+; signature extern native printInt() -> unknown @ declFunctionPointers.impala:7:1
+; signature extern native printFloat() -> unknown @ declFunctionPointers.impala:8:1
+; signature extern native printLF() -> unknown @ declFunctionPointers.impala:9:1
+	GLOB *1
+calls:	DATi #0	; signature global calls : int @ declFunctionPointers.impala:11:1
+	GLOB *1
+fp:	DATp &NULL	; signature global fp : funcptr @ declFunctionPointers.impala:12:1
+	GLOB *1
+np:	DATp &NULL	; signature global np : ptr @ declFunctionPointers.impala:13:1
+
+;-----------------------------------------------------------------------------
+showoff:	FUNC	; signature func showoff() -> void @ declFunctionPointers.impala:15:1
+		PARA *1
+;-----------------------------------------------------------------------------
+		PEEK %0 &calls 	; global calls = global calls + 1
+		ADDi %0 %0 #1
+		POKE &calls %0 
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+main:	FUNC	; signature func main() -> void @ declFunctionPointers.impala:20:1
+		PARA *1
+;-----------------------------------------------------------------------------
+		PEEK %0 &fp 	; if (global fp == nullfunc) global fp = showoff
+		NEQp %0 &NULL @.f0
+		POKE &fp &showoff 	; global fp = showoff
+	.f0:	PEEK %0 &fp 	; if (global fp != nullfunc) global fp()
+		EQUp %0 &NULL @.f1
+		PEEK %1 &fp 	; expects function() -> unknown @ declFunctionPointers.impala:23:40
+		CALL %1 %0 *1
+	.f1:	PEEK %1 &calls 	; printInt(global calls)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ declFunctionPointers.impala:24:24
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ declFunctionPointers.impala:24:35
+		PEEK %0 &np 	; if (global np == null) printInt(0)
+		NEQp %0 &NULL @.f2
+		MOVi %1 #0 	; printInt(0)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ declFunctionPointers.impala:25:36
+	.f2:	CALL ^printLF %0 *1	; expects printLF() -> unknown @ declFunctionPointers.impala:26:11
+		PEEK %1 &calls 	; printInt(global calls)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ declFunctionPointers.impala:27:24
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ declFunctionPointers.impala:27:35
+		RETU   	; }

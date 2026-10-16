@@ -16,7 +16,9 @@ fi
 libcxx="$(dirname "$(dirname "$CPP_COMPILER")")/lib/c++"
 [ -d "$libcxx" ] && libcxxflags="-L$libcxx -Wl,-rpath,$libcxx"
 
-CPP_OPTIONS=${CPP_OPTIONS:-"-fsanitize=fuzzer,address -DLIBFUZZ $libcxxflags"}
+# CPP_OPTIONS ADDS to these defaults: the strict lane is CPP_OPTIONS="-fsanitize=undefined -fno-sanitize-recover=all".
+# It used to replace them, which silently dropped -DLIBFUZZ and the libc++ link flags. -UNDEBUG keeps asserts on.
+CPP_OPTIONS="-fsanitize=fuzzer,address -UNDEBUG -DLIBFUZZ $libcxxflags ${CPP_OPTIONS:-}"
 CPP_COMPILER="$CPP_COMPILER" CPP_OPTIONS="$CPP_OPTIONS" \
 		bash BuildCpp.sh release native ../output/GAZLFuzz \
 		-I.. GAZLCmd.cpp ../src/GAZL.cpp

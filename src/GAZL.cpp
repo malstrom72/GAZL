@@ -23,6 +23,7 @@
 
 #include "GAZL.h"
 #include <math.h>
+#include <stdint.h>
 #include <string.h>
 #include <stdlib.h>
 #include <algorithm>
@@ -86,6 +87,8 @@ const char* ASSEMBLER_ERROR_TEXTS[] = {
 	/* , NOT_ENOUGH_FUNCTION_SPACE					*/	, "Not enough space for function table"
 	/* , LABEL_ON_FUNCTION							*/	, "Branch target lands on a FUNC"
 	/* , FRAME_TOO_LARGE								*/	, "Frame too large"
+	/* , NON_ASCII_TEXT								*/	, "Non-ASCII character in text"
+	/* , UNNAMED_DATA_SECTION						*/	, "Unnamed data section must start with a labelled data statement"
 	/* , UNBALANCED_LOCAL_SCOPE						*/	, "Unbalanced SCOP / ENDS"
 	/* , OVERLAPPING_DATA_REGIONS					*/	, "Data regions overlap"
 	/* , UNSUPPORTED_GAZL_VERSION					*/	, "File requires a newer GAZL engine"
@@ -154,8 +157,16 @@ static Int stringToInt(const Char* &p, const Char* e) {
 		case '-': ++p; sign = -1; break;
 	}
 	switch (p < e ? *p : 0) {
-		case '\'':	while (++p < e && *p != '\'') i = (i << 8) | (*p & 0xFFU); if (p < e) ++p; break;
-		case '\"':	while (++p < e && *p != '\"') i = (i << 8) | (*p & 0xFFU); if (p < e) ++p; break;
+		case '\'':
+		case '\"':	{
+						const Char quote = *p;
+						while (++p < e && *p != quote) {
+							if ((*p & 0x80) != 0) throw Exception(NON_ASCII_TEXT);
+							i = (i << 8) | (*p & 0xFFU);
+						}
+						if (p < e) ++p;
+						break;
+					}
 		case '0':	if (*++p == 'x') {
 						while (++p < e && ((*p >= '0' && *p <= '9') || (*p >= 'A' && *p <= 'F') || (*p >= 'a' && *p <= 'f')))
 							i = (i << 4) + (*p <= '9' ? *p - '0' : (*p & ~0x20) - ('A' - 10));
@@ -163,43 +174,174 @@ static Int stringToInt(const Char* &p, const Char* e) {
 					} /* else continue */
 		default:	for (; p < e && *p >= '0' && *p <= '9'; ++p) i = i * 10 + (*p - '0'); break;
 	}
-	return (Int)(sign < 0 ? 0u - i : i);									// negate in UNSIGNED: `(Int)i * -1` is signed-overflow UB at i == 2^31, the literal -2147483648
+	return (Int)(sign < 0 ? 0u - i : i);																	// negate in UNSIGNED: `(Int)i * -1` is signed-overflow UB at i == 2^31, the literal -2147483648
 }
 
-template<class F> F pow10(F x) { return pow(10, x); }
-static float pow10(float x) { return powf(10.0f, x); }
+/**
+	An unsigned integer of up to 1024 bits, enough for the exact comparisons in `parseFloat`.
+**/
+class ExactInt {
+	public:		explicit ExactInt(UInt value) : size(1) { words[0] = value; }
+	public:		void multiplyAdd(UInt factor, UInt addend);													/// `this` = `this` * `factor` + `addend`
+	public:		void multiplyByPowerOfTen(int power);
+	public:		void shiftLeft(int bits);
+	public:		int compare(const ExactInt& other) const;													/// -1, 0 or 1
+	protected:	enum { MAX_WORDS = 32 };
+	protected:	int size;																					// words in use, the top one non-zero unless the value is 0
+	protected:	UInt words[MAX_WORDS];																		// least significant first
+};
 
-static Float stringToFloat(const Char* &p, const Char* e) {
-	/*
-		Accumulate in double, convert to Float once at the end. Accumulating directly in float32
-		diverges across compilers: `d * 10 + digit` loses precision at each step near the float
-		range limit, and clang contracts it to a single-rounded fmadd while MSVC emits mul+add
-		(two roundings) -- so e.g. "2147483647.0" parsed to 2^31 on one and 2^31-128 on the other.
-		A <=15-digit integer is exact in double (so contraction cannot change it), and the single
-		closing double->float conversion is correctly rounded and identical on every target.
-	*/
-	double d = 0;
-	double sign = 1;
+void ExactInt::multiplyAdd(UInt factor, UInt addend) {
+	uint64_t carry = addend;
+	for (int i = 0; i < size; ++i) {
+		carry += static_cast<uint64_t>(words[i]) * factor;
+		words[i] = static_cast<UInt>(carry);
+		carry >>= 32;
+	}
+	if (carry != 0) {
+		assert(size < MAX_WORDS);
+		words[size++] = static_cast<UInt>(carry);
+	}
+}
+
+void ExactInt::multiplyByPowerOfTen(int power) {
+	static const UInt SMALL_POWERS[9] = { 1, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000 };
+	for (; power >= 9; power -= 9) multiplyAdd(1000000000, 0);
+	multiplyAdd(SMALL_POWERS[power], 0);
+}
+
+void ExactInt::shiftLeft(int bits) {
+	const int wordShift = bits / 32;
+	const int bitShift = bits % 32;
+	assert(size + wordShift + 1 <= MAX_WORDS);
+	words[size + wordShift] = 0;
+	for (int i = size - 1; i >= 0; --i) {
+		if (bitShift != 0) words[i + wordShift + 1] |= words[i] >> (32 - bitShift);
+		words[i + wordShift] = words[i] << bitShift;
+	}
+	for (int i = 0; i < wordShift; ++i) words[i] = 0;
+	size += wordShift + 1;
+	while (size > 1 && words[size - 1] == 0) --size;
+}
+
+int ExactInt::compare(const ExactInt& other) const {
+	if (size != other.size) return (size < other.size ? -1 : 1);
+	for (int i = size - 1; i >= 0; --i) {
+		if (words[i] != other.words[i]) return (words[i] < other.words[i] ? -1 : 1);
+	}
+	return 0;
+}
+
+/*
+	Compares the decimal `digits` * 10^`power`, plus a non-zero `tail` below its last digit if `tail` is set, with
+	the midpoint between the positive floats with bits `bits` and `bits + 1`: -1 below, 0 on it, 1 above.
+*/
+static int compareWithMidpoint(const ExactInt& digits, int power, bool tail, UInt bits) {
+	const UInt field = bits >> 23;
+	const UInt mantissa = (field != 0 ? (bits & 0x7FFFFF) | 0x800000 : bits);
+	const int exponent = static_cast<int>(field != 0 ? field : 1) - 150;										// the float is `mantissa` * 2^`exponent`
+	ExactInt left(digits);
+	ExactInt right(2 * mantissa + 1);																			// the midpoint is `right` * 2^(`exponent` - 1)
+	if (power >= 0) left.multiplyByPowerOfTen(power);
+	else right.multiplyByPowerOfTen(-power);
+	if (exponent >= 1) right.shiftLeft(exponent - 1);
+	else left.shiftLeft(1 - exponent);
+	const int comparison = left.compare(right);
+	return (comparison == 0 && tail ? 1 : comparison);
+}
+
+/*
+	The bits of a positive float within a step or so of `value`, built from its binary exponent and mantissa with
+	integer operations only, so that a flush-to-zero floating-point environment cannot move it.
+*/
+static UInt approximateFloatBits(double value) {
+	if (!(value > 0.0)) return 0;
+	if (value >= 4.0e38) return 0x7F800000;
+	int exponent;
+	const UInt mantissa = static_cast<UInt>(frexp(value, &exponent) * 16777216.0);								// `value` = `mantissa` * 2^(`exponent` - 24)
+	if (exponent + 126 >= 255) return 0x7F800000;
+	if (exponent + 126 >= 1) return (static_cast<UInt>(exponent + 126) << 23) | (mantissa & 0x7FFFFF);
+	const int shift = -(exponent + 125);																			// subnormal: count steps of 2^-149
+	return (shift >= 32 ? 0 : mantissa >> shift);
+}
+
+/*
+	Reads a float literal, `[sign] digits [. digits] [e exponent]`, and rounds its exact decimal value to the nearest
+	float, ties to even. A double gives a candidate within a step or so; exact comparisons with the midpoints next
+	to it then move it to the correctly rounded result. A float midpoint has at most 113 significant digits, so the
+	first `MAX_DIGITS` decide every comparison, and the rest only count as a non-zero `tail`. The exact midpoint
+	comparison comes from Numbstrict's `parseReal` (https://github.com/malstrom72/Numbstrict), cut down to float.
+*/
+Float parseFloat(const Char*& p, const Char* e) {
+	const int MAX_DIGITS = 120;
+	const int MAX_APPROXIMATE_DIGITS = 17;
+	bool negative = false;
 	switch (p < e ? *p : 0) {
-		case '+': ++p; sign = 1; break;
-		case '-': ++p; sign = -1; break;
+		case '+': ++p; break;
+		case '-': ++p; negative = true; break;
 	}
+	ExactInt digits(0);
+	int count = 0;																									// significant digits in `digits`
+	int power = 0;																									// the value is `digits` * 10^`power` (+ `tail`)
+	bool tail = false;
+	double approximate = 0.0;
+	int approximateCount = 0;
 	if (p < e && *p >= '0' && *p <= '9') {
+		bool fraction = false;
 		do {
-			d = d * 10 + (*p - '0');
-		} while (++p < e && *p >= '0' && *p <= '9');
-		if (p + 1 < e && *p == '.' && p[1] >= '0' && p[1] <= '9') {
+			const UInt digit = static_cast<UInt>(*p - '0');
+			if (count == 0 && digit == 0) {																			// leading zero
+				if (fraction) --power;
+			} else if (count < MAX_DIGITS) {
+				digits.multiplyAdd(10, digit);
+				++count;
+				if (fraction) --power;
+				if (approximateCount < MAX_APPROXIMATE_DIGITS) {
+					approximate = approximate * 10.0 + digit;
+					++approximateCount;
+				}
+			} else {
+				if (!fraction) ++power;
+				tail = tail || (digit != 0);
+			}
 			++p;
-			double f = 1;
-			do {
-				d += (*p - '0') * (f *= 0.1);
-			} while (++p < e && *p >= '0' && *p <= '9');
-		}
+			if (!fraction && p + 1 < e && *p == '.' && p[1] >= '0' && p[1] <= '9') {
+				fraction = true;
+				++p;
+			}
+		} while (p < e && *p >= '0' && *p <= '9');
 		if (p + 1 < e && (*p == 'E' || *p == 'e')) {
-			d *= pow10((double)(stringToInt(++p, e)));
+			const Int exponent = stringToInt(++p, e);
+			power += (exponent < -100000 ? -100000 : exponent > 100000 ? 100000 : exponent);					// far beyond any float
 		}
 	}
-	return static_cast<Float>(d * sign);
+	UInt bits;
+	const int lead = power + count - 1;																				// decimal exponent of the leading digit
+	if (count == 0 || lead < -46) {																					// below 1e-46, under half the least float
+		bits = 0;
+	} else if (lead > 38) {																							// 1e39 or more
+		bits = 0x7F800000;
+	} else {
+		int scale = power + count - approximateCount;
+		for (; scale > 0; --scale) approximate *= 10.0;
+		double divisor = 1.0;
+		for (; scale < 0; ++scale) divisor *= 10.0;
+		bits = approximateFloatBits(approximate / divisor);
+		while (bits < 0x7F800000) {
+			const int comparison = compareWithMidpoint(digits, power, tail, bits);
+			if (comparison < 0 || (comparison == 0 && (bits & 1) == 0)) break;
+			++bits;
+		}
+		while (bits > 0) {
+			const int comparison = compareWithMidpoint(digits, power, tail, bits - 1);
+			if (comparison > 0 || (comparison == 0 && ((bits - 1) & 1) != 0)) break;
+			--bits;
+		}
+	}
+	Float value;
+	bits |= (negative ? 0x80000000U : 0U);
+	memcpy(&value, &bits, sizeof (value));
+	return value;
 }
 
 static Char* int2string(Int i, int radix, int minLength, Char buffer[33]) {
@@ -247,7 +389,8 @@ enum Opcode {
 
 	, NOOP____, GLOB____, CNST____, DATA____, LOCA____, OUTP____, SCOP____, ENDS____, SEEK____, GAZL____
 	
-	, MOVE_CC_
+	, FIRST_COMPILE_TIME_OPCODE						// the assembler evaluates the opcodes from here on, never `run()`
+	, MOVE_CC_ = FIRST_COMPILE_TIME_OPCODE
 	, ABSI_CC_
 	, ADDI_CCC, SUBI_CCC, MULI_CCC, DIVI_CCC, MODI_CCC, ANDI_CCC, IORI_CCC, XORI_CCC, SHLI_CCC, SHRI_CCC, SHRU_CCC
 	, ABSF_CC_
@@ -259,7 +402,6 @@ enum Opcode {
 	, SKIP_B__, IFDF_CB_, IFND_CB_
 	, DEFI____
 };
-const int FIRST_COMPILE_TIME_OPCODE = MOVE_CC_;
 
 const int TRANSIENT			= 0x00001;
 const int VAR_INT_R			= 0x00002 | TRANSIENT;		// Readable int variable.
@@ -289,6 +431,7 @@ const int COMPILE_TIME		= 0x20000;
 const int FORWARD			= 0x40000;
 const int UNCHECKED_ADDRESS	= 0x80000;					// Do *not* verify that the offset is < size of the symbol. (Some instructions shouldn't do this, like ADDp for example.)
 const int TARGET			= 0x400000;					// Call-target constant: what `&function` MINTS inside a `GAZL #2` region (FUNC outside one).
+const int INTERIOR			= 0x800000;					// Data label inside a named section: an address, not a global of its own (the section is).
 const int FWD_ADDRESS_W		= ADDRESS_W | FORWARD;
 const int FWD_ADDRESS_R		= ADDRESS_R | FORWARD;
 const int FWD_BRANCH		= BRANCH | FORWARD;
@@ -378,9 +521,9 @@ static const Operator OPERATORS[] = {
 	, { " DIFt_vcv", SUBI_VCV,	{ VAR_INT_W		, TGT_FWD_FREE	, VAR_TGT_R		}		, 0				, 0				}
 	, { " DIFt_vvc", SUBI_VVC,	{ VAR_INT_W		, VAR_TGT_R		, TGT_FWD_FREE	}		, 0				, 0				}
 	, { " DIFt_vvv", SUBI_VVV,	{ VAR_INT_W		, VAR_TGT_R		, VAR_TGT_R		}		, 0				, 0				}
-	, { " DIVf_vcc", DIVF_CCC,	{ VAR_FLOAT_W	, CONST_FLOAT	, CONST_FLOAT	}		, YIELDS_CONST|CHECK_DIV_BY_0, CONST_FLOAT }
+	, { " DIVf_vcc", DIVF_CCC,	{ VAR_FLOAT_W	, CONST_FLOAT	, CONST_FLOAT	}		, YIELDS_CONST	, CONST_FLOAT	}
 	, { " DIVf_vcv", DIVF_VCV,	{ VAR_FLOAT_W	, CONST_FLOAT	, VAR_FLOAT_R	}		, 0				, 0				}
-	, { " DIVf_vvc", DIVF_VVC,	{ VAR_FLOAT_W	, VAR_FLOAT_R	, CONST_FLOAT	}		, CHECK_DIV_BY_0, 0				}
+	, { " DIVf_vvc", DIVF_VVC,	{ VAR_FLOAT_W	, VAR_FLOAT_R	, CONST_FLOAT	}		, 0				, 0				}
 	, { " DIVf_vvv", DIVF_VVV,	{ VAR_FLOAT_W	, VAR_FLOAT_R	, VAR_FLOAT_R	}		, 0				, 0				}
 	, { " DIVi_vcc", DIVI_CCC,	{ VAR_INT_W		, CONST_INT		, CONST_INT		}		, YIELDS_CONST|CHECK_DIV_BY_0, CONST_INT }
 	, { " DIVi_vcv", DIVI_VCV,	{ VAR_INT_W		, CONST_INT		, VAR_INT_R		}		, 0				, 0				}
@@ -454,7 +597,7 @@ static const Operator OPERATORS[] = {
 	, { " IORi_vcv", IORI_VVC,	{ VAR_INT_W		, CONST_INT		, VAR_INT_R		}		, SWAP_1_AND_2	, 0				}
 	, { " IORi_vvc", IORI_VVC,	{ VAR_INT_W		, VAR_INT_R		, CONST_INT		}		, 0				, 0				}
 	, { " IORi_vvv", IORI_VVV,	{ VAR_INT_W		, VAR_INT_R		, VAR_INT_R		}		, 0				, 0				}
-	, { " LEQf_ccb", NLSI_CCB,	{ CONST_FLOAT	, CONST_FLOAT	, FWD_BRANCH	}		, SWAP_0_AND_1 | YIELDS_GOTO, 0	}
+	, { " LEQf_ccb", NLSF_CCB,	{ CONST_FLOAT	, CONST_FLOAT	, FWD_BRANCH	}		, SWAP_0_AND_1 | YIELDS_GOTO, 0	}
 	, { " LEQf_cvb", NLSF_VCB,	{ CONST_FLOAT	, VAR_FLOAT_R	, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
 	, { " LEQf_vcb", NLSF_CVB,	{ VAR_FLOAT_R	, CONST_FLOAT	, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
 	, { " LEQf_vvb", NLSF_VVB,	{ VAR_FLOAT_R	, VAR_FLOAT_R	, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
@@ -602,7 +745,7 @@ static const Operator OPERATORS[] = {
 	, { "!DEFi_c__", DEFI____,	{ CONST_INT		, 0				, 0				}		, 0				, CONST_INT		}
 	, { "!DEFp_c__", DEFI____,	{ FREE_ADDRESS		, 0			, 0				}		, 0				, FREE_ADDRESS		}
 	, { "!DIFp_ccc", SUBI_CCC,	{ COMPILE_TIME	, FREE_ADDRESS	, FREE_ADDRESS	}		, 0				, CONST_INT		}
-	, { "!DIVf_ccc", DIVF_CCC,	{ COMPILE_TIME	, CONST_FLOAT	, CONST_FLOAT	}		, CHECK_DIV_BY_0, CONST_FLOAT	}
+	, { "!DIVf_ccc", DIVF_CCC,	{ COMPILE_TIME	, CONST_FLOAT	, CONST_FLOAT	}		, 0				, CONST_FLOAT	}
 	, { "!DIVi_ccc", DIVI_CCC,	{ COMPILE_TIME	, CONST_INT		, CONST_INT		}		, CHECK_DIV_BY_0, CONST_INT		}
 	, { "!EQUi_ccb", EQUI_CCB,	{ CONST_INT		, CONST_INT		, FWD_BRANCH	}		, 0				, 0				}
 	, { "!FLOf_cc_", FLOF_CC_,	{ COMPILE_TIME	, CONST_FLOAT	, 0				}		, 0				, CONST_FLOAT	}
@@ -678,6 +821,8 @@ void Symbols::resolve(const Reference& ref, const Symbol& symbol) {
 	assert((ref.offset < 0) == (ref.accepts == FWD_BRANCH));
 	if ((ref.accepts & UNCHECKED_ADDRESS) == 0 && ref.offset >= static_cast<Int>(symbol.size))
 		throw Exception(OFFSET_OUT_OF_BOUNDS, ref.label);
+	// A function address takes no offset: `&main:1` would name another function.
+	if ((symbol.types & FUNC) != 0 && ref.offset > 0) throw Exception(OFFSET_OUT_OF_BOUNDS, ref.label);
 	if (ref.offset == 0) *ref.storage = symbol.value;
 	else {
 		assert((symbol.types & CONST_FLOAT) == 0);
@@ -768,24 +913,31 @@ bool Symbols::lookupConstant(const Char* name, bool* isFloat, Value* value) cons
 	return true;
 }
 
-bool Symbols::findFirstGlobal(Iterator& iterator, bool includeTemps) const {
-	int mask = (includeTemps ? ADDRESS : ADDRESS | TEMPORARY);
+static int globalMask(bool includeTemps, bool includeInteriors) {	// a global matches when `types & mask` is exactly `ADDRESS`
+	return ADDRESS | (includeTemps ? 0 : TEMPORARY) | (includeInteriors ? 0 : INTERIOR);
+}
+
+bool Symbols::findFirstGlobal(Iterator& iterator, bool includeTemps, bool includeInteriors) const {
+	const int mask = globalMask(includeTemps, includeInteriors);
 	for (iterator = symbols.begin(); iterator != symbols.end() && (iterator->second.types & mask) != ADDRESS; ++iterator);
 	return (iterator != symbols.end());
 }
 
-bool Symbols::findNextGlobal(Iterator& iterator, bool includeTemps) const {
-	int mask = (includeTemps ? ADDRESS : ADDRESS | TEMPORARY);
+bool Symbols::findNextGlobal(Iterator& iterator, bool includeTemps, bool includeInteriors) const {
+	const int mask = globalMask(includeTemps, includeInteriors);
 	for (++iterator; iterator != symbols.end() && (iterator->second.types & mask) != ADDRESS; ++iterator);
 	return (iterator != symbols.end());
 }
 
-const char* Symbols::getGlobalInfo(const Iterator& iterator, bool& isTemp, Pointer& address, UInt& size) const {
+GlobalInfo Symbols::getGlobalInfo(const Iterator& iterator) const {
 	assert((iterator->second.types & ADDRESS) == ADDRESS);
-	isTemp = ((iterator->second.types & TEMPORARY) != 0);
-	address = iterator->second.value.p;
-	size = iterator->second.size;
-	return iterator->first.c_str();
+	GlobalInfo info;
+	info.name = iterator->first.c_str();
+	info.address = iterator->second.value.p;
+	info.size = iterator->second.size;
+	info.isTemp = ((iterator->second.types & TEMPORARY) != 0);
+	info.isInterior = ((iterator->second.types & INTERIOR) != 0);
+	return info;
 }
 
 Assembler::Assembler(UInt maxCodeSize, Instruction* codeBase, UInt maxFunctionCount, UInt* functionTable
@@ -794,7 +946,8 @@ Assembler::Assembler(UInt maxCodeSize, Instruction* codeBase, UInt maxFunctionCo
 		, functionTable(functionTable), memoryBase(memoryBase), memoryEnd(memoryBase + maxMemorySize)
 		, ip(codeBase), functionStart(0), functionCount(0), localsSize(0), maxLocalsSize(0), localScopeDepth(0)
 		, paramsSize(0), globalsPointer(memoryBase)
-		, constantsPointer(memoryEnd), dataLabelType(0), dataPointer(0), dataEnd(0)
+		, constantsPointer(memoryEnd), dataLabelType(0), dataPointer(0), dataEnd(0), dataOpenStart(0)
+		, dataIsNamed(false), dataIsConstant(false)
 		, sectionBegin(0), sectionEnd(0), regionStart(0), regionExtent(-1), dialect(1), globals(globals) {
 	for (Int i = 0; i < 128; ++i) compileTimeVars[i].types = 0;
 	Value v;
@@ -866,7 +1019,7 @@ void Assembler::parseConstant(const Char* b, const Char* e, int accepts, Value* 
 							if (v->i < 0 && (accepts & CONST_INT_N) == 0) throw Exception(NEGATIVE_VALUE_NOT_ACCEPTED, b, e);
 						} else {
 							p = b;
-							v->f = stringToFloat(p, e);
+							v->f = parseFloat(p, e);
 							if (p != e) throw Exception(INVALID_NUMERICAL_LITERAL, p, e);
 							if ((accepts & CONST_FLOAT) == 0) throw Exception(DID_NOT_EXPECT_CONSTANT_FLOAT, p, e);
 						}
@@ -876,7 +1029,7 @@ void Assembler::parseConstant(const Char* b, const Char* e, int accepts, Value* 
 		case '<':	{
 						if (b + 3 != e || b[2] != '>' || !isValidIdentifierChar(b[1]))
 							throw Exception(INVALID_COMPILE_TIME_VARIABLE, b, e);
-						const CompileTimeVar& cv = compileTimeVars[b[1]];
+						const CompileTimeVar& cv = compileTimeVars[(unsigned char)b[1]];
 						if ((accepts & cv.types) == 0) throw Exception(INCOMPATIBLE_COMPILE_TIME_VARIABLE_TYPE, b, e);
 						*v = cv.value;
 						break;
@@ -919,12 +1072,43 @@ void Assembler::parseOperand(const Char* b, const Char* e, int accepts, Value* v
 	}
 }
 
+/*
+	A data label covers its own statement and everything after it, up to the next label or the end of the section. So
+	each label is declared reaching to the end of the section, and the next label shortens the previous one to end
+	where it starts. In an unnamed section, data before the first label would belong to no name, so a snapshot could
+	not save it.
+*/
+void Assembler::noteDataStatement(const Char* labelBegin, const Char* labelEnd, const Value* first) {
+	if (labelBegin == labelEnd) {
+		if (!dataIsNamed) throw Exception(UNNAMED_DATA_SECTION);
+		return;
+	}
+	if (!dataOpenLabel.empty()) {
+		const Symbols::SymbolMap::iterator it = globals.symbols.find(dataOpenLabel);
+		if (it != globals.symbols.end()) it->second.size = static_cast<UInt>(first - dataOpenStart);
+	}
+	dataIsNamed = true;
+	dataOpenLabel = std::string(labelBegin, labelEnd);
+	dataOpenStart = first;
+}
+
+Pointer Assembler::makeGAZLPointer(const Value* data, bool constant) const {
+	if (constant) {
+		assert(data >= constantsPointer && data <= memoryEnd - 1);
+		return MEMORY_OFFSET - (Pointer)(memoryEnd - 1 - data);						// counted down from the zero guard
+	} else {
+		assert(data >= memoryBase && data <= globalsPointer);
+		return MEMORY_OFFSET + (Pointer)(data - memoryBase);
+	}
+}
+
 void Assembler::finalizeFunction() {
 	assert(functionStart != 0);
 	assert(functionStart->opcode == FUNC_CC_);
 	if (ip == codeBase || (ip[-1].opcode != RETU_C__ && ip[-1].opcode != GOTO_B__
-			&& ip[-1].opcode != TAIL_CC_ && ip[-1].opcode != TAIL_VC_))
+			&& ip[-1].opcode != TAIL_CC_ && ip[-1].opcode != TAIL_VC_)) {
 		throw Exception(MISSING_RETURN_INSTRUCTION);
+	}
 	/*
 		A jump or switch may never reach a `FUNC` (`FUNC` is `CALL`-only). Branch targets resolve to local `BRANCH`
 		labels; a label left at the function boundary `ip` (a trailing elided `NOOP`) is where the next `FUNC` lands.
@@ -1010,20 +1194,23 @@ void Assembler::finalize(ProgramSizes& sizes) {
 	if (dialect != 1) throw Exception(UNCLOSED_GAZL_REGION);	// so a truncated GAZL 2 unit cannot pass, and a following concatenated unit always starts in the default
 	threadBranches();
 	closeDataRegion();
+	if (dataPointer != 0 && !dataIsNamed) throw Exception(UNNAMED_DATA_SECTION);
 	globals.resolveForwardRefs();
+	// Constants were placed downward from the top during assembly, with addresses counted down from the base.
+	// Moving them to just below the globals puts every word at its address; nothing needs patching.
+	const UInt constantsSize = (UInt)(memoryEnd - 1 - constantsPointer);		// the top word is the zero guard
+	if (constantsSize != 0) {
+		const std::vector<Value> constants(constantsPointer, memoryEnd - 1);
+		memmove(memoryBase + constantsSize, memoryBase, (globalsPointer - memoryBase) * sizeof (Value));
+		memcpy(memoryBase, &constants[0], constantsSize * sizeof (Value));
+	}
+	// Poison the data stack, so a local read before its first write gets 0xDEADBEEF rather than a plausible value.
+	Value* const stackEnd = memoryEnd - 1;
+	for (Value* p = memoryBase + constantsSize + (globalsPointer - memoryBase); p < stackEnd; ++p) p->p = 0xDEADBEEF;
 	sizes.codeSize = (UInt)(ip - codeBase);
 	sizes.functionCount = this->functionCount;
 	sizes.globalsSize = (UInt)(globalsPointer - memoryBase);
 	sizes.constsSize = (UInt)(memoryEnd - constantsPointer);
-}
-
-void Assembler::finalize(UInt& codeSize, UInt& globalsSize, UInt& constsSize, UInt& functionCount) {
-	ProgramSizes sizes;
-	finalize(sizes);
-	codeSize = sizes.codeSize;
-	globalsSize = sizes.globalsSize;
-	constsSize = sizes.constsSize;
-	functionCount = sizes.functionCount;
 }
 
 void Assembler::newUnit(const Char* unitName) {
@@ -1078,7 +1265,7 @@ Value Assembler::calcConstant(const Operator* op, const Char* op1Begin, const Ch
 		case ADDF_CCC: v1.f += v2.f; break;
 		case SUBF_CCC: v1.f -= v2.f; break;
 		case MULF_CCC: v1.f *= v2.f; break;
-		case DIVF_CCC: if (v2.f == 0) throw Exception(CONSTANT_DIVISION_BY_ZERO); v1.f /= v2.f; break;
+		case DIVF_CCC: v1.f /= v2.f; break;																		// IEEE: a zero divisor gives an infinity or NaN
 		case FTOI_CCC: v1.i = ftoi(v1.f * v2.f); break;
 		case ITOF_CCC: v1.f = (Float)(v1.i) * v2.f; break;
 		default: assert(0);
@@ -1127,9 +1314,14 @@ const Char* Assembler::feed(const Char* line) {
 							while (e > p && (*(e - 1) == ' ' || *(e - 1) == '\t')) --e;
 							if ((e - p) == 0) throw Exception(MISSING_OPERAND);
 							if ((e - p) > dataEnd - dataPointer) throw Exception(DATA_SECTION_FULL, dataLabel);
+							for (const Char* c = p; c < e; ++c) {
+								if ((*c & 0x80) != 0) throw Exception(NON_ASCII_TEXT, p, e);
+							}
 							Value v;
-							v.p = (Int)(dataPointer - memoryBase + MEMORY_OFFSET);
-							declare(globals, labelBegin, labelEnd, dataLabelType, v, static_cast<Int>(e - p));
+							v.p = makeGAZLPointer(dataPointer, dataIsConstant);
+							declare(globals, labelBegin, labelEnd, dataLabelType, v
+									, static_cast<UInt>(dataEnd - dataPointer));
+							noteDataStatement(labelBegin, labelEnd, dataPointer);
 							while (p < e) (dataPointer++)->i = *p++;
 							return eatEOL(eatSpace(e));
 						}
@@ -1140,9 +1332,7 @@ const Char* Assembler::feed(const Char* line) {
 			case 't':
 			case 'A':	{																								// DATi, DATf, DATp, DATt and DATA
 							if (dataPointer == 0) throw Exception(DATA_SECTION_MISSING);
-							Value v;
-							v.p = (Int)(dataPointer - memoryBase + MEMORY_OFFSET);
-							declare(globals, labelBegin, labelEnd, dataLabelType, v);
+							Value* const first = dataPointer;
 							int accepts = KONST;
 							switch (mnemonicBegin[3]) {
 								case 'i': accepts = CONST_INT; break;
@@ -1160,6 +1350,10 @@ const Char* Assembler::feed(const Char* line) {
 								parseOperand(b, e, accepts, dataPointer);
 								++dataPointer;
 							}
+							Value v;
+							v.p = makeGAZLPointer(first, dataIsConstant);
+							declare(globals, labelBegin, labelEnd, dataLabelType, v, static_cast<UInt>(dataEnd - first));
+							noteDataStatement(labelBegin, labelEnd, first);
 							return eatEOL(p);
 						}
 			
@@ -1204,7 +1398,7 @@ const Char* Assembler::feed(const Char* line) {
 		if ((op->accepts[0] & COMPILE_TIME) != 0) {																		// Compile-time calculation
 			if (op0End != op0Begin + 3 || *op0Begin != '<' || op0Begin[2] != '>' || !isValidIdentifierChar(op0Begin[1]))
 				throw Exception(INVALID_COMPILE_TIME_VARIABLE, op0Begin, op0End);
-			CompileTimeVar& cv = compileTimeVars[op0Begin[1]];
+			CompileTimeVar& cv = compileTimeVars[(unsigned char)op0Begin[1]];
 			cv.value = calcConstant(op, op1Begin, op1End, op2Begin, op2End);
 			cv.types = op->declareTypes;
 			if ((cv.types & CONST_INT_P) != 0 && cv.value.i < 0) cv.types &= ~CONST_INT_P;
@@ -1252,7 +1446,10 @@ const Char* Assembler::feed(const Char* line) {
 							size = v.i;
 							closeDataRegion();									// The previous section's last region gets its overlap check while `dataLabel` still names it.
 							dataLabel = std::string(labelBegin, labelEnd);
-							dataLabelType = op->declareTypes;
+							dataLabelType = op->declareTypes | (labelBegin != labelEnd ? INTERIOR : 0);					// labels inside a named section are interior
+							if (dataPointer != 0 && !dataIsNamed) throw Exception(UNNAMED_DATA_SECTION);
+							dataIsNamed = (labelBegin != labelEnd);
+							dataOpenLabel.clear();
 							if (constantsPointer - globalsPointer < size) throw Exception(NOT_ENOUGH_MEMORY_SPACE);
 							if (op->opcode == GLOB____) {
 								dataPointer = globalsPointer;
@@ -1269,7 +1466,8 @@ const Char* Assembler::feed(const Char* line) {
 							dataRegions.clear();
 							regionStart = 0;
 							regionExtent = -1;									// The implicit region: offset 0, claims what it writes, fenced by the section end - GAZL 1 verbatim.
-							v.p = (Int)(dataPointer - memoryBase + MEMORY_OFFSET);
+							dataIsConstant = (op->opcode != GLOB____);
+							v.p = makeGAZLPointer(dataPointer, dataIsConstant);
 							declare(globals, labelBegin, labelEnd, op->declareTypes, v, size);
 							break;
 
@@ -1281,6 +1479,12 @@ const Char* Assembler::feed(const Char* line) {
 			case SEEK____:	{																							// SEEK
 								if (dataPointer == 0) throw Exception(DATA_SECTION_MISSING);
 								closeDataRegion();
+								if (!dataOpenLabel.empty()) {												// the open data label ends with its region, which an unbounded region ends where its writing did
+									const Symbols::SymbolMap::iterator it = globals.symbols.find(dataOpenLabel);
+									const Value* const regionEnd = (regionExtent < 0 ? dataPointer : dataEnd);
+									if (it != globals.symbols.end()) it->second.size = static_cast<UInt>(regionEnd - dataOpenStart);
+									dataOpenLabel.clear();
+								}
 								parseOperand(op0Begin, op0End, op->accepts[0], &v);
 								regionStart = v.i;
 								regionExtent = -1;
@@ -1292,13 +1496,14 @@ const Char* Assembler::feed(const Char* line) {
 									throw Exception(OFFSET_OUT_OF_BOUNDS, dataLabel);
 								dataPointer = sectionBegin + regionStart;
 								dataEnd = (regionExtent < 0 ? sectionEnd : dataPointer + regionExtent);
-								v.p = (Int)(dataPointer - memoryBase + MEMORY_OFFSET);	// a label names the cursor without requiring a fill; a bounded region's extent rides along as the symbol's size
-								declare(globals, labelBegin, labelEnd, dataLabelType, v, (regionExtent < 0 ? 1 : (UInt)(regionExtent)));
+								v.p = makeGAZLPointer(dataPointer, dataIsConstant);	// a label names the cursor without requiring a fill; a bounded region's extent rides along as the symbol's size
+								declare(globals, labelBegin, labelEnd, dataLabelType, v, (regionExtent < 0 ? 1 : static_cast<UInt>(regionExtent)));
+								if (labelBegin != labelEnd) dataIsNamed = true;								// the label reaches what this region holds
 								break;
 							}
 					
 			case FUNC_CC_:	if (functionCount >= maxFunctionCount) throw Exception(NOT_ENOUGH_FUNCTION_SPACE);			// FUNC
-							v.p = (Int)(FUNCTION_OFFSET + functionCount);		// A function pointer is its stable declaration-order ordinal (not a code offset), resolved through `functionTable` at call time.
+							v.p = (Int)(FUNCTION_OFFSET + functionCount);
 							functionTable[functionCount] = (UInt)(ip - codeBase);
 							++functionCount;
 							declare(globals, labelBegin, labelEnd,
@@ -1316,7 +1521,7 @@ const Char* Assembler::feed(const Char* line) {
 							v.i = 1;
 							parseOperand(op0Begin, op0End, op->accepts[0], &v);
 							size = v.i;
-							if (size > 0x7FFFFFFFu - localsSize) throw Exception(FRAME_TOO_LARGE);							// slot offsets must fit an Int
+							if (size > 0x7FFFFFFFu - localsSize) throw Exception(FRAME_TOO_LARGE);						// slot offsets must fit an Int
 							v.i = localsSize;
 							declare(locals, labelBegin, labelEnd, op->declareTypes, v, size);
 							localsSize += size;
@@ -1398,13 +1603,13 @@ const Char* Assembler::feed(const Char* line) {
 								if (op->opcode == SWCH_VCC) {															// SWCH
 									assert(*op2Begin == '@');
 									assert(op->accepts[2] == FWD_BRANCH);
-									size = (p1->i + 1);
+									size = static_cast<UInt>(p1->i) + 1u;
 									if (size > constantsPointer - globalsPointer) {
 										throw Exception(NOT_ENOUGH_MEMORY_SPACE);
 									}
 									Value v;
 									constantsPointer -= size;
-									v.p = (Int)(constantsPointer - memoryBase + MEMORY_OFFSET);
+									v.p = makeGAZLPointer(constantsPointer, true);
 									p2->i = v.i;
 									locals.registerSwitch(op2Begin + 1, op2End, p1->i, constantsPointer
 											, -(Int)(ip - codeBase));
@@ -1432,19 +1637,21 @@ const Char* Assembler::feed(const Char* line) {
 }
 
 Processor::Processor() : codeSize(0), codeBase(0), functionCount(0), functionTable(0), memorySize(0), memoryBase(0)
-		, rwMemorySize(0), dataStackBase(0), dataStackEnd(0), ipStackBase(0), ipStackEnd(0), natives(0), ip(0), dsp(0)
-		, ipsp(0), userData(0), clockCyclesLeft(0) {
+		, constantsSize(0), readOffset(0), rwMemorySize(0), dataStackBase(0), dataStackEnd(0), ipStackBase(0)
+		, ipStackEnd(0), natives(0), clockCyclesLeft(0), ip(0), dsp(0), ipsp(0), userData(0) {
 }
 
 Processor::Processor(UInt codeSize, const Instruction* code, UInt functionCount, const UInt* functionTable
-		, UInt memorySize, Value* memory, UInt rwMemorySize, UInt dataStackOffset, UInt dataStackSize, UInt ipStackSize
-		, CallStackEntry* ipStack, NativeFunc const* natives, void* userData)
+		, UInt memorySize, Value* memory, UInt constsSize, UInt rwMemorySize, UInt dataStackOffset, UInt dataStackSize
+		, UInt ipStackSize, CallStackEntry* ipStack, NativeFunc const* natives, void* userData)
 		: codeSize(codeSize), codeBase(code), functionCount(functionCount), functionTable(functionTable)
-		, memorySize(memorySize - 1), memoryBase(memory), rwMemorySize(rwMemorySize)
-		, dataStackBase(memory + dataStackOffset), dataStackEnd(memory + dataStackOffset + dataStackSize)
-		, ipStackBase(ipStack), ipStackEnd(ipStack + ipStackSize), natives(natives), ip(codeBase), dsp(dataStackBase)
-		, ipsp(ipStackBase), userData(userData), clockCyclesLeft(0x7FFFFFFFU) {
-	assert(rwMemorySize <= memorySize);
+		, memorySize(memorySize - 1), memoryBase(memory), constantsSize(constsSize - 1)
+		, readOffset(constantsSize - MEMORY_OFFSET), rwMemorySize(rwMemorySize)
+		, dataStackBase(memory + constantsSize + dataStackOffset)
+		, dataStackEnd(memory + constantsSize + dataStackOffset + dataStackSize)
+		, ipStackBase(ipStack), ipStackEnd(ipStack + ipStackSize), natives(natives), clockCyclesLeft(0x7FFFFFFFU)
+		, ip(codeBase), dsp(dataStackBase), ipsp(ipStackBase), userData(userData) {
+	assert(constsSize >= 1 && constsSize - 1 + rwMemorySize <= memorySize - 1);
 	assert(dataStackOffset + dataStackSize <= rwMemorySize);
 	assert(code != 0);
 	assert(memory != 0);
@@ -1455,11 +1662,13 @@ Processor::Processor(UInt codeSize, const Instruction* code, UInt functionCount,
 		, UInt memorySize, Value* memory, UInt globalsSize, UInt constsSize, UInt ipStackSize, CallStackEntry* ipStack
 		, NativeFunc const* natives, void* userData)
 		: codeSize(codeSize), codeBase(code), functionCount(functionCount), functionTable(functionTable)
-		, memorySize(memorySize - 1), memoryBase(memory), rwMemorySize(memorySize - constsSize)
-		, dataStackBase(memory + globalsSize), dataStackEnd(memory + memorySize - constsSize), ipStackBase(ipStack)
-		, ipStackEnd(ipStack + ipStackSize), natives(natives), ip(codeBase), dsp(dataStackBase), ipsp(ipStackBase)
-		, userData(userData), clockCyclesLeft(0x7FFFFFFFU) {
-	assert(globalsSize + constsSize <= memorySize);
+		, memorySize(memorySize - 1), memoryBase(memory), constantsSize(constsSize - 1)
+		, readOffset(constantsSize - MEMORY_OFFSET), rwMemorySize(memorySize - constsSize)
+		, dataStackBase(memory + constantsSize + globalsSize)
+		, dataStackEnd(memory + memorySize - 1), ipStackBase(ipStack), ipStackEnd(ipStack + ipStackSize)
+		, natives(natives), clockCyclesLeft(0x7FFFFFFFU), ip(codeBase), dsp(dataStackBase), ipsp(ipStackBase)
+		, userData(userData) {
+	assert(constsSize >= 1 && globalsSize + constsSize <= memorySize);			// `constsSize` includes the zero guard
 	assert(code != 0);
 	assert(memory != 0);
 	assert(ipStack != 0);
@@ -1471,8 +1680,7 @@ Processor::Processor(UInt codeSize, const Instruction* code, UInt functionCount,
 #define C0 (ip->p0)
 #define C1 (ip->p1)
 #define C2 (ip->p2)
-	#define CHECK_INT_DIV_BY_ZERO(v) if (v == 0) { err = DIVISION_BY_ZERO; goto ret; }
-	#define CHECK_FLOAT_DIV_BY_ZERO(v) if (v == 0) { err = DIVISION_BY_ZERO; goto ret; }
+#define CHECK_INT_DIV_BY_ZERO(v) if (v == 0) { err = DIVISION_BY_ZERO; goto ret; }
 
 Int Processor::run() {
 	assert(codeBase != 0);
@@ -1481,26 +1689,26 @@ Int Processor::run() {
 	const Instruction* ip = this->ip;
 	Value* dsp = this->dsp;
 	CallStackEntry* ipsp = this->ipsp;
-	Value* const mb = memoryBase - MEMORY_OFFSET;
+	Value* const mb = memoryBase + constantsSize - MEMORY_OFFSET;														// mb[pointer] is the word at `pointer`
 	UInt ui, ui2;
 	Int nativeError;
 	Int err = TIME_OUT;
 
 	assert(ip != 0);
 	assert(dsp != 0);
-	assert(ipsp > ipStackBase && ipsp <= ipStackEnd); // If this blows it probably means you are trying to continue GAZL after it has returned to your native caller. You need to setup a new call with enterCall().
+	assert(ipsp > ipStackBase && ipsp <= ipStackEnd); 	// If this blows it probably means you are trying to continue GAZL after it has returned to your native caller. You need to setup a new call with enterCall().
 	
 	while (--clockCyclesLeft >= 0) {
 		switch (ip->opcode) {
 			case FUNC_CC_:	if ((UInt)C0.i + (UInt)C1.i > (UInt)(dataStackEnd - dsp)) { err = DATA_STACK_OVERFLOW; goto ret; } dsp += (UInt)(C0.i); break;
-			case CALL_VVC:	ui = V0.p - FUNCTION_OFFSET;						// ui = function ordinal
+			case CALL_VVC:	ui = V0.p - FUNCTION_OFFSET;																// ui = function ordinal
 							if (ui >= functionCount) { err = BAD_CALL; goto ret; }
-							ui = functionTable[ui];						// ui = code offset
+							ui = functionTable[ui];																		// ui = code offset
 							assert((codeBase + ui)->opcode == FUNC_CC_);
 							goto call;
-			case CALL_CVC:	ui = C0.p - FUNCTION_OFFSET;						// ui = function ordinal (constant, validated at assembly)
+			case CALL_CVC:	ui = C0.p - FUNCTION_OFFSET;																// ui = function ordinal (constant, validated at assembly)
 							assert(ui < functionCount);
-							ui = functionTable[ui];						// ui = code offset
+							ui = functionTable[ui];																		// ui = code offset
 							assert((codeBase + ui)->opcode == FUNC_CC_);
 							goto call;
 			call:			if (ipsp >= ipStackEnd) { err = IP_STACK_OVERFLOW; goto ret; }
@@ -1516,7 +1724,7 @@ Int Processor::run() {
 							if ((nativeError = (*natives[C0.i])(this)) != 0) { err = nativeError; goto ret; }
 							clockCyclesLeft = this->clockCyclesLeft;
 							if (this->ip != ip) {																		// the native called pushCall(): continue in the last-pushed callee
-								assert(this->ipsp > ipsp && this->ipsp[-1].dsp != 0);	// plain pushCall frames on top
+								assert(this->ipsp > ipsp && this->ipsp[-1].dsp != 0);									// plain pushCall frames on top
 								ipsp = this->ipsp;
 								dsp = this->dsp;
 								ip = this->ip;
@@ -1548,12 +1756,12 @@ Int Processor::run() {
 			case PEEK_VC_:	V0 = mb[C1.p]; break;
 			case POKE_CV_:	mb[C0.p] = V1; break;
 			case POKE_CC_:	mb[C0.p] = C1; break;
-			case PEEK_VVV:	if ((ui = (UInt)V1.i + (UInt)V2.i - MEMORY_OFFSET) < memorySize) { V0 = mb[ui + MEMORY_OFFSET]; break; } else { err = BAD_PEEK; goto ret; }
-			case PEEK_VCV:	if ((ui = (UInt)C1.i + (UInt)V2.i - MEMORY_OFFSET) < memorySize) { V0 = mb[ui + MEMORY_OFFSET]; break; } else { err = BAD_PEEK; goto ret; }
-			case POKE_VVV:	if ((ui = (UInt)V0.i + (UInt)V1.i - MEMORY_OFFSET) < rwMemorySize) { mb[ui + MEMORY_OFFSET] = V2; break; } else { err = BAD_POKE; goto ret; }
-			case POKE_CVV:	if ((ui = (UInt)C0.i + (UInt)V1.i - MEMORY_OFFSET) < rwMemorySize) { mb[ui + MEMORY_OFFSET] = V2; break; } else { err = BAD_POKE; goto ret; }
-			case POKE_VVC:	if ((ui = (UInt)V0.i + (UInt)V1.i - MEMORY_OFFSET) < rwMemorySize) { mb[ui + MEMORY_OFFSET] = C2; break; } else { err = BAD_POKE; goto ret; }
-			case POKE_CVC:	if ((ui = (UInt)C0.i + (UInt)V1.i - MEMORY_OFFSET) < rwMemorySize) { mb[ui + MEMORY_OFFSET] = C2; break; } else { err = BAD_POKE; goto ret; }
+			case PEEK_VVV:	if ((ui = (UInt)V1.i + (UInt)V2.i) + readOffset < memorySize) { V0 = mb[ui]; break; } else { err = BAD_PEEK; goto ret; }
+			case PEEK_VCV:	if ((ui = (UInt)C1.i + (UInt)V2.i) + readOffset < memorySize) { V0 = mb[ui]; break; } else { err = BAD_PEEK; goto ret; }
+			case POKE_VVV:	if ((ui = (UInt)V0.i + (UInt)V1.i) - MEMORY_OFFSET < rwMemorySize) { mb[ui] = V2; break; } else { err = BAD_POKE; goto ret; }
+			case POKE_CVV:	if ((ui = (UInt)C0.i + (UInt)V1.i) - MEMORY_OFFSET < rwMemorySize) { mb[ui] = V2; break; } else { err = BAD_POKE; goto ret; }
+			case POKE_VVC:	if ((ui = (UInt)V0.i + (UInt)V1.i) - MEMORY_OFFSET < rwMemorySize) { mb[ui] = C2; break; } else { err = BAD_POKE; goto ret; }
+			case POKE_CVC:	if ((ui = (UInt)C0.i + (UInt)V1.i) - MEMORY_OFFSET < rwMemorySize) { mb[ui] = C2; break; } else { err = BAD_POKE; goto ret; }
 			case GETL_VVV:	if ((Int)(ui2 = (UInt)(dataStackEnd - dsp - C1.i)) > 0 && (ui = V2.i) < ui2) { V0 = (dsp + C1.i)[ui]; break; } else { err = BAD_PEEK; goto ret; };
 			case SETL_VVV:	if ((Int)(ui2 = (UInt)(dataStackEnd - dsp - C0.i)) > 0 && (ui = V1.i) < ui2) { (dsp + C0.i)[ui] = V2; break; } else { err = BAD_POKE; goto ret; };
 			case SETL_VVC:	if ((Int)(ui2 = (UInt)(dataStackEnd - dsp - C0.i)) > 0 && (ui = V1.i) < ui2) { (dsp + C0.i)[ui] = C2; break; } else { err = BAD_POKE; goto ret; };
@@ -1596,21 +1804,22 @@ Int Processor::run() {
 			case SUBF_VCV:	V0.f = C1.f - V2.f; break;
 			case MULF_VVV:	V0.f = V1.f * V2.f; break;
 			case MULF_VVC:	V0.f = V1.f * C2.f; break;
-			case DIVF_VVV:	CHECK_FLOAT_DIV_BY_ZERO(V2.f); V0.f = V1.f / V2.f; break;
+			case DIVF_VVV:	V0.f = V1.f / V2.f; break;
 			case DIVF_VVC:	V0.f = V1.f / C2.f; break;
-			case DIVF_VCV:	CHECK_FLOAT_DIV_BY_ZERO(V2.f); V0.f = C1.f / V2.f; break;
+			case DIVF_VCV:	V0.f = C1.f / V2.f; break;
 			case FTOI_VVC:	V0.i = ftoi(V1.f * C2.f); break;
 			case ITOF_VVC:	V0.f = (Float)(V1.i) * C2.f; break;
-			case COPY_VVC:	ui = V0.i - MEMORY_OFFSET; ui2 = V1.i - MEMORY_OFFSET; goto copy;
-			case COPY_VCC:	ui = V0.i - MEMORY_OFFSET; ui2 = C1.i - MEMORY_OFFSET; goto copy;
-			case COPY_CVC:	ui = C0.i - MEMORY_OFFSET; ui2 = V1.i - MEMORY_OFFSET; goto copy;
-			case COPY_CCC:	ui = C0.i - MEMORY_OFFSET; ui2 = C1.i - MEMORY_OFFSET; goto copy;
-			copy:			if ((UInt)C2.i <= rwMemorySize && ui <= rwMemorySize - (UInt)C2.i
-									&& (UInt)C2.i <= memorySize && ui2 <= memorySize - (UInt)C2.i) {
-								// std::copy(&mb[ui2 + MEMORY_OFFSET], &mb[ui2 + MEMORY_OFFSET] + C2.i, &mb[ui + MEMORY_OFFSET]);
-								// memcpy(&mb[ui + MEMORY_OFFSET], &mb[ui2 + MEMORY_OFFSET], sizeof (Value) * C2.i);
-								const Value* sp = &mb[ui2 + MEMORY_OFFSET];
-								Value* dp = &mb[ui + MEMORY_OFFSET];
+			case COPY_VVC:	ui = V0.i; ui2 = V1.i; goto copy;
+			case COPY_VCC:	ui = V0.i; ui2 = C1.i; goto copy;
+			case COPY_CVC:	ui = C0.i; ui2 = V1.i; goto copy;
+			case COPY_CCC:	ui = C0.i; ui2 = C1.i; goto copy;
+			copy:			if ((UInt)C2.i <= rwMemorySize && ui - MEMORY_OFFSET <= rwMemorySize - (UInt)C2.i
+									&& (UInt)C2.i <= memorySize
+									&& ui2 + readOffset <= memorySize - (UInt)C2.i) {
+								// std::copy(&mb[ui2], &mb[ui2] + C2.i, &mb[ui]);
+								// memcpy(&mb[ui], &mb[ui2], sizeof (Value) * C2.i);
+								const Value* sp = &mb[ui2];
+								Value* dp = &mb[ui];
 								Value* ep = dp + C2.i;
 								while (dp < ep) *dp++= *sp++;
 								break;
@@ -1618,7 +1827,7 @@ Int Processor::run() {
 								err = ACCESS_VIOLATION;
 								goto ret;
 							}
-			case FORi_VVB:	V0.i = iadd(V0.i, 1); if (V0.i < V1.i) { ip += C2.i; continue; }; break;		// iadd, not ++: a counter already at INT_MAX made `++` signed-overflow UB. Wrap is unchanged, and FORp maps here too
+			case FORi_VVB:	V0.i = iadd(V0.i, 1); if (V0.i < V1.i) { ip += C2.i; continue; }; break;					// iadd, not ++: a counter already at INT_MAX made `++` signed-overflow UB. Wrap is unchanged, and FORp maps here too
 			case FORi_VCB:	V0.i = iadd(V0.i, 1); if (V0.i < C1.i) { ip += C2.i; continue; }; break;
 			case LSSI_VVB:	if (V0.i < V1.i) { ip += C2.i; continue; }; break;
 			case LSSI_VCB:	if (V0.i < C1.i) { ip += C2.i; continue; }; break;
@@ -1662,29 +1871,28 @@ ret:
 #undef C1
 #undef C2
 #undef CHECK_INT_DIV_BY_ZERO
-#undef CHECK_FLOAT_DIV_BY_ZERO
 
 Status Processor::enterCall(Pointer functionPointer) {
 	assert(codeBase != 0);
-	UInt ui = functionPointer - FUNCTION_OFFSET;						// ui = function ordinal
+	UInt ui = functionPointer - FUNCTION_OFFSET;																		// ui = function ordinal
 	if (ui >= functionCount) return BAD_CALL;
-	ui = functionTable[ui];										// ui = code offset
+	ui = functionTable[ui];																								// ui = code offset
 	assert((codeBase + ui)->opcode == FUNC_CC_);
 	if (ipsp + 2 > ipStackEnd) return IP_STACK_OVERFLOW;
 	ipsp->ip = this->ip;
 	ipsp++->dsp = this->dsp;
 	ipsp->ip = this->ip;
-	ipsp++->dsp = 0;			// Mark return to native caller.
+	ipsp++->dsp = 0;																									// Mark return to native caller.
 	this->ip = codeBase + ui;
 	return OK;
 }
 
 /*
-	pushCall(); the contract is in GAZL.h. The first push in a native call returns to the `^call`'s continuation and restores the
-	caller's frame base (undoing the window advance CALL_NVC performed for the native); every further push chains: its
-	frame resumes at the previously pushed target, so the calls run last-pushed-first, each RETU flowing into the next.
-	Frames store the resume point MINUS ONE because RETU restores and then the dispatch loop increments (`++ip`); for a
-	chain frame that minus-one address is never executed, only incremented over.
+	pushCall(); the contract is in GAZL.h. The first push in a native call returns to the `^call`'s continuation and
+	restores the caller's frame base (undoing the window advance CALL_NVC performed for the native); every further
+	push chains: its frame resumes at the previously pushed target, so the calls run last-pushed-first, each RETU
+	flowing into the next. Frames store the resume point MINUS ONE because RETU restores and then the dispatch loop
+	increments (`++ip`); for a chain frame that minus-one address is never executed, only incremented over.
 */
 Value* Processor::pushCall(Pointer functionPointer) {
 	assert(codeBase != 0);
@@ -1716,11 +1924,11 @@ Value* Processor::pushCall(Pointer functionPointer) {
 	data stack, call stack and instruction pointer hold nothing that needs saving.
 */
 const UInt MEMORY_FORMAT_VERSION = 1;
-const UInt MEMORY_INT_CANARY = 0x01020304;						// Detects endianness / format bugs on thaw.
-const UInt MEMORY_HEADER_SIZE = 4 + 6 * 4;						// Magic + { format version, GAZL version, word size, int canary, float canary, global count }.
+const UInt MEMORY_INT_CANARY = 0x01020304;							// Detects endianness / format bugs on thaw.
+const UInt MEMORY_HEADER_SIZE = 4 + 6 * 4;							// Magic + { format version, GAZL version, word size, int canary, float canary, global count }.
 static const char MEMORY_MAGIC[4] = { 'G', 'Z', 'M', 'M' };
 
-static unsigned char* putMemoryWord(unsigned char* p, UInt v) {	// Writes a 32-bit little-endian word.
+static unsigned char* putMemoryWord(unsigned char* p, UInt v) {		// Writes a 32-bit little-endian word.
 	p[0] = static_cast<unsigned char>(v);
 	p[1] = static_cast<unsigned char>(v >> 8);
 	p[2] = static_cast<unsigned char>(v >> 16);
@@ -1729,7 +1937,7 @@ static unsigned char* putMemoryWord(unsigned char* p, UInt v) {	// Writes a 32-b
 }
 
 static const unsigned char* getMemoryWord(const unsigned char* p, const unsigned char* end, UInt& value, bool& ok) {
-	if (end - p < 4) { ok = false; value = 0; return p; }		// Truncated: stop reading, leave `ok` false.
+	if (end - p < 4) { ok = false; value = 0; return p; }			// Truncated: stop reading, leave `ok` false.
 	value = (UInt)p[0] | ((UInt)p[1] << 8) | ((UInt)p[2] << 16) | ((UInt)p[3] << 24);
 	return p + 4;
 }
@@ -1738,30 +1946,27 @@ UInt freezeMemorySize(const Processor& processor, const Symbols& symbols) {
 	(void)processor;
 	UInt size = MEMORY_HEADER_SIZE;
 	Symbols::Iterator it;
-	for (bool ok = symbols.findFirstGlobal(it, false); ok; ok = symbols.findNextGlobal(it, false)) {
-		bool isTemp;
-		Pointer address;
-		UInt globalSize;
-		const char* name = symbols.getGlobalInfo(it, isTemp, address, globalSize);
-		size += 4 + (UInt)strlen(name) + 4 + globalSize * 4;	// name length + name + size + words
+	for (bool ok = symbols.findFirstGlobal(it, false, false); ok; ok = symbols.findNextGlobal(it, false, false)) {
+		const GlobalInfo info = symbols.getGlobalInfo(it);
+		size += 4 + (UInt)strlen(info.name) + 4 + info.size * 4;	// name length + name + size + words
 	}
 	return size;
 }
 
 UInt freezeMemory(const Processor& processor, const Symbols& symbols, void* buffer, UInt bufferSize) {
 	const UInt needed = freezeMemorySize(processor, symbols);
-	if (buffer == 0 || bufferSize < needed) return needed;	// Too small: write nothing, tell the caller the required size.
+	if (buffer == 0 || bufferSize < needed) return needed;			// Too small: write nothing, tell the caller the required size.
 
 	unsigned char* const start = static_cast<unsigned char*>(buffer);
 	unsigned char* p = start;
 	Symbols::Iterator it;
 	UInt globalCount = 0;
-	for (bool ok = symbols.findFirstGlobal(it, false); ok; ok = symbols.findNextGlobal(it, false)) ++globalCount;
+	for (bool ok = symbols.findFirstGlobal(it, false, false); ok; ok = symbols.findNextGlobal(it, false, false)) ++globalCount;
 
 	memcpy(p, MEMORY_MAGIC, 4);
 	p += 4;
 	Value floatCanary;
-	floatCanary.f = 1.0f;										// Detects a divergent float bit-layout on thaw.
+	floatCanary.f = 1.0f;											// Detects a divergent float bit-layout on thaw.
 	p = putMemoryWord(p, MEMORY_FORMAT_VERSION);
 	p = putMemoryWord(p, (UInt)VERSION);
 	p = putMemoryWord(p, (UInt)WORD_SIZE);
@@ -1769,22 +1974,19 @@ UInt freezeMemory(const Processor& processor, const Symbols& symbols, void* buff
 	p = putMemoryWord(p, floatCanary.p);
 	p = putMemoryWord(p, globalCount);
 
-	for (bool ok = symbols.findFirstGlobal(it, false); ok; ok = symbols.findNextGlobal(it, false)) {
-		bool isTemp;
-		Pointer address;
-		UInt size;
-		const char* name = symbols.getGlobalInfo(it, isTemp, address, size);
-		assert(!isTemp);
-		const UInt nameLength = (UInt)strlen(name);
+	for (bool ok = symbols.findFirstGlobal(it, false, false); ok; ok = symbols.findNextGlobal(it, false, false)) {
+		const GlobalInfo info = symbols.getGlobalInfo(it);
+		assert(!info.isTemp && !info.isInterior);
+		const UInt nameLength = (UInt)strlen(info.name);
 		p = putMemoryWord(p, nameLength);
-		memcpy(p, name, nameLength);
+		memcpy(p, info.name, nameLength);
 		p += nameLength;
-		p = putMemoryWord(p, size);
-		const Value* source = processor.accessConstMemory(address, size);
+		p = putMemoryWord(p, info.size);
+		const Value* source = processor.accessConstMemory(info.address, info.size);
 		assert(source != 0);
-		for (UInt i = 0; i < size; ++i) p = putMemoryWord(p, source[i].p);
+		for (UInt i = 0; i < info.size; ++i) p = putMemoryWord(p, source[i].p);
 	}
-	assert((UInt)(p - start) == needed);					// Byte count must match freezeMemorySize exactly.
+	assert((UInt)(p - start) == needed);							// Byte count must match freezeMemorySize exactly.
 	return needed;
 }
 
@@ -1906,7 +2108,8 @@ bool unitTest() {
 					|| (op.accepts[j] & (CONST_INT_P | CONST_FLOAT)) == 0 || (op.accepts[j] & FORWARD) == 0);
 			assert((op.accepts[j] & BRANCH) == 0 || (op.accepts[j] & FORWARD) != 0);
 		}
-		assert((op.otherFlags & YIELDS_CONST) == 0 || (op.opcode >= FIRST_COMPILE_TIME_OPCODE));
+		assert(((op.otherFlags & (YIELDS_CONST | YIELDS_GOTO)) != 0 || op.key[0] == '!')
+				== (op.opcode >= FIRST_COMPILE_TIME_OPCODE));
 		assert((op.otherFlags & CHECK_DIV_BY_0) == 0 || (op.accepts[2] & (CONST_FLOAT | CONST_INT)) == CONST_FLOAT || (op.accepts[2] & (CONST_FLOAT | CONST_INT)) == CONST_INT);
 		assert((op.declareTypes & FORWARD) == 0);
 	}
@@ -1954,26 +2157,6 @@ bool unitTest() {
 					assert(0);
 				}
 			}
-		}
-
-		// A frame summing past INT_MAX is refused at assembly, so a slot offset can never wrap.
-		{
-			std::vector<Value> m(100);
-			std::vector<Instruction> c(100);
-			std::vector<UInt> f(100);
-			Symbols g;
-			Assembler assem(100, &c[0], 100, &f[0], 100, &m[0], g);
-			assem.newUnit("FrameTooLarge");
-			bool refused = false;
-			try {
-				const Char* cp = STR("f: FUNC\n$a: LOCA *2147483647\n$b: LOCA *1\n RETU\n");
-				while (*cp != 0) cp = assem.feed(cp);
-			}
-			catch (const Exception& e) {
-				refused = (e.error == FRAME_TOO_LARGE);
-			}
-			assert(refused);
-			(void)refused;
 		}
 
 		TestCallbackData callbackData;
@@ -2037,21 +2220,12 @@ bool unitTest() {
 			MemoryLoad loaded = thawMemory(pmachine2, globals2, memoryBlob.empty() ? 0 : &memoryBlob[0], (UInt)memoryBlob.size());
 			assert(loaded == MEMORY_OK);
 
-			// A first global name length far past the end of the blob must be rejected, not read.
-			std::vector<unsigned char> badBlob(memoryBlob);
-			assert(badBlob.size() >= 32);
-			badBlob[28] = 0xF0; badBlob[29] = 0xFF; badBlob[30] = 0xFF; badBlob[31] = 0xFF;
-			assert(thawMemory(pmachine2, globals2, &badBlob[0], (UInt)badBlob.size()) == MEMORY_TRUNCATED);
-
 			// Every non-TEMP global must match the frozen original (identical assemblies share global addresses).
 			Symbols::Iterator it;
-			for (bool ok = globals.findFirstGlobal(it, false); ok; ok = globals.findNextGlobal(it, false)) {
-				bool isTemp;
-				Pointer address;
-				UInt size;
-				globals.getGlobalInfo(it, isTemp, address, size);
-				const UInt index = address - MEMORY_OFFSET;
-				for (UInt i = 0; i < size; ++i) assert(memory2[index + i].i == memory[index + i].i);
+			for (bool ok = globals.findFirstGlobal(it, false, true); ok; ok = globals.findNextGlobal(it, false, true)) {
+				const GlobalInfo info = globals.getGlobalInfo(it);
+				const UInt index = info.address - MEMORY_OFFSET + (sizes.constsSize - 1);			// the buffer starts with the constants
+				for (UInt i = 0; i < info.size; ++i) assert(memory2[index + i].i == memory[index + i].i);
 			}
 			// The restored function pointer resolves to CallBack in the fresh assembly (and equals the original ordinal).
 			UInt gpSize;

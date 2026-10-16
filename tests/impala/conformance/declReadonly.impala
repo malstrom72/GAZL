@@ -1,0 +1,22 @@
+/*
+	Conformance: Impala.md#readonly
+	`readonly` data is real storage, initialized and read through `global`.
+	Expected (GAZLCmd declReadonly.gazl main): 42 300 4
+*/
+const int DEBUG = 1
+extern native printInt
+extern native printFloat
+extern native printLF
+
+const int SOME_COUNT = 3
+readonly int IMMUTABLE = 42
+readonly array SOME_CONSTS[SOME_COUNT] = { 100, 200, 300 }
+
+function main()
+locals int i
+{
+	printInt(global IMMUTABLE); printLF();
+	i = 2;
+	printInt((int) global SOME_CONSTS[i]); printLF();
+	printInt(SOME_COUNT + 1); printLF();
+}

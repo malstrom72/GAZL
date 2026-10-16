@@ -1,0 +1,19 @@
+/*
+	Conformance: Impala.md#integer-literals
+	Decimal, hexadecimal, character and multi-character literals, and a negated literal.
+	`'ab'` packs the first character into the higher byte: 0x6162.
+	Expected (GAZLCmd lexIntegerLiterals.gazl main): 123 31 65 -5 24930
+*/
+const int DEBUG = 1
+extern native printInt
+extern native printFloat
+extern native printLF
+
+function main()
+{
+	printInt(123); printLF();
+	printInt(0x1F); printLF();
+	printInt('A'); printLF();
+	printInt(-5); printLF();
+	printInt('ab'); printLF();
+}

@@ -1,0 +1,49 @@
+; Compiled with Impala version 2.0
+
+; signatures version=1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ exprPointersArrays.impala:6:1
+; signature extern native printInt() -> unknown @ exprPointersArrays.impala:7:1
+; signature extern native printFloat() -> unknown @ exprPointersArrays.impala:8:1
+; signature extern native printLF() -> unknown @ exprPointersArrays.impala:9:1
+.z.data:	! DEFi #6
+data:	GLOB *.z.data	; signature array data[6] : int @ exprPointersArrays.impala:11:1
+	DATi #0 #1 #2 #3 #4 #5
+	GLOB *1
+gp:	DATp &data:0	; signature global gp : int-ptr @ exprPointersArrays.impala:12:1
+
+;-----------------------------------------------------------------------------
+main:	FUNC	; signature func main() -> void @ exprPointersArrays.impala:14:1
+		PARA *1
+	$p:	LOCp
+	$q:	LOCp
+	$value:	LOCi
+;-----------------------------------------------------------------------------
+		MOVp $p &data:3 	; p = &global data[3]
+		PEEK %1 $p 	; printInt(*p)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ exprPointersArrays.impala:18:14
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ exprPointersArrays.impala:18:25
+		PEEK %1 $p #1	; printInt(*(p + 1))
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ exprPointersArrays.impala:19:20
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ exprPointersArrays.impala:19:31
+		SUBp $q $p #1	; q = p - 1
+		SUBp %1 $q #1	; printInt(p - (q - 1))
+		DIFp %1 $p %1
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ exprPointersArrays.impala:21:23
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ exprPointersArrays.impala:21:34
+		PEEK %1 &gp 	; printInt(*(global gp + 3))
+		PEEK %1 %1 #3
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ exprPointersArrays.impala:22:28
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ exprPointersArrays.impala:22:39
+		PEEK %1 $p #-1	; printInt(p[-1])
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ exprPointersArrays.impala:23:17
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ exprPointersArrays.impala:23:28
+		MOVi $value #9 	; value = 9
+		ANDi %1 $value #0xf	; printInt(("0123456789abcdef")[value & 0xf])
+		PEEK %1 &.s_012345_4d2 %1
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ exprPointersArrays.impala:25:45
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ exprPointersArrays.impala:25:56
+		RETU   	; }
+
+.s_012345_4d2:	CNST *17
+	DATs 0123456789abcdef
+	DATi #0

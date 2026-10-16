@@ -1,0 +1,29 @@
+/*
+	Conformance: Impala.md#switch
+	An exclusive `== low to high` range, several values per case, no fall-through, and `default` outside the range.
+	Expected (GAZLCmd stmtSwitch.gazl main): 10 10 50 -1 -1
+*/
+const int DEBUG = 1
+extern native printInt
+extern native printFloat
+extern native printLF
+
+function pick(int i) returns int j
+{
+	switch (i == 0 to 10) {
+		case 0, 1, 2: {
+			j = 10;
+		}
+		case 5: j = 50;
+		default: j = -1;
+	}
+}
+
+function main()
+{
+	printInt(pick(0)); printLF();
+	printInt(pick(2)); printLF();
+	printInt(pick(5)); printLF();
+	printInt(pick(7)); printLF();
+	printInt(pick(10)); printLF();
+}

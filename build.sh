@@ -15,6 +15,12 @@ mkdir -p output
 # engine it exercises, so a regression surfaces before the slower node suite rather than after it.
 bash tools/test-fuzz.sh
 
+# Every memory instruction form at every edge of the memory arena, against an oracle (tools/GAZLBoundsSweep.cpp).
+bash tools/test-bounds.sh
+
+# Float literals round correctly, sampled across every float (tools/GAZLFloatLiteralTest.cpp).
+bash tools/test-float-literals.sh
+
 # Every node-only gate, shared with build.cmd so the two cannot run different subsets.
 bash tools/test-js.sh
 

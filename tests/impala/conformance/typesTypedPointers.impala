@@ -1,0 +1,26 @@
+/*
+	Conformance: Impala.md#typed-pointers-and-arrays-impala-2
+	Element types are a zero-cost overlay: typed subscripts, `&`, pointer arithmetic and pointer-to-pointer.
+	Expected (GAZLCmd typesTypedPointers.gazl main): 30 20 2.5 30
+*/
+const int DEBUG = 1
+extern native printInt
+extern native printFloat
+extern native printLF
+
+function main()
+locals int array a[4], float array f[2], int pointer p, int pointer pointer pp, pointer raw
+{
+	a[0] = 10;
+	a[1] = 20;
+	a[2] = 30;
+	p = &a[1];
+	printInt(p[1]); printLF();
+	raw = p;
+	p = (int pointer) raw;
+	printInt(*p); printLF();
+	f[1] = 2.5;
+	printFloat(f[1]); printLF();
+	pp = &p;
+	printInt((*pp)[1]); printLF();
+}

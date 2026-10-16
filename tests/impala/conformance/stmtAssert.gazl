@@ -1,0 +1,36 @@
+; Compiled with Impala version 2.0
+
+; signatures version=1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ stmtAssert.impala:6:1
+; signature extern native printInt() -> unknown @ stmtAssert.impala:7:1
+; signature extern native printFloat() -> unknown @ stmtAssert.impala:8:1
+; signature extern native printLF() -> unknown @ stmtAssert.impala:9:1
+
+;-----------------------------------------------------------------------------
+check:	FUNC	; signature func check(int i) -> int @ stmtAssert.impala:11:1
+	$r:	OUTi
+	$i:	INPi
+;-----------------------------------------------------------------------------
+		! EQUi #DEBUG #0 @.a0	; assert(i != 0)
+		NEQi $i #0 @.a0
+		MOVp %1 &.a_i0_4d2 
+		CALL ^assertFail %0 *1
+	.a0:	MOVi $r #1 	; r = 1
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+main:	FUNC	; signature func main() -> void @ stmtAssert.impala:17:1
+		PARA *1
+;-----------------------------------------------------------------------------
+		MOVi %2 #3 	; printInt(check(3))
+		CALL &check %1 *2	; expects check(int) -> int @ stmtAssert.impala:19:19
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ stmtAssert.impala:19:20
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ stmtAssert.impala:19:31
+		RETU   	; }
+
+	! EQUi #DEBUG #0 @.noAssertStrings
+.a_i0_4d2:	CNST *9
+	DATs (i != 0)
+	DATi #0
+.noAssertStrings:	!

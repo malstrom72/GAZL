@@ -1,0 +1,30 @@
+; Compiled with Impala version 2.0
+
+; signatures version=1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ declReadonly.impala:6:1
+; signature extern native printInt() -> unknown @ declReadonly.impala:7:1
+; signature extern native printFloat() -> unknown @ declReadonly.impala:8:1
+; signature extern native printLF() -> unknown @ declReadonly.impala:9:1
+SOME_COUNT:	! DEFi #3	; signature const SOME_COUNT : int @ declReadonly.impala:11:1
+	CNST *1
+IMMUTABLE:	DATi #42	; signature readonly IMMUTABLE : int @ declReadonly.impala:12:1
+.z.SOME_CONSTS:	! DEFi #SOME_COUNT
+SOME_CONSTS:	CNST *.z.SOME_CONSTS	; signature array SOME_CONSTS[SOME_COUNT] : unknown @ declReadonly.impala:13:1
+	DATA #100 #200 #300
+
+;-----------------------------------------------------------------------------
+main:	FUNC	; signature func main() -> void @ declReadonly.impala:15:1
+		PARA *1
+	$i:	LOCi
+;-----------------------------------------------------------------------------
+		PEEK %1 &IMMUTABLE 	; printInt(global IMMUTABLE)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ declReadonly.impala:18:28
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ declReadonly.impala:18:39
+		MOVi $i #2 	; i = 2
+		PEEK %1 &SOME_CONSTS $i	; printInt((int) global SOME_CONSTS[i])
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ declReadonly.impala:20:39
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ declReadonly.impala:20:50
+		ADDi %1 #SOME_COUNT #1	; printInt(SOME_COUNT + 1)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ declReadonly.impala:21:26
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ declReadonly.impala:21:37
+		RETU   	; }
