@@ -165,7 +165,7 @@ enum DataSection {
 struct GlobalInfo {
 	const char* name;				// valid as long as the `Symbols` it came from
 	Pointer address;
-	UInt owned;						// the words it owns, to the next label: what freezing saves under its name
+	UInt size;						// the words it owns, to the next label: what freezing saves under its name
 	DataSection section;			// the kind of section it is declared in; freezing saves `GLOB_SECTION` only
 };
 
@@ -181,13 +181,13 @@ class Symbols {
 		branch label of the current function.
 	**/
 	protected:	struct Symbol {
-					Symbol(int types, Value value, UInt size) : types(types), value(value), sectionOffset(0)
-							, sectionSize(size), owned(size) { }
+					Symbol(int types, Value value, UInt size) : types(types), value(value), size(size), minOffset(0)
+							, maxOffset(static_cast<Int>(size) - 1) { }
 					int types;																			// What kind of name it is, matched against the types an operand accepts.
 					Value value;																		// What the name stands for: an address, a function or native, a constant, a frame word or a code position.
-					UInt sectionOffset;																	// For data, its word in its section; for a local, its word in the frame. Checks `:k`.
-					UInt sectionSize;																	// For data, its section's size; for a local, the frame's parameters and locals. `sectionOffset + k` must stay inside.
-					UInt owned;																			// For data, the words owned, to the next label: what freezing saves and hosts are told.
+					UInt size;																			// Its own words: for data, what it owns, to the next label (what freezing saves and hosts are told); for a local, its declared size.
+					Int minOffset;																		// The lowest `k` a `:k` on it may take: down to its section's or frame's first word.
+					Int maxOffset;																		// The highest `k`: up to its section's or frame's last word.
 				};
 
 	protected:	struct Reference {
@@ -207,7 +207,7 @@ class Symbols {
 				
 	public:		void registerNative(const Char* name, Int index);
 	public:		Pointer findFunction(const Char* name) const;															// Returns `NULL_POINTER` if not found.
-	public:		Pointer findGlobal(const Char* name, UInt& owned) const;												// `owned` is the words the label owns. Returns `NULL_POINTER` if not found (in which case, `owned` is left untouched).
+	public:		Pointer findGlobal(const Char* name, UInt& size) const;													// `size` is the words the label owns. Returns `NULL_POINTER` if not found (in which case, `size` is left untouched).
 	public:		void defineConstant(const Char* name, bool asFloat, const Value& value);
 	public:		bool lookupConstant(const Char* name, bool* isFloat, Value* value) const;
 	public:		bool findFirstGlobal(Iterator& iterator) const;															// Every name of data, `GLOB`, `TEMP` and `CNST` alike, in ascending order (see `GlobalInfo`).

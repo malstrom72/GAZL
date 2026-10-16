@@ -697,7 +697,7 @@ std::string globalWords(Machine& m, const char* name) {
 */
 UInt ownedWords(const Symbols& symbols, const char* name) {
 	GlobalInfo info;
-	return (symbols.getGlobalInfo(name, info) ? info.owned : 99);
+	return (symbols.getGlobalInfo(name, info) ? info.size : 99);
 }
 
 void putWord(std::vector<unsigned char>& b, size_t at, UInt v) {
@@ -868,14 +868,14 @@ int sweepFrozenEntries() {
 	GlobalInfo entry;
 	GlobalInfo nosuch;
 	GlobalInfo function;
-	nosuch.owned = 1;
+	nosuch.size = 1;
 	function.address = 1;
-	if (!m.symbols.getGlobalInfo("entry", entry) || entry.section != CNST_SECTION || entry.owned != 2
-			|| m.symbols.getGlobalInfo("nosuch", nosuch) || nosuch.owned != 0 || nosuch.name != 0
+	if (!m.symbols.getGlobalInfo("entry", entry) || entry.section != CNST_SECTION || entry.size != 2
+			|| m.symbols.getGlobalInfo("nosuch", nosuch) || nosuch.size != 0 || nosuch.name != 0
 			|| m.symbols.getGlobalInfo("main", function) || function.address != NULL_POINTER
-			|| !m.symbols.getGlobalInfo("tmpval", temp) || temp.section != TEMP_SECTION || temp.owned != 2
+			|| !m.symbols.getGlobalInfo("tmpval", temp) || temp.section != TEMP_SECTION || temp.size != 2
 			|| !m.symbols.getGlobalInfo("head", head) || strcmp(head.name, "head") != 0
-			|| head.owned != 1 || head.section != GLOB_SECTION) {
+			|| head.size != 1 || head.section != GLOB_SECTION) {
 		std::printf("FAIL frozen entries: getGlobalInfo by name reports the wrong global\n");
 		++failures;
 	}

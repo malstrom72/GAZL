@@ -762,8 +762,7 @@ void Symbols::resolve(const Reference& ref, const Symbol& symbol) {
 		throw Exception(OFFSET_OUT_OF_BOUNDS, ref.label);
 	}
 	if (symbol.types != BRANCH && (ref.accepts & UNCHECKED_ADDRESS) == 0
-			&& (ref.offset < -static_cast<Int>(symbol.sectionOffset)
-			|| ref.offset >= static_cast<Int>(symbol.sectionSize - symbol.sectionOffset))) {				// `sectionOffset + offset` in [0, sectionSize), without a sum that can wrap
+			&& (ref.offset < symbol.minOffset || ref.offset > symbol.maxOffset)) {
 		throw Exception(OFFSET_OUT_OF_BOUNDS, ref.label);
 	}
 	if (ref.offset == 0) *ref.storage = symbol.value;
@@ -822,10 +821,10 @@ void Symbols::registerNative(const Char* name, Int index) {
 	define(name, NATIVE, v, 1);
 }
 
-Pointer Symbols::findGlobal(const Char* name, UInt& owned) const {
+Pointer Symbols::findGlobal(const Char* name, UInt& size) const {
 	const SymbolMap::const_iterator it = symbols.find(name);
 	if (it == symbols.end() || (it->second.types & ADDRESS) == 0) return NULL_POINTER;
-	owned = it->second.owned;
+	size = it->second.size;
 	return it->second.value.p;
 }
 
@@ -865,7 +864,7 @@ GlobalInfo Symbols::getGlobalInfo(const Iterator& iterator) const {
 	GlobalInfo info;
 	info.name = iterator->first.c_str();
 	info.address = iterator->second.value.p;
-	info.owned = iterator->second.owned;
+	info.size = iterator->second.size;
 	const int types = iterator->second.types;
 	info.section = ((types & ADDRESS_W) == 0 ? CNST_SECTION : ((types & TEMPORARY) != 0 ? TEMP_SECTION : GLOB_SECTION));
 	return info;
@@ -1021,8 +1020,8 @@ void Assembler::settleFrame() {
 	for (Symbols::SymbolMap::iterator it = locals.symbols.begin(); it != locals.symbols.end(); ++it) {
 		Symbols::Symbol& local = it->second;
 		if ((local.types & ANY_VAR) != 0) {
-			local.sectionOffset = static_cast<UInt>(local.value.i);
-			local.sectionSize = localsSize;
+			local.minOffset = -local.value.i;
+			local.maxOffset = static_cast<Int>(localsSize) - 1 - local.value.i;
 		}
 	}
 }
@@ -1041,10 +1040,9 @@ void Assembler::declareData(const Char* labelBegin, const Char* labelEnd, const 
 	Value v;
 	v.p = makeGAZLPointer(first, dataIsConstant);
 	Symbols::Symbol* const owner = declare(globals, labelBegin, labelEnd, dataLabelType, v
-			, static_cast<UInt>(dataEnd - sectionBegin));
-	owner->sectionOffset = static_cast<UInt>(first - sectionBegin);
-	owner->owned = static_cast<UInt>(dataEnd - first);
-	if (dataOwner != 0) dataOwner->owned = owner->sectionOffset - dataOwner->sectionOffset;
+			, static_cast<UInt>(dataEnd - first));													// owning, and reaching, to the section's end
+	owner->minOffset = -static_cast<Int>(first - sectionBegin);
+	if (dataOwner != 0) dataOwner->size = static_cast<UInt>(dataOwner->minOffset - owner->minOffset);
 	dataOwner = owner;
 }
 
@@ -1801,14 +1799,14 @@ static void findMemoryOwners(const Symbols& symbols, std::vector<MemoryOwner>& o
 	Symbols::Iterator it;
 	for (bool ok = symbols.findFirstGlobal(it); ok; ok = symbols.findNextGlobal(it)) {
 		const MemoryOwner owner = { symbols.getGlobalInfo(it), static_cast<UInt>(it->first.size()) };
-		if (owner.info.section == GLOB_SECTION && owner.info.owned != 0) owners.push_back(owner);
+		if (owner.info.section == GLOB_SECTION && owner.info.size != 0) owners.push_back(owner);
 	}
 }
 
 static UInt frozenSize(const std::vector<MemoryOwner>& owners) {
 	UInt size = MEMORY_HEADER_SIZE + MEMORY_CHECK_SIZE;
 	for (size_t i = 0; i < owners.size(); ++i) {
-		size += 4 + owners[i].length + memoryPadding(owners[i].length) + 4 + owners[i].info.owned * 4;
+		size += 4 + owners[i].length + memoryPadding(owners[i].length) + 4 + owners[i].info.size * 4;
 	}
 	return size;
 }
@@ -1835,9 +1833,9 @@ UInt freezeMemory(const Processor& processor, const Symbols& symbols, void* buff
 	p = putMemoryCheck(p);
 	for (size_t i = 0; i < owners.size(); ++i) {
 		const GlobalInfo& owner = owners[i].info;
-		const Value* words = processor.accessConstMemory(owner.address, owner.owned);
+		const Value* words = processor.accessConstMemory(owner.address, owner.size);
 		assert(words != 0);
-		p = putMemoryEntry(p, owner.name, owners[i].length, words, owner.owned);
+		p = putMemoryEntry(p, owner.name, owners[i].length, words, owner.size);
 	}
 	assert(static_cast<UInt>(p - start) == needed);					// Byte count must match `frozenSize` exactly.
 	return needed;
@@ -1907,9 +1905,9 @@ MemoryLoad thawMemory(Processor& processor, const Symbols& symbols, const void* 
 		}
 		const MemoryEntry& entry = entries[e++];												// the same name: restored
 		const GlobalInfo& owner = owners[o++].info;
-		exact = exact && entry.count == owner.owned;
-		const UInt restored = (entry.count == owner.owned || prefix ? minimum(entry.count, owner.owned) : 0);
-		Value* const destination = processor.accessMemory(owner.address, owner.owned);
+		exact = exact && entry.count == owner.size;
+		const UInt restored = (entry.count == owner.size || prefix ? minimum(entry.count, owner.size) : 0);
+		Value* const destination = processor.accessMemory(owner.address, owner.size);
 		assert(destination != 0);
 		for (UInt i = 0; i < restored; ++i) destination[i].p = getMemoryWord(entry.words + i * 4);
 	}
@@ -2110,7 +2108,7 @@ bool unitTest() {
 				const GlobalInfo info = globals.getGlobalInfo(it);
 				if (info.section == TEMP_SECTION) continue;
 				const UInt index = info.address - MEMORY_OFFSET + (sizes.constsSize - 1);			// the buffer starts with the constants
-				for (UInt i = 0; i < info.owned; ++i) assert(memory2[index + i].i == memory[index + i].i);
+				for (UInt i = 0; i < info.size; ++i) assert(memory2[index + i].i == memory[index + i].i);
 			}
 			// The restored function pointer resolves to CallBack in the fresh assembly (and equals the original ordinal).
 			UInt gpSize;
