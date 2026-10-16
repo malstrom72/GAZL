@@ -724,8 +724,8 @@ int sweepFrameAndThaw() {
 
 /*
 	What `freezeMemory` saves for each way of naming data: a named section once and whole, a label in an unnamed
-	section over every value on its line, and nothing for unnamed words, `TEMP` or `CNST`. Each saved entry is
-	checked by name, size and words. Returns the number of failures, each one printed.
+	section from its line to the next label or the section's end, and nothing for `TEMP` or `CNST`. Each saved
+	entry is checked by name, size and words. Returns the number of failures, each one printed.
 */
 int sweepSnapshotEntries() {
 	const char* const SOURCE =
@@ -735,9 +735,7 @@ int sweepSnapshotEntries() {
 		"state:\tGLOB *3\n"					// named section with labels inside: saved once, as `state`
 		"gain:\tDATf #0.5\n"
 		"level:\tDATi #3\n"
-		"\tGLOB *4\n"						// unnamed section without labels: nothing to save it under
-		"\tDATi #11 #12 #13 #14\n"
-		"\tGLOB *3\n"						// unnamed section, first word labelled
+		"\tGLOB *3\n"						// unnamed section: the label covers the unlabelled line after it too
 		"first:\tDATi #21\n"
 		"\tDATi #22\n"
 		"\tGLOB *8\n"						// labels over several values
@@ -751,14 +749,14 @@ int sweepSnapshotEntries() {
 		"v:\tLOCi\n"
 		"\tPEEK v &multi:2\n"				// a label's offset is checked against all of its values
 		"\tRETU\n";
-	struct Entry { const char* name; UInt size; UInt words[4]; };
+	struct Entry { const char* name; UInt size; UInt words[8]; };
 	const Entry EXPECTED[] = {
 		{ "clock", 1, { 7 } },
-		{ "first", 1, { 21 } },
+		{ "first", 3, { 21, 22, 0 } },
 		{ "multi", 3, { 31, 32, 33 } },
 		{ "params", 4, { 0, 0, 0, 0 } },
 		{ "state", 3, { 0x3F000000u, 3, 0 } },
-		{ "text", 3, { 'a', 'b', 'c' } }
+		{ "text", 5, { 'a', 'b', 'c', 0, 0 } }
 	};
 	const int count = sizeof (EXPECTED) / sizeof (*EXPECTED);
 
@@ -797,7 +795,7 @@ int sweepSnapshotEntries() {
 		bool same = (name == EXPECTED[i].name && size == EXPECTED[i].size);
 		for (UInt w = 0; w < size; ++w) {
 			const UInt word = r.word();
-			same = same && w < 4 && word == EXPECTED[i].words[w];
+			same = same && w < 8 && word == EXPECTED[i].words[w];
 		}
 		if (!same) {
 			std::printf("FAIL snapshot entries: entry %d is %s (%u words), expected %s (%u words)\n", i, name.c_str()
@@ -811,7 +809,7 @@ int sweepSnapshotEntries() {
 	UInt levelSize = 0;
 	const Pointer stateAddress = m.symbols.findGlobal("state", stateSize);
 	if (m.symbols.findGlobal("gain", gainSize) != stateAddress || gainSize != 1
-			|| m.symbols.findGlobal("level", levelSize) != stateAddress + 1 || levelSize != 1) {
+			|| m.symbols.findGlobal("level", levelSize) != stateAddress + 1 || levelSize != 2) {
 		std::printf("FAIL snapshot entries: findGlobal no longer resolves the labels inside `state`\n");
 		++failures;
 	}
@@ -826,7 +824,7 @@ int sweepSnapshotEntries() {
 		const bool assembled = assemble(e, std::string("\tGLOB *2\nx:\t") + EMPTY[i] + "\ny:\tDATi #5\n", eLayout
 				, error);
 		const Pointer x = e.symbols.findGlobal("x", xSize);
-		if (!assembled || x == NULL_POINTER || xSize != 0 || e.symbols.findGlobal("y", ySize) != x || ySize != 1) {
+		if (!assembled || x == NULL_POINTER || xSize != 0 || e.symbols.findGlobal("y", ySize) != x || ySize != 2) {
 			std::printf("FAIL snapshot entries: `x: %s` is not an empty label at `y`\n", EMPTY[i]);
 			++failures;
 		}
@@ -863,9 +861,9 @@ int sweepTextEncoding() {
 	const Case CASES[] = {
 		{ "DATs with a byte above 0x7F", "\tGLOB *4\n\tDATs abc\xE5\n", NON_ASCII_TEXT },
 		{ "a quoted literal with a byte above 0x7F", "\tGLOB *1\n\tDATi #'\xE5'\n", NON_ASCII_TEXT },
-		{ "a comment with bytes above 0x7F", "\tGLOB *1\n\tDATi #1 ; \xE5\xE4\xF6 \xC3\xA5\n; \xFF\n", -1 },
-		{ "ASCII DATs text", "\tGLOB *3\n\tDATs abc\n", -1 },
-		{ "an ASCII quoted literal", "\tGLOB *1\n\tDATi #'AB'\n", -1 }
+		{ "a comment with bytes above 0x7F", "t:\tGLOB *1\n\tDATi #1 ; \xE5\xE4\xF6 \xC3\xA5\n; \xFF\n", -1 },
+		{ "ASCII DATs text", "t:\tGLOB *3\n\tDATs abc\n", -1 },
+		{ "an ASCII quoted literal", "t:\tGLOB *1\n\tDATi #'AB'\n", -1 }
 	};
 	const int count = sizeof (CASES) / sizeof (*CASES);
 	int failures = 0;
@@ -877,6 +875,75 @@ int sweepTextEncoding() {
 		}
 	}
 	std::printf("text encoding: %d checked, %d failed\n", count, failures);
+	return failures;
+}
+
+/*
+	Data in an unnamed section before its first label belongs to no name, so a snapshot could not save it, and the
+	assembler refuses it: at the statement, or for a section with no data, when the next section opens or at
+	`finalize`. Returns the number of failures, each one printed.
+*/
+int sweepUnnamedSections() {
+	struct Case { const char* what; const char* source; int error; };
+	const Case CASES[] = {
+		{ "an unnamed GLOB with unlabelled data", "\tGLOB *1\n\tDATi #0\n", UNNAMED_DATA_SECTION },
+		{ "an unnamed GLOB followed by another section", "\tGLOB *1\n\tDATi #0\nb:\tGLOB *1\n", UNNAMED_DATA_SECTION },
+		{ "an unnamed CNST with unlabelled data", "\tCNST *1\n\tDATi #0\n", UNNAMED_DATA_SECTION },
+		{ "an unnamed TEMP without data", "\tTEMP *1\n", UNNAMED_DATA_SECTION },
+		{ "a named section", "s:\tGLOB *1\n\tDATi #0\n", -1 },
+		{ "an unnamed section with a labelled statement", "\tGLOB *1\na:\tDATi #0\n", -1 },
+		{ "data before the first label of an unnamed section", "\tGLOB *2\n\tDATi #0\nb:\tDATi #0\n"
+				, UNNAMED_DATA_SECTION }
+	};
+	const int count = sizeof (CASES) / sizeof (*CASES);
+	int failures = 0;
+	for (int i = 0; i < count; ++i) {
+		const int error = assemblyError(CASES[i].source);
+		if (error != CASES[i].error) {
+			std::printf("FAIL unnamed sections: %s gave error %d, expected %d\n", CASES[i].what, error, CASES[i].error);
+			++failures;
+		}
+	}
+	// A label covers the unlabelled statements after it, up to the next label or the end of the section.
+	Machine m;
+	Layout layout = Layout();
+	std::string error;
+	UInt sSize = 0;
+	UInt tSize = 0;
+	const bool assembled = assemble(m, "\tGLOB *20\ns:\tDATs blahblah\n\tDATi #10\n\tDATs yaddayadda\nt:\tDATi #1\n"
+			, layout, error);
+	const Pointer sAddress = m.symbols.findGlobal("s", sSize);
+	if (!assembled || sAddress == NULL_POINTER || sSize != 19 || m.symbols.findGlobal("t", tSize) != sAddress + 19
+			|| tSize != 1) {
+		std::printf("FAIL unnamed sections: a label does not cover the unlabelled lines after it (%s)\n", error.c_str());
+		++failures;
+	}
+	std::printf("unnamed sections: %d checked, %d failed\n", count + 1, failures);
+	return failures;
+}
+
+/*
+	A function address takes no offset: `&main:1` would name whichever function was declared next. Checked where the
+	function is already known and where it is a forward reference. Returns the number of failures, each one printed.
+*/
+int sweepFunctionOffsets() {
+	struct Case { const char* what; const char* source; int error; };
+	const Case CASES[] = {
+		{ "an offset on a known function", "main:\tFUNC\np:\tLOCp\n\tMOVp p &main:1\n\tRETU\n", OFFSET_OUT_OF_BOUNDS },
+		{ "an offset on a forward function", "\tGLOB *1\nfp:\tDATp &main:1\nmain:\tFUNC\n\tRETU\n"
+				, OFFSET_OUT_OF_BOUNDS },
+		{ "a function address without an offset", "\tGLOB *1\nfp:\tDATp &main\nmain:\tFUNC\n\tRETU\n", -1 }
+	};
+	const int count = sizeof (CASES) / sizeof (*CASES);
+	int failures = 0;
+	for (int i = 0; i < count; ++i) {
+		const int error = assemblyError(CASES[i].source);
+		if (error != CASES[i].error) {
+			std::printf("FAIL function offsets: %s gave error %d, expected %d\n", CASES[i].what, error, CASES[i].error);
+			++failures;
+		}
+	}
+	std::printf("function offsets: %d checked, %d failed\n", count, failures);
 	return failures;
 }
 
@@ -984,6 +1051,7 @@ int main() {
 		std::printf("bounds sweep: this host forbids executable memory; the JIT is NOT swept\n");
 	}
 #endif
-	const int hostFailures = sweepNativeAccess() + sweepFrameAndThaw() + sweepSnapshotEntries() + sweepTextEncoding();
+	const int hostFailures = sweepNativeAccess() + sweepFrameAndThaw() + sweepSnapshotEntries() + sweepTextEncoding()
+			+ sweepUnnamedSections() + sweepFunctionOffsets();
 	return (sweep(engineCount) != 0 || hostFailures != 0) ? 1 : 0;
 }
