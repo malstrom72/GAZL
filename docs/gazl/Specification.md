@@ -79,7 +79,7 @@ an access around the end of memory and back in.
 example one per thread.
 - **What they share:** the constants and the globals, so a global written by one is seen by the others.
 - **What each has of its own:** its call stack, and its own part of the data stack, a range above the globals that
-  the host assigns. A function's frames and transients live in the part of the processor that runs it.
+  the host assigns. Every frame lives in the part of the processor running the call.
 - **What is checked:** each processor's accesses are checked against the memory as above, not against its own part.
   One processor can therefore read and write another's part of the data stack through a pointer; the sandbox
   protects the host, not processors from each other.
