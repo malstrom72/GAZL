@@ -334,7 +334,7 @@ restored by name ("thaw") into the program after it has been assembled again. A 
   padding, so that the name and its padding together take a multiple of 4 bytes. A name of `L` bytes has
   `(4 - L % 4) % 4` padding bytes.
 
-Every field starts at a multiple of 4 bytes from the start of the snapshot. A reader must still decode each word
+Every field starts at a multiple of 4 bytes from the start of the snapshot. Thaw must still decode each word
 byte by byte, as above, and never by loading it through a pointer.
 
 **Header,** 20 bytes:
@@ -343,7 +343,7 @@ byte by byte, as above, and never by loading it through a pointer.
 | ------ | ------------------------------------------------------- |
 | 0      | magic, the bytes `G` `Z` `M` `M` (`47 5A 4D 4D`)        |
 | 4      | word: snapshot format version, 1                        |
-| 8      | word: the GAZL version of the writer, 1 for GAZL 1      |
+| 8      | word: the GAZL version of freeze, 1 for GAZL 1          |
 | 12     | word: word size in bits, 32                             |
 | 16     | word: `S`, the number of entries that follow, `S >= 1`  |
 
@@ -362,8 +362,8 @@ the name order below. Its 28 bytes are fixed:
     05 00 00 00   24 67 61 7A 6C 00 00 00   03 00 00 00   04 03 02 01   00 00 80 3F   01 00 80 7F
     L = 5         "$gazl" + 3 padding       N = 3         0x01020304    1.0f          signaling NaN
 
-A writer produces its words the way it produces any other entry's: from the int `0x01020304`, the float `1.0f` and
-a word holding a signaling NaN. A reader parses it like any other entry and compares all 28 bytes, which checks
+Freeze produces its words the way it produces any other entry's: from the int `0x01020304`, the float `1.0f` and
+a word holding a signaling NaN. Thaw parses it like any other entry and compares all 28 bytes, which checks
 that lengths, names, padding, words and float bits, a NaN's payload included, decode as they were encoded. Any
 difference is `MEMORY_BAD_CANARY`.
 
@@ -373,21 +373,21 @@ saved exactly once. Owners in `CNST` and `TEMP` sections are left out. In the ex
 are `buffer` (1 word), `clock` (1 word) and `tail` (39 words). An entry's words are the raw 32 bits of memory,
 whatever they hold.
 
-**Validation.** A reader validates the whole snapshot before restoring anything. On the first problem below, looked
+**Validation.** Thaw validates the whole snapshot before restoring anything. On the first problem below, looked
 for in this order, it restores nothing and returns that problem's status:
 
 | problem                                                                              | status                |
 | ------------------------------------------------------------------------------------ | --------------------- |
 | fewer than 4 bytes, or the magic is wrong                                            | `MEMORY_BAD_MAGIC`    |
 | the header is incomplete                                                             | `MEMORY_TRUNCATED`    |
-| the format version is not 1, or the GAZL version is 0 or above the reader's own      | `MEMORY_BAD_VERSION`  |
+| the format version is not 1, or the GAZL version is 0 or above thaw's own           | `MEMORY_BAD_VERSION`  |
 | the word size is not 32                                                              | `MEMORY_BAD_WORDSIZE` |
 | a length runs past the end of the snapshot                                           | `MEMORY_TRUNCATED`    |
 | the check entry differs from the one above                                           | `MEMORY_BAD_CANARY`   |
 | a name is not a valid identifier, names do not ascend strictly, or padding is not 0  | `MEMORY_MALFORMED`    |
 | bytes follow the last entry                                                          | `MEMORY_MALFORMED`    |
 
-**Restore.** Only after validation succeeds, the reader matches the snapshot's entries to the re-assembled
+**Restore.** Only after validation succeeds, thaw matches the snapshot's entries to the re-assembled
 program's owners in `GLOB` sections, by name. Each name falls in exactly one case:
 - **An entry and an owner of the same size:** the words are restored.
 - **An entry and an owner of different sizes:** the host chooses, for the whole restore, between two policies.
@@ -410,9 +410,9 @@ The status says whether the snapshot fitted the program exactly:
 - A restored word is its raw bits. Snapshots record no types, layouts or pointer targets, so pointers in restored
   data are valid only when the program was assembled from the same code and constants by the same implementation,
   and a pointer into the data stack is never valid.
-- The format checks its own structure, not whether its bytes are intact. The host is responsible for giving the
-  reader exactly the bytes the writer produced, no more and no fewer, for example by storing their count and a
-  checksum of them.
+- The format checks its own structure, not whether its bytes are intact. The host is responsible for passing thaw
+  exactly the bytes that freeze produced, no more and no fewer, for example by storing their count and a checksum
+  of them.
 
 ## 12. Conformance
 
@@ -431,7 +431,7 @@ Where `src/GAZL.cpp` does not yet do what this specification says:
    - names are not padded, and entries follow the assembler's own order rather than ascending names;
    - a named section is saved whole, and labels inside it are not saved, where section 6 makes every label an
      owner (the assembler already gives every word an owner, with data labels running to the next label);
-   - the reader accepts only its own GAZL version;
+   - thaw accepts only its own GAZL version;
    - it restores while it parses, so a truncated snapshot restores the entries before the damage, and there is
      no `MEMORY_MALFORMED`;
    - a size mismatch is always skipped, there is no prefix policy, and there is no `MEMORY_MISMATCH`.
