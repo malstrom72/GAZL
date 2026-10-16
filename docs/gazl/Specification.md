@@ -411,8 +411,8 @@ The status says whether the frozen memory fitted the program exactly:
   data are valid only when the program was assembled from the same code and constants by the same implementation,
   and a pointer into the data stack is never valid.
 - The format checks its own structure, not whether its bytes are intact. When thawing, the host must supply
-  exactly the bytes that freezing produced, no more and no fewer, for example by storing their count and a
-  checksum with them.
+  exactly the bytes that freezing produced, no more and no fewer. To be sure of that, it can store the byte count
+  and a checksum along with the frozen memory, and check both before thawing.
 
 ## 12. Conformance
 
