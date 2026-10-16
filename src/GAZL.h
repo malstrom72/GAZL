@@ -176,14 +176,18 @@ struct GlobalInfo {
 */
 class Symbols {
 	friend class Assembler;
+	/**
+		One name: in `globals` a data label, function, native or named constant; in `locals` a parameter, local or
+		branch label of the current function.
+	**/
 	protected:	struct Symbol {
 					Symbol(int types, Value value, UInt size) : types(types), value(value), sectionOffset(0)
 							, sectionSize(size), owned(size) { }
-					int types;
-					Value value;
-					UInt sectionOffset;																	// For data, its word in its section; for a local, its word in the frame.
+					int types;																			// What kind of name it is, matched against the types an operand accepts.
+					Value value;																		// What the name stands for: an address, a function or native, a constant, a frame word or a code position.
+					UInt sectionOffset;																	// For data, its word in its section; for a local, its word in the frame. Checks `:k`.
 					UInt sectionSize;																	// For data, its section's size; for a local, the frame's parameters and locals. `sectionOffset + k` must stay inside.
-					UInt owned;																			// For data, the words owned: to the next label.
+					UInt owned;																			// For data, the words owned, to the next label: what freezing saves and hosts are told.
 				};
 
 	protected:	struct Reference {
