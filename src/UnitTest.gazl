@@ -459,7 +459,7 @@ checkZeroLoop: NOOP
 ;
 ; Divide floats
 ;
-; Division by 0 is considered illegal and should generate a run-time error (or compile-time error if 0 is a constant).
+; Follows IEEE-754: dividing by a zero of either sign gives an infinity of the matching sign, and 0 / 0 gives NaN.
 ;
 ;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 
@@ -470,6 +470,15 @@ checkZeroLoop: NOOP
  SUBf      f3              f3              #456.7
  ABSf      f3              f3
  GRTf      f3              #1.0e-6         @fail
+ MOVf      f0              #0.0
+ DIVf      f1              #1.0            f0                  ; 1 / 0 = +inf, above the largest float
+ LEQf      f1              #3.4028235e38   @fail
+ DIVf      f1              #-1.0           f0                  ; -1 / 0 = -inf
+ GEQf      f1              #-3.4028235e38  @fail
+ DIVf      f1              #1.0            #-0.0               ; folded at assembly: 1 / -0 = -inf
+ GEQf      f1              #-3.4028235e38  @fail
+ DIVf      f1              f0              f0                  ; 0 / 0 = NaN, unequal to itself
+ EQUf      f1              f1              @fail
 
 ;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ;

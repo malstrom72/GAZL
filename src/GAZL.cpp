@@ -504,9 +504,9 @@ static const Operator OPERATORS[] = {
 	, { " DIFp_vcv", SUBI_VCV,	{ VAR_INT_W		, FWD_FREE		, VAR_PTR_R		}		, 0				, 0				}
 	, { " DIFp_vvc", SUBI_VVC,	{ VAR_INT_W		, VAR_PTR_R		, FWD_FREE		}		, 0				, 0				}
 	, { " DIFp_vvv", SUBI_VVV,	{ VAR_INT_W		, VAR_PTR_R		, VAR_PTR_R		}		, 0				, 0				}
-	, { " DIVf_vcc", DIVF_CCC,	{ VAR_FLOAT_W	, CONST_FLOAT	, CONST_FLOAT	}		, YIELDS_CONST|CHECK_DIV_BY_0, CONST_FLOAT }
+	, { " DIVf_vcc", DIVF_CCC,	{ VAR_FLOAT_W	, CONST_FLOAT	, CONST_FLOAT	}		, YIELDS_CONST	, CONST_FLOAT	}
 	, { " DIVf_vcv", DIVF_VCV,	{ VAR_FLOAT_W	, CONST_FLOAT	, VAR_FLOAT_R	}		, 0				, 0				}
-	, { " DIVf_vvc", DIVF_VVC,	{ VAR_FLOAT_W	, VAR_FLOAT_R	, CONST_FLOAT	}		, CHECK_DIV_BY_0, 0				}
+	, { " DIVf_vvc", DIVF_VVC,	{ VAR_FLOAT_W	, VAR_FLOAT_R	, CONST_FLOAT	}		, 0				, 0				}
 	, { " DIVf_vvv", DIVF_VVV,	{ VAR_FLOAT_W	, VAR_FLOAT_R	, VAR_FLOAT_R	}		, 0				, 0				}
 	, { " DIVi_vcc", DIVI_CCC,	{ VAR_INT_W		, CONST_INT		, CONST_INT		}		, YIELDS_CONST|CHECK_DIV_BY_0, CONST_INT }
 	, { " DIVi_vcv", DIVI_VCV,	{ VAR_INT_W		, CONST_INT		, VAR_INT_R		}		, 0				, 0				}
@@ -692,7 +692,7 @@ static const Operator OPERATORS[] = {
 	, { "!DEFi_c__", DEFI____,	{ CONST_INT		, 0				, 0				}		, 0				, CONST_INT		}
 	, { "!DEFp_c__", DEFI____,	{ FREE_ADDRESS		, 0			, 0				}		, 0				, FREE_ADDRESS		}
 	, { "!DIFp_ccc", SUBI_CCC,	{ COMPILE_TIME	, FREE_ADDRESS	, FREE_ADDRESS	}		, 0				, CONST_INT		}
-	, { "!DIVf_ccc", DIVF_CCC,	{ COMPILE_TIME	, CONST_FLOAT	, CONST_FLOAT	}		, CHECK_DIV_BY_0, CONST_FLOAT	}
+	, { "!DIVf_ccc", DIVF_CCC,	{ COMPILE_TIME	, CONST_FLOAT	, CONST_FLOAT	}		, 0				, CONST_FLOAT	}
 	, { "!DIVi_ccc", DIVI_CCC,	{ COMPILE_TIME	, CONST_INT		, CONST_INT		}		, CHECK_DIV_BY_0, CONST_INT		}
 	, { "!EQUi_ccb", EQUI_CCB,	{ CONST_INT		, CONST_INT		, FWD_BRANCH	}		, 0				, 0				}
 	, { "!FLOf_cc_", FLOF_CC_,	{ COMPILE_TIME	, CONST_FLOAT	, 0				}		, 0				, CONST_FLOAT	}
@@ -1141,7 +1141,7 @@ Value Assembler::calcConstant(const Operator* op, const Char* op1Begin, const Ch
 		case ADDF_CCC: v1.f += v2.f; break;
 		case SUBF_CCC: v1.f -= v2.f; break;
 		case MULF_CCC: v1.f *= v2.f; break;
-		case DIVF_CCC: if (v2.f == 0) throw Exception(CONSTANT_DIVISION_BY_ZERO); v1.f /= v2.f; break;
+		case DIVF_CCC: v1.f /= v2.f; break;																		// IEEE: a zero divisor gives an infinity or NaN
 		case FTOI_CCC: v1.i = ftoi(v1.f * v2.f); break;
 		case ITOF_CCC: v1.f = (Float)(v1.i) * v2.f; break;
 		default: assert(0);
@@ -1484,7 +1484,6 @@ Processor::Processor(UInt codeSize, const Instruction* code, UInt functionCount,
 #define C1 (ip->p1)
 #define C2 (ip->p2)
 #define CHECK_INT_DIV_BY_ZERO(v) if (v == 0) { err = DIVISION_BY_ZERO; goto ret; }
-#define CHECK_FLOAT_DIV_BY_ZERO(v) if (v == 0) { err = DIVISION_BY_ZERO; goto ret; }
 
 Int Processor::run() {
 	assert(codeBase != 0);
@@ -1592,9 +1591,9 @@ Int Processor::run() {
 			case SUBF_VCV:	V0.f = C1.f - V2.f; break;
 			case MULF_VVV:	V0.f = V1.f * V2.f; break;
 			case MULF_VVC:	V0.f = V1.f * C2.f; break;
-			case DIVF_VVV:	CHECK_FLOAT_DIV_BY_ZERO(V2.f); V0.f = V1.f / V2.f; break;
+			case DIVF_VVV:	V0.f = V1.f / V2.f; break;
 			case DIVF_VVC:	V0.f = V1.f / C2.f; break;
-			case DIVF_VCV:	CHECK_FLOAT_DIV_BY_ZERO(V2.f); V0.f = C1.f / V2.f; break;
+			case DIVF_VCV:	V0.f = C1.f / V2.f; break;
 			case FTOI_VVC:	V0.i = ftoi(V1.f * C2.f); break;
 			case ITOF_VVC:	V0.f = (Float)(V1.i) * C2.f; break;
 			case COPY_VVC:	ui = V0.i; ui2 = V1.i; goto copy;
@@ -1659,7 +1658,6 @@ ret:
 #undef C1
 #undef C2
 #undef CHECK_INT_DIV_BY_ZERO
-#undef CHECK_FLOAT_DIV_BY_ZERO
 
 Status Processor::enterCall(Pointer functionPointer) {
 	assert(codeBase != 0);

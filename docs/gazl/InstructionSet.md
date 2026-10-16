@@ -189,8 +189,8 @@ corrected constant forms.
 - `float(d)        float           #float`
 - `float(d)        float           float`
 
-Divide floats Division by 0 is considered illegal and should generate a run-time error (or compile-time error if 0 is a
-constant).
+Divide floats Follows IEEE-754: dividing by a zero of either sign gives an infinity of the matching sign, and 0 / 0 gives
+NaN.
 
 ## DIVi
 - `int(d)          #int            #int`
