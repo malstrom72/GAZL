@@ -410,9 +410,8 @@ The status says whether the frozen memory fitted the program exactly:
 - A restored word is its raw bits. Frozen memory records no types, layouts or pointer targets, so pointers in restored
   data are valid only when the program was assembled from the same code and constants by the same implementation,
   and a pointer into the data stack is never valid.
-- The format checks its own structure, not whether its bytes are intact. When thawing, the host must supply
-  exactly the bytes that freezing produced, no more and no fewer. To be sure of that, it can store the byte count
-  and a checksum along with the frozen memory, and check both before thawing.
+- The format checks its own structure, not whether its bytes are intact. It is advisable that the host stores a
+  checksum and the byte count with the frozen memory.
 
 ## 12. Conformance
 
