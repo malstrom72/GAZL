@@ -422,8 +422,8 @@ const int BRANCH			= 0x08000;					// Constant positive (or zero) integer.
 const int NATIVE			= 0x10000;
 const int COMPILE_TIME		= 0x20000;
 const int FORWARD			= 0x40000;
-const int OFFSET_GIVEN		= 0x1000000;				// Written with a `:offset`, `:0` included, which only data and locals take.
-const int UNCHECKED_ADDRESS	= 0x80000;					// Do *not* verify that the offset is < size of the symbol. (Some instructions shouldn't do this, like ADDp for example.)
+const int UNCHECKED_ADDRESS	= 0x80000;					// Do *not* check the offset against the symbol's range: the address is only a value (`MOVp`, `ADDp` and the like).
+const int OFFSET_GIVEN		= 0x1000000;				// Set per operand, not in the table: a `:offset` was written, `:0` included, which only data and locals take.
 const int FWD_ADDRESS_W		= ADDRESS_W | FORWARD;
 const int FWD_ADDRESS_R		= ADDRESS_R | FORWARD;
 const int FWD_BRANCH		= BRANCH | FORWARD;
@@ -761,8 +761,7 @@ void Symbols::resolve(const Reference& ref, const Symbol& symbol) {
 	if ((ref.accepts & OFFSET_GIVEN) != 0 && (symbol.types & (ADDRESS | ANY_VAR)) == 0) {
 		throw Exception(OFFSET_OUT_OF_BOUNDS, ref.label);
 	}
-	if (symbol.types != BRANCH && (ref.accepts & UNCHECKED_ADDRESS) == 0
-			&& (ref.offset < symbol.minOffset || ref.offset > symbol.maxOffset)) {
+	if ((ref.accepts & UNCHECKED_ADDRESS) == 0 && (ref.offset < symbol.minOffset || ref.offset > symbol.maxOffset)) {
 		throw Exception(OFFSET_OUT_OF_BOUNDS, ref.label);
 	}
 	if (ref.offset == 0) *ref.storage = symbol.value;
@@ -1374,7 +1373,10 @@ const Char* Assembler::feed(const Char* line) {
 			default:		if (functionStart == 0) throw Exception(MISSING_FUNCTION_DECLARATION);						// The rest
 							if (ip == functionStart + 1) settleFrame();													// the declarations are complete
 							v.p = (Int)(ip - codeBase);
-							declare(locals, labelBegin, labelEnd, BRANCH, v);
+							if (Symbols::Symbol* const label = declare(locals, labelBegin, labelEnd, BRANCH, v)) {		// a branch's offset is its jump distance, any value
+								label->minOffset = -2147483647 - 1;
+								label->maxOffset = 2147483647;
+							}
 							if (op->opcode == NOOP____) break;															// NOOP
 							else if ((op->otherFlags & YIELDS_CONST) != 0) {											// Const calc -> MOVE
 								assert((op->accepts[0] & ANY_VAR_W) != 0);
