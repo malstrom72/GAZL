@@ -1879,34 +1879,39 @@ MemoryLoad thawMemory(Processor& processor, const Symbols& symbols, const void* 
 	std::vector<MemoryOwner> owners;
 	findMemoryOwners(symbols, owners);
 	bool exact = true;
+	const unsigned char* entry = start + MEMORY_HEADER_SIZE + MEMORY_CHECK_SIZE;
 	size_t o = 0;
-	p = start + MEMORY_HEADER_SIZE + MEMORY_CHECK_SIZE;
-	for (UInt e = 1; e < entryCount; ++e) {
-		const UInt length = getMemoryWord(p);
-		const std::string name(reinterpret_cast<const char*>(p + 4), length);
-		p += 4 + length + memoryPadding(length);
-		const UInt count = getMemoryWord(p);
-		const unsigned char* const words = p + 4;
-		p = words + static_cast<size_t>(count) * 4;
-		while (o < owners.size() && name.compare(owners[o].name) > 0) {
-			exact = false;															// an owner with no entry: left unchanged
-			++o;
+	while (entry != end || o != owners.size()) {											// one merged walk: step the lower name, or both
+		std::string name;
+		UInt count = 0;
+		const unsigned char* words = entry;
+		if (entry != end) {
+			const UInt length = getMemoryWord(entry);
+			name.assign(reinterpret_cast<const char*>(entry + 4), length);
+			words = entry + 4 + length + memoryPadding(length) + 4;
+			count = getMemoryWord(words - 4);
 		}
-		if (o == owners.size() || name.compare(owners[o].name) != 0) {
-			exact = false;															// an entry with no owner: dropped
+		const int order = (entry == end ? 1 : (o == owners.size() ? -1 : name.compare(owners[o].name)));
+		if (order > 0) {																	// an owner with no entry: left unchanged
+			exact = false;
+			++o;
 			continue;
 		}
-		const MemoryOwner& owner = owners[o++];
-		UInt restored = owner.size;
-		if (count != owner.size) {
+		if (order < 0) {																	// an entry with no owner: dropped
 			exact = false;
-			restored = (prefix ? minimum(count, owner.size) : 0);
+		} else {																			// the same name: restored
+			const MemoryOwner& owner = owners[o++];
+			UInt restored = owner.size;
+			if (count != owner.size) {
+				exact = false;
+				restored = (prefix ? minimum(count, owner.size) : 0);
+			}
+			Value* const destination = processor.accessMemory(owner.address, owner.size);
+			assert(destination != 0);
+			for (UInt i = 0; i < restored; ++i) destination[i].p = getMemoryWord(words + i * 4);
 		}
-		Value* const destination = processor.accessMemory(owner.address, owner.size);
-		assert(destination != 0);
-		for (UInt i = 0; i < restored; ++i) destination[i].p = getMemoryWord(words + i * 4);
+		entry = words + static_cast<size_t>(count) * 4;
 	}
-	if (o != owners.size()) exact = false;
 	return (exact ? MEMORY_OK : MEMORY_MISMATCH);
 }
 
