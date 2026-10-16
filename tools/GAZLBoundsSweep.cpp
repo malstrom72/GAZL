@@ -852,17 +852,14 @@ int sweepFrozenEntries() {
 		std::printf("FAIL frozen entries: %d bytes follow the last expected entry\n", (int)(frozen.size() - at));
 		++failures;
 	}
-	// A label that owns nothing is still a name: `findGlobal` resolves it, reaching to the end of its section.
-	UInt stateSize = 0;
-	UInt gainSize = 0;
-	UInt levelSize = 0;
+	// A label that owns nothing is still a name: `findGlobal` resolves it, with what it owns.
+	UInt stateSize = 99;
+	UInt gainSize = 99;
+	UInt levelSize = 99;
 	const Pointer stateAddress = m.symbols.findGlobal("state", stateSize);
-	if (stateSize != 3 || ownedWords(m.symbols, "state") != 0
-			|| m.symbols.findGlobal("gain", gainSize) != stateAddress || gainSize != 3
-			|| ownedWords(m.symbols, "gain") != 1
-			|| m.symbols.findGlobal("level", levelSize) != stateAddress + 1 || levelSize != 2
-			|| ownedWords(m.symbols, "level") != 2) {
-		std::printf("FAIL frozen entries: the labels in `state` do not reach and own what they should\n");
+	if (stateSize != 0 || m.symbols.findGlobal("gain", gainSize) != stateAddress || gainSize != 1
+			|| m.symbols.findGlobal("level", levelSize) != stateAddress + 1 || levelSize != 2) {
+		std::printf("FAIL frozen entries: the labels in `state` do not own what they should\n");
 		++failures;
 	}
 	// By name, `getGlobalInfo` knows writable data only, `TEMP` included, and agrees with the iteration.
@@ -871,11 +868,11 @@ int sweepFrozenEntries() {
 	GlobalInfo entry;
 	GlobalInfo nosuch;
 	entry.address = 1;
-	nosuch.reach = 1;
+	nosuch.owned = 1;
 	if (m.symbols.getGlobalInfo("entry", entry) || entry.address != NULL_POINTER || entry.name != 0
-			|| m.symbols.getGlobalInfo("nosuch", nosuch) || nosuch.reach != 0
-			|| !m.symbols.getGlobalInfo("tmpval", temp) || !temp.isTemp || temp.owned != 2 || temp.reach != 2
-			|| !m.symbols.getGlobalInfo("head", head) || strcmp(head.name, "head") != 0 || head.reach != 3
+			|| m.symbols.getGlobalInfo("nosuch", nosuch) || nosuch.owned != 0
+			|| !m.symbols.getGlobalInfo("tmpval", temp) || !temp.isTemp || temp.owned != 2
+			|| !m.symbols.getGlobalInfo("head", head) || strcmp(head.name, "head") != 0
 			|| head.owned != 1 || head.isTemp) {
 		std::printf("FAIL frozen entries: getGlobalInfo by name reports the wrong global\n");
 		++failures;
@@ -891,8 +888,7 @@ int sweepFrozenEntries() {
 		const bool assembled = assemble(e, std::string("\tGLOB *2\nx:\t") + EMPTY[i] + "\ny:\tDATi #5\n", eLayout
 				, error);
 		const Pointer x = e.symbols.findGlobal("x", xSize);
-		if (!assembled || x == NULL_POINTER || xSize != 2 || ownedWords(e.symbols, "x") != 0
-				|| e.symbols.findGlobal("y", ySize) != x || ySize != 2 || ownedWords(e.symbols, "y") != 2) {
+		if (!assembled || x == NULL_POINTER || xSize != 0 || e.symbols.findGlobal("y", ySize) != x || ySize != 2) {
 			std::printf("FAIL frozen entries: `x: %s` is not an empty label at `y`\n", EMPTY[i]);
 			++failures;
 		}
@@ -1075,7 +1071,7 @@ int sweepUnnamedSections() {
 			++failures;
 		}
 	}
-	// A label owns the unlabelled statements after it, up to the next label, and reaches to the end of the section.
+	// A label owns the unlabelled statements after it, up to the next label.
 	Machine m;
 	Layout layout = Layout();
 	std::string error;
@@ -1084,8 +1080,8 @@ int sweepUnnamedSections() {
 	const bool assembled = assemble(m, "\tGLOB *20\ns:\tDATs blahblah\n\tDATi #10\n\tDATs yaddayadda\nt:\tDATi #1\n"
 			, layout, error);
 	const Pointer sAddress = m.symbols.findGlobal("s", sSize);
-	if (!assembled || sAddress == NULL_POINTER || sSize != 20 || ownedWords(m.symbols, "s") != 19
-			|| m.symbols.findGlobal("t", tSize) != sAddress + 19 || tSize != 1 || ownedWords(m.symbols, "t") != 1) {
+	if (!assembled || sAddress == NULL_POINTER || sSize != 19 || m.symbols.findGlobal("t", tSize) != sAddress + 19
+			|| tSize != 1) {
 		std::printf("FAIL unnamed sections: a label does not cover the unlabelled lines after it (%s)\n", error.c_str());
 		++failures;
 	}
@@ -1101,28 +1097,39 @@ int sweepUnnamedSections() {
 }
 
 /*
-	An access through a label reaches to the end of its section, past the labels after it, but no further
-	(docs/gazl/Specification.md section 5). Returns the number of failures, each one printed.
+	An access through a label may reach any word of its section, before or after the label, and an offset on a local
+	any declared word of its frame, but no further (docs/gazl/Specification.md sections 5 and 6). An address that is
+	only a value is not checked. Returns the number of failures, each one printed.
 */
 int sweepLabelReach() {
-	struct Case { const char* what; const char* section; const char* access; int error; };
-	const char* const NAMED = "s:\tGLOB *4\na:\tDATi #1\nb:\tDATi #2\n";
-	const Case CASES[] = {
-		{ "a section label, to its last word", NAMED, "&s:3", -1 },
-		{ "a section label, past its end", NAMED, "&s:4", OFFSET_OUT_OF_BOUNDS },
-		{ "an inner label, past the next label", NAMED, "&a:3", -1 },
-		{ "an inner label, past the section end", NAMED, "&a:4", OFFSET_OUT_OF_BOUNDS },
-		{ "a later inner label, to the section end", NAMED, "&b:2", -1 },
-		{ "a later inner label, past the section end", NAMED, "&b:3", OFFSET_OUT_OF_BOUNDS },
-		{ "a label in an unnamed section, past the next label", "\tGLOB *4\na:\tDATi #1\nb:\tDATi #2\n", "&a:3", -1 },
-		{ "a label that owns nothing, to the section end", "\tGLOB *4\na:\tDATi\nb:\tDATi #2\n", "&a:3", -1 }
+	const std::string NAMED = "s:\tGLOB *4\na:\tDATi #1\nb:\tDATi #2\nmain:\tFUNC\nv:\tLOCi\np:\tLOCp\n";
+	const std::string UNNAMED = "\tGLOB *4\na:\tDATi #1\nb:\tDATi #2\nmain:\tFUNC\nv:\tLOCi\n";
+	const std::string FRAME = "main:\tFUNC\nx:\tLOCi\nb:\tLOCA *3\ny:\tLOCi\n";
+	const std::string END = "\tRETU\n";
+	struct Text { const char* what; std::string source; int error; };
+	const Text CASES[] = {
+		{ "a section label, to its last word", NAMED + "\tPEEK v &s:3\n\tPOKE &s:3 v\n" + END, -1 },
+		{ "a section label, past its end", NAMED + "\tPEEK v &s:4\n" + END, OFFSET_OUT_OF_BOUNDS },
+		{ "a section label, before its start", NAMED + "\tPEEK v &s:-1\n" + END, OFFSET_OUT_OF_BOUNDS },
+		{ "an inner label, past the next label", NAMED + "\tPEEK v &a:3\n\tPOKE &a:3 v\n" + END, -1 },
+		{ "an inner label, past the section end", NAMED + "\tPEEK v &a:4\n" + END, OFFSET_OUT_OF_BOUNDS },
+		{ "an inner label, back to the section start", NAMED + "\tPEEK v &b:-1\n\tPOKE &b:-1 v\n" + END, -1 },
+		{ "an inner label, before the section start", NAMED + "\tPOKE &b:-2 v\n" + END, OFFSET_OUT_OF_BOUNDS },
+		{ "an address that is only a value, before the section", NAMED + "\tMOVp p &s:-5\n" + END, -1 },
+		{ "a label in an unnamed section, past the next label", UNNAMED + "\tPEEK v &a:3\n" + END, -1 },
+		{ "a label in an unnamed section, before it", UNNAMED + "\tPEEK v &b:-1\n" + END, -1 },
+		{ "a label that owns nothing, to the section end", "\tGLOB *4\na:\tDATi\nb:\tDATi #2\nmain:\tFUNC\nv:\tLOCi\n"
+				"\tPEEK v &a:3\n" + END, -1 },
+		{ "a named constant as a negative offset", "NEG:\t! DEFi #-1\n" + NAMED + "\tPEEK v &b:NEG\n" + END, -1 },
+		{ "a local, back to the frame start", FRAME + "\tMOVi y:-4 #0\n\tMOVi b:-1 #0\n" + END, -1 },
+		{ "a local, before the frame start", FRAME + "\tMOVi x:-1 #0\n" + END, OFFSET_OUT_OF_BOUNDS },
+		{ "a local array, past itself to the frame end", FRAME + "\tMOVi b:3 #0\n\tMOVi x:4 #0\n" + END, -1 },
+		{ "a local, past the frame end", FRAME + "\tMOVi y:1 #0\n" + END, OFFSET_OUT_OF_BOUNDS }
 	};
 	const int count = sizeof (CASES) / sizeof (*CASES);
 	int failures = 0;
 	for (int i = 0; i < count; ++i) {
-		const std::string source = std::string(CASES[i].section) + "main:\tFUNC\nv:\tLOCi\n\tPEEK v " + CASES[i].access
-				+ "\n\tPOKE " + CASES[i].access + " v\n\tRETU\n";
-		const int error = assemblyError(source);
+		const int error = assemblyError(CASES[i].source);
 		if (error != CASES[i].error) {
 			std::printf("FAIL label reach: %s gave error %d, expected %d\n", CASES[i].what, error, CASES[i].error);
 			++failures;
@@ -1133,14 +1140,18 @@ int sweepLabelReach() {
 }
 
 /*
-	A function address takes no offset: `&main:1` would name whichever function was declared next. Checked where the
-	function is already known and where it is a forward reference. Returns the number of failures, each one printed.
+	A function address takes no offset, not even `:0`: `&main:1` would name whichever function was declared next.
+	Checked where the function is already known and where it is a forward reference. Returns the number of failures,
+	each one printed.
 */
 int sweepFunctionOffsets() {
 	struct Case { const char* what; const char* source; int error; };
 	const Case CASES[] = {
 		{ "an offset on a known function", "main:\tFUNC\np:\tLOCp\n\tMOVp p &main:1\n\tRETU\n", OFFSET_OUT_OF_BOUNDS },
 		{ "an offset on a forward function", "\tGLOB *1\nfp:\tDATp &main:1\nmain:\tFUNC\n\tRETU\n"
+				, OFFSET_OUT_OF_BOUNDS },
+		{ "a zero offset on a function", "main:\tFUNC\np:\tLOCp\n\tMOVp p &main:0\n\tRETU\n", OFFSET_OUT_OF_BOUNDS },
+		{ "a negative offset on a forward function", "\tGLOB *1\nfp:\tDATp &main:-1\nmain:\tFUNC\n\tRETU\n"
 				, OFFSET_OUT_OF_BOUNDS },
 		{ "a function address without an offset", "\tGLOB *1\nfp:\tDATp &main\nmain:\tFUNC\n\tRETU\n", -1 }
 	};

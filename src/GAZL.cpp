@@ -422,6 +422,7 @@ const int BRANCH			= 0x08000;					// Constant positive (or zero) integer.
 const int NATIVE			= 0x10000;
 const int COMPILE_TIME		= 0x20000;
 const int FORWARD			= 0x40000;
+const int OFFSET_GIVEN		= 0x1000000;				// Written with a `:offset`, `:0` included, which a function or native does not take.
 const int UNCHECKED_ADDRESS	= 0x80000;					// Do *not* verify that the offset is < size of the symbol. (Some instructions shouldn't do this, like ADDp for example.)
 const int FWD_ADDRESS_W		= ADDRESS_W | FORWARD;
 const int FWD_ADDRESS_R		= ADDRESS_R | FORWARD;
@@ -755,11 +756,15 @@ void Symbols::registerSwitch(const Char* labelBegin, const Char* labelEnd, UInt 
 void Symbols::resolve(const Reference& ref, const Symbol& symbol) {
 	if ((symbol.types & ref.accepts) == 0) throw Exception(INCOMPATIBLE_TYPES, ref.label);
 	assert((ref.accepts == FWD_BRANCH) == (symbol.types == BRANCH));
-	assert((ref.offset < 0) == (ref.accepts == FWD_BRANCH));
-	if ((ref.accepts & UNCHECKED_ADDRESS) == 0 && ref.offset >= static_cast<Int>(symbol.reach))
+	assert(ref.accepts != FWD_BRANCH || ref.offset < 0);											// a branch's offset is its distance back to the jump
+	// A function or native takes no offset, not even `:0`: `&main:1` would name another function.
+	if ((symbol.types & (FUNC | NATIVE)) != 0 && (ref.accepts & OFFSET_GIVEN) != 0) {
 		throw Exception(OFFSET_OUT_OF_BOUNDS, ref.label);
-	// A function address takes no offset: `&main:1` would name another function.
-	if ((symbol.types & FUNC) != 0 && ref.offset > 0) throw Exception(OFFSET_OUT_OF_BOUNDS, ref.label);
+	}
+	if (symbol.types != BRANCH && (ref.accepts & UNCHECKED_ADDRESS) == 0
+			&& (ref.offset < -static_cast<Int>(symbol.before) || ref.offset >= static_cast<Int>(symbol.reach))) {
+		throw Exception(OFFSET_OUT_OF_BOUNDS, ref.label);
+	}
 	if (ref.offset == 0) *ref.storage = symbol.value;
 	else {
 		assert((symbol.types & CONST_FLOAT) == 0);
@@ -817,14 +822,11 @@ void Symbols::registerNative(const Char* name, Int index) {
 	define(name, NATIVE, v, 1);
 }
 
-Pointer Symbols::findGlobal(const Char* name, UInt& reach) const {
-	int types;
-	Value value;
-	const Char* nameBegin = name;
-	const Char* nameEnd = name + strlen(name);
-	if (!isValidIdentifier(nameBegin, nameEnd)) return NULL_POINTER;
-	if (!lookup(nameBegin, nameEnd, ADDRESS, types, value, reach)) return NULL_POINTER;
-	return value.p;
+Pointer Symbols::findGlobal(const Char* name, UInt& owned) const {
+	const SymbolMap::const_iterator it = symbols.find(name);
+	if (it == symbols.end() || (it->second.types & ADDRESS) == 0) return NULL_POINTER;
+	owned = it->second.owned;
+	return it->second.value.p;
 }
 
 Pointer Symbols::findFunction(const Char* name) const {
@@ -871,7 +873,6 @@ GlobalInfo Symbols::getGlobalInfo(const Iterator& iterator) const {
 	GlobalInfo info;
 	info.name = iterator->first.c_str();
 	info.address = iterator->second.value.p;
-	info.reach = iterator->second.reach;
 	info.isTemp = ((iterator->second.types & TEMPORARY) != 0);
 	info.owned = iterator->second.owned;
 	return info;
@@ -880,7 +881,7 @@ GlobalInfo Symbols::getGlobalInfo(const Iterator& iterator) const {
 bool Symbols::getGlobalInfo(const Char* name, GlobalInfo& info) const {
 	const Iterator it = symbols.find(name);
 	if (it == symbols.end() || (it->second.types & globalMask(true)) != ADDRESS) {
-		const GlobalInfo none = { 0, NULL_POINTER, 0, 0, false };
+		const GlobalInfo none = { 0, NULL_POINTER, 0, false };
 		info = none;
 		return false;
 	}
@@ -893,7 +894,8 @@ Assembler::Assembler(UInt maxCodeSize, Instruction* codeBase, UInt maxFunctionCo
 		: codeBase(codeBase), codeEnd(codeBase + maxCodeSize), maxFunctionCount(maxFunctionCount)
 		, functionTable(functionTable), memoryBase(memoryBase), memoryEnd(memoryBase + maxMemorySize)
 		, ip(codeBase), functionStart(0), functionCount(0), localsSize(0), paramsSize(0), globalsPointer(memoryBase)
-		, constantsPointer(memoryEnd), dataLabelType(0), dataPointer(0), dataEnd(0), dataOwner(0), dataOwnerStart(0)
+		, constantsPointer(memoryEnd), dataLabelType(0), dataPointer(0), sectionBegin(0), dataEnd(0), dataOwner(0)
+		, dataOwnerStart(0)
 		, dataIsConstant(false), globals(globals) {
 	for (Int i = 0; i < 128; ++i) compileTimeVars[i].types = 0;
 	Value v;
@@ -947,8 +949,12 @@ void Assembler::linkWithOffset(Symbols& defs, const char* b, const char* e, int 
 	Value o;
 	o.i = 0;
 	const Char* p = reinterpret_cast<const Char*>(memchr(b, ':', e - b));
-	if (p != 0) parseConstant(p + 1, e, CONST_INT_P, &o);
-	else p = e;
+	if (p != 0) {
+		parseConstant(p + 1, e, CONST_INT, &o);											// either sign: the check is against the section or frame
+		accepts |= OFFSET_GIVEN;
+	} else {
+		p = e;
+	}
 	defs.link(b, p, v, accepts, o.i);
 }
 
@@ -1015,6 +1021,21 @@ void Assembler::parseOperand(const Char* b, const Char* e, int accepts, Value* v
 }
 
 /*
+	A frame is laid out strictly: each parameter and local takes the next words, in declaration order. So an offset on
+	a local may reach any declared word of the frame, before it or after it. Runs once the declarations are complete,
+	before any instruction refers to a local; again after a `NOOP`, which leaves room for more declarations.
+*/
+void Assembler::settleFrame() {
+	for (Symbols::SymbolMap::iterator it = locals.symbols.begin(); it != locals.symbols.end(); ++it) {
+		Symbols::Symbol& local = it->second;
+		if ((local.types & ANY_VAR) != 0) {
+			local.before = static_cast<UInt>(local.value.i);
+			local.reach = localsSize - static_cast<UInt>(local.value.i);
+		}
+	}
+}
+
+/*
 	A data label owns its word and everything after it, up to the next label or the end of the section, and reaches to
 	the end of the section; a section's own label is simply its first. So each label is declared owning to the end,
 	and the next one ends what the previous one owns. Data before an unnamed section's first label would belong to no
@@ -1029,6 +1050,7 @@ void Assembler::declareData(const Char* labelBegin, const Char* labelEnd, const 
 	v.p = makeGAZLPointer(first, dataIsConstant);
 	Symbols::Symbol* const owner = declare(globals, labelBegin, labelEnd, dataLabelType, v
 			, static_cast<UInt>(dataEnd - first));
+	owner->before = static_cast<UInt>(first - sectionBegin);
 	if (dataOwner != 0) dataOwner->owned = static_cast<UInt>(first - dataOwnerStart);
 	dataOwner = owner;
 	dataOwnerStart = first;
@@ -1329,6 +1351,7 @@ const Char* Assembler::feed(const Char* line) {
 								dataPointer = constantsPointer;
 							}
 							assert(globalsPointer <= constantsPointer);
+							sectionBegin = dataPointer;
 							dataEnd = dataPointer + size;
 							dataIsConstant = (op->opcode != GLOB____);
 							if (labelBegin != labelEnd) declareData(labelBegin, labelEnd, dataPointer);
@@ -1359,6 +1382,7 @@ const Char* Assembler::feed(const Char* line) {
 							break;
 							
 			default:		if (functionStart == 0) throw Exception(MISSING_FUNCTION_DECLARATION);						// The rest
+							if (ip == functionStart + 1) settleFrame();													// the declarations are complete
 							v.p = (Int)(ip - codeBase);
 							declare(locals, labelBegin, labelEnd, BRANCH, v);
 							if (op->opcode == NOOP____) break;															// NOOP

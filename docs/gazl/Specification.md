@@ -147,7 +147,7 @@ assembly error.
 
 | prefix | operand                                                         | example                |
 | ------ | --------------------------------------------------------------- | ---------------------- |
-| (none) | local variable, optionally `name:offset` into a local array     | `x`, `buf:3`           |
+| (none) | local variable, optionally `name:offset` within the frame       | `x`, `buf:3`           |
 | `%`    | transient `n`: the `n`-th word after the function's locals      | `%0`                   |
 | `#`    | constant: a literal or a named assembly-time constant           | `#12`, `#0.5`, `#TRUE` |
 | `<`    | assembly-time variable: one of `A-Za-z0-9_.$` in `<` `>`        | `<A>`, `<x>`, `<0>`    |
@@ -156,15 +156,15 @@ assembly error.
 | `@`    | branch label in the current function                            | `@loop`, `@sw.3`       |
 | `*`    | non-negative size constant                                      | `*16`                  |
 
-**Offsets.** `&label:k` and `local:k` take a constant `k >= 0`.
+**Offsets.** `&label:k` and `local:k` take a constant `k`, negative or not.
 - **Accesses are checked at assembly.** Where an instruction reads or writes the word at `&label:k` (`PEEK`,
-  `POKE`, `COPY`), that word must lie within the label's section; it may be owned by a later label (section 6). A
-  local array offset must lie within the array.
+  `POKE`, `COPY`), that word must lie within the label's section, before or after the label; it may be owned by
+  another label (section 6). The word at `local:k` must lie within the frame's parameters and locals (section 6).
+  Anything else is `OFFSET_OUT_OF_BOUNDS`.
 - **Addresses are not.** Where `&label:k` is only a value (`MOVp`, `ADDp`, `DIFp`, pointer compares, `FORp`,
-  `DATp`, `DATA`), any offset is accepted, one past the end of the section included. An access through such a
-  pointer is checked at run time (section 3).
-- **A function address takes no offset.** `&function:k` with `k > 0` is `OFFSET_OUT_OF_BOUNDS`: it would name
-  another function.
+  `DATp`, `DATA`), any offset is accepted. An access through such a pointer is checked at run time (section 3).
+- **A function or native takes no offset.** Any `:k` on one, `:0` included, is `OFFSET_OUT_OF_BOUNDS`: an offset
+  would name another function.
 
 **Integer literals** are decimal, or hexadecimal after a lowercase `0x`, with an optional sign. A quoted literal
 (`'AB'`) packs its characters into one int, the first character in the most significant byte used. A value outside
@@ -218,11 +218,15 @@ So every word is named by exactly one `owner:offset`, and that is what freezing 
     clock:  DATi #0             ; clock:0, an Impala scalar
 
 Without the `DATi #5954` row, `tail` would own all 40 words and `buffer` none. Owning is not addressing:
-`&buffer:5` still reaches the word `tail:4` (section 5).
+`&buffer:5` still reaches the word `tail:4`, and `&tail:-1` the word `buffer:0` (section 5).
 
 **Functions** start with `FUNC`, labelled with the function's name.
 - **Declarations first.** Parameters (`PARA`, `INPi/f/p`, `OUTi/f/p`) and locals (`LOCi/f/p`, `LOCA *n`) come
   before the first instruction.
+- **The frame's layout is strict.** Each declaration takes the next words of the frame, in declaration order, from
+  word 0: one word, or `n` for `LOCA *n`. The transients follow the last declaration. A program may rely on this
+  layout: `local:k`, `GETL`, `SETL` and a pointer from `ADRL` reach a local's neighbours, and one `COPY` may move
+  several locals.
 - **Ending.** The last instruction must be `RETU` or `GOTO`.
 - **Labels** are local to their function. A branch may not target the position where the next `FUNC` starts
   (`LABEL_ON_FUNCTION`).

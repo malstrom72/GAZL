@@ -159,7 +159,6 @@ inline Exception::~Exception() throw() { }																				// (GCC requires e
 struct GlobalInfo {
 	const char* name;				// valid as long as the `Symbols` it came from
 	Pointer address;
-	UInt reach;						// the words an access through it reaches, to the end of its section
 	UInt owned;						// the words it owns, to the next label: what freezing saves under its name
 	bool isTemp;					// declared in a `TEMP` section, which freezing leaves out
 };
@@ -172,10 +171,12 @@ struct GlobalInfo {
 class Symbols {
 	friend class Assembler;
 	protected:	struct Symbol {
-					Symbol(int types, Value value, UInt reach) : types(types), value(value), reach(reach), owned(reach) { }
+					Symbol(int types, Value value, UInt reach) : types(types), value(value), before(0), reach(reach)
+							, owned(reach) { }
 					int types;
 					Value value;
-					UInt reach;																			// The words an offset may reach: for data, to the end of the section; for a local array, its size.
+					UInt before;																		// For data and locals, the words of its section or frame before it: the lowest offset is `-before`.
+					UInt reach;																			// For data and locals, the words from it to the end of its section or frame: offsets stay below this.
 					UInt owned;																			// For data, the words owned: to the next label.
 				};
 
@@ -196,7 +197,7 @@ class Symbols {
 				
 	public:		void registerNative(const Char* name, Int index);
 	public:		Pointer findFunction(const Char* name) const;															// Returns `NULL_POINTER` if not found.
-	public:		Pointer findGlobal(const Char* name, UInt& reach) const;												// Returns `NULL_POINTER` if not found (in which case, `reach` is left untouched).
+	public:		Pointer findGlobal(const Char* name, UInt& owned) const;												// `owned` is the words the label owns. Returns `NULL_POINTER` if not found (in which case, `owned` is left untouched).
 	public:		void defineConstant(const Char* name, bool asFloat, const Value& value);
 	public:		bool lookupConstant(const Char* name, bool* isFloat, Value* value) const;
 	public:		bool findFirstGlobal(Iterator& iterator, bool includeTemps) const;				// Names of writable data: named sections, and labels on data statements (see `GlobalInfo`).
@@ -259,6 +260,7 @@ class Assembler {
 	protected:	Value calcConstant(const Operator* op, const Char* op1Begin, const Char* op1End, const Char* op2Begin
 						, const Char* op2End);
 	protected:	void finalizeFunction();
+	protected:	void settleFrame();																						// Let an offset on a local reach any declared word of the frame.
 	protected:	void declareData(const Char* labelBegin, const Char* labelEnd, const Value* first);						// Declare a data label at `first`, and end what the previous one owns there.
 	protected:	Pointer makeGAZLPointer(const Value* data, bool constant) const;										// The pointer to `data`: up from the base for globals, down from it for constants.
 	protected:	Instruction* const codeBase;
@@ -277,6 +279,7 @@ class Assembler {
 	protected:	std::string dataLabel;																					// Only for error display.
 	protected:	int dataLabelType;
 	protected:	Value* dataPointer;
+	protected:	Value* sectionBegin;																					// The current data section's first word.
 	protected:	Value* dataEnd;
 	protected:	Symbols::Symbol* dataOwner;																				// The current section's latest label, owning to its end for now; null while it has none.
 	protected:	const Value* dataOwnerStart;																			// Where `dataOwner` starts.
