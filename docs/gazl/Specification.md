@@ -405,10 +405,12 @@ two. Each name falls in exactly one case:
 - **An entry and an owner of the same size:** the words are restored.
 - **An entry and an owner of different sizes:** the host chooses, for the whole restore, between two policies.
   - *Prefix:* the owner's first words are filled from the entry's first words, as many as both have. If the owner
-    is larger, its remaining words keep their initial values; if it is smaller, the rest of the entry is dropped.
-  - *Skip:* the owner keeps its initial value, and the entry is dropped.
+    is larger, its remaining words are left unchanged; if it is smaller, the rest of the entry is dropped.
+  - *Skip:* the owner is left unchanged, and the entry is dropped.
 - **An entry with no owner:** dropped.
-- **An owner with no entry:** keeps its initial value.
+- **An owner with no entry:** left unchanged.
+
+Restore writes nothing else: every word it does not restore keeps whatever it held before.
 
 The status says whether the snapshot fitted the program exactly:
 - **`MEMORY_OK`:** every entry met an owner of the same size, and every owner had an entry.
@@ -419,6 +421,16 @@ The status says whether the snapshot fitted the program exactly:
 
 `MEMORY_MISMATCH` is new. A host that wants to know which names did not fit can compare the snapshot's entries with
 the program's owners itself.
+
+**When to freeze and thaw.** Both are defined only while no processor that uses the memory is inside a call: frames
+on the data stack are not saved, and a suspended call would see its globals change under it. Several processors may
+share one memory, so GAZL cannot check this; it is the host's responsibility. The usual order is to assemble, create
+the processor, thaw, and only then call the program, so that unchanged words still hold their initial values.
+
+**Untrusted snapshots.** A snapshot may come from anywhere, a preset downloaded from the web included. Whatever it
+holds, validation and restore never write outside the owners they restore, so the sandbox (section 10) holds. The
+restored values are untrusted as well: a program should range-check a restored value it uses as an index. Even an
+unchecked one only makes a later access fail its run-time check.
 
 **Data only.** A snapshot holds data and nothing else. Its meaning depends on two more parts, both the host's to
 keep with it:
@@ -435,7 +447,9 @@ Restoring into a changed program works by name, as above, but nothing more is pr
 - the snapshot records no types and no layouts;
 - an owner whose meaning changed receives the old words as they were, and still returns `MEMORY_OK` if its size
   did not change;
-- data pointers and function pointers are raw values, valid only if their targets did not move.
+- data pointers and function pointers are raw values, valid only if their targets did not move;
+- a pointer into the data stack is never valid after a restore, not even into the same program, since the frames it
+  pointed into are gone.
 
 Migrating data between program versions is outside this specification.
 
