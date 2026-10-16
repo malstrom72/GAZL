@@ -421,8 +421,4 @@ An implementation conforms when it runs the following with the expected results:
 
 ## 13. Not yet implemented
 
-Where `src/GAZL.cpp` does not yet do what this specification says:
-
-1. **Accesses through a label inside a section** (section 5). `&label:k` in `PEEK`, `POKE` or `COPY` is checked
-   against the words up to the next label, not against the end of the section, so an access that reaches a later
-   label's words is `OFFSET_OUT_OF_BOUNDS`. Accesses through a section's name are checked against the whole section.
+`src/GAZL.cpp` does everything this specification says.

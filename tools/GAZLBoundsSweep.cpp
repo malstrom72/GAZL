@@ -693,6 +693,18 @@ std::string globalWords(Machine& m, const char* name) {
 	return s;
 }
 
+/*
+	The words the global `name` owns, from `getGlobalInfo`, or 99 when there is no such global.
+*/
+UInt ownedWords(const Symbols& symbols, const char* name) {
+	Symbols::Iterator it;
+	for (bool ok = symbols.findFirstGlobal(it, true); ok; ok = symbols.findNextGlobal(it, true)) {
+		const GlobalInfo info = symbols.getGlobalInfo(it);
+		if (strcmp(info.name, name) == 0) return info.owned;
+	}
+	return 99;
+}
+
 void putWord(std::vector<unsigned char>& b, size_t at, UInt v) {
 	b[at] = (unsigned char)v; b[at + 1] = (unsigned char)(v >> 8); b[at + 2] = (unsigned char)(v >> 16);
 	b[at + 3] = (unsigned char)(v >> 24);
@@ -845,14 +857,17 @@ int sweepFrozenEntries() {
 		std::printf("FAIL frozen entries: %d bytes follow the last expected entry\n", (int)(frozen.size() - at));
 		++failures;
 	}
-	// A label left out of the frozen memory is still a name: `findGlobal` resolves it as before.
+	// A label that owns nothing is still a name: `findGlobal` resolves it, reaching to the end of its section.
 	UInt stateSize = 0;
 	UInt gainSize = 0;
 	UInt levelSize = 0;
 	const Pointer stateAddress = m.symbols.findGlobal("state", stateSize);
-	if (m.symbols.findGlobal("gain", gainSize) != stateAddress || gainSize != 1
-			|| m.symbols.findGlobal("level", levelSize) != stateAddress + 1 || levelSize != 2) {
-		std::printf("FAIL frozen entries: findGlobal no longer resolves the labels inside `state`\n");
+	if (stateSize != 3 || ownedWords(m.symbols, "state") != 0
+			|| m.symbols.findGlobal("gain", gainSize) != stateAddress || gainSize != 3
+			|| ownedWords(m.symbols, "gain") != 1
+			|| m.symbols.findGlobal("level", levelSize) != stateAddress + 1 || levelSize != 2
+			|| ownedWords(m.symbols, "level") != 2) {
+		std::printf("FAIL frozen entries: the labels in `state` do not reach and own what they should\n");
 		++failures;
 	}
 	// A data line without values is legal and writes nothing, so its label owns no words.
@@ -866,7 +881,8 @@ int sweepFrozenEntries() {
 		const bool assembled = assemble(e, std::string("\tGLOB *2\nx:\t") + EMPTY[i] + "\ny:\tDATi #5\n", eLayout
 				, error);
 		const Pointer x = e.symbols.findGlobal("x", xSize);
-		if (!assembled || x == NULL_POINTER || xSize != 0 || e.symbols.findGlobal("y", ySize) != x || ySize != 2) {
+		if (!assembled || x == NULL_POINTER || xSize != 2 || ownedWords(e.symbols, "x") != 0
+				|| e.symbols.findGlobal("y", ySize) != x || ySize != 2 || ownedWords(e.symbols, "y") != 2) {
 			std::printf("FAIL frozen entries: `x: %s` is not an empty label at `y`\n", EMPTY[i]);
 			++failures;
 		}
@@ -1024,7 +1040,7 @@ int sweepTextEncoding() {
 }
 
 /*
-	Data in an unnamed section before its first label belongs to no name, so a snapshot could not save it, and the
+	Data in an unnamed section before its first label belongs to no name, so freezing could not save it, and the
 	assembler refuses it: at the statement, or for a section with no data, when the next section opens or at
 	`finalize`. Returns the number of failures, each one printed.
 */
@@ -1049,7 +1065,7 @@ int sweepUnnamedSections() {
 			++failures;
 		}
 	}
-	// A label covers the unlabelled statements after it, up to the next label or the end of the section.
+	// A label owns the unlabelled statements after it, up to the next label, and reaches to the end of the section.
 	Machine m;
 	Layout layout = Layout();
 	std::string error;
@@ -1058,12 +1074,44 @@ int sweepUnnamedSections() {
 	const bool assembled = assemble(m, "\tGLOB *20\ns:\tDATs blahblah\n\tDATi #10\n\tDATs yaddayadda\nt:\tDATi #1\n"
 			, layout, error);
 	const Pointer sAddress = m.symbols.findGlobal("s", sSize);
-	if (!assembled || sAddress == NULL_POINTER || sSize != 19 || m.symbols.findGlobal("t", tSize) != sAddress + 19
-			|| tSize != 1) {
+	if (!assembled || sAddress == NULL_POINTER || sSize != 20 || ownedWords(m.symbols, "s") != 19
+			|| m.symbols.findGlobal("t", tSize) != sAddress + 19 || tSize != 1 || ownedWords(m.symbols, "t") != 1) {
 		std::printf("FAIL unnamed sections: a label does not cover the unlabelled lines after it (%s)\n", error.c_str());
 		++failures;
 	}
 	std::printf("unnamed sections: %d checked, %d failed\n", count + 1, failures);
+	return failures;
+}
+
+/*
+	An access through a label reaches to the end of its section, past the labels after it, but no further
+	(docs/gazl/Specification.md section 5). Returns the number of failures, each one printed.
+*/
+int sweepLabelReach() {
+	struct Case { const char* what; const char* section; const char* access; int error; };
+	const char* const NAMED = "s:\tGLOB *4\na:\tDATi #1\nb:\tDATi #2\n";
+	const Case CASES[] = {
+		{ "a section label, to its last word", NAMED, "&s:3", -1 },
+		{ "a section label, past its end", NAMED, "&s:4", OFFSET_OUT_OF_BOUNDS },
+		{ "an inner label, past the next label", NAMED, "&a:3", -1 },
+		{ "an inner label, past the section end", NAMED, "&a:4", OFFSET_OUT_OF_BOUNDS },
+		{ "a later inner label, to the section end", NAMED, "&b:2", -1 },
+		{ "a later inner label, past the section end", NAMED, "&b:3", OFFSET_OUT_OF_BOUNDS },
+		{ "a label in an unnamed section, past the next label", "\tGLOB *4\na:\tDATi #1\nb:\tDATi #2\n", "&a:3", -1 },
+		{ "a label that owns nothing, to the section end", "\tGLOB *4\na:\tDATi\nb:\tDATi #2\n", "&a:3", -1 }
+	};
+	const int count = sizeof (CASES) / sizeof (*CASES);
+	int failures = 0;
+	for (int i = 0; i < count; ++i) {
+		const std::string source = std::string(CASES[i].section) + "main:\tFUNC\nv:\tLOCi\n\tPEEK v " + CASES[i].access
+				+ "\n\tPOKE " + CASES[i].access + " v\n\tRETU\n";
+		const int error = assemblyError(source);
+		if (error != CASES[i].error) {
+			std::printf("FAIL label reach: %s gave error %d, expected %d\n", CASES[i].what, error, CASES[i].error);
+			++failures;
+		}
+	}
+	std::printf("label reach: %d checked, %d failed\n", count, failures);
 	return failures;
 }
 
@@ -1197,6 +1245,6 @@ int main() {
 	}
 #endif
 	const int hostFailures = sweepNativeAccess() + sweepFrameAndThaw() + sweepFrozenEntries() + sweepThawRules()
-			+ sweepTextEncoding() + sweepUnnamedSections() + sweepFunctionOffsets();
+			+ sweepTextEncoding() + sweepUnnamedSections() + sweepLabelReach() + sweepFunctionOffsets();
 	return (sweep(engineCount) != 0 || hostFailures != 0) ? 1 : 0;
 }
