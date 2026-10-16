@@ -21,6 +21,9 @@ bash tools/test-bounds.sh
 # Float literals round correctly, sampled across every float (tools/GAZLFloatLiteralTest.cpp).
 bash tools/test-float-literals.sh
 
+# Several processors in one memory, cooperative and on threads (tools/GAZLMultiProcessorTest.cpp).
+bash tools/test-processors.sh
+
 # Build Impala
 bash tools/BuildImpala.sh
 
