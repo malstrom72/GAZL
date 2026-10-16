@@ -697,8 +697,8 @@ std::string globalWords(Machine& m, const char* name) {
 	The words the global `name` owns, from `getGlobalInfo`, or 99 when there is no such global.
 */
 UInt ownedWords(const Symbols& symbols, const char* name) {
-	const GlobalInfo info = symbols.getGlobalInfo(name);
-	return (info.address != NULL_POINTER ? info.owned : 99);
+	GlobalInfo info;
+	return (symbols.getGlobalInfo(name, info) ? info.owned : 99);
 }
 
 void putWord(std::vector<unsigned char>& b, size_t at, UInt v) {
@@ -867,12 +867,17 @@ int sweepFrozenEntries() {
 		++failures;
 	}
 	// By name, `getGlobalInfo` knows writable data only, `TEMP` included, and agrees with the iteration.
-	const GlobalInfo temp = m.symbols.getGlobalInfo("tmpval");
-	const GlobalInfo head = m.symbols.getGlobalInfo("head");
-	if (m.symbols.getGlobalInfo("entry").address != NULL_POINTER
-			|| m.symbols.getGlobalInfo("nosuch").address != NULL_POINTER
-			|| temp.address == NULL_POINTER || !temp.isTemp || temp.owned != 2 || temp.size != 2
-			|| strcmp(head.name, "head") != 0 || head.size != 3 || head.owned != 1 || head.isTemp) {
+	GlobalInfo temp;
+	GlobalInfo head;
+	GlobalInfo entry;
+	GlobalInfo nosuch;
+	entry.address = 1;
+	nosuch.size = 1;
+	if (m.symbols.getGlobalInfo("entry", entry) || entry.address != NULL_POINTER || entry.name != 0
+			|| m.symbols.getGlobalInfo("nosuch", nosuch) || nosuch.size != 0
+			|| !m.symbols.getGlobalInfo("tmpval", temp) || !temp.isTemp || temp.owned != 2 || temp.size != 2
+			|| !m.symbols.getGlobalInfo("head", head) || strcmp(head.name, "head") != 0 || head.size != 3
+			|| head.owned != 1 || head.isTemp) {
 		std::printf("FAIL frozen entries: getGlobalInfo by name reports the wrong global\n");
 		++failures;
 	}

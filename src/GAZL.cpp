@@ -877,13 +877,15 @@ GlobalInfo Symbols::getGlobalInfo(const Iterator& iterator) const {
 	return info;
 }
 
-GlobalInfo Symbols::getGlobalInfo(const Char* name) const {
+bool Symbols::getGlobalInfo(const Char* name, GlobalInfo& info) const {
 	const Iterator it = symbols.find(name);
 	if (it == symbols.end() || (it->second.types & ADDRESS) != ADDRESS) {
 		const GlobalInfo none = { 0, NULL_POINTER, 0, 0, false };
-		return none;
+		info = none;
+		return false;
 	}
-	return getGlobalInfo(it);
+	info = getGlobalInfo(it);
+	return true;
 }
 
 Assembler::Assembler(UInt maxCodeSize, Instruction* codeBase, UInt maxFunctionCount, UInt* functionTable
