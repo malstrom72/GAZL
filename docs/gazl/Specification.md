@@ -54,18 +54,22 @@ Data memory is one array of words, sized by the host. Every address is measured 
 ![Data memory: constants below the base, then globals, the data stack and the zero guard](images/memory.svg)
 
 - **Globals** are placed from the base upward, and **constants** from the base downward. The assembler also places
-  switch tables among the constants. `C` is the total size of the constants.
-- **A section is contiguous.** Its words follow each other in order, whether the section is named or not.
-- **Sections are not ordered.** The order and adjacency of separate sections are unspecified. A pointer computed
-  from one section into another stays inside memory, but which word it reaches is unspecified. (The reference
-  implementation places sections in declaration order.)
+  switch tables among the constants.
+- **Within a section, the layout is strict.** A section's words are contiguous, in the order its data statements
+  fill them, whether the section is named or not. It has exactly the size it declares (section 6).
+- **Between sections, nothing is promised.** An implementation may place sections in any order and leave unused
+  words between them, for example to align each section to 64 bits for a JIT. A pointer computed from one section
+  into another stays inside memory, but which word it reaches is unspecified. (The reference implementation places
+  sections in declaration order, with no gaps.)
+- `C` and `G` are the space the constants and the globals take, gaps included.
 - **The data stack** is everything above the globals, up to the zero guard.
 - **The zero guard** is the last word of memory, just above the data stack. It always holds 0, so a native scanning
   for a string's terminator stops there. No checked read reaches it.
 
-Every address therefore depends only on the program: neither globals nor constants move when the host chooses a
-different memory size. Only the size of the data stack does. The host must provide at least `C + G + 1` words,
-the constants, the globals and the zero guard; every word beyond that is data stack.
+Addresses therefore depend on the program and the implementation, never on the memory size: neither globals nor
+constants move when the host chooses a different memory size. Only the size of the data stack does. The host must
+provide at least `C + G + 1` words, the constants, the globals and the zero guard; every word beyond that is data
+stack.
 
 A read must succeed exactly when its pointer is in `[base - C, base + rw)`, and a write exactly when it is in
 `[base, base + rw)`. An address is `base + offset` computed with 32-bit wrap-around, so an offset can never carry
@@ -174,9 +178,9 @@ A program is one or more **units** (source files) assembled in order into one pr
 - **Shared across units:** global names, meaning data sections, functions and named constants.
 - **Reset per unit:** assembly-time variables.
 
-**Data sections.** `GLOB *n`, `TEMP *n` and `CNST *n` each reserve a section of `n` words. The statement's label,
-if it has one, names the whole section; a section without a label is unnamed. The data statements that follow
-fill it in order:
+**Data sections.** `GLOB *n`, `TEMP *n` and `CNST *n` each reserve a section of exactly `n` words. The statement's
+label, if it has one, names the section and its first word; a section without a label is unnamed. The data
+statements that follow fill it in order:
 - `DATi`, `DATf` and `DATp` write one or more ints, floats or pointers; `DATA` writes one or more values of mixed
   types.
 - `DATs text` writes the rest of the line, one ASCII character per word, with trailing blanks removed. A byte
@@ -184,6 +188,8 @@ fill it in order:
 - A label on a data statement names the statement's first word. A data statement without values is legal and
   writes nothing.
 - Words left unfilled are 0.
+- A data statement that would write past the section's `n` words is `DATA_SECTION_FULL`. Data never spills into
+  whatever follows.
 
 `TEMP` is `GLOB` that a memory snapshot skips (section 11). `CNST` sections are read-only.
 
@@ -401,9 +407,11 @@ keep with it:
 - **Code:** the GAZL source the program was assembled from.
 - **Constants:** every constant the host supplied at assembly.
 
-A restore is defined for a program assembled from the same code and the same constants. The re-assembly then
-rebuilds an identical layout and identical function ordinals (section 2), and every entry is restored exactly,
-pointers included.
+A restore is exact, pointers included, for the same program assembled by the same implementation: the same code,
+the same constants and the same engine. The re-assembly then rebuilds an identical layout and identical function
+ordinals (section 2), and every entry is restored exactly. Another implementation may lay out sections differently
+(section 3): entries still restore by name and size, but data pointers are valid only if their targets kept their
+addresses.
 
 Restoring into a changed program still works by name and size, but nothing more is promised:
 - the snapshot records no types and no layouts;
