@@ -448,6 +448,9 @@ keep with it:
 - **Code:** the GAZL source the program was assembled from.
 - **Constants:** every constant the host supplied at assembly.
 
+The snapshot does not identify the program it came from. Deciding which code and constants a snapshot belongs to,
+and whether to restore it into a given program at all, is the host's, in whatever way suits it.
+
 A restore is exact, pointers included, for the same program assembled by the same implementation: the same code,
 the same constants and the same engine. The re-assembly then rebuilds an identical layout and identical function
 ordinals (section 2), and every entry is restored exactly. Another implementation may lay out sections differently
