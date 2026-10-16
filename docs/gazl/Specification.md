@@ -326,8 +326,7 @@ These hold as long as the host keeps the floating-point environment required in 
 ## 11. Memory snapshot format
 
 A snapshot ("freeze") holds the values of a program's writable memory, by owner (section 6), so that they can be
-restored by name ("thaw") into the program after it has been assembled again. A snapshot holds data only. The code
-and constants it belongs to must be kept with it by the host, and the snapshot does not identify them.
+restored by name ("thaw") into the program after it has been assembled again. A snapshot holds data only.
 
 **Encoding.** A snapshot is a sequence of bytes built from two kinds of field:
 - A **word** is 4 bytes holding an unsigned 32-bit value, little-endian: bits 0-7 first, bits 24-31 last.
@@ -405,6 +404,8 @@ The status says whether the snapshot fitted the program exactly:
 - **`MEMORY_MISMATCH`:** anything else. The data is restored as far as the policy allows.
 
 **Conditions.**
+- A snapshot does not identify the program it came from. The host is responsible for keeping the code and constants
+  it belongs to, and for deciding which program to restore it into.
 - Freeze and thaw are defined only while no processor that uses the memory is inside a call.
 - A restored word is its raw bits. Snapshots record no types, layouts or pointer targets, so pointers in restored
   data are valid only when the program was assembled from the same code and constants by the same implementation,
