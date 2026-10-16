@@ -1464,9 +1464,9 @@ Int Processor::run() {
 	while (--clockCyclesLeft >= 0) {
 		switch (ip->opcode) {
 			case FUNC_CC_:	if ((UInt)C0.i + (UInt)C1.i > (UInt)(dataStackEnd - dsp)) { err = DATA_STACK_OVERFLOW; goto ret; } dsp += (UInt)(C0.i); break;
-		case CALL_VVC:	ui = V0.p - FUNCTION_OFFSET;																	// ui = function ordinal
+			case CALL_VVC:	ui = V0.p - FUNCTION_OFFSET;																// ui = function ordinal
 							if (ui >= functionCount) { err = BAD_CALL; goto ret; }
-						ui = functionTable[ui];																			// ui = code offset
+							ui = functionTable[ui];																		// ui = code offset
 							assert((codeBase + ui)->opcode == FUNC_CC_);
 							goto call;
 			case CALL_CVC:	ui = C0.p - FUNCTION_OFFSET;																// ui = function ordinal (constant, validated at assembly)
