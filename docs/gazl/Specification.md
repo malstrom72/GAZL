@@ -380,7 +380,7 @@ for in this order, it restores nothing and returns that problem's status:
 | ------------------------------------------------------------------------------------ | --------------------- |
 | fewer than 4 bytes, or the magic is wrong                                            | `MEMORY_BAD_MAGIC`    |
 | the header is incomplete                                                             | `MEMORY_TRUNCATED`    |
-| the format version is not 1, or the GAZL version is 0 or above thaw's own           | `MEMORY_BAD_VERSION`  |
+| the format version is not 1, or the GAZL version is 0 or above thaw's own            | `MEMORY_BAD_VERSION`  |
 | the word size is not 32                                                              | `MEMORY_BAD_WORDSIZE` |
 | a length runs past the end of the snapshot                                           | `MEMORY_TRUNCATED`    |
 | the check entry differs from the one above                                           | `MEMORY_BAD_CANARY`   |
