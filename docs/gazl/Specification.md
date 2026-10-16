@@ -197,14 +197,14 @@ own label, or a label on one of its data statements.
 
 So every word is named by exactly one `owner:offset`, and that is what a snapshot saves (section 11). For example:
 
-    morky:  GLOB *40
-            DATi #5954          ; morky:0, the only word morky owns
-    smorky: DATi #1             ; smorky:0, and smorky owns smorky:1 to smorky:38 too
+    buffer: GLOB *40
+            DATi #5954          ; buffer:0, the only word buffer owns
+    tail:   DATi #1             ; tail:0, and tail owns tail:1 to tail:38 too
             GLOB *1
     clock:  DATi #0             ; clock:0, an Impala scalar
 
-Without the `DATi #5954` row, `smorky` would own all 40 words and `morky` none. Owning is not addressing:
-`&morky:5` still reaches the word `smorky:4` (section 5).
+Without the `DATi #5954` row, `tail` would own all 40 words and `buffer` none. Owning is not addressing:
+`&buffer:5` still reaches the word `tail:4` (section 5).
 
 **Functions** start with `FUNC`, labelled with the function's name.
 - **Declarations first.** Parameters (`PARA`, `INPi/f/p`, `OUTi/f/p`) and locals (`LOCi/f/p`, `LOCA *n`) come
@@ -373,7 +373,7 @@ encoded them, and that floats travel as raw bits, a NaN's payload included. Any 
 **Program entries** follow, in strictly ascending ASCII order of their names: one for each owner in a `GLOB`
 section that owns at least one word, holding exactly the words it owns. Every word of a `GLOB` section is therefore
 saved exactly once. Owners in `CNST` and `TEMP` sections are left out. In the example of section 6, the entries
-are `clock` (1 word), `morky` (1 word) and `smorky` (39 words); Impala's arrays (`params: GLOB *4`) and scalars
+are `buffer` (1 word), `clock` (1 word) and `tail` (39 words); Impala's arrays (`params: GLOB *4`) and scalars
 (`GLOB *1`, then `clock: DATi #0`) each give one entry.
 
 An entry's words are memory exactly, 32 bits each, whatever their type: an int as its two's-complement bits, a
