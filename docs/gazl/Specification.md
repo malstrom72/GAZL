@@ -146,7 +146,7 @@ assembly error.
 | (none) | local variable, optionally `name:offset` into a local array     | `x`, `buf:3`           |
 | `%`    | transient `n`: the `n`-th word after the function's locals      | `%0`                   |
 | `#`    | constant: a literal or a named assembly-time constant           | `#12`, `#0.5`, `#TRUE` |
-| `<`    | assembly-time variable: any one identifier character in `<` `>` | `<A>`, `<x>`, `<0>`    |
+| `<`    | assembly-time variable: one of `A-Za-z0-9_.$` in `<` `>`        | `<A>`, `<x>`, `<0>`    |
 | `&`    | address of a data section or function, optionally `:offset`     | `&table:4`, `&main`    |
 | `^`    | native function                                                 | `^print`               |
 | `@`    | branch label in the current function                            | `@loop`, `@sw.3`       |
