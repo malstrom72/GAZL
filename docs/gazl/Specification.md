@@ -55,9 +55,12 @@ Data memory is one array of words, sized by the host. Every address is measured 
               | constants (CNST)      | globals (GLOB, TEMP)    | data stack ...                  | zero guard |
               |<---- read-only ------>|<--------------------- writable: rw words ---------------->|
 
-- **Globals** are placed from the base upward, in declaration order.
-- **Constants** are placed from the base downward, in declaration order: the first constant section ends just below
-  the base. The assembler also places switch tables there. `C` is the total size of the constants.
+- **Globals** are placed from the base upward, and **constants** from the base downward. The assembler also places
+  switch tables among the constants. `C` is the total size of the constants.
+- **A section is contiguous.** Its words follow each other in order, whether the section is named or not.
+- **Sections are not ordered.** The order and adjacency of separate sections are unspecified. A pointer computed
+  from one section into another stays inside memory, but which word it reaches is unspecified. (The reference
+  implementation places sections in declaration order.)
 - **The data stack** is everything above the globals, up to the zero guard.
 - **The zero guard** is the last word of memory, just above the data stack. It always holds 0, so a native scanning
   for a string's terminator stops there. No checked read reaches it.
@@ -147,6 +150,16 @@ assembly error.
 | `@`    | branch label in the current function                            | `@loop`, `@sw.3`       |
 | `*`    | non-negative size constant                                      | `*16`                  |
 
+**Offsets.** `&label:k` and `local:k` take a constant `k >= 0`.
+- **Accesses are checked at assembly.** Where an instruction reads or writes the word at `&label:k` (`PEEK`,
+  `POKE`, `COPY`), that word must lie within the label's section; it may be owned by a later label (section 6). A
+  local array offset must lie within the array.
+- **Addresses are not.** Where `&label:k` is only a value (`MOVp`, `ADDp`, `DIFp`, pointer compares, `FORp`,
+  `DATp`, `DATA`), any offset is accepted, one past the end of the section included. An access through such a
+  pointer is checked at run time (section 3).
+- **A function address takes no offset.** `&function:k` with `k > 0` is `OFFSET_OUT_OF_BOUNDS`: it would name
+  another function.
+
 **Integer literals** are decimal, or hexadecimal after a lowercase `0x`, with an optional sign. A quoted literal
 (`'AB'`) packs its characters into one int, the first character in the most significant byte used. A value outside
 32 bits wraps. A literal that parses completely as an integer is an int, so a float operand needs a float literal:
@@ -170,13 +183,30 @@ fill it in order:
   types.
 - `DATs text` writes the rest of the line, one ASCII character per word, with trailing blanks removed. A byte
   above 0x7F in the text is `NON_ASCII_TEXT`. Impala emits every other character as numbers on a `DATi` line.
-- A label on a data statement names the statement's first word and covers exactly the values the statement
-  writes. A data statement without values is legal and writes nothing; a label on it covers no words (size 0).
+- A label on a data statement names the statement's first word. A data statement without values is legal and
+  writes nothing.
 - Words left unfilled are 0.
-- A section must be reachable: if it has no label and none of its data statements has one, it is an assembly error
-  (`UNNAMED_DATA_SECTION`).
 
 `TEMP` is `GLOB` that a memory snapshot skips (section 11). `CNST` sections are read-only.
+
+**Memory ownership.** Every word of a data section has exactly one owner, and an owner is a label: the section's
+own label, or a label on one of its data statements.
+- **The last label owns.** A word belongs to the last label at or before it in its section. An owner's words run
+  from its own word up to the next label, or to the end of the section, unfilled words included.
+- **Labels on the same word.** The later one in the source owns the words; the earlier one owns none.
+- **No owner is an error.** In an unnamed section, data before the first labelled statement would belong to no one,
+  and so would every word of an unnamed section with no labelled statement: `UNNAMED_DATA_SECTION`.
+
+So every word is named by exactly one `owner:offset`, and that is what a snapshot saves (section 11). For example:
+
+    morky:  GLOB *40
+            DATi #5954          ; morky:0, the only word morky owns
+    smorky: DATi #1             ; smorky:0, and smorky owns smorky:1 to smorky:38 too
+            GLOB *1
+    clock:  DATi #0             ; clock:0, an Impala scalar
+
+Without the `DATi #5954` row, `smorky` would own all 40 words and `morky` none. Owning is not addressing:
+`&morky:5` still reaches the word `smorky:4` (section 5).
 
 **Functions** start with `FUNC`, labelled with the function's name.
 - **Declarations first.** Parameters (`PARA`, `INPi/f/p`, `OUTi/f/p`) and locals (`LOCi/f/p`, `LOCA *n`) come
@@ -294,16 +324,16 @@ These hold as long as the host keeps the floating-point environment required in 
 
 ## 11. Memory snapshot format
 
-A snapshot ("freeze") saves the values of a program's named global sections so a later run can restore them by name
-("thaw"), even after the program has been changed and re-assembled. A snapshot is a payload that a host embeds in
-its own storage (a plugin state chunk, a preset file); it is not a file format of its own.
+A snapshot ("freeze") saves the values of a program's writable memory by owner (section 6), so a later run can
+restore them by name ("thaw"), even after the program has been changed and re-assembled. A snapshot is a payload
+that a host embeds in its own storage (a plugin state chunk, a preset file); it is not a file format of its own.
 
 This format is decided but not implemented yet: today's `freezeMemory` / `thawMemory` write an earlier layout of the
 same idea (open question 2).
 
 **Encoding.** A snapshot is a sequence of bytes built from two kinds of field:
 - A **word** is 4 bytes holding an unsigned 32-bit value, little-endian: bits 0-7 first, bits 24-31 last.
-- A **name** is a section's identifier (section 5), one byte per character, followed by 0 to 3 zero bytes of
+- A **name** is an owner's identifier (section 5), one byte per character, followed by 0 to 3 zero bytes of
   padding, so that the name and its padding together take a multiple of 4 bytes. A name of `L` bytes has
   `(4 - L % 4) % 4` padding bytes.
 
@@ -318,39 +348,36 @@ byte by byte, as above, and never by loading it through a pointer.
 | 4      | word: snapshot format version, 1                        |
 | 8      | word: the GAZL version of the writer, 1 for GAZL 1      |
 | 12     | word: word size in bits, 32                             |
-| 16     | word: `S`, the number of sections that follow, `S >= 1` |
+| 16     | word: `S`, the number of entries that follow, `S >= 1`  |
 
-**Sections.** `S` sections follow from offset 20, each directly after the previous one:
+**Entries.** `S` entries follow from offset 20, each directly after the previous one:
 
 | field     | content                                                     |
 | --------- | ----------------------------------------------------------- |
 | word      | `L`, the length of the name in bytes, excluding its padding |
 | name      | `L` bytes, then the padding                                 |
-| word      | `N`, the size of the section in words                       |
-| `N` words | the section's memory, first word first                      |
+| word      | `N`, the number of words                                    |
+| `N` words | the owner's words, first word first                         |
 
-**The check section** is always the first section. It is recognised by its position, never restored, and exempt
-from the name order below. Its 28 bytes are fixed:
+**The check entry** is always the first entry. It is recognised by its position, never restored, and exempt from
+the name order below. Its 28 bytes are fixed:
 
     05 00 00 00   24 67 61 7A 6C 00 00 00   03 00 00 00   04 03 02 01   00 00 80 3F   01 00 80 7F
     L = 5         "$gazl" + 3 padding       N = 3         0x01020304    1.0f          signaling NaN
 
-A writer must produce its words the way it produces any other section's: the first from an int, the second from
-the float `1.0f`, the third from a word holding a signaling NaN. A reader must parse it like any other section and
+A writer must produce its words the way it produces any other entry's: the first from an int, the second from
+the float `1.0f`, the third from a word holding a signaling NaN. A reader must parse it like any other entry and
 then compare all 28 bytes. It proves the reader decodes lengths, names, padding and words exactly as the writer
 encoded them, and that floats travel as raw bits, a NaN's payload included. Any mismatch is `MEMORY_BAD_CANARY`.
 
-**Program sections** follow, in strictly ascending ASCII order of their names. Each word of writable memory is
-saved at most once, under the outermost name it has:
-- **A named `GLOB` section** is saved whole, as one entry. Labels on data statements inside it are not saved
-  separately; their words are already in the section's entry.
-- **In an unnamed `GLOB` section,** each labelled data statement is saved as its own entry, covering the words that
-  statement writes. Impala's scalar globals take this form: `GLOB *1` followed by `clock: DATi #0`.
-- **Words of an unnamed section that no label covers** have no name, and are not saved.
+**Program entries** follow, in strictly ascending ASCII order of their names: one for each owner in a `GLOB`
+section that owns at least one word, holding exactly the words it owns. Every word of a `GLOB` section is therefore
+saved exactly once. Owners in `CNST` and `TEMP` sections are left out. In the example of section 6, the entries
+are `clock` (1 word), `morky` (1 word) and `smorky` (39 words); Impala's arrays (`params: GLOB *4`) and scalars
+(`GLOB *1`, then `clock: DATi #0`) each give one entry.
 
-`CNST` and `TEMP` sections, and labels inside them, are left out. A section's words are its memory exactly, 32
-bits each, whatever their type: an int as its two's-complement bits, a float as its binary32 bits, a pointer as
-its raw value.
+An entry's words are memory exactly, 32 bits each, whatever their type: an int as its two's-complement bits, a
+float as its binary32 bits, a pointer as its raw value.
 
 **Validation.** A reader validates the whole snapshot before restoring anything. On the first problem below, looked
 for in this order, it restores nothing and returns that problem's status:
@@ -362,12 +389,12 @@ for in this order, it restores nothing and returns that problem's status:
 | the format version is not 1, or the GAZL version is 0 or above the reader's own      | `MEMORY_BAD_VERSION`  |
 | the word size is not 32                                                              | `MEMORY_BAD_WORDSIZE` |
 | a length runs past the end of the snapshot                                           | `MEMORY_TRUNCATED`    |
-| the check section differs from the one above                                         | `MEMORY_BAD_CANARY`   |
+| the check entry differs from the one above                                           | `MEMORY_BAD_CANARY`   |
 | a name is not a valid identifier, names do not ascend strictly, or padding is not 0  | `MEMORY_MALFORMED`    |
-| bytes follow the last section                                                        | `MEMORY_MALFORMED`    |
+| bytes follow the last entry                                                          | `MEMORY_MALFORMED`    |
 
-**Restore.** Only after validation succeeds, a program section is restored when the re-assembled program has a
-writable section of the same name and size. Every other section is skipped without error.
+**Restore.** Only after validation succeeds, an entry is restored when the re-assembled program has an owner of the
+same name in a `GLOB` section, owning the same number of words. Every other entry is skipped without error.
 
 **Data only.** A snapshot holds data and nothing else. Its meaning depends on two more parts, both the host's to
 keep with it:
@@ -375,12 +402,12 @@ keep with it:
 - **Constants:** every constant the host supplied at assembly.
 
 A restore is defined for a program assembled from the same code and the same constants. The re-assembly then
-rebuilds an identical layout and identical function ordinals (section 2), and every section is restored exactly,
+rebuilds an identical layout and identical function ordinals (section 2), and every entry is restored exactly,
 pointers included.
 
 Restoring into a changed program still works by name and size, but nothing more is promised:
 - the snapshot records no types and no layouts;
-- a same-size section whose layout changed receives the old words as they were;
+- an owner of the same size whose meaning changed receives the old words as they were;
 - data pointers and function pointers are raw values, valid only if their targets did not move.
 
 Migrating data between program versions is outside this specification.
@@ -392,7 +419,7 @@ same in GAZL 1 and GAZL 2. A GAZL version that changes what memory contents mean
 - store the snapshot's exact byte length with it, since validation requires the reader to be given exactly the
   bytes that were written;
 - store a checksum with it (CRC-32 at least) and verify it before calling `thawMemory`. Strongly recommended:
-  validation catches damaged lengths and names, but not a changed bit inside a section's words.
+  validation catches damaged lengths and names, but not a changed bit inside an entry's words.
 
 ## 12. Conformance
 
@@ -411,9 +438,11 @@ answer.
    exact ties such as `2180774.875`. None of the float literals in existing GAZL or Impala sources changes value.
 2. **The snapshot format is decided but not implemented.** Section 11 is the format to build. Today's
    `freezeMemory` / `thawMemory` write and read an earlier layout of the same idea:
-   - the two check words sit in the header rather than in a `$gazl` check section, and there is no NaN word;
-   - names are not padded, and sections follow the assembler's own order rather than ascending names;
+   - the two check words sit in the header rather than in a `$gazl` check entry, and there is no NaN word;
+   - names are not padded, and entries follow the assembler's own order rather than ascending names;
+   - a named section is saved whole, and labels inside it are not saved, where section 6 makes every label an
+     owner (the assembler already gives every word an owner, with data labels running to the next label);
    - the reader accepts only its own GAZL version;
-   - it restores while it parses, so a truncated snapshot restores the sections before the damage, and there is
+   - it restores while it parses, so a truncated snapshot restores the entries before the damage, and there is
      no `MEMORY_MALFORMED`.
    No snapshots exist yet that must stay readable, so the implementation can switch to section 11 directly.
