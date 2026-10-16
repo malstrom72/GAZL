@@ -87,6 +87,7 @@ const char* ASSEMBLER_ERROR_TEXTS[] = {
 	/* , LABEL_ON_FUNCTION							*/	, "Branch target lands on a FUNC"
 	/* , FRAME_TOO_LARGE								*/	, "Frame too large"
 	/* , NON_ASCII_TEXT								*/	, "Non-ASCII character in text"
+	/* , UNNAMED_DATA_SECTION						*/	, "Unnamed data section must start with a labelled data statement"
 };
 
 // --- defined integer / FTOI semantics, shared by Processor::run() and calcConstant() so the
@@ -767,6 +768,8 @@ void Symbols::resolve(const Reference& ref, const Symbol& symbol) {
 	assert((ref.offset < 0) == (ref.accepts == FWD_BRANCH));
 	if ((ref.accepts & UNCHECKED_ADDRESS) == 0 && ref.offset >= static_cast<Int>(symbol.size))
 		throw Exception(OFFSET_OUT_OF_BOUNDS, ref.label);
+	// A function address takes no offset: `&main:1` would name another function.
+	if ((symbol.types & FUNC) != 0 && ref.offset > 0) throw Exception(OFFSET_OUT_OF_BOUNDS, ref.label);
 	if (ref.offset == 0) *ref.storage = symbol.value;
 	else {
 		assert((symbol.types & CONST_FLOAT) == 0);
@@ -889,8 +892,8 @@ Assembler::Assembler(UInt maxCodeSize, Instruction* codeBase, UInt maxFunctionCo
 		: codeBase(codeBase), codeEnd(codeBase + maxCodeSize), maxFunctionCount(maxFunctionCount)
 		, functionTable(functionTable), memoryBase(memoryBase), memoryEnd(memoryBase + maxMemorySize)
 		, ip(codeBase), functionStart(0), functionCount(0), localsSize(0), paramsSize(0), globalsPointer(memoryBase)
-		, constantsPointer(memoryEnd), dataLabelType(0), dataPointer(0), dataEnd(0), dataIsConstant(false)
-		, globals(globals) {
+		, constantsPointer(memoryEnd), dataLabelType(0), dataPointer(0), dataEnd(0), dataOpenStart(0)
+		, dataIsNamed(false), dataIsConstant(false), globals(globals) {
 	for (Int i = 0; i < 128; ++i) compileTimeVars[i].types = 0;
 	Value v;
 	v.i = 0;
@@ -1009,6 +1012,26 @@ void Assembler::parseOperand(const Char* b, const Char* e, int accepts, Value* v
 	}
 }
 
+/*
+	A data label covers its own statement and everything after it, up to the next label or the end of the section. So
+	each label is declared reaching to the end of the section, and the next label shortens the previous one to end
+	where it starts. In an unnamed section, data before the first label would belong to no name, so a snapshot could
+	not save it.
+*/
+void Assembler::noteDataStatement(const Char* labelBegin, const Char* labelEnd, const Value* first) {
+	if (labelBegin == labelEnd) {
+		if (!dataIsNamed) throw Exception(UNNAMED_DATA_SECTION);
+		return;
+	}
+	if (!dataOpenLabel.empty()) {
+		const Symbols::SymbolMap::iterator it = globals.symbols.find(dataOpenLabel);
+		if (it != globals.symbols.end()) it->second.size = static_cast<UInt>(first - dataOpenStart);
+	}
+	dataIsNamed = true;
+	dataOpenLabel = std::string(labelBegin, labelEnd);
+	dataOpenStart = first;
+}
+
 Pointer Assembler::makeGAZLPointer(const Value* data, bool constant) const {
 	if (constant) {
 		assert(data >= constantsPointer && data <= memoryEnd - 1);
@@ -1044,7 +1067,10 @@ void Assembler::finalizeFunction() {
 
 void Assembler::finalize(ProgramSizes& sizes) {
 	newUnit(0);
-	if (dataPointer != 0) memset(dataPointer, 0, (dataEnd - dataPointer) * sizeof (*dataPointer));
+	if (dataPointer != 0) {
+		if (!dataIsNamed) throw Exception(UNNAMED_DATA_SECTION);
+		memset(dataPointer, 0, (dataEnd - dataPointer) * sizeof (*dataPointer));
+	}
 	globals.resolveForwardRefs();
 	// Constants were placed downward from the top during assembly, with addresses counted down from the base.
 	// Moving them to just below the globals puts every word at its address; nothing needs patching.
@@ -1169,7 +1195,9 @@ const Char* Assembler::feed(const Char* line) {
 							}
 							Value v;
 							v.p = makeGAZLPointer(dataPointer, dataIsConstant);
-							declare(globals, labelBegin, labelEnd, dataLabelType, v, static_cast<Int>(e - p));
+							declare(globals, labelBegin, labelEnd, dataLabelType, v
+									, static_cast<UInt>(dataEnd - dataPointer));
+							noteDataStatement(labelBegin, labelEnd, dataPointer);
 							while (p < e) (dataPointer++)->i = *p++;
 							return eatEOL(eatSpace(e));
 						}
@@ -1196,10 +1224,10 @@ const Char* Assembler::feed(const Char* line) {
 								parseOperand(b, e, accepts, dataPointer);
 								++dataPointer;
 							}
-							// Declared after the values, so the label covers exactly them: none for a line without values.
 							Value v;
 							v.p = makeGAZLPointer(first, dataIsConstant);
-							declare(globals, labelBegin, labelEnd, dataLabelType, v, (UInt)(dataPointer - first));
+							declare(globals, labelBegin, labelEnd, dataLabelType, v, static_cast<UInt>(dataEnd - first));
+							noteDataStatement(labelBegin, labelEnd, first);
 							return eatEOL(p);
 						}
 			
@@ -1292,8 +1320,12 @@ const Char* Assembler::feed(const Char* line) {
 							size = v.i;
 							dataLabel = std::string(labelBegin, labelEnd);
 							dataLabelType = op->declareTypes | (labelBegin != labelEnd ? INTERIOR : 0);					// labels inside a named section are interior
-							if (dataPointer != 0)
+							if (dataPointer != 0) {
+								if (!dataIsNamed) throw Exception(UNNAMED_DATA_SECTION);
 								memset(dataPointer, 0, (dataEnd - dataPointer) * sizeof (*dataPointer));
+							}
+							dataIsNamed = (labelBegin != labelEnd);
+							dataOpenLabel.clear();
 							if (constantsPointer - globalsPointer < size) throw Exception(NOT_ENOUGH_MEMORY_SPACE);
 							if (op->opcode == GLOB____) {
 								dataPointer = globalsPointer;
@@ -1473,9 +1505,9 @@ Int Processor::run() {
 	while (--clockCyclesLeft >= 0) {
 		switch (ip->opcode) {
 			case FUNC_CC_:	if ((UInt)C0.i + (UInt)C1.i > (UInt)(dataStackEnd - dsp)) { err = DATA_STACK_OVERFLOW; goto ret; } dsp += (UInt)(C0.i); break;
-		case CALL_VVC:	ui = V0.p - FUNCTION_OFFSET;																	// ui = function ordinal
+			case CALL_VVC:	ui = V0.p - FUNCTION_OFFSET;																// ui = function ordinal
 							if (ui >= functionCount) { err = BAD_CALL; goto ret; }
-						ui = functionTable[ui];																			// ui = code offset
+							ui = functionTable[ui];																		// ui = code offset
 							assert((codeBase + ui)->opcode == FUNC_CC_);
 							goto call;
 			case CALL_CVC:	ui = C0.p - FUNCTION_OFFSET;																// ui = function ordinal (constant, validated at assembly)

@@ -127,7 +127,8 @@ enum AssemblerError {
 	, LABEL_ON_FUNCTION = 33
 	, FRAME_TOO_LARGE = 34
 	, NON_ASCII_TEXT = 35
-	, ASSEMBLER_ERROR_COUNT = 36
+	, UNNAMED_DATA_SECTION = 36
+	, ASSEMBLER_ERROR_COUNT = 37
 };
 
 extern const char* ASSEMBLER_ERROR_TEXTS[];
@@ -255,6 +256,7 @@ class Assembler {
 	protected:	Value calcConstant(const Operator* op, const Char* op1Begin, const Char* op1End, const Char* op2Begin
 						, const Char* op2End);
 	protected:	void finalizeFunction();
+	protected:	void noteDataStatement(const Char* labelBegin, const Char* labelEnd, const Value* first);				// Settle label extents.
 	protected:	Pointer makeGAZLPointer(const Value* data, bool constant) const;										// The pointer to `data`: up from the base for globals, down from it for constants.
 	protected:	Instruction* const codeBase;
 	protected:	Instruction* const codeEnd;
@@ -273,6 +275,9 @@ class Assembler {
 	protected:	int dataLabelType;
 	protected:	Value* dataPointer;
 	protected:	Value* dataEnd;
+	protected:	std::string dataOpenLabel;																				// The section's latest data label, reaching to its end for now.
+	protected:	const Value* dataOpenStart;																				// Where `dataOpenLabel` starts.
+	protected:	bool dataIsNamed;																						// The current data section, or a data statement in it, has a label.
 	protected:	bool dataIsConstant;																					// The current data section is a `CNST` one, placed below the base.
 	protected:	Symbols& globals;
 	protected:	Symbols locals;
@@ -341,8 +346,7 @@ enum {
 						 | Transients |
 						 | +------------+
 						 | | Parameters | <-- Frame #2 (callee)
-						 +-|----------+ |
-					       |------------|
+						 +-|------------|
 						   | Locals     |
 						   |            |
 						   |------------|
