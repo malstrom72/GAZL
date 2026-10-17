@@ -1,14 +1,15 @@
-# GAZL 1 Specification
+# GAZL 2 Specification
 
-**DRAFT.** This document is meant to let someone who has never seen `src/GAZL.cpp` build a GAZL 1 implementation
+**DRAFT.** This document is meant to let someone who has never seen `src/GAZL.cpp` build a GAZL 2 implementation
 that runs every existing program with identical results. It defines the machine model, the source format, execution,
-the host interface and the frozen memory format. The per-instruction reference is
+the host interface and the frozen memory format. Sections 1 to 11 define GAZL 1, and section 12 what GAZL 2 adds.
+The per-instruction reference is
 [InstructionSet.md](InstructionSet.md); the conformance suite is [`src/UnitTest.gazl`](../../src/UnitTest.gazl).
 Where this draft and the reference implementation disagree, the disagreement is a bug in one of them and is listed
-under [Not yet implemented](#13-not-yet-implemented).
+under [Not yet implemented](#14-not-yet-implemented).
 
 "Must" marks a requirement on every implementation. "Unspecified" means an implementation may produce any result,
-but must stay inside the sandbox (section 10). Nothing in GAZL 1 is undefined in the C sense.
+but must stay inside the sandbox (section 10). Nothing in GAZL is undefined in the C sense.
 
 ## 1. Compatibility promise
 
@@ -25,9 +26,8 @@ written. So the format only ever grows:
 - Every implementation predefines `#GAZL_VERSION`, the version of the engine, and `#GAZL_WORD_SIZE` (32). A GAZL 1
   engine reports 1.
 - Later versions are supersets, not replacements. A GAZL 2 engine reports 2 and assembles every GAZL 1 program
-  unchanged; its additions are mnemonics that GAZL 1 refuses, used inside `GAZL #2` ... `GAZL #1` regions. A program
-  that needs a later version tests for it at assembly, with `! GEQi #GAZL_VERSION #2 @label`, rather than for an
-  exact value.
+  unchanged; its additions are mnemonics that GAZL 1 refuses as unknown (section 12). A program that needs a later
+  version tests for it at assembly, with `! GEQi #GAZL_VERSION #2 @label`, rather than for an exact value.
 
 ## 2. Values
 
@@ -425,13 +425,99 @@ The status says whether the frozen memory fitted the program exactly:
 - The format checks its own structure, not whether its bytes are intact. It is advisable that the host stores a
   checksum and the byte count with the frozen memory.
 
-## 12. Conformance
+## 12. GAZL 2
+
+GAZL 2 is GAZL 1 plus this section: a GAZL 2 implementation meets sections 1 to 11 as well, and its
+`#GAZL_VERSION` is 2. Every addition is a mnemonic that a GAZL 1 engine refuses as unknown, so a program either
+requires GAZL 2 or guards each use with `! GEQi #GAZL_VERSION #2 @label`; a skipped part is not parsed.
+
+**Dialect regions.** `GAZL #n` sets the dialect of the statements that follow. `GAZL #2` starts a GAZL 2 region and
+`GAZL #1` ends it; outside any region the dialect is 1, so a GAZL 1 program keeps its meaning.
+- **Versions.** `n` below 1 or above the engine's version is `UNSUPPORTED_GAZL_VERSION`.
+- **Closing.** The dialect carries over from one unit to the next, and the program must end in dialect 1
+  (`UNCLOSED_GAZL_REGION`). A unit that starts with `GAZL #2` and ends with `GAZL #1` can therefore be combined
+  with units of either dialect, in any order.
+- **What it changes.** The dialect decides only how functions and function addresses are typed, below. Every other
+  GAZL 2 mnemonic means the same in both dialects.
+
+**Call targets.** A function declared inside a GAZL 2 region has a **target** address, of type `t`. A target is the
+same word as a function pointer, `0x56789ABC + k` (section 2), but the assembler keeps it out of every pointer
+position, so a target is only ever named, copied or loaded, never computed.
+- **Instructions.** `LOCt`, `INPt` and `OUTt` declare target locals and parameters, `MOVt` copies a target, and
+  `DATt` writes targets into a data section. `EQUt`, `NEQt`, `LSSt`, `LEQt`, `GRTt` and `GEQt` compare two targets
+  by declaration order, and `DIFt` gives the difference of their ordinals as an int. No instruction adds to a
+  target.
+- **Constants.** Where these instructions take a constant, it must be the address of a GAZL 2 function, or `&NULL`.
+- **Calls.** `CALL` and `TAIL` take a function of either dialect, so GAZL 1 and GAZL 2 functions call each other.
+- **Pointers.** A `p` position (`MOVp`, `DATp`, `EQUp` and the rest) refuses a GAZL 2 function's address in either
+  dialect, with `INCOMPATIBLE_TYPES`. Inside a GAZL 2 region it refuses a GAZL 1 function's address too, and an
+  indirect `CALL` or `TAIL` must go through a `t` variable or a transient, not a `p` variable.
+- **Memory.** Memory has no types, so `PEEK`, `POKE`, `GETL`, `SETL`, `COPY` and `DATA` carry targets like any other
+  word (section 2). A target that names no function stops the program with `BAD_CALL` when it is called.
+
+**Local scopes.** `SCOP` and `ENDS` group declarations whose lifetimes do not overlap, so they can share frame words.
+- **Placement.** Both stand among a function's declarations, before its first instruction
+  (`MUST_DEFINE_LOCALS_FIRST`).
+- **Offsets.** A declaration takes the next free words of the frame. `ENDS` frees the words declared since its
+  `SCOP`, so the next declaration reuses them: sibling scopes overlay each other, and a nested scope stacks on top
+  of its parent.
+- **Frame size.** The frame is the deepest chain of nested declarations, not the sum of all of them.
+- **Balance.** Every `SCOP` must be closed by an `ENDS` before the first instruction, an `ENDS` needs an open
+  `SCOP`, and scopes nest at most 32 deep: `UNBALANCED_LOCAL_SCOPE` otherwise.
+
+Scopes generate no code. A declaration that must outlive a scope comes before its `SCOP`:
+
+    $g:     LOCi            ; offset 0, outside every scope
+            SCOP
+    $a:     LOCA *4         ; offsets 1 to 4
+            SCOP
+    $b:     LOCi            ; offset 5, nested
+            ENDS
+            ENDS
+            SCOP
+    $c:     LOCA *2         ; offsets 1 and 2 again, a sibling of the first scope
+            ENDS
+
+The frame is 6 words: `$g`, `$a` and `$b`.
+
+**Tail calls.** `TAIL target *n` ends the current function by calling `target` in its place. `target` is
+`&function` or a variable holding a function; natives cannot be tail-called.
+- **Arguments.** They are always the transients `%0` to `%n - 1`, which count toward the frame (section 6). They
+  are copied, lowest word first, to the start of the current function's frame, and the callee takes that frame
+  over.
+- **Return.** Nothing is pushed on the call stack: the callee's `RETU` returns to the current function's caller,
+  which reads the callee's outputs where it would have read the current function's.
+- **Checks.** The callee's `FUNC` checks its frame as after a `CALL` (`DATA_STACK_OVERFLOW`), and a variable that
+  names no function is `BAD_CALL`.
+- **Ending.** A function may end with `TAIL`, as well as with `RETU` or `GOTO`.
+
+A chain of tail calls, however long, therefore runs in constant call-stack and data-stack space.
+
+**Data regions.** `SEEK :offset` and `SEEK :offset *extent` move the fill position of the current data section to
+`offset` words from its start, and open a region there that the data statements after it fill in order. Both
+operands take any assembly-time constant.
+- **Extent.** With `*extent` the region is that many words, and writing past it is `DATA_SECTION_FULL`. Without it
+  the region is the words written, bounded by the end of the section.
+- **Bounds.** A region that reaches past its section is `OFFSET_OUT_OF_BOUNDS` at the `SEEK`. Two regions of one
+  section that overlap are `OVERLAPPING_DATA_REGIONS`, so no word is written twice.
+- **Order.** Regions may come in any order, and words no region writes are 0. A section without `SEEK` is one
+  region at offset 0, as in GAZL 1.
+- **Labels.** A label on a `SEEK` is an ordinary data label at the region's first word.
+- **Ownership.** Section 6 applies by address, whatever order the regions come in: a word belongs to the last label
+  at or before it, and of two labels on one word the later in the source owns it. So an unnamed section needs a
+  label on its first word; otherwise the words before its first label are `UNNAMED_DATA_SECTION`.
+
+**Open.** The syntax of `SEEK` is not final, and will be settled before GAZL 2 is.
+
+**Frozen memory.** A GAZL 2 implementation writes 2 as the GAZL version in the header (section 11).
+
+## 13. Conformance
 
 An implementation conforms when it runs the following with the expected results:
 - **`src/UnitTest.gazl`.** It must assemble and its `test` function must run to completion.
 - **The replayed fuzz inputs** in `tests/fuzz/` must neither crash the implementation nor break the sandbox.
 - **`tools/GAZLBoundsSweep.cpp`'s oracle** must agree with every memory access at every edge of memory.
 
-## 13. Not yet implemented
+## 14. Not yet implemented
 
 `src/GAZL.cpp` does everything this specification says.
