@@ -142,29 +142,36 @@ assembly error.
 
   As a regular expression: `[A-Za-z_.$][A-Za-z0-9_.$]*`. A switch case label (`@sw#'B'`, see `SWCH` in
   InstructionSet.md) is an identifier followed by `#` and a constant; the `#` part is not part of the identifier.
+  The constant is an index into the switch's table, 0 or more. A case at or past the table's `*size` is never
+  reached; a negative one is an assembly error.
 
 **Operands** are classified by their first character:
 
 | prefix | operand                                                         | example                |
 | ------ | --------------------------------------------------------------- | ---------------------- |
-| (none) | local variable, optionally `name:offset` into a local array     | `x`, `buf:3`           |
+| (none) | local variable, optionally `name:offset` within the frame       | `x`, `buf:3`           |
 | `%`    | transient `n`: the `n`-th word after the function's locals      | `%0`                   |
-| `#`    | constant: a literal or a named assembly-time constant           | `#12`, `#0.5`, `#TRUE` |
+| `#`    | number: a literal, or a name from `! DEFi` or `! DEFf`          | `#12`, `#0.5`, `#TRUE` |
 | `<`    | assembly-time variable: one of `A-Za-z0-9_.$` in `<` `>`        | `<A>`, `<x>`, `<0>`    |
-| `&`    | address of a data section or function, optionally `:offset`     | `&table:4`, `&main`    |
+| `&`    | pointer: a data label, function, `! DEFp` name, or `NULL`       | `&table:4`, `&main`    |
 | `^`    | native function                                                 | `^print`               |
 | `@`    | branch label in the current function                            | `@loop`, `@sw.3`       |
 | `*`    | non-negative size constant                                      | `*16`                  |
 
-**Offsets.** `&label:k` and `local:k` take a constant `k >= 0`.
+The prefix does not restrict the kind of name: `#name` and `&name` both take any name the operand accepts, so
+`#table`, `#NULL` and `DATA &GAZL_VERSION` assemble too.
+
+**Offsets.** `&label:k` and `local:k` take a constant `k`, negative or not, on data labels and locals only.
 - **Accesses are checked at assembly.** Where an instruction reads or writes the word at `&label:k` (`PEEK`,
-  `POKE`, `COPY`), that word must lie within the label's section; it may be owned by a later label (section 6). A
-  local array offset must lie within the array.
+  `POKE`, `COPY`), that word must lie within the label's section, before or after the label; it may be owned by
+  another label (section 6). The word at `local:k` must lie within the frame's parameters and locals (section 6).
+  Anything else is `OFFSET_OUT_OF_BOUNDS`.
 - **Addresses are not.** Where `&label:k` is only a value (`MOVp`, `ADDp`, `DIFp`, pointer compares, `FORp`,
-  `DATp`, `DATA`), any offset is accepted, one past the end of the section included. An access through such a
-  pointer is checked at run time (section 3).
-- **A function address takes no offset.** `&function:k` with `k > 0` is `OFFSET_OUT_OF_BOUNDS`: it would name
-  another function.
+  `DATp`, `DATA`), any offset is accepted. So is any `local:k` that is the local of `ADRL` or the array of `GETL`
+  and `SETL`. Accesses through these are checked at run time (sections 3 and 8).
+- **Nothing else takes an offset.** Any `:k` on a function, a native, `&NULL`, a `! DEFp` name or a number, `:0`
+  included, is `OFFSET_OUT_OF_BOUNDS`: on a function it would name another function, and on the others it names
+  nothing.
 
 **Integer literals** are decimal, or hexadecimal after a lowercase `0x`, with an optional sign. A quoted literal
 (`'AB'`) packs its characters into one int, the first character in the most significant byte used. A value outside
@@ -204,7 +211,8 @@ statements that follow fill it in order:
 own label, or a label on one of its data statements.
 - **The last label owns.** A word belongs to the last label at or before it in its section. An owner's words run
   from its own word up to the next label, or to the end of the section, unfilled words included.
-- **Labels on the same word.** The later one in the source owns the words; the earlier one owns none.
+- **Labels on the same word.** The later one in the source owns the words; the earlier one owns none, and is not
+  an owner.
 - **No owner is an error.** In an unnamed section, data before the first labelled statement would belong to no one,
   and so would every word of an unnamed section with no labelled statement: `UNNAMED_DATA_SECTION`.
 
@@ -217,11 +225,16 @@ So every word is named by exactly one `owner:offset`, and that is what freezing 
     clock:  DATi #0             ; clock:0, an Impala scalar
 
 Without the `DATi #5954` row, `tail` would own all 40 words and `buffer` none. Owning is not addressing:
-`&buffer:5` still reaches the word `tail:4` (section 5).
+`&buffer:5` still reaches the word `tail:4`, and `&tail:-1` the word `buffer:0` (section 5).
 
 **Functions** start with `FUNC`, labelled with the function's name.
 - **Declarations first.** Parameters (`PARA`, `INPi/f/p`, `OUTi/f/p`) and locals (`LOCi/f/p`, `LOCA *n`) come
   before the first instruction.
+- **The frame's layout is strict.** Each declaration takes the next words of the frame, in declaration order, from
+  word 0: one word, or `n` for `LOCA *n`. The transients follow the last declaration. A program may rely on this
+  layout: `local:k`, `GETL`, `SETL` and a pointer from `ADRL p x *0` reach a local's neighbours, and one `COPY` may
+  move several locals. With `ADRL p x *n`, `n > 0`, the program promises to use `p` only within the `n` words from
+  `x`; an access through it outside them gives an unspecified result.
 - **Ending.** The last instruction must be `RETU` or `GOTO`.
 - **Labels** are local to their function. A branch may not target the position where the next `FUNC` starts
   (`LABEL_ON_FUNCTION`).
@@ -233,7 +246,8 @@ Without the `DATi #5954` row, `tail` would own all 40 words and `buffer` none. O
 ## 7. Assembly-time evaluation
 
 A statement prefixed with `!` runs while the program is assembled and generates no code:
-- `! DEFi`, `! DEFf` and `! DEFp` define a named constant: the statement's label.
+- `! DEFi`, `! DEFf` and `! DEFp` define a named constant: the statement's label. `DEFi` and `DEFf` name a number,
+  written `#name`, and `DEFp` a pointer, written `&name`.
 - `! MOVi <A> #1`, `! ADDi <A> <A> #2` and so on compute into assembly-time variables. A variable's name is exactly
   one identifier character (section 5) between `<` and `>`, so there are 65 of them. Names are case-sensitive: `<a>`
   and `<A>` are different variables. All are cleared at the start of each unit, and reading one that the unit has not
@@ -381,7 +395,7 @@ for in this order, nothing is restored and that problem's status is returned:
 | the format version is not 1, or the GAZL version is 0 or newer than the thawing GAZL | `MEMORY_BAD_VERSION`  |
 | the word size is not 32                                                              | `MEMORY_BAD_WORDSIZE` |
 | a length runs past the end of the frozen memory                                      | `MEMORY_TRUNCATED`    |
-| the check entry differs from the one above                                           | `MEMORY_BAD_CANARY`   |
+| the check entry is missing, or differs from the one above                            | `MEMORY_BAD_CANARY`   |
 | a name is not a valid identifier, names do not ascend strictly, or padding is not 0  | `MEMORY_MALFORMED`    |
 | bytes follow the last entry                                                          | `MEMORY_MALFORMED`    |
 
@@ -420,18 +434,4 @@ An implementation conforms when it runs the following with the expected results:
 
 ## 13. Not yet implemented
 
-Where `src/GAZL.cpp` does not yet do what this specification says:
-
-1. **The frozen memory format** (section 11). `freezeMemory` / `thawMemory` write and read an earlier layout of the same
-   idea:
-   - the two check words sit in the header rather than in a `$gazl` check entry, and there is no NaN word;
-   - names are not padded, and entries follow the assembler's own order rather than ascending names;
-   - a named section is saved whole, and labels inside it are not saved, where section 6 makes every label an
-     owner (the assembler already gives every word an owner, with data labels running to the next label);
-   - thawing accepts only frozen memory from its own GAZL version;
-   - it restores while it parses, so truncated frozen memory restores the entries before the damage, and there is
-     no `MEMORY_MALFORMED`;
-   - a size mismatch is always skipped, there is no prefix policy, and there is no `MEMORY_MISMATCH`.
-2. **Accesses through a label inside a section** (section 5). `&label:k` in `PEEK`, `POKE` or `COPY` is checked
-   against the words up to the next label, not against the end of the section, so an access that reaches a later
-   label's words is `OFFSET_OUT_OF_BOUNDS`. Accesses through a section's name are checked against the whole section.
+`src/GAZL.cpp` does everything this specification says.
