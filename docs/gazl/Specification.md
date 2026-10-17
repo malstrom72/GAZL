@@ -229,8 +229,9 @@ Without the `DATi #5954` row, `tail` would own all 40 words and `buffer` none. O
   before the first instruction.
 - **The frame's layout is strict.** Each declaration takes the next words of the frame, in declaration order, from
   word 0: one word, or `n` for `LOCA *n`. The transients follow the last declaration. A program may rely on this
-  layout: `local:k`, `GETL`, `SETL` and a pointer from `ADRL` reach a local's neighbours, and one `COPY` may move
-  several locals.
+  layout: `local:k`, `GETL`, `SETL` and a pointer from `ADRL p x *0` reach a local's neighbours, and one `COPY` may
+  move several locals. With `ADRL p x *n`, `n > 0`, the program promises to use `p` only within the `n` words from
+  `x`; an access through it outside them gives an unspecified result.
 - **Ending.** The last instruction must be `RETU` or `GOTO`.
 - **Labels** are local to their function. A branch may not target the position where the next `FUNC` starts
   (`LABEL_ON_FUNCTION`).
