@@ -243,8 +243,7 @@ Without the `DATi #5954` row, `tail` would own all 40 words and `buffer` none. O
 
 A statement prefixed with `!` runs while the program is assembled and generates no code:
 - `! DEFi`, `! DEFf` and `! DEFp` define a named constant: the statement's label. `DEFi` and `DEFf` name a number,
-  written `#name`. `DEFp` names a pointer, written `&name`: an address such as `&table:3`, with no data of its own,
-  so it is not an owner (section 6) and freezing leaves it out.
+  written `#name`, and `DEFp` a pointer, written `&name`.
 - `! MOVi <A> #1`, `! ADDi <A> <A> #2` and so on compute into assembly-time variables. A variable's name is exactly
   one identifier character (section 5) between `<` and `>`, so there are 65 of them. Names are case-sensitive: `<a>`
   and `<A>` are different variables. All are cleared at the start of each unit, and reading one that the unit has not
