@@ -502,10 +502,12 @@ operands take any assembly-time constant.
   section that overlap are `OVERLAPPING_DATA_REGIONS`, so no word is written twice.
 - **Order.** Regions may come in any order, and words no region writes are 0. A section without `SEEK` is one
   region at offset 0, as in GAZL 1.
-- **Labels.** A label on a `SEEK` names the region's first word. Its size is the extent, or 1 without one.
+- **Labels.** A label on a `SEEK` is an ordinary data label at the region's first word.
+- **Ownership.** Section 6 applies by address, whatever order the regions come in: a word belongs to the last label
+  at or before it, and of two labels on one word the later in the source owns it. So an unnamed section needs a
+  label on its first word; otherwise the words before its first label are `UNNAMED_DATA_SECTION`.
 
-**Open.** `SEEK` is not final. Its syntax, and how its regions and labels combine with memory ownership (section 6)
-and with frozen memory (section 11), will be settled before GAZL 2 is.
+**Open.** The syntax of `SEEK` is not final, and will be settled before GAZL 2 is.
 
 **Frozen memory.** A GAZL 2 implementation writes 2 as the GAZL version in the header (section 11).
 
