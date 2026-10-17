@@ -157,7 +157,7 @@ assembly error.
 | `*`    | non-negative size constant                                      | `*16`                  |
 
 The prefix does not restrict the kind of name: `#name` and `&name` both take any name the operand accepts, so
-`#table`, `#NULL` and `DATA &GAZL_VERSION` assemble too. Impala writes `#name` for a `! DEFp` name.
+`#table`, `#NULL` and `DATA &GAZL_VERSION` assemble too.
 
 **Offsets.** `&label:k` and `local:k` take a constant `k`, negative or not, on data labels and locals only.
 - **Accesses are checked at assembly.** Where an instruction reads or writes the word at `&label:k` (`PEEK`,
