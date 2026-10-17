@@ -149,12 +149,15 @@ assembly error.
 | ------ | --------------------------------------------------------------- | ---------------------- |
 | (none) | local variable, optionally `name:offset` within the frame       | `x`, `buf:3`           |
 | `%`    | transient `n`: the `n`-th word after the function's locals      | `%0`                   |
-| `#`    | constant: a literal or a named assembly-time constant           | `#12`, `#0.5`, `#TRUE` |
+| `#`    | number: a literal, or a name from `! DEFi` or `! DEFf`          | `#12`, `#0.5`, `#TRUE` |
 | `<`    | assembly-time variable: one of `A-Za-z0-9_.$` in `<` `>`        | `<A>`, `<x>`, `<0>`    |
-| `&`    | address of a data section or function, optionally `:offset`     | `&table:4`, `&main`    |
+| `&`    | pointer: a data label, function, `! DEFp` name, or `NULL`       | `&table:4`, `&main`    |
 | `^`    | native function                                                 | `^print`               |
 | `@`    | branch label in the current function                            | `@loop`, `@sw.3`       |
 | `*`    | non-negative size constant                                      | `*16`                  |
+
+The prefix decides the kind of name: a pointer written with `#` (`#NULL`, `#table`), or a number written with `&`
+(`&GAZL_VERSION`), is `INCOMPATIBLE_TYPES`.
 
 **Offsets.** `&label:k` and `local:k` take a constant `k`, negative or not, on data labels and locals only.
 - **Accesses are checked at assembly.** Where an instruction reads or writes the word at `&label:k` (`PEEK`,
@@ -163,8 +166,9 @@ assembly error.
   Anything else is `OFFSET_OUT_OF_BOUNDS`.
 - **Addresses are not.** Where `&label:k` is only a value (`MOVp`, `ADDp`, `DIFp`, pointer compares, `FORp`,
   `DATp`, `DATA`), any offset is accepted. An access through such a pointer is checked at run time (section 3).
-- **Nothing else takes an offset.** Any `:k` on a function, a native, `&NULL` or a named constant, `:0` included,
-  is `OFFSET_OUT_OF_BOUNDS`: on a function it would name another function, and on the others it names nothing.
+- **Nothing else takes an offset.** Any `:k` on a function, a native, `&NULL`, a `! DEFp` name or a number, `:0`
+  included, is `OFFSET_OUT_OF_BOUNDS`: on a function it would name another function, and on the others it names
+  nothing.
 
 **Integer literals** are decimal, or hexadecimal after a lowercase `0x`, with an optional sign. A quoted literal
 (`'AB'`) packs its characters into one int, the first character in the most significant byte used. A value outside
@@ -238,7 +242,9 @@ Without the `DATi #5954` row, `tail` would own all 40 words and `buffer` none. O
 ## 7. Assembly-time evaluation
 
 A statement prefixed with `!` runs while the program is assembled and generates no code:
-- `! DEFi`, `! DEFf` and `! DEFp` define a named constant: the statement's label.
+- `! DEFi`, `! DEFf` and `! DEFp` define a named constant: the statement's label. `DEFi` and `DEFf` name a number,
+  written `#name`. `DEFp` names a pointer, written `&name`: an address such as `&table:3`, with no data of its own,
+  so it is not an owner (section 6) and freezing leaves it out.
 - `! MOVi <A> #1`, `! ADDi <A> <A> #2` and so on compute into assembly-time variables. A variable's name is exactly
   one identifier character (section 5) between `<` and `>`, so there are 65 of them. Names are case-sensitive: `<a>`
   and `<A>` are different variables. All are cleared at the start of each unit, and reading one that the unit has not

@@ -176,10 +176,10 @@ struct GlobalInfo {
 */
 class Symbols {
 	friend class Assembler;
-	/**
+	/*
 		One name: in `globals` a data label, function, native or named constant; in `locals` a parameter, local or
 		branch label of the current function.
-	**/
+	*/
 	protected:	struct Symbol {
 					Symbol(int types, Value value, UInt size) : types(types), value(value), size(size), minOffset(0)
 							, maxOffset(static_cast<Int>(size) - 1) { }

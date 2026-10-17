@@ -786,6 +786,7 @@ int sweepFrozenEntries() {
 		"tmpval:\tDATi #41\n"
 		"table:\tCNST *2\n"					// CNST, and a label inside it
 		"entry:\tDATi #51\n"
+		"alias:\t! DEFp &multi:1\n"			// a pointer constant: an address, but no data of its own
 		"main:\tFUNC\n"
 		"v:\tLOCi\n"
 		"\tPEEK v &multi:2\n"				// a label's offset is checked against all of its values
@@ -861,9 +862,12 @@ int sweepFrozenEntries() {
 	GlobalInfo entry;
 	GlobalInfo nosuch;
 	GlobalInfo function;
+	GlobalInfo alias;
 	nosuch.size = 1;
 	function.address = 1;
+	alias.address = 1;
 	if (!m.symbols.getGlobalInfo("entry", entry) || entry.section != CNST_SECTION || entry.size != 2
+			|| m.symbols.getGlobalInfo("alias", alias) || alias.address != NULL_POINTER
 			|| m.symbols.getGlobalInfo("nosuch", nosuch) || nosuch.size != 0 || nosuch.name != 0
 			|| m.symbols.getGlobalInfo("main", function) || function.address != NULL_POINTER
 			|| !m.symbols.getGlobalInfo("tmpval", temp) || temp.section != TEMP_SECTION || temp.size != 2
@@ -1149,14 +1153,28 @@ int sweepFunctionOffsets() {
 				, OFFSET_OUT_OF_BOUNDS },
 		{ "an offset on NULL", "main:\tFUNC\np:\tLOCp\n\tMOVp p &NULL:1\n\tRETU\n", OFFSET_OUT_OF_BOUNDS },
 		{ "a zero offset on NULL", "\tGLOB *1\nn:\tDATp &NULL:0\nmain:\tFUNC\n\tRETU\n", OFFSET_OUT_OF_BOUNDS },
-		{ "an offset on a named constant", "\tGLOB *1\nv:\tDATA &GAZL_VERSION:0\nmain:\tFUNC\n\tRETU\n"
+		{ "a number written as a pointer, with an offset", "\tGLOB *1\nv:\tDATA &GAZL_VERSION:0\nmain:\tFUNC\n\tRETU\n"
+				, INCOMPATIBLE_TYPES },
+		{ "an offset on a pointer constant", "g:\tGLOB *2\nP:\t! DEFp &g\nmain:\tFUNC\np:\tLOCp\n\tMOVp p &P:1\n"
+				"\tRETU\n", OFFSET_OUT_OF_BOUNDS },
+		{ "a zero offset on a pointer constant", "g:\tGLOB *2\nP:\t! DEFp &g\n\tDATp &P:0\nmain:\tFUNC\n\tRETU\n"
 				, OFFSET_OUT_OF_BOUNDS },
 		{ "a function address without an offset", "\tGLOB *1\nfp:\tDATp &main\nmain:\tFUNC\n\tRETU\n", -1 },
 		{ "a zero offset on a called function", "f:\tFUNC\n\tRETU\nmain:\tFUNC\n\tCALL &f:0 %0 *0\n\tRETU\n"
 				, OFFSET_OUT_OF_BOUNDS },
 		{ "a zero offset on a native", "main:\tFUNC\n\tCALL ^native:0 %0 *0\n\tRETU\n", OFFSET_OUT_OF_BOUNDS },
 		{ "an offset on a native", "main:\tFUNC\n\tCALL ^native:1 %0 *0\n\tRETU\n", OFFSET_OUT_OF_BOUNDS },
-		{ "a native without an offset", "main:\tFUNC\n\tCALL ^native %0 *0\n\tRETU\n", -1 }
+		{ "a native without an offset", "main:\tFUNC\n\tCALL ^native %0 *0\n\tRETU\n", -1 },
+		{ "a number written as a pointer", "\tGLOB *1\ng:\tDATA &GAZL_VERSION\nmain:\tFUNC\n\tRETU\n"
+				, INCOMPATIBLE_TYPES },
+		{ "an address written as a number", "g:\tGLOB *1\n\tDATA #g\nmain:\tFUNC\n\tRETU\n", INCOMPATIBLE_TYPES },
+		{ "an address written as a number in DATp", "g:\tGLOB *1\n\tDATp #g\nmain:\tFUNC\n\tRETU\n"
+				, INCOMPATIBLE_TYPES },
+		{ "NULL written as a number", "main:\tFUNC\np:\tLOCp\n\tMOVp p #NULL\n\tRETU\n", INCOMPATIBLE_TYPES },
+		{ "a number, a pointer constant and NULL, each as written", "N:\t! DEFi #2\ng:\tGLOB *4\nP:\t! DEFp &g:1\n"
+				"\tDATA #N #GAZL_VERSION &NULL &P\nmain:\tFUNC\n\tRETU\n", -1 },
+		{ "a number defined after its use", "g:\tGLOB *1\n\tDATA #LATER\nLATER:\t! DEFi #5\nmain:\tFUNC\n\tRETU\n"
+				, -1 }
 	};
 	const int count = sizeof (CASES) / sizeof (*CASES);
 	int failures = 0;

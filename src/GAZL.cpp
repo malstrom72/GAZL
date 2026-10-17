@@ -424,6 +424,7 @@ const int COMPILE_TIME		= 0x20000;
 const int FORWARD			= 0x40000;
 const int UNCHECKED_ADDRESS	= 0x80000;					// Do *not* check the offset against the symbol's range: the address is only a value (`MOVp`, `ADDp` and the like).
 const int OFFSET_GIVEN		= 0x1000000;				// Set per operand, not in the table: a `:offset` was written, `:0` included, which only data and locals take.
+const int POINTER_CONSTANT	= 0x2000000;				// On a symbol, never in an operand: a `! DEFp` name, an address with no data of its own.
 const int FWD_ADDRESS_W		= ADDRESS_W | FORWARD;
 const int FWD_ADDRESS_R		= ADDRESS_R | FORWARD;
 const int FWD_BRANCH		= BRANCH | FORWARD;
@@ -681,7 +682,7 @@ static const Operator OPERATORS[] = {
 	, { "!ANDi_ccc", ANDI_CCC,	{ COMPILE_TIME	, CONST_INT		, CONST_INT		}		, 0				, CONST_INT		}
 	, { "!DEFf_c__", DEFI____,	{ CONST_FLOAT	, 0				, 0				}		, 0				, CONST_FLOAT	}
 	, { "!DEFi_c__", DEFI____,	{ CONST_INT		, 0				, 0				}		, 0				, CONST_INT		}
-	, { "!DEFp_c__", DEFI____,	{ FREE_ADDRESS		, 0			, 0				}		, 0				, FREE_ADDRESS		}
+	, { "!DEFp_c__", DEFI____,	{ FREE_ADDRESS		, 0			, 0				}		, 0				, FREE_ADDRESS | POINTER_CONSTANT }
 	, { "!DIFp_ccc", SUBI_CCC,	{ COMPILE_TIME	, FREE_ADDRESS	, FREE_ADDRESS	}		, 0				, CONST_INT		}
 	, { "!DIVf_ccc", DIVF_CCC,	{ COMPILE_TIME	, CONST_FLOAT	, CONST_FLOAT	}		, 0				, CONST_FLOAT	}
 	, { "!DIVi_ccc", DIVI_CCC,	{ COMPILE_TIME	, CONST_INT		, CONST_INT		}		, CHECK_DIV_BY_0, CONST_INT		}
@@ -758,7 +759,8 @@ void Symbols::resolve(const Reference& ref, const Symbol& symbol) {
 	assert((ref.accepts == FWD_BRANCH) == (symbol.types == BRANCH));
 	assert(ref.accepts != FWD_BRANCH || ref.offset < 0);											// a branch's offset is its distance back to the jump
 	// Only data and locals take an offset, `:0` included: `&main:1` would name another function, `&NULL:1` no pointer.
-	if ((ref.accepts & OFFSET_GIVEN) != 0 && (symbol.types & (ADDRESS | ANY_VAR)) == 0) {
+	if ((ref.accepts & OFFSET_GIVEN) != 0 && ((symbol.types & (ADDRESS | ANY_VAR)) == 0
+			|| (symbol.types & POINTER_CONSTANT) != 0)) {
 		throw Exception(OFFSET_OUT_OF_BOUNDS, ref.label);
 	}
 	if ((ref.accepts & UNCHECKED_ADDRESS) == 0 && (ref.offset < symbol.minOffset || ref.offset > symbol.maxOffset)) {
@@ -848,18 +850,22 @@ bool Symbols::lookupConstant(const Char* name, bool* isFloat, Value* value) cons
 	return true;
 }
 
+static bool isData(int types) {												// a `! DEFp` name has an address type too, but names no data of its own
+	return (types & ADDRESS) != 0 && (types & POINTER_CONSTANT) == 0;
+}
+
 bool Symbols::findFirstGlobal(Iterator& iterator) const {
-	for (iterator = symbols.begin(); iterator != symbols.end() && (iterator->second.types & ADDRESS) == 0; ++iterator);
+	for (iterator = symbols.begin(); iterator != symbols.end() && !isData(iterator->second.types); ++iterator);
 	return (iterator != symbols.end());
 }
 
 bool Symbols::findNextGlobal(Iterator& iterator) const {
-	for (++iterator; iterator != symbols.end() && (iterator->second.types & ADDRESS) == 0; ++iterator);
+	for (++iterator; iterator != symbols.end() && !isData(iterator->second.types); ++iterator);
 	return (iterator != symbols.end());
 }
 
 GlobalInfo Symbols::getGlobalInfo(const Iterator& iterator) const {
-	assert((iterator->second.types & ADDRESS) != 0);
+	assert(isData(iterator->second.types));
 	GlobalInfo info;
 	info.name = iterator->first.c_str();
 	info.address = iterator->second.value.p;
@@ -871,7 +877,7 @@ GlobalInfo Symbols::getGlobalInfo(const Iterator& iterator) const {
 
 bool Symbols::getGlobalInfo(const Char* name, GlobalInfo& info) const {
 	const Iterator it = symbols.find(name);
-	if (it == symbols.end() || (it->second.types & ADDRESS) == 0) {
+	if (it == symbols.end() || !isData(it->second.types)) {
 		const GlobalInfo none = { 0, NULL_POINTER, 0, GLOB_SECTION };
 		info = none;
 		return false;
@@ -977,7 +983,7 @@ void Assembler::parseConstant(const Char* b, const Char* e, int accepts, Value* 
 						break;
 					}
 				
-		default:	globals.link(b, e, v, accepts); break;
+		default:	globals.link(b, e, v, accepts & (CONST_INT | CONST_FLOAT | FORWARD)); break;		// `#name` is a number; a pointer is `&name`
 	}
 }
 
@@ -1000,7 +1006,7 @@ void Assembler::parseOperand(const Char* b, const Char* e, int accepts, Value* v
 					break;
 
 		case '&':	if ((accepts & (ADDRESS | FUNC)) == 0) throw Exception(DID_NOT_EXPECT_ADDRESS, b, e);
-					linkWithOffset(globals, b + 1, e, accepts, v);
+					linkWithOffset(globals, b + 1, e, accepts & ~(CONST_INT | CONST_FLOAT), v);		// `&name` is a pointer; a number is `#name`
 					break;
 
 		default:	assert((accepts & ANY_VAR) != 0);
@@ -1736,19 +1742,20 @@ static UInt getMemoryWord(const unsigned char* p) {					// Reads a 32-bit little
 			| (static_cast<UInt>(p[3]) << 24);
 }
 
-static UInt memoryPadding(UInt length) { return (4 - length % 4) % 4; }		/// zero bytes after a name of `length` bytes
+static UInt memoryPadding(UInt nameLength) { return (4 - nameLength % 4) % 4; }	// zero bytes after a name
 
-static unsigned char* putMemoryEntry(unsigned char* p, const char* name, UInt length, const Value* words, UInt count) {
-	p = putMemoryWord(p, length);
-	memcpy(p, name, length);
-	p += length;
-	for (UInt i = memoryPadding(length); i > 0; --i) *p++ = 0;
-	p = putMemoryWord(p, count);
-	for (UInt i = 0; i < count; ++i) p = putMemoryWord(p, words[i].p);
+static unsigned char* putMemoryEntry(unsigned char* p, const char* name, UInt nameLength, const Value* words
+		, UInt wordCount) {
+	p = putMemoryWord(p, nameLength);
+	memcpy(p, name, nameLength);
+	p += nameLength;
+	for (UInt i = memoryPadding(nameLength); i > 0; --i) *p++ = 0;
+	p = putMemoryWord(p, wordCount);
+	for (UInt i = 0; i < wordCount; ++i) p = putMemoryWord(p, words[i].p);
 	return p;
 }
 
-static unsigned char* putMemoryCheck(unsigned char* p) {			/// writes the check entry, exactly as any other entry
+static unsigned char* putMemoryCheck(unsigned char* p) {			// writes the check entry, exactly as any other entry
 	Value check[3];
 	check[0].p = 0x01020304;
 	check[1].f = 1.0f;
@@ -1758,12 +1765,12 @@ static unsigned char* putMemoryCheck(unsigned char* p) {			/// writes the check 
 	return next;
 }
 
-struct MemoryEntry {
-	const unsigned char* name;
-	UInt length;
-	UInt count;
-	const unsigned char* words;
-	const unsigned char* next;
+struct MemoryEntry {														// One entry of frozen memory, pointing into the bytes it was read from.
+	const unsigned char* name;												// not terminated: `nameLength` bytes
+	UInt nameLength;
+	UInt wordCount;
+	const unsigned char* words;												// still encoded: `wordCount` little-endian words
+	const unsigned char* next;												// the entry after this one
 };
 
 /*
@@ -1771,25 +1778,27 @@ struct MemoryEntry {
 */
 static bool getMemoryEntry(const unsigned char* p, const unsigned char* end, MemoryEntry& entry) {
 	if (end - p < 4) return false;
-	entry.length = getMemoryWord(p);
+	entry.nameLength = getMemoryWord(p);
 	entry.name = p + 4;
 	const size_t room = static_cast<size_t>(end - entry.name);
-	if (entry.length > room || room - entry.length < memoryPadding(entry.length) + 4) return false;	// no sum that can wrap
-	entry.words = entry.name + entry.length + memoryPadding(entry.length) + 4;
-	entry.count = getMemoryWord(entry.words - 4);
-	if (static_cast<size_t>(end - entry.words) / 4 < entry.count) return false;
-	entry.next = entry.words + static_cast<size_t>(entry.count) * 4;
+	if (entry.nameLength > room || room - entry.nameLength < memoryPadding(entry.nameLength) + 4) {
+		return false;																	// no sum that can wrap
+	}
+	entry.words = entry.name + entry.nameLength + memoryPadding(entry.nameLength) + 4;
+	entry.wordCount = getMemoryWord(entry.words - 4);
+	if (static_cast<size_t>(end - entry.words) / 4 < entry.wordCount) return false;
+	entry.next = entry.words + static_cast<size_t>(entry.wordCount) * 4;
 	return true;
 }
 
-static int compareMemoryNames(const void* a, size_t aLength, const void* b, size_t bLength) {	/// byte order, then length
+static int compareMemoryNames(const void* a, size_t aLength, const void* b, size_t bLength) {	// byte order, then length
 	const int order = memcmp(a, b, minimum(aLength, bLength));
 	return (order != 0 ? order : (aLength < bLength ? -1 : (aLength > bLength ? 1 : 0)));
 }
 
 struct MemoryOwner {
 	GlobalInfo info;
-	UInt length;															// of `info.name`
+	UInt nameLength;
 };
 
 /*
@@ -1808,7 +1817,7 @@ static void findMemoryOwners(const Symbols& symbols, std::vector<MemoryOwner>& o
 static UInt frozenSize(const std::vector<MemoryOwner>& owners) {
 	UInt size = MEMORY_HEADER_SIZE + MEMORY_CHECK_SIZE;
 	for (size_t i = 0; i < owners.size(); ++i) {
-		size += 4 + owners[i].length + memoryPadding(owners[i].length) + 4 + owners[i].info.size * 4;
+		size += 4 + owners[i].nameLength + memoryPadding(owners[i].nameLength) + 4 + owners[i].info.size * 4;
 	}
 	return size;
 }
@@ -1837,7 +1846,7 @@ UInt freezeMemory(const Processor& processor, const Symbols& symbols, void* buff
 		const GlobalInfo& owner = owners[i].info;
 		const Value* words = processor.accessConstMemory(owner.address, owner.size);
 		assert(words != 0);
-		p = putMemoryEntry(p, owner.name, owners[i].length, words, owner.size);
+		p = putMemoryEntry(p, owner.name, owners[i].nameLength, words, owner.size);
 	}
 	assert(static_cast<UInt>(p - start) == needed);					// Byte count must match `frozenSize` exactly.
 	return needed;
@@ -1881,11 +1890,12 @@ MemoryLoad thawMemory(Processor& processor, const Symbols& symbols, const void* 
 	for (size_t e = 1; e < entries.size(); ++e) {
 		const MemoryEntry& entry = entries[e];
 		const Char* const name = reinterpret_cast<const Char*>(entry.name);
-		if (!isValidIdentifier(name, name + entry.length)) return MEMORY_MALFORMED;
-		for (UInt i = 0; i < memoryPadding(entry.length); ++i) {
-			if (entry.name[entry.length + i] != 0) return MEMORY_MALFORMED;
+		if (!isValidIdentifier(name, name + entry.nameLength)) return MEMORY_MALFORMED;
+		for (UInt i = 0; i < memoryPadding(entry.nameLength); ++i) {
+			if (entry.name[entry.nameLength + i] != 0) return MEMORY_MALFORMED;
 		}
-		if (e > 1 && compareMemoryNames(entries[e - 1].name, entries[e - 1].length, entry.name, entry.length) >= 0) {
+		if (e > 1 && compareMemoryNames(entries[e - 1].name, entries[e - 1].nameLength, entry.name, entry.nameLength)
+				>= 0) {
 			return MEMORY_MALFORMED;
 		}
 	}
@@ -1898,7 +1908,7 @@ MemoryLoad thawMemory(Processor& processor, const Symbols& symbols, const void* 
 	size_t o = 0;
 	while (e < entries.size() || o < owners.size()) {											// one merged walk: step the lower name, or both
 		const int order = (e == entries.size() ? 1 : (o == owners.size() ? -1
-				: compareMemoryNames(entries[e].name, entries[e].length, owners[o].info.name, owners[o].length)));
+				: compareMemoryNames(entries[e].name, entries[e].nameLength, owners[o].info.name, owners[o].nameLength)));
 		if (order != 0) {
 			exact = false;
 			if (order < 0) ++e;																	// an entry with no owner: dropped
@@ -1907,8 +1917,8 @@ MemoryLoad thawMemory(Processor& processor, const Symbols& symbols, const void* 
 		}
 		const MemoryEntry& entry = entries[e++];												// the same name: restored
 		const GlobalInfo& owner = owners[o++].info;
-		exact = exact && entry.count == owner.size;
-		const UInt restored = (entry.count == owner.size || prefix ? minimum(entry.count, owner.size) : 0);
+		exact = exact && entry.wordCount == owner.size;
+		const UInt restored = (entry.wordCount == owner.size || prefix ? minimum(entry.wordCount, owner.size) : 0);
 		Value* const destination = processor.accessMemory(owner.address, owner.size);
 		assert(destination != 0);
 		for (UInt i = 0; i < restored; ++i) destination[i].p = getMemoryWord(entry.words + i * 4);
