@@ -908,6 +908,7 @@ void Assembler::declare(Symbols& where, const Char* labelBegin, const Char* labe
 	if (p < labelEnd) {
 		Value v;
 		parseConstant(p + 1, labelEnd, CONST_INT, &v);
+		if (v.i < 0 && types == BRANCH) return;													// a case below the table: unreachable, like one past its end
 		Char buffer[33];
 		name += '.';
 		name += int2string(v.i, 10, 1, buffer);

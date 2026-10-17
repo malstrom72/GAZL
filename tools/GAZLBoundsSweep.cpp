@@ -947,6 +947,33 @@ int sweepFunctionOffsets() {
 	return failures;
 }
 
+/*
+	A switch case label takes any constant (docs/gazl/Specification.md section 5). A case outside the table, below it
+	or past its end, can never be reached through it, and assembles all the same. Returns the number of failures, each
+	one printed.
+*/
+int sweepSwitchCases() {
+	struct Case { const char* what; const char* label; };
+	const Case CASES[] = {
+		{ "a case inside the table", "@sw#2" },
+		{ "a case past the table's end", "@sw#7" },
+		{ "a case below the table", "@sw#-6" }
+	};
+	const int count = sizeof (CASES) / sizeof (*CASES);
+	int failures = 0;
+	for (int i = 0; i < count; ++i) {
+		const std::string source = std::string("main:\tFUNC\ni:\tLOCi\n\tSWCH i *4 @sw\n") + (CASES[i].label + 1)
+				+ ":\tMOVi i #1\nsw:\tRETU\n";
+		const int error = assemblyError(source);
+		if (error != -1) {
+			std::printf("FAIL switch cases: %s gave error %d\n", CASES[i].what, error);
+			++failures;
+		}
+	}
+	std::printf("switch cases: %d checked, %d failed\n", count, failures);
+	return failures;
+}
+
 struct Totals { int probes; int failures; };
 
 int sweep(int engineCount) {
@@ -1052,6 +1079,6 @@ int main() {
 	}
 #endif
 	const int hostFailures = sweepNativeAccess() + sweepFrameAndThaw() + sweepSnapshotEntries() + sweepTextEncoding()
-			+ sweepUnnamedSections() + sweepFunctionOffsets();
+			+ sweepUnnamedSections() + sweepFunctionOffsets() + sweepSwitchCases();
 	return (sweep(engineCount) != 0 || hostFailures != 0) ? 1 : 0;
 }
