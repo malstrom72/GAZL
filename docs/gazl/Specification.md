@@ -142,6 +142,8 @@ assembly error.
 
   As a regular expression: `[A-Za-z_.$][A-Za-z0-9_.$]*`. A switch case label (`@sw#'B'`, see `SWCH` in
   InstructionSet.md) is an identifier followed by `#` and a constant; the `#` part is not part of the identifier.
+  The constant is an index into the switch's table, 0 or more. A case at or past the table's `*size` is never
+  reached; a negative one is an assembly error.
 
 **Operands** are classified by their first character:
 
