@@ -1360,7 +1360,8 @@ const Char* Assembler::feed(const Char* line) {
 							size = v.i;
 							if (size > 0x7FFFFFFFu - localsSize) throw Exception(FRAME_TOO_LARGE);						// slot offsets must fit an Int
 							v.i = localsSize;
-							if (Symbols::Symbol* const local = declare(locals, labelBegin, labelEnd, op->declareTypes, v, size)) {
+							if (Symbols::Symbol* const local = declare(locals, labelBegin, labelEnd, op->declareTypes, v
+									, size)) {
 								local->minOffset = -2147483647 - 1;													// checked against the frame where it is used
 								local->maxOffset = 2147483647;
 							}
