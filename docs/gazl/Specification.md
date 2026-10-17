@@ -167,7 +167,8 @@ The prefix does not restrict the kind of name: `#name` and `&name` both take any
   another label (section 6). The word at `local:k` must lie within the frame's parameters and locals (section 6).
   Anything else is `OFFSET_OUT_OF_BOUNDS`.
 - **Addresses are not.** Where `&label:k` is only a value (`MOVp`, `ADDp`, `DIFp`, pointer compares, `FORp`,
-  `DATp`, `DATA`), any offset is accepted. An access through such a pointer is checked at run time (section 3).
+  `DATp`, `DATA`), any offset is accepted. So is any `local:k` that is the local of `ADRL` or the array of `GETL`
+  and `SETL`. Accesses through these are checked at run time (sections 3 and 8).
 - **Nothing else takes an offset.** Any `:k` on a function, a native, `&NULL`, a `! DEFp` name or a number, `:0`
   included, is `OFFSET_OUT_OF_BOUNDS`: on a function it would name another function, and on the others it names
   nothing.
