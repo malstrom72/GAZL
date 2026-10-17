@@ -682,7 +682,7 @@ static const Operator OPERATORS[] = {
 	, { "!ANDi_ccc", ANDI_CCC,	{ COMPILE_TIME	, CONST_INT		, CONST_INT		}		, 0				, CONST_INT		}
 	, { "!DEFf_c__", DEFI____,	{ CONST_FLOAT	, 0				, 0				}		, 0				, CONST_FLOAT	}
 	, { "!DEFi_c__", DEFI____,	{ CONST_INT		, 0				, 0				}		, 0				, CONST_INT		}
-	, { "!DEFp_c__", DEFI____,	{ FREE_ADDRESS		, 0			, 0				}		, 0				, FREE_ADDRESS | POINTER_CONSTANT }
+	, { "!DEFp_c__", DEFI____,	{ FREE_ADDRESS	, 0				, 0				}		, 0				, FREE_ADDRESS|POINTER_CONSTANT }
 	, { "!DIFp_ccc", SUBI_CCC,	{ COMPILE_TIME	, FREE_ADDRESS	, FREE_ADDRESS	}		, 0				, CONST_INT		}
 	, { "!DIVf_ccc", DIVF_CCC,	{ COMPILE_TIME	, CONST_FLOAT	, CONST_FLOAT	}		, 0				, CONST_FLOAT	}
 	, { "!DIVi_ccc", DIVI_CCC,	{ COMPILE_TIME	, CONST_INT		, CONST_INT		}		, CHECK_DIV_BY_0, CONST_INT		}
@@ -1907,8 +1907,8 @@ MemoryLoad thawMemory(Processor& processor, const Symbols& symbols, const void* 
 	size_t e = 1;
 	size_t o = 0;
 	while (e < entries.size() || o < owners.size()) {											// one merged walk: step the lower name, or both
-		const int order = (e == entries.size() ? 1 : (o == owners.size() ? -1
-				: compareMemoryNames(entries[e].name, entries[e].nameLength, owners[o].info.name, owners[o].nameLength)));
+		const int order = (e == entries.size() ? 1 : (o == owners.size() ? -1 : compareMemoryNames(entries[e].name
+				, entries[e].nameLength, owners[o].info.name, owners[o].nameLength)));
 		if (order != 0) {
 			exact = false;
 			if (order < 0) ++e;																	// an entry with no owner: dropped
