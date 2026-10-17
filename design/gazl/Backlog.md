@@ -62,6 +62,13 @@ macros alone, so the pass changes no generated code there.
   would say that.
 - The common case, zeros and then more data, would be simpler as plain data, for example `DATz *n` (n zero words),
   leaving absolute placement to what Impala 2 really needs: struct fields at offsets the host decides.
-- Data label extents (a label covers up to the next label or the end of its section, from #135) must become
-  region-aware: regions may be opened in any offset order, so "the next label" cannot follow statement order, and
-  `SEEK` labels have their own size (the extent, or 1).
+- Ownership is settled: a label owns up to the next label by address, decided when the section closes, so regions
+  may come in any order, and a label on a `SEEK` is an ordinary data label at the region's first word.
+
+## GAZL 2: the prefix decides a name's kind
+
+GAZL 1 lets `#name` and `&name` take any name the operand accepts (`#table`, `#NULL`, `DATA &GAZL_VERSION`), because
+compiled programs rely on it: Impala writes `#name` for a `! DEFp` name. Inside a `GAZL #2` region it should be
+strict: `#` only numbers (literals, `DEFi`, `DEFf`), `&` only pointers (data labels, functions, `DEFp`, `NULL`).
+That also covers the region's function-pointer rule on the `#` path, which today only the `&` path applies. Impala's
+`--gazl2` output then writes `&name` for a `DEFp`.

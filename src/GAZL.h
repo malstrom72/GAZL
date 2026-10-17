@@ -157,15 +157,20 @@ inline Exception::Exception(AssemblerError error, const Char* b, const Char* e) 
 inline Exception::Exception(AssemblerError error, const std::string& detail) : error(error), detail(detail) { assert(0 <= error && error < ASSEMBLER_ERROR_COUNT); }
 inline Exception::~Exception() throw() { }																				// (GCC requires explicit destructor with one that has throw().)
 
+enum DataSection {
+	GLOB_SECTION				// writable, and saved by freezing
+	, TEMP_SECTION				// writable, but left out of freezing
+	, CNST_SECTION				// read-only
+};
+
 /*
-	What `Symbols::getGlobalInfo` reports about one name of writable data.
+	What `Symbols::getGlobalInfo` reports about one name of data: a section's label, or a label on a data statement.
 */
 struct GlobalInfo {
 	const char* name;				// valid as long as the `Symbols` it came from
 	Pointer address;
-	UInt size;						// in words
-	bool isTemp;					// declared in a `TEMP` section, which a memory snapshot leaves out
-	bool isInterior;				// a label inside a named section, which already covers its words
+	UInt size;						// the words it owns, to the next label: what freezing saves under its name
+	DataSection section;			// the kind of section it is declared in; freezing saves `GLOB_SECTION` only
 };
 
 /*
@@ -175,11 +180,18 @@ struct GlobalInfo {
 */
 class Symbols {
 	friend class Assembler;
+	/*
+		One name: in `globals` a data label, function, native or named constant; in `locals` a parameter, local or
+		branch label of the current function.
+	*/
 	protected:	struct Symbol {
-					Symbol(int types, Value value, UInt size) : types(types), value(value), size(size) { }
-					int types;
-					Value value;
-					UInt size;
+					Symbol(int types, Value value, UInt size) : types(types), value(value), size(size), minOffset(0)
+							, maxOffset(static_cast<Int>(size) - 1) { }
+					int types;																			// What kind of name it is, matched against the types an operand accepts.
+					Value value;																		// What the name stands for: an address, a function or native, a constant, a frame word or a code position.
+					UInt size;																			// Its own words: for data, what it owns, to the next label (what freezing saves and hosts are told); for a local, its declared size.
+					Int minOffset;																		// The lowest `k` a `:k` on it may take: for data, down to its section's first word.
+					Int maxOffset;																		// The highest `k`: for data, up to its section's last word. Locals are checked against the frame instead.
 				};
 
 	protected:	struct Reference {
@@ -199,15 +211,16 @@ class Symbols {
 				
 	public:		void registerNative(const Char* name, Int index);
 	public:		Pointer findFunction(const Char* name) const;															// Returns `NULL_POINTER` if not found.
-	public:		Pointer findGlobal(const Char* name, UInt& size) const;													// Returns `NULL_POINTER` if not found (in which case, `size` is left untouched).
+	public:		Pointer findGlobal(const Char* name, UInt& size) const;													// `size` is the words the label owns. Returns `NULL_POINTER` if not found (in which case, `size` is left untouched).
 	public:		void defineConstant(const Char* name, bool asFloat, const Value& value);
 	public:		bool lookupConstant(const Char* name, bool* isFloat, Value* value) const;
-	public:		bool findFirstGlobal(Iterator& iterator, bool includeTemps, bool includeInteriors) const;				// Names of writable data: named sections, and labels on data statements (see `GlobalInfo`).
-	public:		bool findNextGlobal(Iterator& iterator, bool includeTemps, bool includeInteriors) const;
+	public:		bool findFirstGlobal(Iterator& iterator) const;															// Every name of data, `GLOB`, `TEMP` and `CNST` alike, in ascending order (see `GlobalInfo`).
+	public:		bool findNextGlobal(Iterator& iterator) const;
 	public:		GlobalInfo getGlobalInfo(const Iterator& iterator) const;
+	public:		bool getGlobalInfo(const Char* name, GlobalInfo& info) const;													// Returns false, with `info` cleared, if `name` is not data.
 
-	protected:	bool lookup(const Char* nameBegin, const Char* nameEnd, int acceptedTypes, int& types, Value& value, UInt& size) const;
-	protected:	void define(const std::string& name, int types, Value value, UInt size = 1);
+	protected:	bool lookup(const Char* nameBegin, const Char* nameEnd, int acceptedTypes, int& types, Value& value) const;
+	protected:	Symbol* define(const std::string& name, int types, Value value, UInt size = 1);
 	protected:	void link(const Char* labelBegin, const Char* labelEnd, Value* storage, int accepts, Int offset = 0);
 	protected:	void registerSwitch(const Char* labelBegin, const Char* labelEnd, UInt switchSize, Value* storage, Int offset = 0);
 	protected:	void resolveForwardRefs();
@@ -248,7 +261,8 @@ class Assembler {
 					Value value;
 				};
 
-	protected:	void declare(Symbols& where, const Char* labelBegin, const Char* labelEnd, int types, Value value, UInt size = 1);
+	protected:	Symbols::Symbol* declare(Symbols& where, const Char* labelBegin, const Char* labelEnd, int types, Value value
+						, UInt size = 1);
 	protected:	static int operatorCompare(const void* a, const void* b);
 	protected:	static int nativeDefinitionCompare(const void* a, const void* b);
 	protected:	static Char parseOperandType(const Char* b, const Char* e);
@@ -262,7 +276,9 @@ class Assembler {
 	protected:	void finalizeFunction();
 	protected:	void threadBranches();		// Collapse GOTO chains and turn a GOTO onto a RETU into the RETU. In place: no address moves.
 	protected:	void closeDataRegion();		// Record the closing SEEK region's claim and check it against the section's earlier regions.
-	protected:	void noteDataStatement(const Char* labelBegin, const Char* labelEnd, const Value* first);				// Settle label extents.
+	protected:	void declareData(const Char* labelBegin, const Char* labelEnd, const Value* first);						// Declare a data label at `first`; what it owns is decided when the section closes.
+	protected:	void closeDataSection();																				// Give each of the section's labels the words it owns, by address.
+	protected:	static bool lowerAddress(const Symbols::Symbol* a, const Symbols::Symbol* b);							// Orders data labels by address.
 	protected:	Pointer makeGAZLPointer(const Value* data, bool constant) const;										// The pointer to `data`: up from the base for globals, down from it for constants.
 	protected:	Instruction* const codeBase;
 	protected:	Instruction* const codeEnd;
@@ -285,9 +301,7 @@ class Assembler {
 	protected:	int dataLabelType;
 	protected:	Value* dataPointer;
 	protected:	Value* dataEnd;						// Fence of the current SEEK region; `sectionEnd` for the implicit / unbounded one.
-	protected:	std::string dataOpenLabel;																				// The section's latest data label, reaching to its end for now.
-	protected:	const Value* dataOpenStart;																				// Where `dataOpenLabel` starts.
-	protected:	bool dataIsNamed;																						// The current data section, or a data statement in it, has a label.
+	protected:	std::vector<Symbols::Symbol*> dataLabels;																// The current section's labels, in source order.
 	protected:	bool dataIsConstant;																					// The current data section is a `CNST` one, placed below the base.
 	protected:	Value* sectionBegin;				// The current data section's own range; SEEK offsets are relative to `sectionBegin`.
 	protected:	Value* sectionEnd;
@@ -442,24 +456,26 @@ inline Value* Processor::accessParams(UInt count) const {
 inline void* Processor::getUserData() const { return userData; }
 
 /*
-	Memory serialization ("freeze" / "thaw"). Persists a Processor's mutable, non-TEMP global memory so it can be
-	reconstructed later. Source text and compile-time constants are the caller's responsibility: to thaw, first
-	re-assemble the same source (which deterministically rebuilds identical code, layout and function ordinals), then
-	call `thawMemory`. Function pointers stored in globals survive re-assembly because they are stable ordinals.
-	Call only at a quiescent boundary (between `run()` calls, with no active GAZL call).
+	Frozen memory ("freeze" / "thaw", docs/gazl/Specification.md section 11). Freezing saves the words of every
+	owner in a `GLOB` section by name; thawing restores them by name into a re-assembled program. Code, constants and
+	which program the frozen memory belongs to are the caller's responsibility. Call only at a quiescent boundary
+	(between `run()` calls, with no active GAZL call).
 */
 enum MemoryLoad {
-	MEMORY_OK = 0				// Restored successfully.
-	, MEMORY_BAD_MAGIC = 1		// Not a GAZL memory blob.
-	, MEMORY_BAD_VERSION = 2	// Incompatible memory-format or GAZL version.
+	MEMORY_OK = 0				// Every entry met an owner of the same size, and every owner had an entry.
+	, MEMORY_BAD_MAGIC = 1		// Not frozen memory.
+	, MEMORY_BAD_VERSION = 2	// Unknown format version, or a GAZL version this one cannot thaw.
 	, MEMORY_BAD_WORDSIZE = 3	// Word size differs from this build.
-	, MEMORY_BAD_CANARY = 4		// Endianness or float bit-layout differs from this build.
-	, MEMORY_TRUNCATED = 5		// Blob ended unexpectedly.
+	, MEMORY_BAD_CANARY = 4		// The check entry is missing or differs: the encoding was damaged or misread.
+	, MEMORY_TRUNCATED = 5		// The header is incomplete, or a length runs past the end.
+	, MEMORY_MALFORMED = 6		// A name is invalid or out of order, padding is not zero, or bytes follow the last entry.
+	, MEMORY_MISMATCH = 7		// Restored as far as `prefix` allows, but entries and owners did not match exactly.
 };
 
 UInt freezeMemorySize(const Processor& processor, const Symbols& symbols);												// Exact byte count a freeze will occupy.
-UInt freezeMemory(const Processor& processor, const Symbols& symbols, void* buffer, UInt bufferSize);					// Writes the blob; returns the size (writes nothing and returns the needed size if `bufferSize` is too small).
-MemoryLoad thawMemory(Processor& processor, const Symbols& symbols, const void* buffer, UInt bufferSize);				// Restores non-TEMP globals by name into an already-assembled Processor.
+UInt freezeMemory(const Processor& processor, const Symbols& symbols, void* buffer, UInt bufferSize);					// Writes the frozen memory; returns its size (writes nothing and returns the needed size if `bufferSize` is too small).
+MemoryLoad thawMemory(Processor& processor, const Symbols& symbols, const void* buffer, UInt bufferSize
+		, bool prefix);																								// Validates all of `buffer`, then restores it by name; on any validation failure restores nothing. An owner and an entry of different sizes share as many leading words as both have if `prefix`, and are left alone if not.
 Float parseFloat(const Char*& p, const Char* e);																		// Reads a float literal at `p`, advancing it, rounded to the nearest float, ties to even.
 
 #if !defined(NDEBUG)

@@ -429,9 +429,10 @@ const int BRANCH			= 0x08000;					// Constant positive (or zero) integer.
 const int NATIVE			= 0x10000;
 const int COMPILE_TIME		= 0x20000;
 const int FORWARD			= 0x40000;
-const int UNCHECKED_ADDRESS	= 0x80000;					// Do *not* verify that the offset is < size of the symbol. (Some instructions shouldn't do this, like ADDp for example.)
+const int UNCHECKED_ADDRESS	= 0x80000;					// Do *not* check the offset against the symbol's range: the address is only a value (`MOVp`, `ADDp` and the like).
 const int TARGET			= 0x400000;					// Call-target constant: what `&function` MINTS inside a `GAZL #2` region (FUNC outside one).
-const int INTERIOR			= 0x800000;					// Data label inside a named section: an address, not a global of its own (the section is).
+const int OFFSET_GIVEN		= 0x1000000;				// Set per operand, not in the table: a `:offset` was written, `:0` included, which only data and locals take.
+const int POINTER_CONSTANT	= 0x2000000;				// On a symbol, never in an operand: a `! DEFp` name, an address with no data of its own.
 const int FWD_ADDRESS_W		= ADDRESS_W | FORWARD;
 const int FWD_ADDRESS_R		= ADDRESS_R | FORWARD;
 const int FWD_BRANCH		= BRANCH | FORWARD;
@@ -743,7 +744,7 @@ static const Operator OPERATORS[] = {
 	, { "!ANDi_ccc", ANDI_CCC,	{ COMPILE_TIME	, CONST_INT		, CONST_INT		}		, 0				, CONST_INT		}
 	, { "!DEFf_c__", DEFI____,	{ CONST_FLOAT	, 0				, 0				}		, 0				, CONST_FLOAT	}
 	, { "!DEFi_c__", DEFI____,	{ CONST_INT		, 0				, 0				}		, 0				, CONST_INT		}
-	, { "!DEFp_c__", DEFI____,	{ FREE_ADDRESS		, 0			, 0				}		, 0				, FREE_ADDRESS		}
+	, { "!DEFp_c__", DEFI____,	{ FREE_ADDRESS	, 0				, 0				}		, 0				, FREE_ADDRESS|POINTER_CONSTANT }
 	, { "!DIFp_ccc", SUBI_CCC,	{ COMPILE_TIME	, FREE_ADDRESS	, FREE_ADDRESS	}		, 0				, CONST_INT		}
 	, { "!DIVf_ccc", DIVF_CCC,	{ COMPILE_TIME	, CONST_FLOAT	, CONST_FLOAT	}		, 0				, CONST_FLOAT	}
 	, { "!DIVi_ccc", DIVI_CCC,	{ COMPILE_TIME	, CONST_INT		, CONST_INT		}		, CHECK_DIV_BY_0, CONST_INT		}
@@ -796,7 +797,7 @@ const char* Exception::what() const throw() {
 	return whatString.c_str();
 }
 
-void Symbols::define(const std::string& name, int types, Value value, UInt size) {
+Symbols::Symbol* Symbols::define(const std::string& name, int types, Value value, UInt size) {
 	const Char* nameBegin = name.data();
 	const Char* nameEnd = nameBegin + name.size();
 	if (!isValidIdentifier(nameBegin, nameEnd)) throw Exception(INVALID_IDENTIFIER, name);
@@ -805,7 +806,7 @@ void Symbols::define(const std::string& name, int types, Value value, UInt size)
 	if ((types & CONST_INT_N) != 0 && value.i >= 0) types &= ~CONST_INT_N;
 	SymbolMap::iterator it = symbols.find(name);
 	if (it != symbols.end()) throw Exception(SYMBOL_ALREADY_DEFINED, name);
-	symbols.insert(it, std::pair<std::string, Symbol>(name, Symbol(types, value, size)));
+	return &symbols.insert(it, std::pair<std::string, Symbol>(name, Symbol(types, value, size)))->second;
 }
 
 void Symbols::registerSwitch(const Char* labelBegin, const Char* labelEnd, UInt switchSize
@@ -818,11 +819,15 @@ void Symbols::registerSwitch(const Char* labelBegin, const Char* labelEnd, UInt 
 void Symbols::resolve(const Reference& ref, const Symbol& symbol) {
 	if ((symbol.types & ref.accepts) == 0) throw Exception(INCOMPATIBLE_TYPES, ref.label);
 	assert((ref.accepts == FWD_BRANCH) == (symbol.types == BRANCH));
-	assert((ref.offset < 0) == (ref.accepts == FWD_BRANCH));
-	if ((ref.accepts & UNCHECKED_ADDRESS) == 0 && ref.offset >= static_cast<Int>(symbol.size))
+	assert(ref.accepts != FWD_BRANCH || ref.offset < 0);											// a branch's offset is its distance back to the jump
+	// Only data and locals take an offset, `:0` included: `&main:1` would name another function, `&NULL:1` no pointer.
+	if ((ref.accepts & OFFSET_GIVEN) != 0 && ((symbol.types & (ADDRESS | ANY_VAR)) == 0
+			|| (symbol.types & POINTER_CONSTANT) != 0)) {
 		throw Exception(OFFSET_OUT_OF_BOUNDS, ref.label);
-	// A function address takes no offset: `&main:1` would name another function.
-	if ((symbol.types & FUNC) != 0 && ref.offset > 0) throw Exception(OFFSET_OUT_OF_BOUNDS, ref.label);
+	}
+	if ((ref.accepts & UNCHECKED_ADDRESS) == 0 && (ref.offset < symbol.minOffset || ref.offset > symbol.maxOffset)) {
+		throw Exception(OFFSET_OUT_OF_BOUNDS, ref.label);
+	}
 	if (ref.offset == 0) *ref.storage = symbol.value;
 	else {
 		assert((symbol.types & CONST_FLOAT) == 0);
@@ -830,12 +835,11 @@ void Symbols::resolve(const Reference& ref, const Symbol& symbol) {
 	}
 }
 
-bool Symbols::lookup(const Char* nameBegin, const Char* nameEnd, int acceptedTypes, int& types, Value& value, UInt& size) const {
+bool Symbols::lookup(const Char* nameBegin, const Char* nameEnd, int acceptedTypes, int& types, Value& value) const {
 	assert(isValidIdentifier(nameBegin, nameEnd));
 	SymbolMap::const_iterator symbolIt = symbols.find(std::string(nameBegin, nameEnd));
 	if (symbolIt == symbols.end() || (symbolIt->second.types & acceptedTypes) == 0) return false;
 	types = symbolIt->second.types;
-	size = symbolIt->second.size;
 	value = symbolIt->second.value;
 	return true;
 }
@@ -881,23 +885,19 @@ void Symbols::registerNative(const Char* name, Int index) {
 }
 
 Pointer Symbols::findGlobal(const Char* name, UInt& size) const {
-	int types;
-	Value value;
-	const Char* nameBegin = name;
-	const Char* nameEnd = name + strlen(name);
-	if (!isValidIdentifier(nameBegin, nameEnd)) return NULL_POINTER;
-	if (!lookup(nameBegin, nameEnd, ADDRESS, types, value, size)) return NULL_POINTER;
-	return value.p;
+	GlobalInfo info;
+	if (!getGlobalInfo(name, info)) return NULL_POINTER;
+	size = info.size;
+	return info.address;
 }
 
 Pointer Symbols::findFunction(const Char* name) const {
 	int types;
 	Value value;
-	UInt size;
 	const Char* nameBegin = name;
 	const Char* nameEnd = name + strlen(name);
 	if (!isValidIdentifier(nameBegin, nameEnd)) return NULL_POINTER;
-	if (!lookup(nameBegin, nameEnd, FUNC | TARGET, types, value, size)) return NULL_POINTER;	// the host-boundary CALL: like the CALL rows, it takes either dialect's functions
+	if (!lookup(nameBegin, nameEnd, FUNC | TARGET, types, value)) return NULL_POINTER;	// the host-boundary CALL: like the CALL rows, it takes either dialect's functions
 	return value.p;
 }
 
@@ -907,37 +907,45 @@ void Symbols::defineConstant(const Char* name, bool asFloat, const Value& value)
 
 bool Symbols::lookupConstant(const Char* name, bool* isFloat, Value* value) const {
 	int types;
-	UInt size;
-	if (!lookup(name, name + strlen(name), KONST, types, *value, size)) return false;
+	if (!lookup(name, name + strlen(name), KONST, types, *value)) return false;
 	*isFloat = ((types & CONST_FLOAT) != 0);
 	return true;
 }
 
-static int globalMask(bool includeTemps, bool includeInteriors) {	// a global matches when `types & mask` is exactly `ADDRESS`
-	return ADDRESS | (includeTemps ? 0 : TEMPORARY) | (includeInteriors ? 0 : INTERIOR);
+static bool isData(int types) {												// a `! DEFp` name has an address type too, but names no data of its own
+	return (types & ADDRESS) != 0 && (types & POINTER_CONSTANT) == 0;
 }
 
-bool Symbols::findFirstGlobal(Iterator& iterator, bool includeTemps, bool includeInteriors) const {
-	const int mask = globalMask(includeTemps, includeInteriors);
-	for (iterator = symbols.begin(); iterator != symbols.end() && (iterator->second.types & mask) != ADDRESS; ++iterator);
+bool Symbols::findFirstGlobal(Iterator& iterator) const {
+	for (iterator = symbols.begin(); iterator != symbols.end() && !isData(iterator->second.types); ++iterator);
 	return (iterator != symbols.end());
 }
 
-bool Symbols::findNextGlobal(Iterator& iterator, bool includeTemps, bool includeInteriors) const {
-	const int mask = globalMask(includeTemps, includeInteriors);
-	for (++iterator; iterator != symbols.end() && (iterator->second.types & mask) != ADDRESS; ++iterator);
+bool Symbols::findNextGlobal(Iterator& iterator) const {
+	for (++iterator; iterator != symbols.end() && !isData(iterator->second.types); ++iterator);
 	return (iterator != symbols.end());
 }
 
 GlobalInfo Symbols::getGlobalInfo(const Iterator& iterator) const {
-	assert((iterator->second.types & ADDRESS) == ADDRESS);
+	assert(isData(iterator->second.types));
 	GlobalInfo info;
 	info.name = iterator->first.c_str();
 	info.address = iterator->second.value.p;
 	info.size = iterator->second.size;
-	info.isTemp = ((iterator->second.types & TEMPORARY) != 0);
-	info.isInterior = ((iterator->second.types & INTERIOR) != 0);
+	const int types = iterator->second.types;
+	info.section = ((types & ADDRESS_W) == 0 ? CNST_SECTION : ((types & TEMPORARY) != 0 ? TEMP_SECTION : GLOB_SECTION));
 	return info;
+}
+
+bool Symbols::getGlobalInfo(const Char* name, GlobalInfo& info) const {
+	const Iterator it = symbols.find(name);
+	if (it == symbols.end() || !isData(it->second.types)) {
+		const GlobalInfo none = { 0, NULL_POINTER, 0, GLOB_SECTION };
+		info = none;
+		return false;
+	}
+	info = getGlobalInfo(it);
+	return true;
 }
 
 Assembler::Assembler(UInt maxCodeSize, Instruction* codeBase, UInt maxFunctionCount, UInt* functionTable
@@ -946,8 +954,7 @@ Assembler::Assembler(UInt maxCodeSize, Instruction* codeBase, UInt maxFunctionCo
 		, functionTable(functionTable), memoryBase(memoryBase), memoryEnd(memoryBase + maxMemorySize)
 		, ip(codeBase), functionStart(0), functionCount(0), localsSize(0), maxLocalsSize(0), localScopeDepth(0)
 		, paramsSize(0), globalsPointer(memoryBase)
-		, constantsPointer(memoryEnd), dataLabelType(0), dataPointer(0), dataEnd(0), dataOpenStart(0)
-		, dataIsNamed(false), dataIsConstant(false)
+		, constantsPointer(memoryEnd), dataLabelType(0), dataPointer(0), dataEnd(0), dataIsConstant(false)
 		, sectionBegin(0), sectionEnd(0), regionStart(0), regionExtent(-1), dialect(1), globals(globals) {
 	for (Int i = 0; i < 128; ++i) compileTimeVars[i].types = 0;
 	Value v;
@@ -962,9 +969,10 @@ Assembler::Assembler(UInt maxCodeSize, Instruction* codeBase, UInt maxFunctionCo
 	globals.define(GAZL_MEMORY_SIZE_STRING, CONST_INT_P, v, 1);
 }
 
-void Assembler::declare(Symbols& where, const Char* labelBegin, const Char* labelEnd, int types, Value value, UInt size) {
+Symbols::Symbol* Assembler::declare(Symbols& where, const Char* labelBegin, const Char* labelEnd, int types, Value value
+		, UInt size) {
 	assert((types & FORWARD) == 0);
-	if (labelBegin == labelEnd) return;
+	if (labelBegin == labelEnd) return 0;
 	const Char* p = reinterpret_cast<const Char*>(memchr(labelBegin, '#', labelEnd - labelBegin));
 	if (p == 0) p = labelEnd;
 	std::string name(labelBegin, p);
@@ -976,7 +984,7 @@ void Assembler::declare(Symbols& where, const Char* labelBegin, const Char* labe
 		name += '.';
 		name += int2string(v.i, 10, 1, buffer);
 	}
-	where.define(name, types, value, size);
+	return where.define(name, types, value, size);
 }
 
 int Assembler::operatorCompare(const void* a, const void* b) {
@@ -1001,8 +1009,12 @@ void Assembler::linkWithOffset(Symbols& defs, const char* b, const char* e, int 
 	Value o;
 	o.i = 0;
 	const Char* p = reinterpret_cast<const Char*>(memchr(b, ':', e - b));
-	if (p != 0) parseConstant(p + 1, e, CONST_INT_P, &o);
-	else p = e;
+	if (p != 0) {
+		parseConstant(p + 1, e, CONST_INT, &o);											// either sign: the check is against the section or frame
+		accepts |= OFFSET_GIVEN;
+	} else {
+		p = e;
+	}
 	defs.link(b, p, v, accepts, o.i);
 }
 
@@ -1067,29 +1079,47 @@ void Assembler::parseOperand(const Char* b, const Char* e, int accepts, Value* v
 
 		default:	assert((accepts & ANY_VAR) != 0);
 					linkWithOffset(locals, b, e, accepts, v);
+					if ((accepts & UNCHECKED_ADDRESS) == 0 && (v->i < 0 || v->i >= static_cast<Int>(localsSize))) {
+						throw Exception(OFFSET_OUT_OF_BOUNDS, b, e);					// the frame's layout is strict: `local:k` may reach all of it
+					}
 					v->i -= localsSize;
 					break;
 	}
 }
 
 /*
-	A data label covers its own statement and everything after it, up to the next label or the end of the section. So
-	each label is declared reaching to the end of the section, and the next label shortens the previous one to end
-	where it starts. In an unnamed section, data before the first label would belong to no name, so a snapshot could
-	not save it.
+	A data label owns its word and everything after it, up to the next label by address or the end of the section, and
+	an offset on it may reach any word of the section; a section's own label is simply its first. With `SEEK`, labels
+	come in any address order, so they are collected here and `closeDataSection` decides what each owns.
 */
-void Assembler::noteDataStatement(const Char* labelBegin, const Char* labelEnd, const Value* first) {
-	if (labelBegin == labelEnd) {
-		if (!dataIsNamed) throw Exception(UNNAMED_DATA_SECTION);
-		return;
+void Assembler::declareData(const Char* labelBegin, const Char* labelEnd, const Value* first) {
+	if (labelBegin == labelEnd) return;
+	Value v;
+	v.p = makeGAZLPointer(first, dataIsConstant);
+	Symbols::Symbol* const label = declare(globals, labelBegin, labelEnd, dataLabelType, v
+			, static_cast<UInt>(sectionEnd - first));
+	label->minOffset = -static_cast<Int>(first - sectionBegin);
+	dataLabels.push_back(label);
+}
+
+bool Assembler::lowerAddress(const Symbols::Symbol* a, const Symbols::Symbol* b) { return a->value.p < b->value.p; }
+
+/*
+	Every word belongs to the last label at or before it. A stable sort by address keeps source order among labels on
+	one word, so the later one owns its words and the earlier owns none. Words before the first label would belong to
+	no name, so freezing could not save them.
+*/
+void Assembler::closeDataSection() {
+	if (sectionBegin == 0) return;																// no section yet
+	std::stable_sort(dataLabels.begin(), dataLabels.end(), lowerAddress);
+	const Pointer begin = makeGAZLPointer(sectionBegin, dataIsConstant);
+	const Pointer end = begin + static_cast<Pointer>(sectionEnd - sectionBegin);
+	if (dataLabels.empty() || dataLabels[0]->value.p != begin) throw Exception(UNNAMED_DATA_SECTION);
+	for (size_t i = 0; i < dataLabels.size(); ++i) {
+		const Pointer next = (i + 1 < dataLabels.size() ? dataLabels[i + 1]->value.p : end);
+		dataLabels[i]->size = static_cast<UInt>(next - dataLabels[i]->value.p);
 	}
-	if (!dataOpenLabel.empty()) {
-		const Symbols::SymbolMap::iterator it = globals.symbols.find(dataOpenLabel);
-		if (it != globals.symbols.end()) it->second.size = static_cast<UInt>(first - dataOpenStart);
-	}
-	dataIsNamed = true;
-	dataOpenLabel = std::string(labelBegin, labelEnd);
-	dataOpenStart = first;
+	dataLabels.clear();
 }
 
 Pointer Assembler::makeGAZLPointer(const Value* data, bool constant) const {
@@ -1194,7 +1224,7 @@ void Assembler::finalize(ProgramSizes& sizes) {
 	if (dialect != 1) throw Exception(UNCLOSED_GAZL_REGION);	// so a truncated GAZL 2 unit cannot pass, and a following concatenated unit always starts in the default
 	threadBranches();
 	closeDataRegion();
-	if (dataPointer != 0 && !dataIsNamed) throw Exception(UNNAMED_DATA_SECTION);
+	closeDataSection();
 	globals.resolveForwardRefs();
 	// Constants were placed downward from the top during assembly, with addresses counted down from the base.
 	// Moving them to just below the globals puts every word at its address; nothing needs patching.
@@ -1317,11 +1347,7 @@ const Char* Assembler::feed(const Char* line) {
 							for (const Char* c = p; c < e; ++c) {
 								if ((*c & 0x80) != 0) throw Exception(NON_ASCII_TEXT, p, e);
 							}
-							Value v;
-							v.p = makeGAZLPointer(dataPointer, dataIsConstant);
-							declare(globals, labelBegin, labelEnd, dataLabelType, v
-									, static_cast<UInt>(dataEnd - dataPointer));
-							noteDataStatement(labelBegin, labelEnd, dataPointer);
+							declareData(labelBegin, labelEnd, dataPointer);
 							while (p < e) (dataPointer++)->i = *p++;
 							return eatEOL(eatSpace(e));
 						}
@@ -1350,10 +1376,7 @@ const Char* Assembler::feed(const Char* line) {
 								parseOperand(b, e, accepts, dataPointer);
 								++dataPointer;
 							}
-							Value v;
-							v.p = makeGAZLPointer(first, dataIsConstant);
-							declare(globals, labelBegin, labelEnd, dataLabelType, v, static_cast<UInt>(dataEnd - first));
-							noteDataStatement(labelBegin, labelEnd, first);
+							declareData(labelBegin, labelEnd, first);
 							return eatEOL(p);
 						}
 			
@@ -1420,7 +1443,7 @@ const Char* Assembler::feed(const Char* line) {
 								if (!isValidIdentifier(op1Begin + 1, op1End))
 									throw Exception(INVALID_IDENTIFIER, op1Begin + 1, op1End);
 								assert(op0End > op0Begin + 1);
-								if (globals.lookup(op0Begin + 1, op0End, op->accepts[0], types, v, size)
+								if (globals.lookup(op0Begin + 1, op0End, op->accepts[0], types, v)
 										== (op->opcode == IFDF_CB_)) {
 									assert(*op1Begin == '@');
 									assert(op1End > op1Begin + 1);
@@ -1445,11 +1468,9 @@ const Char* Assembler::feed(const Char* line) {
 							parseOperand(op0Begin, op0End, op->accepts[0], &v);
 							size = v.i;
 							closeDataRegion();									// The previous section's last region gets its overlap check while `dataLabel` still names it.
+							closeDataSection();
 							dataLabel = std::string(labelBegin, labelEnd);
-							dataLabelType = op->declareTypes | (labelBegin != labelEnd ? INTERIOR : 0);					// labels inside a named section are interior
-							if (dataPointer != 0 && !dataIsNamed) throw Exception(UNNAMED_DATA_SECTION);
-							dataIsNamed = (labelBegin != labelEnd);
-							dataOpenLabel.clear();
+							dataLabelType = op->declareTypes;
 							if (constantsPointer - globalsPointer < size) throw Exception(NOT_ENOUGH_MEMORY_SPACE);
 							if (op->opcode == GLOB____) {
 								dataPointer = globalsPointer;
@@ -1467,8 +1488,7 @@ const Char* Assembler::feed(const Char* line) {
 							regionStart = 0;
 							regionExtent = -1;									// The implicit region: offset 0, claims what it writes, fenced by the section end - GAZL 1 verbatim.
 							dataIsConstant = (op->opcode != GLOB____);
-							v.p = makeGAZLPointer(dataPointer, dataIsConstant);
-							declare(globals, labelBegin, labelEnd, op->declareTypes, v, size);
+							if (labelBegin != labelEnd) declareData(labelBegin, labelEnd, dataPointer);
 							break;
 
 			case GAZL____:	parseOperand(op0Begin, op0End, op->accepts[0], &v);											// GAZL
@@ -1479,12 +1499,6 @@ const Char* Assembler::feed(const Char* line) {
 			case SEEK____:	{																							// SEEK
 								if (dataPointer == 0) throw Exception(DATA_SECTION_MISSING);
 								closeDataRegion();
-								if (!dataOpenLabel.empty()) {												// the open data label ends with its region, which an unbounded region ends where its writing did
-									const Symbols::SymbolMap::iterator it = globals.symbols.find(dataOpenLabel);
-									const Value* const regionEnd = (regionExtent < 0 ? dataPointer : dataEnd);
-									if (it != globals.symbols.end()) it->second.size = static_cast<UInt>(regionEnd - dataOpenStart);
-									dataOpenLabel.clear();
-								}
 								parseOperand(op0Begin, op0End, op->accepts[0], &v);
 								regionStart = v.i;
 								regionExtent = -1;
@@ -1496,9 +1510,7 @@ const Char* Assembler::feed(const Char* line) {
 									throw Exception(OFFSET_OUT_OF_BOUNDS, dataLabel);
 								dataPointer = sectionBegin + regionStart;
 								dataEnd = (regionExtent < 0 ? sectionEnd : dataPointer + regionExtent);
-								v.p = makeGAZLPointer(dataPointer, dataIsConstant);	// a label names the cursor without requiring a fill; a bounded region's extent rides along as the symbol's size
-								declare(globals, labelBegin, labelEnd, dataLabelType, v, (regionExtent < 0 ? 1 : static_cast<UInt>(regionExtent)));
-								if (labelBegin != labelEnd) dataIsNamed = true;								// the label reaches what this region holds
+								declareData(labelBegin, labelEnd, dataPointer);								// an ordinary data label, at the region's first word
 								break;
 							}
 					
@@ -1523,7 +1535,11 @@ const Char* Assembler::feed(const Char* line) {
 							size = v.i;
 							if (size > 0x7FFFFFFFu - localsSize) throw Exception(FRAME_TOO_LARGE);						// slot offsets must fit an Int
 							v.i = localsSize;
-							declare(locals, labelBegin, labelEnd, op->declareTypes, v, size);
+							if (Symbols::Symbol* const local = declare(locals, labelBegin, labelEnd, op->declareTypes, v
+									, size)) {
+								local->minOffset = -2147483647 - 1;													// checked against the frame where it is used
+								local->maxOffset = 2147483647;
+							}
 							localsSize += size;
 							if (localsSize > maxLocalsSize) maxLocalsSize = localsSize;
 							break;
@@ -1556,7 +1572,10 @@ const Char* Assembler::feed(const Char* line) {
 								localsSize = maxLocalsSize;	// every local operand and RETU below resolves against the FINAL frame
 							}
 							v.p = (Int)(ip - codeBase);
-							declare(locals, labelBegin, labelEnd, BRANCH, v);
+							if (Symbols::Symbol* const label = declare(locals, labelBegin, labelEnd, BRANCH, v)) {		// a branch's offset is its jump distance, any value
+								label->minOffset = -2147483647 - 1;
+								label->maxOffset = 2147483647;
+							}
 							if (op->opcode == NOOP____) break;															// NOOP
 							else if ((op->otherFlags & YIELDS_CONST) != 0) {											// Const calc -> MOVE
 								assert((op->accepts[0] & ANY_VAR_W) != 0);
@@ -1912,20 +1931,19 @@ Value* Processor::pushCall(Pointer functionPointer) {
 }
 
 /*
-	--- Memory serialization ("freeze" / "thaw") ---
+	--- Frozen memory ("freeze" / "thaw"), docs/gazl/Specification.md section 11 ---
 
-	Persists the mutable global memory of a Processor so it can be reconstructed later. Only the writable, non-TEMP
-	globals are stored; source text and compile-time constants are the host's responsibility (thaw re-assembles them,
-	which deterministically rebuilds identical code, layout and function ordinals). The blob is engine-agnostic and
-	designed to survive compiler changes: function pointers stored in globals are stable ordinals (see FUNC), so they
-	resolve correctly through the re-assembled function table regardless of code layout.
+	Freezing saves the words of every owner in a `GLOB` section, by name: one entry per label that owns at least one
+	word, in ascending name order, after a fixed check entry. Thawing validates the whole input before it restores
+	anything, then matches entries to the re-assembled program's owners by name. Code, constants and which program
+	the frozen memory belongs to are the host's responsibility.
 
-	The caller must freeze/thaw at a quiescent boundary (between `run()` calls, with no active GAZL call), so that the
-	data stack, call stack and instruction pointer hold nothing that needs saving.
+	Call only at a quiescent boundary (between `run()` calls, with no active GAZL call), so that the data stack, call
+	stack and instruction pointer hold nothing that needs saving.
 */
 const UInt MEMORY_FORMAT_VERSION = 1;
-const UInt MEMORY_INT_CANARY = 0x01020304;							// Detects endianness / format bugs on thaw.
-const UInt MEMORY_HEADER_SIZE = 4 + 6 * 4;							// Magic + { format version, GAZL version, word size, int canary, float canary, global count }.
+const UInt MEMORY_HEADER_SIZE = 20;									// magic, format version, GAZL version, word size, entry count
+const UInt MEMORY_CHECK_SIZE = 28;									// the check entry: "$gazl" and three words
 static const char MEMORY_MAGIC[4] = { 'G', 'Z', 'M', 'M' };
 
 static unsigned char* putMemoryWord(unsigned char* p, UInt v) {		// Writes a 32-bit little-endian word.
@@ -1936,100 +1954,193 @@ static unsigned char* putMemoryWord(unsigned char* p, UInt v) {		// Writes a 32-
 	return p + 4;
 }
 
-static const unsigned char* getMemoryWord(const unsigned char* p, const unsigned char* end, UInt& value, bool& ok) {
-	if (end - p < 4) { ok = false; value = 0; return p; }			// Truncated: stop reading, leave `ok` false.
-	value = (UInt)p[0] | ((UInt)p[1] << 8) | ((UInt)p[2] << 16) | ((UInt)p[3] << 24);
-	return p + 4;
+static UInt getMemoryWord(const unsigned char* p) {					// Reads a 32-bit little-endian word, byte by byte.
+	return static_cast<UInt>(p[0]) | (static_cast<UInt>(p[1]) << 8) | (static_cast<UInt>(p[2]) << 16)
+			| (static_cast<UInt>(p[3]) << 24);
 }
 
-UInt freezeMemorySize(const Processor& processor, const Symbols& symbols) {
-	(void)processor;
-	UInt size = MEMORY_HEADER_SIZE;
+static UInt memoryPadding(UInt nameLength) { return (4 - nameLength % 4) % 4; }	// zero bytes after a name
+
+static unsigned char* putMemoryEntry(unsigned char* p, const char* name, UInt nameLength, const Value* words
+		, UInt wordCount) {
+	p = putMemoryWord(p, nameLength);
+	memcpy(p, name, nameLength);
+	p += nameLength;
+	for (UInt i = memoryPadding(nameLength); i > 0; --i) *p++ = 0;
+	p = putMemoryWord(p, wordCount);
+	for (UInt i = 0; i < wordCount; ++i) p = putMemoryWord(p, words[i].p);
+	return p;
+}
+
+static unsigned char* putMemoryCheck(unsigned char* p) {			// writes the check entry, exactly as any other entry
+	Value check[3];
+	check[0].p = 0x01020304;
+	check[1].f = 1.0f;
+	check[2].p = 0x7F800001;										// a signaling NaN, which a float load could quieten
+	unsigned char* const next = putMemoryEntry(p, "$gazl", 5, check, 3);
+	assert(next == p + MEMORY_CHECK_SIZE);
+	return next;
+}
+
+struct MemoryEntry {														// One entry of frozen memory, pointing into the bytes it was read from.
+	const unsigned char* name;												// not terminated: `nameLength` bytes
+	UInt nameLength;
+	UInt wordCount;
+	const unsigned char* words;												// still encoded: `wordCount` little-endian words
+	const unsigned char* next;												// the entry after this one
+};
+
+/*
+	Reads the entry at `p`, or returns false when its lengths run past `end`.
+*/
+static bool getMemoryEntry(const unsigned char* p, const unsigned char* end, MemoryEntry& entry) {
+	if (end - p < 4) return false;
+	entry.nameLength = getMemoryWord(p);
+	entry.name = p + 4;
+	const size_t room = static_cast<size_t>(end - entry.name);
+	if (entry.nameLength > room || room - entry.nameLength < memoryPadding(entry.nameLength) + 4) {
+		return false;																	// no sum that can wrap
+	}
+	entry.words = entry.name + entry.nameLength + memoryPadding(entry.nameLength) + 4;
+	entry.wordCount = getMemoryWord(entry.words - 4);
+	if (static_cast<size_t>(end - entry.words) / 4 < entry.wordCount) return false;
+	entry.next = entry.words + static_cast<size_t>(entry.wordCount) * 4;
+	return true;
+}
+
+static int compareMemoryNames(const void* a, size_t aLength, const void* b, size_t bLength) {	// byte order, then length
+	const int order = memcmp(a, b, minimum(aLength, bLength));
+	return (order != 0 ? order : (aLength < bLength ? -1 : (aLength > bLength ? 1 : 0)));
+}
+
+struct MemoryOwner {
+	GlobalInfo info;
+	UInt nameLength;
+};
+
+/*
+	The owners of the `GLOB` sections that own at least one word, in ascending name order (the order of `Symbols`):
+	every name of data except those in `TEMP` and `CNST` sections.
+*/
+static void findMemoryOwners(const Symbols& symbols, std::vector<MemoryOwner>& owners) {
+	owners.clear();
 	Symbols::Iterator it;
-	for (bool ok = symbols.findFirstGlobal(it, false, false); ok; ok = symbols.findNextGlobal(it, false, false)) {
-		const GlobalInfo info = symbols.getGlobalInfo(it);
-		size += 4 + (UInt)strlen(info.name) + 4 + info.size * 4;	// name length + name + size + words
+	for (bool ok = symbols.findFirstGlobal(it); ok; ok = symbols.findNextGlobal(it)) {
+		const MemoryOwner owner = { symbols.getGlobalInfo(it), static_cast<UInt>(it->first.size()) };
+		if (owner.info.section == GLOB_SECTION && owner.info.size != 0) owners.push_back(owner);
+	}
+}
+
+static UInt frozenSize(const std::vector<MemoryOwner>& owners) {
+	UInt size = MEMORY_HEADER_SIZE + MEMORY_CHECK_SIZE;
+	for (size_t i = 0; i < owners.size(); ++i) {
+		size += 4 + owners[i].nameLength + memoryPadding(owners[i].nameLength) + 4 + owners[i].info.size * 4;
 	}
 	return size;
 }
 
+UInt freezeMemorySize(const Processor& processor, const Symbols& symbols) {
+	(void)processor;
+	std::vector<MemoryOwner> owners;
+	findMemoryOwners(symbols, owners);
+	return frozenSize(owners);
+}
+
 UInt freezeMemory(const Processor& processor, const Symbols& symbols, void* buffer, UInt bufferSize) {
-	const UInt needed = freezeMemorySize(processor, symbols);
+	std::vector<MemoryOwner> owners;
+	findMemoryOwners(symbols, owners);
+	const UInt needed = frozenSize(owners);
 	if (buffer == 0 || bufferSize < needed) return needed;			// Too small: write nothing, tell the caller the required size.
 
 	unsigned char* const start = static_cast<unsigned char*>(buffer);
-	unsigned char* p = start;
-	Symbols::Iterator it;
-	UInt globalCount = 0;
-	for (bool ok = symbols.findFirstGlobal(it, false, false); ok; ok = symbols.findNextGlobal(it, false, false)) ++globalCount;
-
-	memcpy(p, MEMORY_MAGIC, 4);
-	p += 4;
-	Value floatCanary;
-	floatCanary.f = 1.0f;											// Detects a divergent float bit-layout on thaw.
-	p = putMemoryWord(p, MEMORY_FORMAT_VERSION);
-	p = putMemoryWord(p, (UInt)VERSION);
-	p = putMemoryWord(p, (UInt)WORD_SIZE);
-	p = putMemoryWord(p, MEMORY_INT_CANARY);
-	p = putMemoryWord(p, floatCanary.p);
-	p = putMemoryWord(p, globalCount);
-
-	for (bool ok = symbols.findFirstGlobal(it, false, false); ok; ok = symbols.findNextGlobal(it, false, false)) {
-		const GlobalInfo info = symbols.getGlobalInfo(it);
-		assert(!info.isTemp && !info.isInterior);
-		const UInt nameLength = (UInt)strlen(info.name);
-		p = putMemoryWord(p, nameLength);
-		memcpy(p, info.name, nameLength);
-		p += nameLength;
-		p = putMemoryWord(p, info.size);
-		const Value* source = processor.accessConstMemory(info.address, info.size);
-		assert(source != 0);
-		for (UInt i = 0; i < info.size; ++i) p = putMemoryWord(p, source[i].p);
+	memcpy(start, MEMORY_MAGIC, 4);
+	unsigned char* p = putMemoryWord(start + 4, MEMORY_FORMAT_VERSION);
+	p = putMemoryWord(p, static_cast<UInt>(VERSION));
+	p = putMemoryWord(p, static_cast<UInt>(WORD_SIZE));
+	p = putMemoryWord(p, static_cast<UInt>(owners.size()) + 1);
+	p = putMemoryCheck(p);
+	for (size_t i = 0; i < owners.size(); ++i) {
+		const GlobalInfo& owner = owners[i].info;
+		const Value* words = processor.accessConstMemory(owner.address, owner.size);
+		assert(words != 0);
+		p = putMemoryEntry(p, owner.name, owners[i].nameLength, words, owner.size);
 	}
-	assert((UInt)(p - start) == needed);							// Byte count must match freezeMemorySize exactly.
+	assert(static_cast<UInt>(p - start) == needed);					// Byte count must match `frozenSize` exactly.
 	return needed;
 }
 
-MemoryLoad thawMemory(Processor& processor, const Symbols& symbols, const void* buffer, UInt bufferSize) {
-	const unsigned char* p = static_cast<const unsigned char*>(buffer);
-	const unsigned char* const end = p + bufferSize;
-	bool ok = true;
+/*
+	Thawing reads every entry once, then checks them in the order of the specification's validation table, so that
+	nothing is restored unless all of it is valid. Only then are entries and owners, both in ascending name order,
+	merged in one walk.
+*/
+MemoryLoad thawMemory(Processor& processor, const Symbols& symbols, const void* buffer, UInt bufferSize
+		, bool prefix) {
+	const unsigned char* const start = static_cast<const unsigned char*>(buffer);
+	const unsigned char* const end = start + bufferSize;
+	if (bufferSize < 4 || memcmp(start, MEMORY_MAGIC, 4) != 0) return MEMORY_BAD_MAGIC;
+	if (bufferSize < MEMORY_HEADER_SIZE) return MEMORY_TRUNCATED;
+	const UInt gazlVersion = getMemoryWord(start + 8);
+	if (getMemoryWord(start + 4) != MEMORY_FORMAT_VERSION || gazlVersion == 0
+			|| gazlVersion > static_cast<UInt>(VERSION)) {
+		return MEMORY_BAD_VERSION;
+	}
+	if (getMemoryWord(start + 12) != static_cast<UInt>(WORD_SIZE)) return MEMORY_BAD_WORDSIZE;
 
-	if (bufferSize < 4 || memcmp(p, MEMORY_MAGIC, 4) != 0) return MEMORY_BAD_MAGIC;
-	p += 4;
-	UInt formatVersion, gazlVersion, wordSize, intCanary, floatCanary, globalCount;
-	p = getMemoryWord(p, end, formatVersion, ok);
-	p = getMemoryWord(p, end, gazlVersion, ok);
-	p = getMemoryWord(p, end, wordSize, ok);
-	p = getMemoryWord(p, end, intCanary, ok);
-	p = getMemoryWord(p, end, floatCanary, ok);
-	p = getMemoryWord(p, end, globalCount, ok);
-	if (!ok) return MEMORY_TRUNCATED;
-	if (formatVersion != MEMORY_FORMAT_VERSION || gazlVersion != (UInt)VERSION) return MEMORY_BAD_VERSION;
-	if (wordSize != (UInt)WORD_SIZE) return MEMORY_BAD_WORDSIZE;
-	Value expectedFloat;
-	expectedFloat.f = 1.0f;
-	if (intCanary != MEMORY_INT_CANARY || floatCanary != expectedFloat.p) return MEMORY_BAD_CANARY;
+	std::vector<MemoryEntry> entries;
+	const unsigned char* p = start + MEMORY_HEADER_SIZE;
+	for (UInt e = getMemoryWord(start + 16); e > 0; --e) {
+		MemoryEntry entry;
+		if (!getMemoryEntry(p, end, entry)) return MEMORY_TRUNCATED;
+		entries.push_back(entry);
+		p = entry.next;
+	}
 
-	for (UInt g = 0; g < globalCount && ok; ++g) {
-		UInt nameLength;
-		p = getMemoryWord(p, end, nameLength, ok);
-		if (!ok || nameLength > (UInt)(end - p)) { ok = false; break; }
-		std::string name(reinterpret_cast<const char*>(p), nameLength);
-		p += nameLength;
-		UInt size;
-		p = getMemoryWord(p, end, size, ok);
+	unsigned char check[MEMORY_CHECK_SIZE];
+	putMemoryCheck(check);
+	const unsigned char* const first = start + MEMORY_HEADER_SIZE;
+	if (entries.empty() || entries[0].next != first + MEMORY_CHECK_SIZE
+			|| memcmp(first, check, MEMORY_CHECK_SIZE) != 0) {
+		return MEMORY_BAD_CANARY;
+	}
 
-		UInt declaredSize = 0;
-		const Pointer address = symbols.findGlobal(name.c_str(), declaredSize);
-		Value* destination = (address != NULL_POINTER && declaredSize == size) ? processor.accessMemory(address, size) : 0;
-		for (UInt i = 0; i < size && ok; ++i) {
-			UInt word;
-			p = getMemoryWord(p, end, word, ok);
-			if (ok && destination != 0) destination[i].i = (Int)word;
+	for (size_t e = 1; e < entries.size(); ++e) {
+		const MemoryEntry& entry = entries[e];
+		const Char* const name = reinterpret_cast<const Char*>(entry.name);
+		if (!isValidIdentifier(name, name + entry.nameLength)) return MEMORY_MALFORMED;
+		for (UInt i = 0; i < memoryPadding(entry.nameLength); ++i) {
+			if (entry.name[entry.nameLength + i] != 0) return MEMORY_MALFORMED;
+		}
+		if (e > 1 && compareMemoryNames(entries[e - 1].name, entries[e - 1].nameLength, entry.name, entry.nameLength)
+				>= 0) {
+			return MEMORY_MALFORMED;
 		}
 	}
-	return ok ? MEMORY_OK : MEMORY_TRUNCATED;
+	if (p != end) return MEMORY_MALFORMED;
+
+	std::vector<MemoryOwner> owners;
+	findMemoryOwners(symbols, owners);
+	bool exact = true;
+	size_t e = 1;
+	size_t o = 0;
+	while (e < entries.size() || o < owners.size()) {											// one merged walk: step the lower name, or both
+		const int order = (e == entries.size() ? 1 : (o == owners.size() ? -1 : compareMemoryNames(entries[e].name
+				, entries[e].nameLength, owners[o].info.name, owners[o].nameLength)));
+		if (order != 0) {
+			exact = false;
+			if (order < 0) ++e;																	// an entry with no owner: dropped
+			else ++o;																			// an owner with no entry: left unchanged
+			continue;
+		}
+		const MemoryEntry& entry = entries[e++];												// the same name: restored
+		const GlobalInfo& owner = owners[o++].info;
+		exact = exact && entry.wordCount == owner.size;
+		const UInt restored = (entry.wordCount == owner.size || prefix ? minimum(entry.wordCount, owner.size) : 0);
+		Value* const destination = processor.accessMemory(owner.address, owner.size);
+		assert(destination != 0);
+		for (UInt i = 0; i < restored; ++i) destination[i].p = getMemoryWord(entry.words + i * 4);
+	}
+	return (exact ? MEMORY_OK : MEMORY_MISMATCH);
 }
 
 #if !defined(NDEBUG)
@@ -2217,13 +2328,15 @@ bool unitTest() {
 
 			Processor pmachine2(sizes2.codeSize, &cody2[0], sizes2.functionCount, &functionTable2[0], MEMORY_SIZE, &memory2[0]
 					, sizes2.globalsSize, sizes2.constsSize, CALL_STACK_SIZE, &callStack2[0], nativeTable, &callbackData);
-			MemoryLoad loaded = thawMemory(pmachine2, globals2, memoryBlob.empty() ? 0 : &memoryBlob[0], (UInt)memoryBlob.size());
+			MemoryLoad loaded = thawMemory(pmachine2, globals2, memoryBlob.empty() ? 0 : &memoryBlob[0]
+					, (UInt)memoryBlob.size(), false);
 			assert(loaded == MEMORY_OK);
 
 			// Every non-TEMP global must match the frozen original (identical assemblies share global addresses).
 			Symbols::Iterator it;
-			for (bool ok = globals.findFirstGlobal(it, false, true); ok; ok = globals.findNextGlobal(it, false, true)) {
+			for (bool ok = globals.findFirstGlobal(it); ok; ok = globals.findNextGlobal(it)) {
 				const GlobalInfo info = globals.getGlobalInfo(it);
+				if (info.section == TEMP_SECTION) continue;
 				const UInt index = info.address - MEMORY_OFFSET + (sizes.constsSize - 1);			// the buffer starts with the constants
 				for (UInt i = 0; i < info.size; ++i) assert(memory2[index + i].i == memory[index + i].i);
 			}
