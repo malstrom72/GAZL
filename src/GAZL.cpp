@@ -983,7 +983,7 @@ void Assembler::parseConstant(const Char* b, const Char* e, int accepts, Value* 
 						break;
 					}
 				
-		default:	globals.link(b, e, v, accepts & (CONST_INT | CONST_FLOAT | FORWARD)); break;		// `#name` is a number; a pointer is `&name`
+		default:	globals.link(b, e, v, accepts); break;
 	}
 }
 
@@ -1006,7 +1006,7 @@ void Assembler::parseOperand(const Char* b, const Char* e, int accepts, Value* v
 					break;
 
 		case '&':	if ((accepts & (ADDRESS | FUNC)) == 0) throw Exception(DID_NOT_EXPECT_ADDRESS, b, e);
-					linkWithOffset(globals, b + 1, e, accepts & ~(CONST_INT | CONST_FLOAT), v);		// `&name` is a pointer; a number is `#name`
+					linkWithOffset(globals, b + 1, e, accepts, v);
 					break;
 
 		default:	assert((accepts & ANY_VAR) != 0);

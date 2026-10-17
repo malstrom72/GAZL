@@ -156,8 +156,8 @@ assembly error.
 | `@`    | branch label in the current function                            | `@loop`, `@sw.3`       |
 | `*`    | non-negative size constant                                      | `*16`                  |
 
-The prefix decides the kind of name: a pointer written with `#` (`#NULL`, `#table`), or a number written with `&`
-(`&GAZL_VERSION`), is `INCOMPATIBLE_TYPES`.
+The prefix does not restrict the kind of name: `#name` and `&name` both take any name the operand accepts, so
+`#table`, `#NULL` and `DATA &GAZL_VERSION` assemble too. Impala writes `#name` for a `! DEFp` name.
 
 **Offsets.** `&label:k` and `local:k` take a constant `k`, negative or not, on data labels and locals only.
 - **Accesses are checked at assembly.** Where an instruction reads or writes the word at `&label:k` (`PEEK`,

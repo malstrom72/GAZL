@@ -1153,8 +1153,8 @@ int sweepFunctionOffsets() {
 				, OFFSET_OUT_OF_BOUNDS },
 		{ "an offset on NULL", "main:\tFUNC\np:\tLOCp\n\tMOVp p &NULL:1\n\tRETU\n", OFFSET_OUT_OF_BOUNDS },
 		{ "a zero offset on NULL", "\tGLOB *1\nn:\tDATp &NULL:0\nmain:\tFUNC\n\tRETU\n", OFFSET_OUT_OF_BOUNDS },
-		{ "a number written as a pointer, with an offset", "\tGLOB *1\nv:\tDATA &GAZL_VERSION:0\nmain:\tFUNC\n\tRETU\n"
-				, INCOMPATIBLE_TYPES },
+		{ "a zero offset on a number", "\tGLOB *1\nv:\tDATA &GAZL_VERSION:0\nmain:\tFUNC\n\tRETU\n"
+				, OFFSET_OUT_OF_BOUNDS },
 		{ "an offset on a pointer constant", "g:\tGLOB *2\nP:\t! DEFp &g\nmain:\tFUNC\np:\tLOCp\n\tMOVp p &P:1\n"
 				"\tRETU\n", OFFSET_OUT_OF_BOUNDS },
 		{ "a zero offset on a pointer constant", "g:\tGLOB *2\nP:\t! DEFp &g\n\tDATp &P:0\nmain:\tFUNC\n\tRETU\n"
@@ -1165,12 +1165,14 @@ int sweepFunctionOffsets() {
 		{ "a zero offset on a native", "main:\tFUNC\n\tCALL ^native:0 %0 *0\n\tRETU\n", OFFSET_OUT_OF_BOUNDS },
 		{ "an offset on a native", "main:\tFUNC\n\tCALL ^native:1 %0 *0\n\tRETU\n", OFFSET_OUT_OF_BOUNDS },
 		{ "a native without an offset", "main:\tFUNC\n\tCALL ^native %0 *0\n\tRETU\n", -1 },
-		{ "a number written as a pointer", "\tGLOB *1\ng:\tDATA &GAZL_VERSION\nmain:\tFUNC\n\tRETU\n"
-				, INCOMPATIBLE_TYPES },
-		{ "an address written as a number", "g:\tGLOB *1\n\tDATA #g\nmain:\tFUNC\n\tRETU\n", INCOMPATIBLE_TYPES },
-		{ "an address written as a number in DATp", "g:\tGLOB *1\n\tDATp #g\nmain:\tFUNC\n\tRETU\n"
-				, INCOMPATIBLE_TYPES },
-		{ "NULL written as a number", "main:\tFUNC\np:\tLOCp\n\tMOVp p #NULL\n\tRETU\n", INCOMPATIBLE_TYPES },
+		{ "a number written as a pointer, which GAZL 1 accepts", "\tGLOB *1\ng:\tDATA &GAZL_VERSION\nmain:\tFUNC\n"
+				"\tRETU\n", -1 },
+		{ "an address written as a number, which GAZL 1 accepts", "g:\tGLOB *1\n\tDATA #g\nmain:\tFUNC\n\tRETU\n", -1 },
+		{ "an address written as a number in DATp, which GAZL 1 accepts", "g:\tGLOB *1\n\tDATp #g\nmain:\tFUNC\n\tRETU\n"
+				, -1 },
+		{ "NULL written as a number, which GAZL 1 accepts", "main:\tFUNC\np:\tLOCp\n\tMOVp p #NULL\n\tRETU\n", -1 },
+		{ "a pointer constant written as a number, as Impala writes it", "g:\tGLOB *2\nP:\t! DEFp &g:1\nmain:\tFUNC\n"
+				"v:\tLOCi\n\tPEEK v #P\n\tRETU\n", -1 },
 		{ "a number, a pointer constant and NULL, each as written", "N:\t! DEFi #2\ng:\tGLOB *4\nP:\t! DEFp &g:1\n"
 				"\tDATA #N #GAZL_VERSION &NULL &P\nmain:\tFUNC\n\tRETU\n", -1 },
 		{ "a number defined after its use", "g:\tGLOB *1\n\tDATA #LATER\nLATER:\t! DEFi #5\nmain:\tFUNC\n\tRETU\n"
