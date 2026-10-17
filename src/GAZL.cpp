@@ -1011,23 +1011,11 @@ void Assembler::parseOperand(const Char* b, const Char* e, int accepts, Value* v
 
 		default:	assert((accepts & ANY_VAR) != 0);
 					linkWithOffset(locals, b, e, accepts, v);
+					if ((accepts & UNCHECKED_ADDRESS) == 0 && (v->i < 0 || v->i >= static_cast<Int>(localsSize))) {
+						throw Exception(OFFSET_OUT_OF_BOUNDS, b, e);					// the frame's layout is strict: `local:k` may reach all of it
+					}
 					v->i -= localsSize;
 					break;
-	}
-}
-
-/*
-	A frame is laid out strictly: each parameter and local takes the next words, in declaration order. So an offset on
-	a local may reach any declared word of the frame, before it or after it. Runs once the declarations are complete,
-	before any instruction refers to a local; again after a `NOOP`, which leaves room for more declarations.
-*/
-void Assembler::settleFrame() {
-	for (Symbols::SymbolMap::iterator it = locals.symbols.begin(); it != locals.symbols.end(); ++it) {
-		Symbols::Symbol& local = it->second;
-		if ((local.types & ANY_VAR) != 0) {
-			local.minOffset = -local.value.i;
-			local.maxOffset = static_cast<Int>(localsSize) - 1 - local.value.i;
-		}
 	}
 }
 
@@ -1372,12 +1360,14 @@ const Char* Assembler::feed(const Char* line) {
 							size = v.i;
 							if (size > 0x7FFFFFFFu - localsSize) throw Exception(FRAME_TOO_LARGE);						// slot offsets must fit an Int
 							v.i = localsSize;
-							declare(locals, labelBegin, labelEnd, op->declareTypes, v, size);
+							if (Symbols::Symbol* const local = declare(locals, labelBegin, labelEnd, op->declareTypes, v, size)) {
+								local->minOffset = -2147483647 - 1;													// checked against the frame where it is used
+								local->maxOffset = 2147483647;
+							}
 							localsSize += size;
 							break;
 							
 			default:		if (functionStart == 0) throw Exception(MISSING_FUNCTION_DECLARATION);						// The rest
-							if (ip == functionStart + 1) settleFrame();													// the declarations are complete
 							v.p = (Int)(ip - codeBase);
 							if (Symbols::Symbol* const label = declare(locals, labelBegin, labelEnd, BRANCH, v)) {		// a branch's offset is its jump distance, any value
 								label->minOffset = -2147483647 - 1;

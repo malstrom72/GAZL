@@ -186,8 +186,8 @@ class Symbols {
 					int types;																			// What kind of name it is, matched against the types an operand accepts.
 					Value value;																		// What the name stands for: an address, a function or native, a constant, a frame word or a code position.
 					UInt size;																			// Its own words: for data, what it owns, to the next label (what freezing saves and hosts are told); for a local, its declared size.
-					Int minOffset;																		// The lowest `k` a `:k` on it may take: down to its section's or frame's first word.
-					Int maxOffset;																		// The highest `k`: up to its section's or frame's last word.
+					Int minOffset;																		// The lowest `k` a `:k` on it may take: for data, down to its section's first word.
+					Int maxOffset;																		// The highest `k`: for data, up to its section's last word. Locals are checked against the frame instead.
 				};
 
 	protected:	struct Reference {
@@ -270,7 +270,6 @@ class Assembler {
 	protected:	Value calcConstant(const Operator* op, const Char* op1Begin, const Char* op1End, const Char* op2Begin
 						, const Char* op2End);
 	protected:	void finalizeFunction();
-	protected:	void settleFrame();																						// Let an offset on a local reach any declared word of the frame.
 	protected:	void declareData(const Char* labelBegin, const Char* labelEnd, const Value* first);						// Declare a data label at `first`, and end what the previous one owns there.
 	protected:	Pointer makeGAZLPointer(const Value* data, bool constant) const;										// The pointer to `data`: up from the base for globals, down from it for constants.
 	protected:	Instruction* const codeBase;
