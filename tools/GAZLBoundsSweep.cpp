@@ -994,10 +994,11 @@ int sweepThawRules() {
 }
 
 /*
-	The assembler's error for `source`, or -1 when it assembles.
+	The assembler's error for `source`, or -1 when it assembles. One native, `^native`, is registered.
 */
 int assemblyError(const std::string& source) {
 	Machine m;
+	m.symbols.registerNative("native", 0);
 	try {
 		Assembler assem(CODE_SIZE, &m.code[0], FUNCTION_COUNT, &m.functionTable[0], MEMORY_SIZE, m.memory(), m.symbols);
 		assem.newUnit("text");
@@ -1150,7 +1151,12 @@ int sweepFunctionOffsets() {
 		{ "a zero offset on NULL", "\tGLOB *1\nn:\tDATp &NULL:0\nmain:\tFUNC\n\tRETU\n", OFFSET_OUT_OF_BOUNDS },
 		{ "an offset on a named constant", "\tGLOB *1\nv:\tDATA &GAZL_VERSION:0\nmain:\tFUNC\n\tRETU\n"
 				, OFFSET_OUT_OF_BOUNDS },
-		{ "a function address without an offset", "\tGLOB *1\nfp:\tDATp &main\nmain:\tFUNC\n\tRETU\n", -1 }
+		{ "a function address without an offset", "\tGLOB *1\nfp:\tDATp &main\nmain:\tFUNC\n\tRETU\n", -1 },
+		{ "a zero offset on a called function", "f:\tFUNC\n\tRETU\nmain:\tFUNC\n\tCALL &f:0 %0 *0\n\tRETU\n"
+				, OFFSET_OUT_OF_BOUNDS },
+		{ "a zero offset on a native", "main:\tFUNC\n\tCALL ^native:0 %0 *0\n\tRETU\n", OFFSET_OUT_OF_BOUNDS },
+		{ "an offset on a native", "main:\tFUNC\n\tCALL ^native:1 %0 *0\n\tRETU\n", OFFSET_OUT_OF_BOUNDS },
+		{ "a native without an offset", "main:\tFUNC\n\tCALL ^native %0 *0\n\tRETU\n", -1 }
 	};
 	const int count = sizeof (CASES) / sizeof (*CASES);
 	int failures = 0;
