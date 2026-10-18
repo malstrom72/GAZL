@@ -2721,6 +2721,11 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
        it for every ordinary declaration and expandInline for the SCOP-scoped locals it pastes, so the
        one format lives here and cannot diverge between them. */
     declRow = function (kind, type, value) {
+        if (value !== undefined && kind !== 'DATs') {                  /* a DATs value is a string, not operands */
+            var words = value.split(' ');
+            for (var w = 0; w < words.length; ++w) words[w] = writtenOperand(words[w]);
+            value = words.join(' ');
+        }
         return replace(kind, '?', TYPE_SUFFIXES[type] || '')
                 + (value !== undefined ? ' ' + value : '');
     };
@@ -4754,6 +4759,18 @@ var _sn = strideStruct(field.elem);
     };
 
     /* -----------------------------------------------------------
+     *  Operand prefix as written: GAZL 2 takes `#` only for numbers
+     *  and `&` only for pointers, so a `pointer` or `funcptr`
+     *  constant is written `&name`. Inside the compiler it stays
+     *  `#name`, so only the output text changes, never the code.
+     * -------------------------------------------------------- */
+    writtenOperand = function (op) {
+        if (op == null || op[0] !== '#') return op;
+        var d = ownEntry(symbols.defines, op.substr(1));
+        return (d !== undefined && (d.type === 'p' || d.type === 'F')) ? '&' + op.substr(1) : op;
+    };
+
+    /* -----------------------------------------------------------
      *  Symbol declaration helper
      * -------------------------------------------------------- */
 
@@ -4844,7 +4861,7 @@ var _sn = strideStruct(field.elem);
         var nextRide    = false;    // ...and whether it may ride a `!` line instead of costing a NOOP
         var nextComment = '';       // pending trailing comment
         function formatOperand(op) {
-            return (op == null ? '' : op);
+            return (op == null ? '' : writtenOperand(op));
         }
 
         for (var i = 0; i < metacode.length; ++i) {
