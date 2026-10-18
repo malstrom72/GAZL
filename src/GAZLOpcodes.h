@@ -76,7 +76,7 @@ enum Opcode {
 	, NLSF_VVB, NLSF_VCB, NLSF_CVB, NEQF_VVB, NEQF_VCB
 	, GOTO_B__, SWCH_VCC
 
-	, NOOP____, GLOB____, CNST____, DATA____, LOCA____, OUTP____, SCOP____, ENDS____, SEEK____, GAZL____
+	, NOOP____, GLOB____, CNST____, DATA____, LOCA____, OUTP____, MARK____, FREE____, SPAN____, GAZL____
 	
 	, MOVE_CC_
 	, ABSI_CC_

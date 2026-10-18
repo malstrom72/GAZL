@@ -232,10 +232,6 @@ Divide ints. Division truncates towards zero (also for negative numbers); this i
 requires. `INT_MIN / -1` is defined to yield `INT_MIN` (no trap). Division by 0 is considered illegal and generates a
 run-time error (or compile-time error if 0 is a constant).
 
-## ENDS
-
-Closes the innermost `SCOP` (GAZL 2 and later). See [SCOP](#scop).
-
 ## EQUf
 - `#float          #float          @label`
 - `#float          float           @label`
@@ -296,6 +292,10 @@ environment note near the top).
 - `ptr(d)          ptr             @label`
 
 Increment `ptr(d)` and branch to `@label` if it is less than `&address` / `ptr`
+
+## FREE
+
+Frees the words declared since the innermost open `MARK` (GAZL 2 and later). See [MARK](#mark).
 
 ## FUNC
 
@@ -536,6 +536,36 @@ Branch on less pointer
 
 Branch on less call target (GAZL 2 and later).
 
+## MARK
+
+Marks the frame's next free word (GAZL 2 and later). Like `LOC` / `PARA` declarations, `MARK` and its matching `FREE`
+must appear after a `FUNC` declaration but before any real instruction.
+
+`FREE` frees the words declared since its `MARK`, so the declarations after it reuse the same frame offsets, while a
+`MARK` inside a `MARK` stacks on top. A function's frame is therefore the deepest nesting chain, not the sum of every
+declaration. Use it for groups whose lifetimes do not overlap, such as an expanded inline body.
+
+    $g:     LOCi            ; declared before any MARK, so it outlives them all
+            MARK
+    $a:     LOCA *SIZE_A    ; offset 1
+            MARK
+    $b:     LOCi            ; offset 1 + SIZE_A  (nested: stacks)
+            FREE
+            FREE
+            MARK
+    $c:     LOCA *SIZE_C    ; offset 1 again     (after FREE: overlays $a and $b)
+            FREE
+
+Sizes are resolved before offsets are assigned, so `LOCA *SOME_CONSTANT` overlays correctly even when only the host
+knows the value, as for a host-owned struct size. A declaration that must outlive a `MARK` block comes before its
+`MARK`.
+
+Unbalanced `MARK` / `FREE` is an error, as is nesting deeper than 32.
+
+Code that wants to run on either engine can guard its use with `! GEQi #GAZL_VERSION #2 @label`, since a skipped
+conditional region is not parsed for mnemonics, so a GAZL 1 engine ignores the marked variant entirely. (Use
+`! EQUi` instead when you deliberately mean one exact version, as `src/UnitTest.gazl` does.)
+
 ## MODi
 - `int(d)          #int            #int`
 - `int(d)          #int            int`
@@ -675,74 +705,6 @@ Write a value to random access memory with an optional integer offset.
 
 Returns from function call.
 
-## SCOP
-
-Opens a local scope (GAZL 2 and later). Like `LOC` / `PARA` declarations, `SCOP` and its matching `ENDS` must appear
-after a `FUNC` declaration but before any real instruction.
-
-Declarations inside a scope are released by `ENDS`, so the NEXT sibling scope reuses the same frame offsets while a
-NESTED scope stacks on top. A function's frame is therefore the DEEPEST nesting chain, not the sum of every
-declaration. Use it for groups whose lifetimes do not overlap - an expanded inline body being the motivating case,
-including inlines within inlines.
-
-    $g:     LOCi            ; outlives everything - declared before any scope
-            SCOP
-    $a:     LOCA *SIZE_A    ; offset 1
-            SCOP
-    $b:     LOCi            ; offset 1 + SIZE_A  (nested: stacks)
-            ENDS
-            ENDS
-            SCOP
-    $c:     LOCA *SIZE_C    ; offset 1 again     (sibling: overlays $a and $b)
-            ENDS
-
-Sizes are resolved before offsets are assigned, so `LOCA *SOME_CONSTANT` overlays correctly even when only the host
-knows the value - which is what makes this usable for a host-owned struct size. Anything that must outlive a scope has
-to be declared BEFORE the first `SCOP`; a declaration placed after `ENDS` reuses the released space.
-
-Unbalanced `SCOP` / `ENDS` is an error, as is nesting deeper than 32.
-
-Code that wants to run on either engine can guard its use with `! GEQi #GAZL_VERSION #2 @label`, since a skipped
-conditional region is not parsed for mnemonics - the scoped variant is ignored entirely on a GAZL 1 engine. (Use
-`! EQUi` instead when you deliberately mean one exact version, as `src/UnitTest.gazl` does.)
-
-## SEEK
-- `:offset`
-- `:offset *extent`
-
-Set the data cursor to an assemble-time `:offset` within the current data section and open a bounded region there
-(GAZL 2 and later). The `DAT*` rows that follow fill the region sequentially, exactly as they fill a section. Both
-operands take any assemble-time constant - `.o.` / `.z.` symbols and `<X>` variables included - so data lands at
-offsets a host-supplied layout decides, without the emitter knowing the numbers.
-
-With `*extent` the region claims `offset .. offset + extent` whole: filling past the extent is an error, and claimed
-words that are never written stay zero. Without `*extent` the region claims exactly the words it writes and is fenced
-by the section end. Unwritten words are zero either way, and regions may be opened in any offset order. Prefer
-stating the extent even where it seems redundant - Impala emits `*1` on scalar fields - because it turns a
-miscounted row into an error at that row rather than a silent write into whatever the layout puts next.
-
-    voice:  GLOB *.z.Voice
-            SEEK :.o.Voice.note
-            DATi #60
-            SEEK :.o.Voice.state *.z.Voice.state
-            DATf #1.0 #2.0                       ; 2 of 4 words written - the tail stays zero
-            SEEK :.o.Voice.gain
-            DATf #0.5
-
-A `SEEK` row may carry a label: it names the region's start address, exactly as a label on a `DAT*` row names that
-row's address - but without requiring any fill, so a named cursor into zero-filled space costs nothing. With `*extent`
-the extent becomes the symbol's size (as a section's size does for its `GLOB`/`CNST` label); without it the size is 1.
-
-    ring:   GLOB *.z.Ring
-    head:   SEEK :.o.Ring.head *1            ; named, zero-initialized - no DAT row needed
-
-A section containing no `SEEK` is a single implicit region at offset 0 - GAZL 1 semantics, unchanged. An offset or
-extent reaching past the section is `Offset out of bounds` at the `SEEK` row; two regions of one section overlapping
-is `Data regions overlap`, checked when a region closes (at the next `SEEK`, the next section, or the end of
-assembly). The `! GEQi #GAZL_VERSION #2` guard idiom above applies to `SEEK` equally. The runnable proof that placed
-data survives a layout re-pack is `design/proofs/seekRegions.gazl` and its twin; the design rationale is
-`design/gazl/GAZL2DataRegions.md`.
-
 ## SETL
 - `var(d)          int             #const`
 - `var(d)          int             var`
@@ -776,6 +738,39 @@ Shift bits right (arithmetic, i.e. replicate most significant bit and keep sign)
 - `int(d)          int             int`
 
 Shift bits right (logical, i.e. shift in zeroes and lose sign)
+
+## SPAN
+- `:offset *extent`
+
+Open a region of `extent` words at an assemble-time `:offset` from the start of the current data section (GAZL 2 and
+later). The `DAT*` rows that follow fill the region sequentially, exactly as they fill a section. Both operands take
+any assemble-time constant, `.o.` / `.z.` symbols and `<X>` variables included, so data lands at offsets a
+host-supplied layout decides, without the emitter knowing the numbers.
+
+Filling past the extent is an error, so a miscounted row fails at that row rather than writing into whatever the
+layout puts next. Words the region claims but never writes stay zero, as do words no region claims, and regions may
+be opened in any offset order.
+
+    voice:  GLOB *.z.Voice
+            SPAN :.o.Voice.note *1
+            DATi #60
+            SPAN :.o.Voice.state *.z.Voice.state
+            DATf #1.0 #2.0                       ; 2 of 4 words written, the tail stays zero
+            SPAN :.o.Voice.gain *1
+            DATf #0.5
+
+A `SPAN` row may carry a label: it is an ordinary data label at the region's first word, so a named word in
+zero-filled space needs no `DAT*` row.
+
+    ring:   GLOB *.z.Ring
+    head:   SPAN :.o.Ring.head *1            ; named and zero, with no DAT row
+
+A section containing no `SPAN` is a single implicit region at offset 0, exactly as in GAZL 1. A region
+reaching past the section is `Offset out of bounds` at the `SPAN` row; two regions of one section overlapping is
+`Data regions overlap`, checked when a region closes (at the next `SPAN`, the next section, or the end of assembly).
+The `! GEQi #GAZL_VERSION #2` guard idiom of [MARK](#mark) applies to `SPAN` equally. The runnable proof that placed
+data survives a layout re-pack is `design/proofs/spanRegions.gazl` and its twin; the design rationale is
+`design/gazl/GAZL2DataRegions.md`.
 
 ## SUBf
 - `float(d)        #float          #float`

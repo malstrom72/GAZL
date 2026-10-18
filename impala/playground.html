@@ -182,7 +182,7 @@
 			sourceName: "input.impala",
 			legacy: legacyEl.checked,
 			rangeChecks: rangesEl.checked,   // the emitted guards are `DEBUG`-gated, so they need `const int DEBUG`
-			gazl2: gazl2El.checked,          // SEEK-placed struct initializers; the output needs a GAZL 2 assembler
+			gazl2: gazl2El.checked,          // SPAN-placed struct initializers; the output needs a GAZL 2 assembler
 			warn: function (message, offset, code, hint) {
 				var c = caretLine(user, at(offset));
 				var pos = "input.impala:" + c.lc.line + ":" + c.lc.col;

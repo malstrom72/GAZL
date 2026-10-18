@@ -34,7 +34,7 @@ Four long-lived branches, all built by CI (`.github/workflows/ci.yml`), in one s
 |---|---|
 | `main` | GAZL 1 and Impala 1 |
 | `Impala2` | Impala 2 |
-| `GAZL2` | GAZL 2 (`SCOP` / `ENDS`, the `GAZL #n` directive) |
+| `GAZL2` | GAZL 2 (`MARK` / `FREE`, `SPAN`, the `GAZL #n` directive) |
 | `jit-compiler` | The native JIT. `GAZL_LOCAL_SCOPES=0` still builds a GAZL 1 compatible engine |
 
 A change lands on the highest branch it belongs to, through a pull request, and is then merged one step at
@@ -107,7 +107,7 @@ Nothing here is end-user documentation - the JIT is an implementation detail of 
 | [GAZLAssemblerOptimizations](gazl/GAZLAssemblerOptimizations.md) | DESIGN NOTE | Assembler-side optimisation, starting with identity folding |
 | [GAZL2FunctionPointers](gazl/GAZL2FunctionPointers.md) | SPEC | The `t` call-target type: `p` doing double duty was a silent-wrong shape (`&one + 1` calls a different function). IMPLEMENTED 2026-08-25 inside `GAZL #2` regions; migration revised from hard break to regions, zero forced migrations |
 | [TailCalls](gazl/TailCalls.md) | DESIGN NOTE | Needed a GAZL instruction *and* Impala syntax; both landed |
-| [GAZL2DataRegions](gazl/GAZL2DataRegions.md) | SPEC | The `SEEK` directive: bounded data regions at symbolic offsets, so initializers survive a repack. IMPLEMENTED END TO END 2026-08-24 - assembler + Impala emission under `--gazl2` (proof: [`seekRegions.gazl`](proofs/seekRegions.gazl)); E454/E459 lift under the flag |
+| [GAZL2DataRegions](gazl/GAZL2DataRegions.md) | SPEC | The `SPAN` directive: bounded data regions at symbolic offsets, so initializers survive a repack. IMPLEMENTED END TO END 2026-08-24 - assembler + Impala emission under `--gazl2` (proof: [`spanRegions.gazl`](proofs/spanRegions.gazl)); E454/E459 lift under the flag |
 | [GAZL2Versioning](gazl/GAZL2Versioning.md) | SPEC | `GAZL #n` region directive (IMPLEMENTED 2026-08-25: the `GAZL #2`...`GAZL #1` bracket is the concatenation idiom) + Impala `--gazl2`; per-product defaults (Permut8 = GAZL 1, Synplant 2 / Microtonic 4 = GAZL 2) |
 
 The `GAZL2*` docs and TailCalls belong to the **GAZL 2** line. It is merged into this branch, so they

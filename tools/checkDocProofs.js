@@ -63,16 +63,16 @@ const PROOFS = [
 		expect: ['axis 1 is b[W - 1] but f expects [3]'],
 	},
 	{
-		file: 'design/proofs/seekRegions.gazl',
+		file: 'design/proofs/spanRegions.gazl',
 		doc: 'design/gazl/GAZL2DataRegions.md',
 		args: ['main'],
 		expect: ['60906', 'globals size: 6'],
 	},
 	{
-		file: 'design/proofs/seekRegionsRepacked.gazl',
+		file: 'design/proofs/spanRegionsRepacked.gazl',
 		doc: 'design/gazl/GAZL2DataRegions.md',
 		args: ['main'],
-		/* Same answer from a re-packed layout - gain first, a pad word, note last - via SEEK regions. */
+		/* Same answer from a re-packed layout (gain first, a pad word, note last) via SPAN regions. */
 		expect: ['60906', 'globals size: 7'],
 	},
 ];
@@ -83,7 +83,7 @@ const PROOFS = [
 const REPACK_PAIRS = [
 	{ a: 'design/proofs/symbolicWindows.gazl', b: 'design/proofs/symbolicWindowsRepacked.gazl',
 			skip: 28, doc: 'design/gazl/GAZLSymbolicWindows.md' },
-	{ a: 'design/proofs/seekRegions.gazl', b: 'design/proofs/seekRegionsRepacked.gazl',
+	{ a: 'design/proofs/spanRegions.gazl', b: 'design/proofs/spanRegionsRepacked.gazl',
 			skip: 19, doc: 'design/gazl/GAZL2DataRegions.md' },
 ];
 

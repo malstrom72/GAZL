@@ -30,8 +30,8 @@
             ! IFDF #GAZL_VERSION @gotVersion
             ! FAIL GAZL_VERSION not defined!
 ; Two versions, because one tree builds either engine: GAZL_2=0 compiles a 1.0 engine that
-; does not know SCOP / ENDS. Everything else here is common to both, so this pins the RANGE it supports
-; and the SCOP block below skips itself on 1.
+; does not know MARK / FREE. Everything else here is common to both, so this pins the RANGE it supports
+; and the MARK block below skips itself on 1.
 gotVersion: ! GEQi #GAZL_VERSION #1 @notTooOld
             ! FAIL This code is for version 1 or 2 of GAZL only.
 notTooOld:  ! LEQi #GAZL_VERSION #2 @versionOK
@@ -91,20 +91,20 @@ global.warming:         GLOB *2
     global.pointer:     DATp &NULL
 
 ;-------------------------------------------------------------------------------
-; SEEK regions (GAZL 2): symbolic offsets, out-of-order placement, and the
-; zero-filled words a bounded region claims but never writes.
+; SPAN regions (GAZL 2): symbolic offsets, out-of-order placement, and the
+; zero-filled words a region claims but never writes.
 OFF_HI:                 ! DEFi #5
 OFF_LO:                 ! DEFi #1
 EXT_LO:                 ! DEFi #3
-seek.test:              GLOB *8
+span.test:              GLOB *8
 ;-------------------------------------------------------------------------------
-                        SEEK :OFF_HI                         ; out of order on purpose: 5 first, 1 below it later
+                        SPAN :OFF_HI *2                      ; out of order on purpose: 5 first, 1 below it later
                         DATi #500
                         DATf #600.5
-seek.lo:                SEEK :OFF_LO *EXT_LO                 ; bounded: claims words 1-3, writes two, the tail zero-fills; the label names the cursor and the extent becomes its size
+span.lo:                SPAN :OFF_LO *EXT_LO                 ; claims words 1-3, writes two, the tail zero-fills; the label names the region's first word
                         DATi #100
                         DATi #200
-seek.mark:              SEEK :7                              ; label only: a named cursor with no DAT rows at all
+span.mark:              SPAN :7 *1                           ; label only: a named word with no DAT rows at all
 
 ;-------------------------------------------------------------------------------
 test:                   FUNC
@@ -124,61 +124,62 @@ test:                   FUNC
     t0:                 LOCt
     lArray:             LOCA *777
 ; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-; SCOP / ENDS: sA and sB are SIBLINGS, so they share offsets; sInner NESTS inside
-; sA's scope, so it must not collide with sA. Everything above stays untouched.
+; MARK / FREE: sB comes after sA's FREE, so the two share offsets; sInner is
+; marked inside sA's block, so it must not collide with sA. Everything above
+; stays untouched.
 ; The declarations AND the assertions that read them are one skip region - nothing but comments sits
 ; between them - so a 1.0 engine never sees the mnemonics it does not know.
-            ! LSSi #GAZL_VERSION #2 @noLocalScopes
-                        SCOP
+            ! LSSi #GAZL_VERSION #2 @noMarks
+                        MARK
     sA:                 LOCi
-                        SCOP
+                        MARK
     sInner:             LOCi
-                        ENDS
-                        ENDS
-                        SCOP
+                        FREE
+                        FREE
+                        MARK
     sB:                 LOCi
     sB2:                LOCi
-                        ENDS
+                        FREE
 ; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 ;
 ; Test that global / const data is initialized correctly.
 ;
 ;
-; Test SCOP / ENDS frame overlay (GAZL 2).
+; Test MARK / FREE frame reuse (GAZL 2).
 ;
  MOVi       i0              #111
  MOVi       sA              #222
  MOVi       sInner          #333
- NEQi       sA              #222            @fail            ; a NESTED scope must not disturb its parent
+ NEQi       sA              #222            @fail            ; a nested MARK must not disturb the words of the one around it
  MOVi       sB              #444
- NEQi       sA              #444            @fail            ; a SIBLING scope reuses the same offset
+ NEQi       sA              #444            @fail            ; a declaration after FREE reuses the freed offset
  MOVi       sB2             #555
  NEQi       sInner          #555            @fail            ; sB2 overlays sInner likewise
- NEQi       i0              #111            @fail            ; anything declared before the first SCOP is untouched
-noLocalScopes: !
+ NEQi       i0              #111            @fail            ; anything declared before the first MARK is untouched
+noMarks:    !
 
 ;
-; Test SEEK data regions (GAZL 2).
+; Test SPAN data regions (GAZL 2).
 ;
- PEEK       i0              &seek.test:OFF_HI
+ PEEK       i0              &span.test:OFF_HI
  NEQi       i0              #500            @fail            ; landed at the symbolic offset
  ! ADDi     <A>             #OFF_HI         #1
- PEEK       f0              &seek.test:<A>
- NEQf       f0              #600.5          @fail            ; rows after a SEEK fill sequentially
- PEEK       i0              &seek.test:OFF_LO
- NEQi       i0              #100            @fail            ; a later SEEK may sit BELOW an earlier one
- PEEK       i1              &seek.test:2
+ PEEK       f0              &span.test:<A>
+ NEQf       f0              #600.5          @fail            ; rows after a SPAN fill sequentially
+ PEEK       i0              &span.test:OFF_LO
+ NEQi       i0              #100            @fail            ; a later SPAN may sit BELOW an earlier one
+ PEEK       i1              &span.test:2
  NEQi       i1              #200            @fail
- PEEK       i2              &seek.test:3
- NEQi       i2              #0              @fail            ; the bounded region's unwritten tail is zero
- PEEK       i3              &seek.test:0
+ PEEK       i2              &span.test:3
+ NEQi       i2              #0              @fail            ; the region's unwritten tail is zero
+ PEEK       i3              &span.test:0
  NEQi       i3              #0              @fail            ; so is a word no region touched
- PEEK       i0              &seek.lo:1
- NEQi       i0              #200            @fail            ; a SEEK label is the region's address, offsettable like any data label
- POKE       &seek.mark      #700
- PEEK       i1              &seek.test:7
- NEQi       i1              #700            @fail            ; a label-only SEEK names a cursor with no DAT behind it
+ PEEK       i0              &span.lo:1
+ NEQi       i0              #200            @fail            ; a SPAN label is the region's address, offsettable like any data label
+ POKE       &span.mark      #700
+ PEEK       i1              &span.test:7
+ NEQi       i1              #700            @fail            ; a label-only SPAN names a word with no DAT behind it
 
 ;
 ; Test the GAZL 2 `t` call-target type. tOne / tTwo are minted inside the GAZL #2 region at the end of
@@ -601,14 +602,6 @@ checkZeroLoop: NOOP
 
 ;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ;
-;ENDS
-;
-; Closes the innermost SCOP (GAZL 2 and later). See SCOP.
-;
-;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
-
-;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-;
 ;EQUf      #float          #float          @label
 ;          #float          float           @label
 ;          float           #float          @label
@@ -761,6 +754,14 @@ looptest4: NOOP
  FORp      p1              p2              @looptest4
  NEQp      p1              p2              @fail
  NEQi      i1              #2864479        @fail
+
+;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+;
+;FREE
+;
+; Frees the words declared since the innermost open MARK (GAZL 2 and later). See MARK.
+;
+;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 
 ;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ;
@@ -1348,6 +1349,24 @@ okLSSp51: NOOP
 
 ;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ;
+;MARK
+;
+; Marks the frame's next free word (GAZL 2 and later). Like LOC / PARA declarations, MARK and its matching FREE must
+; appear after a FUNC declaration but before any real instruction.
+;
+; FREE frees the words declared since its MARK, so the declarations after it reuse the same frame offsets, while a
+; MARK inside a MARK stacks on top. A function's frame is therefore the deepest nesting chain, not the sum of every
+; declaration. Use it for groups whose lifetimes do not overlap, such as an expanded inline body.
+;
+; Sizes are resolved before offsets are assigned, so `LOCA *SOME_CONSTANT` overlays correctly even when only the host
+; knows the value. A declaration that must outlive a MARK block comes before its MARK.
+;
+; Unbalanced MARK / FREE is an error, as is nesting deeper than 32.
+;
+;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+;
 ;MODi      int(d)          #int            #int
 ;          int(d)          #int            int
 ;          int(d)          int             #int
@@ -1638,26 +1657,6 @@ pokeloop: NOOP
 ;
 ; Returns from function call.
 ;
-;
-;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
-
-;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-;
-;SCOP
-;
-; Opens a local scope (GAZL 2 and later). Like LOC / PARA declarations, SCOP and its matching ENDS must appear after a
-; FUNC declaration but before any real instruction.
-;
-; Declarations inside a scope are released by ENDS, so the NEXT sibling scope reuses the same frame offsets while a
-; NESTED scope stacks on top. A function's frame is therefore the DEEPEST nesting chain, not the sum of every
-; declaration. Use it for groups whose lifetimes do not overlap - an expanded inline body being the motivating case,
-; including inlines within inlines.
-;
-; Sizes are resolved before offsets are assigned, so `LOCA *SOME_CONSTANT` overlays correctly even when only the host
-; knows the value. Anything that must outlive a scope has to be declared BEFORE the first SCOP; a declaration placed
-; after ENDS reuses the released space.
-;
-; Unbalanced SCOP / ENDS is an error, as is nesting deeper than 32.
 ;
 ;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 

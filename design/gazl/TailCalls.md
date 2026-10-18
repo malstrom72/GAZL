@@ -87,7 +87,7 @@ An `m <= window` check was in fact implemented first, along with two successivel
 removed the same day, per "no diagnostic for a safe shape". The one load-bearing piece is the
 `paramsSize` fold.
 
-**Additive, not region-gated.** Like `SCOP`/`SEEK`, `TAIL` is a new mnemonic: dialect-1 text may use it
+**Additive, not region-gated.** Like `MARK`/`SPAN`, `TAIL` is a new mnemonic: dialect-1 text may use it
 on a GAZL 2 engine, and an older engine rejects it as an unknown mnemonic - which is the whole version
 story for additions.
 
