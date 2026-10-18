@@ -37,8 +37,7 @@
 #pragma GCC push_options
 #pragma GCC optimize ("no-finite-math-only")
 #endif
-// older gcc might need this too:
-// #pragma GCC optimize ("float-store")
+// An older GCC on x87 may also need `#pragma GCC optimize ("float-store")` to round each instruction once.
 #endif
 
 #ifdef _MSC_VER
@@ -95,11 +94,10 @@ const char* ASSEMBLER_ERROR_TEXTS[] = {
 	/* , UNCLOSED_GAZL_REGION						*/	, "GAZL 2 region not closed with GAZL #1"
 };
 
-// --- defined integer / FTOI semantics, shared by Processor::run() and calcConstant() so the
-// run-time and constant-folded paths can never diverge. These are the chosen normative results
-// (two's-complement wrap / count-mod-32 shifts / saturating FTOI -- the AArch64 & WebAssembly
-// choices), identical on every target. add/sub/mul and the shifts lower to a single native
-// instruction; idiv/imod/ftoi keep a real edge-case branch on purpose (see design/gazl/PortabilityAudit.md).
+/*
+	Integer and `fTOi` arithmetic with defined results on every target, shared by `Processor::run()` and
+	`calcConstant()` so that run time and constant folding cannot differ (design/gazl/PortabilityAudit.md).
+*/
 inline int absolute(int i) { Int x = i >> (Int)(sizeof (Int) * 8 - 1); return (Int)(((UInt)i ^ (UInt)x) - (UInt)x); } // INT_MIN -> INT_MIN
 inline float absolute(float f) { return fabsf(f); }
 inline double absolute(double f) { return fabs(f); }
@@ -112,9 +110,10 @@ inline Int ishl(Int a, Int n) { return (Int)((UInt)a << (n & 31)); }				// count
 inline Int ashr(Int a, Int n) { return a >> (n & 31); }								// count mod 32; arithmetic (sign-extending)
 inline Int lshr(Int a, Int n) { return (Int)((UInt)a >> (n & 31)); }				// count mod 32; logical (zero-fill)
 inline Int ftoi(Float v) {															// v is the ALREADY-SCALED float
-	// Bit-pattern classification (no float comparisons) so the saturation/NaN handling survives
-	// /fp:fast & -ffast-math -- those imply finite-math-only, under which a `v != v` / `v >= 2^31`
-	// test is assumed unreachable and deleted, letting the out-of-range cast UB reappear.
+	/*
+		Classified by bit pattern, not by float comparisons, so that saturation and NaN survive a finite-math
+		build, which would delete a `v != v` or `v >= 2^31` test as unreachable.
+	*/
 	UInt b;
 	memcpy(&b, &v, sizeof b);
 	const UInt e = (b >> 23) & 0xFF;											// biased exponent
@@ -177,15 +176,15 @@ static Int stringToInt(const Char* &p, const Char* e) {
 	return (Int)(sign < 0 ? 0u - i : i);																	// negate in UNSIGNED: `(Int)i * -1` is signed-overflow UB at i == 2^31, the literal -2147483648
 }
 
-/**
+/*
 	An unsigned integer of up to 1024 bits, enough for the exact comparisons in `parseFloat`.
-**/
+*/
 class ExactInt {
 	public:		explicit ExactInt(UInt value) : size(1) { words[0] = value; }
-	public:		void multiplyAdd(UInt factor, UInt addend);													/// `this` = `this` * `factor` + `addend`
+	public:		void multiplyAdd(UInt factor, UInt addend);													// `this` = `this` * `factor` + `addend`
 	public:		void multiplyByPowerOfTen(int power);
 	public:		void shiftLeft(int bits);
-	public:		int compare(const ExactInt& other) const;													/// -1, 0 or 1
+	public:		int compare(const ExactInt& other) const;													// -1, 0 or 1
 	protected:	enum { MAX_WORDS = 32 };
 	protected:	int size;																					// words in use, the top one non-zero unless the value is 0
 	protected:	UInt words[MAX_WORDS];																		// least significant first
@@ -1226,8 +1225,10 @@ void Assembler::finalize(ProgramSizes& sizes) {
 	closeDataRegion();
 	closeDataSection();
 	globals.resolveForwardRefs();
-	// Constants were placed downward from the top during assembly, with addresses counted down from the base.
-	// Moving them to just below the globals puts every word at its address; nothing needs patching.
+	/*
+		Constants were placed downward from the top during assembly, with addresses counted down from the base.
+		Moving them to just below the globals puts every word at its address; nothing needs patching.
+	*/
 	const UInt constantsSize = (UInt)(memoryEnd - 1 - constantsPointer);		// the top word is the zero guard
 	if (constantsSize != 0) {
 		const std::vector<Value> constants(constantsPointer, memoryEnd - 1);
@@ -1835,8 +1836,6 @@ Int Processor::run() {
 			copy:			if ((UInt)C2.i <= rwMemorySize && ui - MEMORY_OFFSET <= rwMemorySize - (UInt)C2.i
 									&& (UInt)C2.i <= memorySize
 									&& ui2 + readOffset <= memorySize - (UInt)C2.i) {
-								// std::copy(&mb[ui2], &mb[ui2] + C2.i, &mb[ui]);
-								// memcpy(&mb[ui], &mb[ui2], sizeof (Value) * C2.i);
 								const Value* sp = &mb[ui2];
 								Value* dp = &mb[ui];
 								Value* ep = dp + C2.i;
@@ -1931,7 +1930,7 @@ Value* Processor::pushCall(Pointer functionPointer) {
 }
 
 /*
-	--- Frozen memory ("freeze" / "thaw"), docs/gazl/Specification.md section 11 ---
+	Frozen memory, docs/gazl/Specification.md section 11.
 
 	Freezing saves the words of every owner in a `GLOB` section, by name: one entry per label that owns at least one
 	word, in ascending name order, after a fixed check entry. Thawing validates the whole input before it restores
@@ -2187,8 +2186,7 @@ int testCallback(Processor* p) {
 	return 0;
 }
 
-// ONE list of the unit-test natives: the freeze/thaw round-trip below compares two assemblies that must
-// have been seeded identically, so the seeding cannot be allowed to drift between sites.
+// The one list of unit-test natives: the freeze and thaw round trip needs both assemblies seeded identically.
 static void seedTestNatives(Symbols& g) { g.registerNative("assertFail", 0); g.registerNative("testMul", 1); g.registerNative("testCallback", 2); }
 
 bool unitTest() {
@@ -2304,8 +2302,7 @@ bool unitTest() {
 			assert(written == memoryBlob.size());
 		}
 
-		// Thaw into a freshly re-assembled machine and verify every non-TEMP global round-trips -- including the
-		// function pointer, which must resolve to the same function through the fresh function table.
+		// Thaw into a re-assembled machine: every `GLOB` word comes back, the stored function pointer included.
 		{
 			std::vector<Value> memory2(MEMORY_SIZE);
 			std::vector<Instruction> cody2(MAX_CODE_SIZE);
