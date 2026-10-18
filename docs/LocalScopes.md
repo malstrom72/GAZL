@@ -1,6 +1,6 @@
 # Local scopes: names, not just slots
 
-Status: **DESIGN, targeting GAZL 2 + Impala 3.0.** The allocation half - `SCOP` / `ENDS` placing an
+Status: **DESIGN, targeting GAZL 2 + Impala 3.0.** The allocation half - `MARK` / `FREE` placing an
 expansion's locals - already ships on this branch and is quoted from the source below. The naming half,
 which is what this document proposes, does not exist anywhere yet. Every GAZL fragment shown as
 *proposed* output is hand-written illustration, not compiler output; the fragments quoted as *today's*
@@ -11,20 +11,20 @@ take to declare them anywhere - inside a true lexical scope, the way a C block d
 
 ## 1. What this branch has today
 
-`SCOP` and `ENDS` bracket a group of declarations whose lifetimes do not overlap the next group's
+`MARK` and `FREE` bracket a group of declarations whose lifetimes do not overlap the next group's
 (`src/GAZL.cpp:1156-1172`):
 
-	case SCOP____:	if (ip != (functionStart + 1)) throw Exception(MUST_DEFINE_LOCALS_FIRST);
-					if (localScopeDepth >= MAX_LOCAL_SCOPE_DEPTH) throw Exception(UNBALANCED_LOCAL_SCOPE);
-					localScopeStack[localScopeDepth++] = localsSize;
+	case MARK____:	if (ip != (functionStart + 1)) throw Exception(MUST_DEFINE_LOCALS_FIRST);
+					if (markDepth >= MAX_MARK_DEPTH) throw Exception(UNBALANCED_MARK);
+					markStack[markDepth++] = localsSize;
 					break;
 
-	case ENDS____:	if (ip != (functionStart + 1)) throw Exception(MUST_DEFINE_LOCALS_FIRST);
-					if (localScopeDepth == 0) throw Exception(UNBALANCED_LOCAL_SCOPE);
-					localsSize = localScopeStack[--localScopeDepth];
+	case FREE____:	if (ip != (functionStart + 1)) throw Exception(MUST_DEFINE_LOCALS_FIRST);
+					if (markDepth == 0) throw Exception(UNBALANCED_MARK);
+					localsSize = markStack[--markDepth];
 					break;
 
-`ENDS` rewinds the bump, so a **sibling** group reuses the same offsets while a **nested** group stacks on
+`FREE` rewinds the bump, so a **sibling** group reuses the same offsets while a **nested** group stacks on
 top. The frame is `maxLocalsSize` - the peak over nesting chains, not the sum (`src/GAZL.cpp:875`). No
 instruction is emitted and the VM is unchanged: this is purely a declaration-time construct.
 
@@ -61,10 +61,10 @@ The sign convention is also load-bearing for the calling convention. At a call t
 **first-declared** local lands exactly on the caller's window base. Declaration order is the ABI. That is
 why the deepest slot is the first declared, and why the bias must be against the final total.
 
-The one line that makes `SCOP` / `ENDS` fit all this costs nothing (`src/GAZL.cpp:1175-1178`):
+The one line that makes `MARK` / `FREE` fit all this costs nothing (`src/GAZL.cpp:1175-1178`):
 
 	if (ip == functionStart + 1) {			// leaving the declaration region
-		if (localScopeDepth != 0) throw Exception(UNBALANCED_LOCAL_SCOPE);
+		if (markDepth != 0) throw Exception(UNBALANCED_MARK);
 		localsSize = maxLocalsSize;			// every local operand and RETU below resolves against the FINAL frame
 	}
 
@@ -74,7 +74,7 @@ before any operand can be parsed. Scoping is bought for a stack of `UInt`s and z
 
 ## 3. What is missing
 
-`ENDS` rewinds the offset counter. It does not touch the symbol table, and `Symbols::define` rejects a
+`FREE` rewinds the offset counter. It does not touch the symbol table, and `Symbols::define` rejects a
 duplicate outright (`src/GAZL.cpp:607`):
 
 	if (it != symbols.end()) throw Exception(SYMBOL_ALREADY_DEFINED, name);
@@ -89,9 +89,9 @@ all.
 
 This is the hinge, and it is worth stating plainly because it decides the whole cost.
 
-In the prologue-only arrangement, every scope closes before the first instruction. If `ENDS` also erased
+In the prologue-only arrangement, every scope closes before the first instruction. If `FREE` also erased
 its names, then every local declared inside a scope would be unreferenceable from anywhere - the only
-code that exists is below the last `ENDS`. Name scoping is meaningless unless a scope **contains
+code that exists is below the last `FREE`. Name scoping is meaningless unless a scope **contains
 instructions**.
 
 So the moment names go out of scope, `LOC*` has to be legal after code, `MUST_DEFINE_LOCALS_FIRST` goes
@@ -131,8 +131,8 @@ It works today *because* of the sign convention: a local's biased offset lies in
 fixup marker, or move to finalize.
 
 **Erasure must filter on `BRANCH`.** Branch labels live in the same `locals` map and must stay
-function-wide, so a `GOTO` can leave a scope and so forward refs survive across `ENDS`. Recording
-per-scope name lists alongside `localScopeStack` handles it: at `ENDS`, erase that scope's variable names
+function-wide, so a `GOTO` can leave a scope and so forward refs survive across `FREE`. Recording
+per-scope name lists alongside `markStack` handles it: at `FREE`, erase that scope's variable names
 only.
 
 **Branching into a scope.** With code-bracketing scopes and slot overlay, a `GOTO` from outside into the
@@ -147,7 +147,7 @@ reference site.
 
 	if ((accepts & FORWARD) == 0) throw Exception(NON_FORWARD_SYMBOL_NOT_FOUND, name);
 
-Erasing names at `ENDS` therefore produces a **loud** error at every out-of-scope reference. There is no
+Erasing names at `FREE` therefore produces a **loud** error at every out-of-scope reference. There is no
 path where a stale reference silently re-resolves to a sibling scope's redefinition of the same name -
 which is the miscompile class this feature would otherwise invite.
 
@@ -155,16 +155,16 @@ which is the miscompile class this feature would otherwise invite.
 
 Worth recording honestly, because "it will simplify the expander" is the easy assumption.
 
-**It removes the local half of `_i<N>`.** An expansion could replay `$tmp` verbatim inside its own `SCOP`:
+**It removes the local half of `_i<N>`.** An expansion could replay `$tmp` verbatim inside its own `MARK`:
 no counter for the variable half, collision-freedom by construction rather than by discipline, and
 readable names in disassembly. Inline-within-inline nests naturally, where the suffix scheme needs
 uniqueness across the whole expansion tree.
 
 **It does not remove the label half.** Labels must stay function-wide: an expansion with an early exit
-jumps to a label after its own `ENDS`, and forward refs resolve at `finalizeFunction` by name. So `.f0_i3`
+jumps to a label after its own `FREE`, and forward refs resolve at `finalizeFunction` by name. So `.f0_i3`
 and the "tag before the `#`" rule for `.s0_i12#0` survive. Scoping labels too is strictly harder than
 scoping variables - variables are non-forwardable, so erasing them is safe by construction; labels are
-forward-referenced by design and would need refs to propagate outward at `ENDS`.
+forward-referenced by design and would need refs to propagate outward at `FREE`.
 
 **It does not remove the extent constants.** See section 8: those live in the global namespace, which no
 frame scoping reaches.
@@ -177,7 +177,7 @@ existence.
 
 **And it does not touch what made `inline` correct.** The parked rationale is that the transient-based
 lowering re-implemented allocation numerically and broke whenever an extent was not a number Impala knows.
-`SCOP` / `ENDS` fixed that by delegating placement to the assembler, which resolves `*.z.Struct` from
+`MARK` / `FREE` fixed that by delegating placement to the assembler, which resolves `*.z.Struct` from
 host-supplied sizes. The prologue-only version delivers that in full; name scoping adds nothing to it.
 
 **Conclusion: do not justify this feature by `inline`.** Justify it by hand-written GAZL and by Impala
@@ -216,7 +216,7 @@ Proposed rules:
 1. **Legal anywhere a statement is**, visible from the declaration to the enclosing `}`. No block-top
    restriction: it costs a positional rule and a diagnostic to enforce and buys nothing at the GAZL level,
    since the fixup is needed either way. Use-before-declare stays loud on both sides.
-2. **A block emits `SCOP` / `ENDS` only if it declares something.** Empty scopes are free but noisy.
+2. **A block emits `MARK` / `FREE` only if it declares something.** Empty scopes are free but noisy.
 3. **Sibling reuse allowed, shadowing rejected**, with a new code from the diagnostic registry. Writing
    `i` in two sibling loops is the entire point; shadowing an enclosing `i` buys nothing and hides the
    assign-to-the-wrong-one bug class.
@@ -266,16 +266,16 @@ Illustrating the proposed output for the Impala source in section 7:
 						$buffer:		LOCA *.x.main.buffer
 	;-----------------------------------------------------------------------------
 						...loop head...
-						SCOP
+						MARK
 	.x.main.0.tmp:		! DEFi #16
 						$tmp:			LOCA *.x.main.0.tmp
 						...fill(tmp)...
-						ENDS
-						SCOP
+						FREE
+						MARK
 	.x.main.1.tmp:		! DEFi #64
 						$tmp:			LOCA *.x.main.1.tmp
 						...drain(tmp)...
-						ENDS
+						FREE
 										RETU
 
 Two namespaces, two mechanisms, and that is the point: `$tmp` declared twice is the GAZL frame scoping

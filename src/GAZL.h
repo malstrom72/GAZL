@@ -71,7 +71,7 @@ typedef unsigned int Pointer;																							// Pointer must be unsigned 
 typedef float Float;
 typedef Int Status;																										// Run-time status code
 
-const int VERSION = 2;						// 2 adds SCOP / ENDS local scopes, SEEK data regions, `GAZL #2` regions with the `t` call-target type, and the TAIL instruction. Pin an exact version with `! EQUi` (as UnitTest.gazl does - it tests one version); require a minimum with `! GEQi #GAZL_VERSION #2 @label`.
+const int VERSION = 2;						// 2 adds MARK / FREE frame reuse, SPAN data regions, strict `#` / `&` prefixes, `GAZL #2` regions with the `t` call-target type, and the TAIL instruction. Pin an exact version with `! EQUi` (as UnitTest.gazl does - it tests one version); require a minimum with `! GEQi #GAZL_VERSION #2 @label`.
 const int WORD_SIZE = 32;
 const Pointer MEMORY_OFFSET = 0x12345678;																				// All memory pointers in GAZL are offsetted by this amount (thus the address of the first memory word is not zero). This makes it easier to detect invalid memory operations (such as writing to a null-pointer).
 const Pointer FUNCTION_OFFSET = 0x56789ABC;																				// All function pointers in GAZL are offsetted by this amount (thus the ordinal of the first function is not zero). A function pointer is an ordinal indexing `functionTable`, not a code address.
@@ -128,7 +128,7 @@ enum AssemblerError {
 	, FRAME_TOO_LARGE = 34
 	, NON_ASCII_TEXT = 35
 	, UNNAMED_DATA_SECTION = 36
-	, UNBALANCED_LOCAL_SCOPE = 37
+	, UNBALANCED_MARK = 37
 	, OVERLAPPING_DATA_REGIONS = 38
 	, UNSUPPORTED_GAZL_VERSION = 39
 	, UNCLOSED_GAZL_REGION = 40
@@ -269,7 +269,7 @@ class Assembler {
 						, const Char* op2End);
 	protected:	void finalizeFunction();
 	protected:	void threadBranches();		// Collapse GOTO chains and turn a GOTO onto a RETU into the RETU. In place: no address moves.
-	protected:	void closeDataRegion();		// Record the closing SEEK region's claim and check it against the section's earlier regions.
+	protected:	void closeDataRegion();		// Record the closing region's claim and check it against the section's earlier regions.
 	protected:	void declareData(const Char* labelBegin, const Char* labelEnd, const Value* first, UInt declaredWords);	// Declare a data label at `first`; what it owns is decided when the section closes.
 	protected:	void closeDataSection();																				// Give each of the section's labels the words it owns, by address.
 	protected:	static bool lowerAddress(const Symbols::Symbol* a, const Symbols::Symbol* b);							// Orders data labels by address.
@@ -283,21 +283,21 @@ class Assembler {
 	protected:	Instruction* ip;
 	protected:	Instruction* functionStart;
 	protected:	UInt functionCount;					// Running ordinal; assigned to each `FUNC` in declaration order.
-	protected:	UInt localsSize;					// Running bump within the innermost SCOP; the final frame size is `maxLocalsSize`.
-	protected:	UInt maxLocalsSize;					// Frame high-water mark. SCOP / ENDS let sibling scopes OVERLAY, so the frame is the max over nesting chains, not the sum.
-	protected:	UInt localScopeDepth;
-	protected:	enum { MAX_LOCAL_SCOPE_DEPTH = 32 };
-	protected:	UInt localScopeStack[MAX_LOCAL_SCOPE_DEPTH];
+	protected:	UInt localsSize;					// Running bump, rewound by FREE; the final frame size is `maxLocalsSize`.
+	protected:	UInt maxLocalsSize;					// Frame high-water mark. FREE lets later declarations OVERLAY freed words, so the frame is the max over nesting chains, not the sum.
+	protected:	UInt markDepth;
+	protected:	enum { MAX_MARK_DEPTH = 32 };
+	protected:	UInt markStack[MAX_MARK_DEPTH];
 	protected:	UInt paramsSize;
 	protected:	Value* globalsPointer;
 	protected:	Value* constantsPointer;
 	protected:	std::string dataLabel;																					// Only for error display.
 	protected:	int dataLabelType;
 	protected:	Value* dataPointer;
-	protected:	Value* dataEnd;						// Fence of the current SEEK region; `sectionEnd` for the implicit / unbounded one.
+	protected:	Value* dataEnd;						// Fence of the current SPAN region; `sectionEnd` for the implicit one.
 	protected:	std::vector<Symbols::Symbol*> dataLabels;																// The current section's labels, in source order.
 	protected:	bool dataIsConstant;																					// The current data section is a `CNST` one, placed below the base.
-	protected:	Value* sectionBegin;				// The current data section's own range; SEEK offsets are relative to `sectionBegin`.
+	protected:	Value* sectionBegin;				// The current data section's own range; SPAN offsets are relative to `sectionBegin`.
 	protected:	Value* sectionEnd;
 	protected:	Int regionStart;					// Current region as section offsets; extent -1 = unbounded, claims only what it writes.
 	protected:	Int regionExtent;

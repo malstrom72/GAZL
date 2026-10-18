@@ -1243,28 +1243,85 @@ int sweepLabelReach() {
 }
 
 /*
-	With `SEEK`, labels come in any address order, and each still owns the words up to the next label by address. Words
-	before an unnamed section's first label, by address, belong to no one. Returns the number of failures, each one
-	printed.
+	A `SPAN` region takes its extent, never more, and must fit its section. With `SPAN`, labels come in any address
+	order, and each still owns the words up to the next label by address. Words before an unnamed section's first
+	label, by address, belong to no one. Returns the number of failures, each one printed.
 */
-int sweepSeekOwnership() {
+int sweepSpanRegions() {
+	struct Case { const char* what; const char* source; int error; };
+	const Case CASES[] = {
+		{ "a region filled to its extent", "s:\tGLOB *4\n\tSPAN :1 *2\n\tDATi #1 #2\n", -1 },
+		{ "a region filled past its extent", "s:\tGLOB *4\n\tSPAN :1 *2\n\tDATi #1 #2 #3\n", DATA_SECTION_FULL },
+		{ "a region without an extent", "s:\tGLOB *4\n\tSPAN :1\n", INVALID_INSTRUCTION },
+		{ "a region to the section end", "s:\tGLOB *4\n\tSPAN :1 *3\n", -1 },
+		{ "a region past the section end", "s:\tGLOB *4\n\tSPAN :1 *4\n", OFFSET_OUT_OF_BOUNDS },
+		{ "a region whose end overflows an int", "s:\tGLOB *4\n\tSPAN :2147483647 *2147483647\n", OFFSET_OUT_OF_BOUNDS },
+		{ "two regions that overlap", "s:\tGLOB *4\n\tSPAN :0 *2\n\tSPAN :1 *1\n\tDATi #1\n", OVERLAPPING_DATA_REGIONS },
+		{ "a region outside any section", "\tSPAN :0 *1\n", DATA_SECTION_MISSING }
+	};
+	const int count = sizeof (CASES) / sizeof (*CASES);
 	int failures = 0;
+	for (int i = 0; i < count; ++i) {
+		const int error = assemblyError(CASES[i].source);
+		if (error != CASES[i].error) {
+			std::printf("FAIL span regions: %s gave error %d, expected %d\n", CASES[i].what, error, CASES[i].error);
+			++failures;
+		}
+	}
 	Machine m;
 	Layout layout = Layout();
 	std::string error;
-	const bool assembled = assemble(m, "s:\tGLOB *6\n\tSEEK :4\nb:\tDATi #4 #5\n\tSEEK :0\n\tDATi #1\na:\tDATi #2 #3\n"
-			"main:\tFUNC\n\tRETU\n", layout, error);
+	const bool assembled = assemble(m, "s:\tGLOB *6\n\tSPAN :4 *2\nb:\tDATi #4 #5\n\tSPAN :0 *4\n\tDATi #1\n"
+			"a:\tDATi #2 #3\nmain:\tFUNC\n\tRETU\n", layout, error);
 	if (!assembled || ownedWords(m.symbols, "s") != 1 || ownedWords(m.symbols, "a") != 3
 			|| ownedWords(m.symbols, "b") != 2 || globalWords(m, "a") != "2 3 0") {
-		std::printf("FAIL seek ownership: labels out of address order own the wrong words (%s)\n", error.c_str());
+		std::printf("FAIL span regions: labels out of address order own the wrong words (%s)\n", error.c_str());
 		++failures;
 	}
-	const int unowned = assemblyError("\tGLOB *4\n\tSEEK :2\nx:\tDATi #1\n\tSEEK :0\n\tDATi #9\nmain:\tFUNC\n\tRETU\n");
+	const int unowned = assemblyError("\tGLOB *4\n\tSPAN :2 *2\nx:\tDATi #1\n\tSPAN :0 *2\n\tDATi #9\n"
+			"main:\tFUNC\n\tRETU\n");
 	if (unowned != UNNAMED_DATA_SECTION) {
-		std::printf("FAIL seek ownership: words before the first label by address gave error %d\n", unowned);
+		std::printf("FAIL span regions: words before the first label by address gave error %d\n", unowned);
 		++failures;
 	}
-	std::printf("seek ownership: 2 checked, %d failed\n", failures);
+	std::printf("span regions: %d checked, %d failed\n", count + 2, failures);
+	return failures;
+}
+
+/*
+	Inside a `GAZL #2` region `#` takes only numbers and `&` only pointers; outside one either takes any name the
+	operand accepts (docs/gazl/Specification.md sections 5 and 12). Returns the number of failures, each one printed.
+*/
+int sweepPrefixes() {
+	const std::string HEAD = "t:\tGLOB *2\n\tDATi #1\nK:\t! DEFi #3\nF:\t! DEFf #0.5\nP:\t! DEFp &t:1\n"
+			"main:\tFUNC\ni:\tLOCi\nf:\tLOCf\np:\tLOCp\nc:\tLOCt\n";
+	const std::string END = "\tRETU\ng:\tFUNC\n\tRETU\n";
+	struct Text { const char* what; std::string body; int gazl1Error; int gazl2Error; };
+	const Text CASES[] = {
+		{ "numbers with #", "\tMOVi i #K\n\tMOVf f #F\n\tMOVi i #7\n", -1, -1 },
+		{ "pointers with &", "\tMOVp p &t\n\tMOVp p &P\n\tMOVp p &NULL\n\tMOVp p &t:1\n", -1, -1 },
+		{ "a function with &", "\tCALL &g %0 *0\n", -1, -1 },
+		{ "a data label with #", "\tMOVp p #t\n", -1, INCOMPATIBLE_TYPES },
+		{ "a DEFp name with #", "\tMOVp p #P\n", -1, INCOMPATIBLE_TYPES },
+		{ "NULL with #", "\tMOVp p #NULL\n", -1, INCOMPATIBLE_TYPES },
+		{ "a later data label with #", "\tMOVp p #u\n", -1, INCOMPATIBLE_TYPES },
+		{ "a DEFi name with & in DATA", "\tRETU\nw:\tGLOB *1\n\tDATA &K\nh:\tFUNC\n", -1, INCOMPATIBLE_TYPES },
+		{ "a data label with # in DATA", "\tRETU\nw:\tGLOB *1\n\tDATA #t\nh:\tFUNC\n", -1, INCOMPATIBLE_TYPES },
+		{ "a DEFi name with & where only numbers go", "\tMOVi i &K\n", DID_NOT_EXPECT_ADDRESS, DID_NOT_EXPECT_ADDRESS }
+	};
+	const int count = sizeof (CASES) / sizeof (*CASES);
+	int failures = 0;
+	for (int i = 0; i < count; ++i) {
+		const std::string body = HEAD + CASES[i].body + END + "u:\tGLOB *1\n";
+		const int gazl1 = assemblyError(body);
+		const int gazl2 = assemblyError("\tGAZL #2\n" + body + "\tGAZL #1\n");
+		if (gazl1 != CASES[i].gazl1Error || gazl2 != CASES[i].gazl2Error) {
+			std::printf("FAIL prefixes: %s gave errors %d and %d, expected %d and %d\n", CASES[i].what, gazl1, gazl2
+					, CASES[i].gazl1Error, CASES[i].gazl2Error);
+			++failures;
+		}
+	}
+	std::printf("prefixes: %d checked, %d failed\n", count * 2, failures);
 	return failures;
 }
 
@@ -1428,6 +1485,6 @@ int main() {
 #endif
 	const int hostFailures = sweepNativeAccess() + sweepFrameAndThaw() + sweepFrozenEntries() + sweepThawRules()
 			+ sweepCanary() + sweepTextEncoding() + sweepUnnamedSections() + sweepLabelReach() + sweepFunctionOffsets()
-			+ sweepSeekOwnership();
+			+ sweepSpanRegions() + sweepPrefixes();
 	return (sweep(engineCount) != 0 || hostFailures != 0) ? 1 : 0;
 }

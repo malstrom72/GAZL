@@ -338,7 +338,7 @@ const SAMPLES = [
 	{ name: "destructuring is parked", expect: "E429",
 		src: "function main() locals int a, int b { a, b = 1; }\n" },
 	/* `inline function` is NOT in this list on the GAZL 2 line. E439 is the Impala 2 branch's refusal,
-	   which exists because that branch must run on a GAZL 1.0 engine with no `SCOP`/`ENDS` for an
+	   which exists because that branch must run on a GAZL 1.0 engine with no `MARK`/`FREE` for an
 	   expansion to declare its locals in. Here the instructions exist and the feature is live, so the
 	   sample would compile clean - which is what this gate caught when the two branches met. */
 	{ name: "break is reserved so it can be refused clearly", expect: "E450",
