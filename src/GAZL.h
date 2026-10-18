@@ -196,8 +196,15 @@ enum DataSection {
 struct GlobalInfo {
 	const char* name;				// valid as long as the `Symbols` it came from
 	Pointer address;
-	UInt size;						// the words it owns, to the next label: what freezing saves under its name
+	UInt declaredWords;				// what the source says: a section's `*n`, or the values on the labelled statement
+	UInt ownedWords;				// to the next label or the section's end: what freezing saves under the name
 	DataSection section;			// the kind of section it is declared in; freezing saves `GLOB_SECTION` only
+};
+
+enum ConstantKind {				// what `Symbols::lookupConstant` found
+	INT_CONSTANT					// a `DEFi`, or an int from `defineConstant`
+	, FLOAT_CONSTANT				// a `DEFf`, or a float from `defineConstant`
+	, ADDRESS_CONSTANT				// a `DEFp`, or `NULL`
 };
 
 /*
@@ -212,11 +219,12 @@ class Symbols {
 		branch label of the current function.
 	*/
 	protected:	struct Symbol {
-					Symbol(int types, Value value, UInt size) : types(types), value(value), size(size), minOffset(0)
-							, maxOffset(static_cast<Int>(size) - 1) { }
+					Symbol(int types, Value value, UInt words) : types(types), value(value), declaredWords(words)
+							, ownedWords(words), minOffset(0), maxOffset(static_cast<Int>(words) - 1) { }
 					int types;																			// What kind of name it is, matched against the types an operand accepts.
 					Value value;																		// What the name stands for: an address, a function or native, a constant, a frame word or a code position.
-					UInt size;																			// Its own words: for data, what it owns, to the next label (what freezing saves and hosts are told); for a local, its declared size.
+					UInt declaredWords;																	// What the source says: a section's `*n`, the values on a labelled data statement, or a local's size.
+					UInt ownedWords;																	// For data, its words to the next label or the section's end: what freezing saves.
 					Int minOffset;																		// The lowest `k` a `:k` on it may take: for data, down to its section's first word.
 					Int maxOffset;																		// The highest `k`: for data, up to its section's last word. Locals are checked against the frame instead.
 				};
@@ -238,16 +246,16 @@ class Symbols {
 				
 	public:		void registerNative(const Char* name, Int index);
 	public:		Pointer findFunction(const Char* name) const;															// Returns `NULL_POINTER` if not found.
-	public:		Pointer findGlobal(const Char* name, UInt& size) const;													// `size` is the words the label owns. Returns `NULL_POINTER` if not found (in which case, `size` is left untouched).
+	public:		Pointer findGlobal(const Char* name, UInt& declaredWords) const;										// `declaredWords` is what the source says (see `GlobalInfo`). Returns `NULL_POINTER` if not found (in which case, `declaredWords` is left untouched).
 	public:		void defineConstant(const Char* name, bool asFloat, const Value& value);
-	public:		bool lookupConstant(const Char* name, bool* isFloat, Value* value) const;
+	public:		bool lookupConstant(const Char* name, ConstantKind& kind, Value& value) const;							// A named constant only, not data or a function. Returns false if `name` is none.
 	public:		bool findFirstGlobal(Iterator& iterator) const;															// Every name of data, `GLOB`, `TEMP` and `CNST` alike, in ascending order (see `GlobalInfo`).
 	public:		bool findNextGlobal(Iterator& iterator) const;
 	public:		GlobalInfo getGlobalInfo(const Iterator& iterator) const;
 	public:		bool getGlobalInfo(const Char* name, GlobalInfo& info) const;													// Returns false, with `info` cleared, if `name` is not data.
 
 	protected:	bool lookup(const Char* nameBegin, const Char* nameEnd, int acceptedTypes, int& types, Value& value) const;
-	protected:	Symbol* define(const std::string& name, int types, Value value, UInt size = 1);
+	protected:	Symbol* define(const std::string& name, int types, Value value, UInt words = 1);
 	protected:	void link(const Char* labelBegin, const Char* labelEnd, Value* storage, int accepts, Int offset = 0);
 	protected:	void registerSwitch(const Char* labelBegin, const Char* labelEnd, UInt switchSize, Value* storage, Int offset = 0);
 	protected:	void resolveForwardRefs();
@@ -325,7 +333,7 @@ class Assembler {
 				};
 
 	protected:	Symbols::Symbol* declare(Symbols& where, const Char* labelBegin, const Char* labelEnd, int types, Value value
-						, UInt size = 1);
+						, UInt words = 1);
 	protected:	static int operatorCompare(const void* a, const void* b);
 	protected:	static int nativeDefinitionCompare(const void* a, const void* b);
 	protected:	static Char parseOperandType(const Char* b, const Char* e);
@@ -339,7 +347,7 @@ class Assembler {
 	protected:	void finalizeFunction();
 	protected:	void threadBranches();		// Collapse GOTO chains and turn a GOTO onto a RETU into the RETU. In place: no address moves.
 	protected:	void closeDataRegion();		// Record the closing SEEK region's claim and check it against the section's earlier regions.
-	protected:	void declareData(const Char* labelBegin, const Char* labelEnd, const Value* first);						// Declare a data label at `first`; what it owns is decided when the section closes.
+	protected:	void declareData(const Char* labelBegin, const Char* labelEnd, const Value* first, UInt declaredWords);	// Declare a data label at `first`; what it owns is decided when the section closes.
 	protected:	void closeDataSection();																				// Give each of the section's labels the words it owns, by address.
 	protected:	static bool lowerAddress(const Symbols::Symbol* a, const Symbols::Symbol* b);							// Orders data labels by address.
 	protected:	Pointer makeGAZLPointer(const Value* data, bool constant) const;										// The pointer to `data`: up from the base for globals, down from it for constants.

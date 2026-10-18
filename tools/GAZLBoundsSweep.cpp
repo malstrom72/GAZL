@@ -680,15 +680,16 @@ MemoryLoad thaw(Machine& m, const std::vector<unsigned char>& frozen, bool prefi
 }
 
 /*
-	The words of the global `name` in `m`, as a list of numbers ("1 2 3"), or "?" when there is no such global.
+	The words the global `name` owns in `m`, the ones thawing restores, as a list of numbers ("1 2 3"), or "?" when
+	there is no such global.
 */
 std::string globalWords(Machine& m, const char* name) {
-	UInt size = 0;
-	const Pointer address = m.symbols.findGlobal(name, size);
-	const Value* words = (address != NULL_POINTER ? machineProcessor(m).accessConstMemory(address, size) : 0);
+	GlobalInfo info;
+	const Value* words = (m.symbols.getGlobalInfo(name, info)
+			? machineProcessor(m).accessConstMemory(info.address, info.ownedWords) : 0);
 	if (words == 0) return "?";
 	std::string s;
-	for (UInt i = 0; i < size; ++i) s += (i == 0 ? "" : " ") + number(words[i].i);
+	for (UInt i = 0; i < info.ownedWords; ++i) s += (i == 0 ? "" : " ") + number(words[i].i);
 	return s;
 }
 
@@ -697,7 +698,15 @@ std::string globalWords(Machine& m, const char* name) {
 */
 UInt ownedWords(const Symbols& symbols, const char* name) {
 	GlobalInfo info;
-	return (symbols.getGlobalInfo(name, info) ? info.size : 99);
+	return (symbols.getGlobalInfo(name, info) ? info.ownedWords : 99);
+}
+
+/*
+	The words the source declares for the global `name`, from `findGlobal`, or 99 when there is no such global.
+*/
+UInt declaredWords(const Symbols& symbols, const char* name) {
+	UInt declared = 99;
+	return (symbols.findGlobal(name, declared) != NULL_POINTER ? declared : 99);
 }
 
 void putWord(std::vector<unsigned char>& b, size_t at, UInt v) {
@@ -787,6 +796,8 @@ int sweepFrozenEntries() {
 		"table:\tCNST *2\n"					// CNST, and a label inside it
 		"entry:\tDATi #51\n"
 		"alias:\t! DEFp &multi:1\n"			// a pointer constant: an address, but no data of its own
+		"count:\t! DEFi #5\n"
+		"ratio:\t! DEFf #0.5\n"
 		"main:\tFUNC\n"
 		"v:\tLOCi\n"
 		"\tPEEK v &multi:2\n"				// a label's offset is checked against all of its values
@@ -846,14 +857,17 @@ int sweepFrozenEntries() {
 		std::printf("FAIL frozen entries: %d bytes follow the last expected entry\n", (int)(frozen.size() - at));
 		++failures;
 	}
-	// A label that owns nothing is still a name: `findGlobal` resolves it, with what it owns.
+	// A label that owns nothing is still a name: `findGlobal` resolves it, with what its statement declares.
 	UInt stateSize = 99;
 	UInt gainSize = 99;
 	UInt levelSize = 99;
 	const Pointer stateAddress = m.symbols.findGlobal("state", stateSize);
-	if (stateSize != 0 || m.symbols.findGlobal("gain", gainSize) != stateAddress || gainSize != 1
-			|| m.symbols.findGlobal("level", levelSize) != stateAddress + 1 || levelSize != 2) {
-		std::printf("FAIL frozen entries: the labels in `state` do not own what they should\n");
+	if (stateSize != 3 || ownedWords(m.symbols, "state") != 0
+			|| m.symbols.findGlobal("gain", gainSize) != stateAddress || gainSize != 1
+			|| ownedWords(m.symbols, "gain") != 1
+			|| m.symbols.findGlobal("level", levelSize) != stateAddress + 1 || levelSize != 1
+			|| ownedWords(m.symbols, "level") != 2) {
+		std::printf("FAIL frozen entries: the labels in `state` do not declare and own what they should\n");
 		++failures;
 	}
 	// By name, `getGlobalInfo` knows all data, `TEMP` and `CNST` included, and nothing else.
@@ -863,17 +877,36 @@ int sweepFrozenEntries() {
 	GlobalInfo nosuch;
 	GlobalInfo function;
 	GlobalInfo alias;
-	nosuch.size = 1;
+	nosuch.declaredWords = 1;
+	nosuch.ownedWords = 1;
 	function.address = 1;
 	alias.address = 1;
-	if (!m.symbols.getGlobalInfo("entry", entry) || entry.section != CNST_SECTION || entry.size != 2
+	if (!m.symbols.getGlobalInfo("entry", entry) || entry.section != CNST_SECTION || entry.declaredWords != 1
+			|| entry.ownedWords != 2
 			|| m.symbols.getGlobalInfo("alias", alias) || alias.address != NULL_POINTER
-			|| m.symbols.getGlobalInfo("nosuch", nosuch) || nosuch.size != 0 || nosuch.name != 0
+			|| m.symbols.getGlobalInfo("nosuch", nosuch) || nosuch.declaredWords != 0 || nosuch.ownedWords != 0
+			|| nosuch.name != 0
 			|| m.symbols.getGlobalInfo("main", function) || function.address != NULL_POINTER
-			|| !m.symbols.getGlobalInfo("tmpval", temp) || temp.section != TEMP_SECTION || temp.size != 2
+			|| !m.symbols.getGlobalInfo("tmpval", temp) || temp.section != TEMP_SECTION || temp.declaredWords != 1
+			|| temp.ownedWords != 2
 			|| !m.symbols.getGlobalInfo("head", head) || strcmp(head.name, "head") != 0
-			|| head.size != 1 || head.section != GLOB_SECTION) {
+			|| head.declaredWords != 3 || head.ownedWords != 1 || head.section != GLOB_SECTION) {
 		std::printf("FAIL frozen entries: getGlobalInfo by name reports the wrong global\n");
+		++failures;
+	}
+	// `lookupConstant` finds named constants of each kind, and not data or functions.
+	ConstantKind kind = INT_CONSTANT;
+	Value value;
+	value.i = 0;
+	UInt multiSize = 0;
+	const Pointer multi = m.symbols.findGlobal("multi", multiSize);
+	if (!m.symbols.lookupConstant("alias", kind, value) || kind != ADDRESS_CONSTANT || value.p != multi + 1
+			|| !m.symbols.lookupConstant("NULL", kind, value) || kind != ADDRESS_CONSTANT || value.p != NULL_POINTER
+			|| !m.symbols.lookupConstant("count", kind, value) || kind != INT_CONSTANT || value.i != 5
+			|| !m.symbols.lookupConstant("ratio", kind, value) || kind != FLOAT_CONSTANT || value.f != 0.5f
+			|| m.symbols.lookupConstant("multi", kind, value) || m.symbols.lookupConstant("main", kind, value)
+			|| m.symbols.lookupConstant("no such", kind, value)) {
+		std::printf("FAIL frozen entries: lookupConstant reports the wrong constant\n");
 		++failures;
 	}
 	// A data line without values is legal and writes nothing, so its label owns no words.
@@ -887,12 +920,13 @@ int sweepFrozenEntries() {
 		const bool assembled = assemble(e, std::string("\tGLOB *2\nx:\t") + EMPTY[i] + "\ny:\tDATi #5\n", eLayout
 				, error);
 		const Pointer x = e.symbols.findGlobal("x", xSize);
-		if (!assembled || x == NULL_POINTER || xSize != 0 || e.symbols.findGlobal("y", ySize) != x || ySize != 2) {
+		if (!assembled || x == NULL_POINTER || xSize != 0 || e.symbols.findGlobal("y", ySize) != x || ySize != 1
+				|| ownedWords(e.symbols, "y") != 2) {
 			std::printf("FAIL frozen entries: `x: %s` is not an empty label at `y`\n", EMPTY[i]);
 			++failures;
 		}
 	}
-	std::printf("frozen entries: %d checked, %d failed\n", count + 3 + emptyCount, failures);
+	std::printf("frozen entries: %d checked, %d failed\n", count + 4 + emptyCount, failures);
 	return failures;
 }
 
@@ -1078,8 +1112,8 @@ int sweepUnnamedSections() {
 	const bool assembled = assemble(m, "\tGLOB *20\ns:\tDATs blahblah\n\tDATi #10\n\tDATs yaddayadda\nt:\tDATi #1\n"
 			, layout, error);
 	const Pointer sAddress = m.symbols.findGlobal("s", sSize);
-	if (!assembled || sAddress == NULL_POINTER || sSize != 19 || m.symbols.findGlobal("t", tSize) != sAddress + 19
-			|| tSize != 1) {
+	if (!assembled || sAddress == NULL_POINTER || sSize != 8 || ownedWords(m.symbols, "s") != 19
+			|| m.symbols.findGlobal("t", tSize) != sAddress + 19 || tSize != 1) {
 		std::printf("FAIL unnamed sections: a label does not cover the unlabelled lines after it (%s)\n", error.c_str());
 		++failures;
 	}
