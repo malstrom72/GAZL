@@ -1024,13 +1024,6 @@ void Assembler::parseOperand(const Char* b, const Char* e, int accepts, Value* v
 	}
 }
 
-/*
-	A data label owns its word and everything after it, up to the next label or the end of the section, and an offset
-	on it may reach any word of the section; a section's own label is simply its first. So each label is declared
-	owning to the end, and the next one ends what the previous one owns. Data before an unnamed section's first label
-	belongs to no name, which only a `GLOB` section refuses, since freezing could not save it. What the statement
-	itself says, `declaredWords`, is kept beside that for hosts.
-*/
 void Assembler::declareData(const Char* labelBegin, const Char* labelEnd, const Value* first, UInt declaredWords) {
 	if (labelBegin == labelEnd) {
 		if (unownedRefused()) throw Exception(UNNAMED_DATA_SECTION);
@@ -1042,7 +1035,7 @@ void Assembler::declareData(const Char* labelBegin, const Char* labelEnd, const 
 			, static_cast<UInt>(dataEnd - first));													// owning, and reaching, to the section's end
 	owner->declaredWords = declaredWords;
 	owner->minOffset = -static_cast<Int>(first - sectionBegin);
-	if (dataOwner != 0) dataOwner->ownedWords = static_cast<UInt>(dataOwner->minOffset - owner->minOffset);
+	if (dataOwner != 0) dataOwner->ownedWords = static_cast<UInt>(dataOwner->minOffset - owner->minOffset);	// the previous label owns up to here
 	dataOwner = owner;
 }
 
