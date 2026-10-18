@@ -1,0 +1,60 @@
+; Compiled with Impala version 2.0
+
+; signatures version=1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ declArrays.impala:6:1
+; signature extern native printInt() -> unknown @ declArrays.impala:7:1
+; signature extern native printFloat() -> unknown @ declArrays.impala:8:1
+; signature extern native printLF() -> unknown @ declArrays.impala:9:1
+	! MULi <A> #3 #4
+.z.board:	! DEFi #<A>
+.d.board.0:	! DEFi #4
+.d.board.1:	! DEFi #3
+board:	GLOB *.z.board	; signature array board[3x4] : int @ declArrays.impala:11:1
+.z.flat:	! DEFi #3
+flat:	GLOB *.z.flat	; signature array flat[3] : int @ declArrays.impala:12:1
+	DATi #5 #6 #7
+.z.initedArray:	! DEFi #4
+initedArray:	GLOB *.z.initedArray	; signature array initedArray[4] : unknown @ declArrays.impala:13:1
+	DATA #1 #2.5 &flat:2 #4
+	! MULi <A> #2 #3
+.z.grid:	! DEFi #<A>
+.d.grid.0:	! DEFi #3
+.d.grid.1:	! DEFi #2
+grid:	GLOB *.z.grid	; signature array grid[2x3] : int @ declArrays.impala:14:1
+	DATi #1 #2 #3 #4 #5 #6
+
+;-----------------------------------------------------------------------------
+main:	FUNC	; signature func main() -> void @ declArrays.impala:16:1
+		PARA *1
+	$y:	LOCi
+	$x:	LOCi
+	$p:	LOCp
+;-----------------------------------------------------------------------------
+		MOVi $y #0 	; for (y = 0 to 3)
+		GEQi #0 #3 @.e0
+	.l1:	MOVi $x #0 	; for (x = 0 to 4)
+		GEQi #0 #4 @.e2
+	.l3:	MULi %0 $y #.d.board.0	; global board[y, x] = y * 10 + x
+		ADDi %0 %0 $x
+		MULi %1 $y #10
+		ADDi %1 %1 $x
+		POKE &board %0 %1
+		FORi $x #4 @.l3
+	.e2:	FORi $y #3 @.l1
+	.e0:	NOOP
+		! ADDi <A> #.d.board.0 #2	; printInt(global board[1, 2])
+		PEEK %1 &board:<A> 
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ declArrays.impala:22:30
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ declArrays.impala:22:41
+		PEEK %1 &initedArray:1 	; printFloat((float) global initedArray[1])
+		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ declArrays.impala:23:43
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ declArrays.impala:23:54
+		PEEK $p &initedArray:2 	; p = (int pointer) global initedArray[2]
+		PEEK %1 $p 	; printInt(*p)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ declArrays.impala:25:14
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ declArrays.impala:25:25
+		! ADDi <A> #.d.grid.0 #2	; printInt(global grid[1, 2])
+		PEEK %1 &grid:<A> 
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ declArrays.impala:26:29
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ declArrays.impala:26:40
+		RETU   	; }

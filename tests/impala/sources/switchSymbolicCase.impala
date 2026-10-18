@@ -1,0 +1,36 @@
+/*
+	Regression: a SYMBOLIC case value under a LITERAL range. Impala cannot tell whether the host's value falls
+	inside the window, so a value below it pasted a negative offset into the label text, and `.s0.-1` killed the
+	whole module at load ("Invalid identifier"). `switchWindow.impala` covers a symbolic RANGE; this is the
+	other half: the label is now guarded the same way, so an arm outside the window is simply unreachable.
+
+	What the golden pins: one `! LSSi` guard per symbolic case value, none for a literal one.
+	Expected (GAZLCmd switchSymbolicCase.gazl main K_LOW -1 K_IN 2 K_HIGH 7): 99 22 99 33
+*/
+const int DEBUG = 0
+extern native printInt
+extern native printLF
+
+const int K_LOW;
+const int K_IN;
+const int K_HIGH;
+
+function pick(int x) returns int r
+{
+	r = 0;
+	switch (x == 0 to 4) {
+		case K_LOW: r = 11;
+		case K_IN: r = 22;
+		case K_HIGH: r = 77;
+		case 3: r = 33;
+		default: r = 99;
+	}
+}
+
+function main()
+{
+	printInt(pick(-1)); printLF();
+	printInt(pick(2)); printLF();
+	printInt(pick(7)); printLF();
+	printInt(pick(3)); printLF();
+}

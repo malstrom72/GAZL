@@ -1,0 +1,22 @@
+/*
+	Conformance: Impala.md#extern-struct-the-host-owns-the-layout
+	An `extern struct` emits symbolic offsets and size; the host supplies the layout at load (here swapped).
+	Expected (GAZLCmd typesExternStruct.gazl main .o.HostFrame.width 1 .o.HostFrame.height 0 .z.HostFrame 2): 640 480 2
+*/
+const int DEBUG = 1
+extern native printInt
+extern native printFloat
+extern native printLF
+
+extern struct HostFrame { int width; int height }
+
+function main()
+locals int array raw[4], HostFrame pointer f
+{
+	f = (HostFrame pointer) &raw[0];
+	f->width = 640;
+	f->height = 480;
+	printInt(f->width); printLF();
+	printInt(raw[0]); printLF();
+	printInt(sizeof(HostFrame)); printLF();
+}

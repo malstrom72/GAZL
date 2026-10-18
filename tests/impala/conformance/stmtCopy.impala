@@ -1,0 +1,21 @@
+/*
+	Conformance: Impala.md#copy
+	`copy` moves a constant number of words between two pointers.
+	Expected (GAZLCmd stmtCopy.gazl main): 2 3 4 0
+*/
+const int DEBUG = 1
+extern native printInt
+extern native printFloat
+extern native printLF
+
+global int array src[5] = { 1, 2, 3, 4, 5 }
+global int array dst[4]
+
+function main()
+{
+	copy(3 from &global src[1] to &global dst[0]);
+	printInt(global dst[0]); printLF();
+	printInt(global dst[1]); printLF();
+	printInt(global dst[2]); printLF();
+	printInt(global dst[3]); printLF();
+}

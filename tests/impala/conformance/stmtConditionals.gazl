@@ -1,0 +1,41 @@
+; Compiled with Impala version 2.0
+
+; signatures version=1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ stmtConditionals.impala:6:1
+; signature extern native printInt() -> unknown @ stmtConditionals.impala:7:1
+; signature extern native printFloat() -> unknown @ stmtConditionals.impala:8:1
+; signature extern native printLF() -> unknown @ stmtConditionals.impala:9:1
+
+;-----------------------------------------------------------------------------
+sign:	FUNC	; signature func sign(int x) -> int @ stmtConditionals.impala:11:1
+	$r:	OUTi
+	$x:	INPi
+;-----------------------------------------------------------------------------
+		LEQi $x #0 @.f0	; if (x > 0)
+		MOVi $r #1 	; r = 1
+		RETU   
+	.f0:	GEQi $x #0 @.f2	; if (x < 0)
+		MOVi $r #-1 	; r = -1
+		RETU   
+	.f2:	MOVi $r #0 	; r = 0
+	.e3:	NOOP
+	.e1:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+main:	FUNC	; signature func main() -> void @ stmtConditionals.impala:22:1
+		PARA *1
+;-----------------------------------------------------------------------------
+		MOVi %2 #5 	; printInt(sign(5))
+		CALL &sign %1 *2	; expects sign(int) -> int @ stmtConditionals.impala:24:18
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ stmtConditionals.impala:24:19
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ stmtConditionals.impala:24:30
+		MOVi %2 #-5 	; printInt(sign(-5))
+		CALL &sign %1 *2	; expects sign(int) -> int @ stmtConditionals.impala:25:19
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ stmtConditionals.impala:25:20
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ stmtConditionals.impala:25:31
+		MOVi %2 #0 	; printInt(sign(0))
+		CALL &sign %1 *2	; expects sign(int) -> int @ stmtConditionals.impala:26:18
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ stmtConditionals.impala:26:19
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ stmtConditionals.impala:26:30
+		RETU   	; }

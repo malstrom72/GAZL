@@ -1,0 +1,30 @@
+/*
+	Conformance: Impala.md#one-subscript-which-strides-by-the-element
+	One subscript strides by the element: a struct array by `sizeof` the struct, a scalar array by one word.
+	Expected (GAZLCmd typesStructStride.gazl main): 27 27
+*/
+const int DEBUG = 1
+extern native printInt
+extern native printFloat
+extern native printLF
+
+struct Cell { int v; int w }
+global Cell array grid[4]
+global int array flat[4]
+
+function read(int i) returns int r
+{
+	r = global grid[i].v + global flat[i];
+}
+
+function main()
+locals int i
+{
+	for (i = 0 to 4) {
+		global grid[i].v = i * 10;
+		global grid[i].w = -1;
+		global flat[i] = i + 5;
+	}
+	printInt(read(2)); printLF();
+	printInt(global grid[2].v + global flat[2] + global grid[3].w - global grid[1].w); printLF();
+}

@@ -1,0 +1,41 @@
+; Compiled with Impala version 2.0
+
+; signatures version=1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ typesTypedPointers.impala:6:1
+; signature extern native printInt() -> unknown @ typesTypedPointers.impala:7:1
+; signature extern native printFloat() -> unknown @ typesTypedPointers.impala:8:1
+; signature extern native printLF() -> unknown @ typesTypedPointers.impala:9:1
+
+;-----------------------------------------------------------------------------
+main:	FUNC	; signature func main() -> void @ typesTypedPointers.impala:11:1
+		PARA *1
+.z.main.a:	! DEFi #4
+	$a:	LOCA *.z.main.a
+.z.main.f:	! DEFi #2
+	$f:	LOCA *.z.main.f
+	$p:	LOCp
+	$pp:	LOCp
+	$raw:	LOCp
+;-----------------------------------------------------------------------------
+		MOVi $a:0 #10 	; a[0] = 10
+		MOVi $a:1 #20 	; a[1] = 20
+		MOVi $a:2 #30 	; a[2] = 30
+		ADRL $p $a:1 *0	; p = &a[1]
+		PEEK %1 $p #1	; printInt(p[1])
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ typesTypedPointers.impala:18:16
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ typesTypedPointers.impala:18:27
+		MOVp $raw $p 	; raw = p
+		MOVp $p $raw 	; p = (int pointer) raw
+		PEEK %1 $p 	; printInt(*p)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ typesTypedPointers.impala:21:14
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ typesTypedPointers.impala:21:25
+		MOVf $f:1 #2.5 	; f[1] = 2.5
+		MOVf %1 $f:1 	; printFloat(f[1])
+		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ typesTypedPointers.impala:23:18
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ typesTypedPointers.impala:23:29
+		ADRL $pp $p *0	; pp = &p
+		PEEK %1 $pp 	; printInt((*pp)[1])
+		PEEK %1 %1 #1
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ typesTypedPointers.impala:25:20
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ typesTypedPointers.impala:25:31
+		RETU   	; }

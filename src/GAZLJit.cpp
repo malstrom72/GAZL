@@ -76,10 +76,10 @@ static bool jitBranchTarget(const Instruction* code, UInt instructionIndex, UInt
 
 std::vector<UInt> switchTargets(const Instruction* code, UInt instructionIndex, const Value* memory) {
 	assert(code[instructionIndex].opcode == OP_SWCH && "only a SWCH has a jump table");
-	const UInt table = static_cast<UInt>(code[instructionIndex].p2.p - MEMORY_OFFSET);
+	const Value* table = memory + static_cast<Int>(code[instructionIndex].p2.p - MEMORY_OFFSET);					// a table is a constant, below `memory`
 	std::vector<UInt> targets(static_cast<UInt>(code[instructionIndex].p1.i) + 1);
 	for (UInt k = 0; k < targets.size(); ++k) {
-		targets[k] = static_cast<UInt>(static_cast<Int>(instructionIndex) + memory[table + k].i);
+		targets[k] = static_cast<UInt>(static_cast<Int>(instructionIndex) + table[k].i);
 	}
 	return targets;
 }
@@ -338,7 +338,7 @@ static int joinRealm(int a, int b) {
 	return REALM_UNKNOWN;
 }
 
-void buildPointerRealms(const Instruction* code, UInt from, UInt to, std::map<Int, int>& realm) {
+void buildPointerRealms(const Instruction* code, UInt from, UInt to, UInt constantsSize, std::map<Int, int>& realm) {
 	/*
 		Pass 1: live-in slots (first textual role is a READ, before any WRITE) are received parameters -> NONFRAME. A
 		slot first WRITTEN in the function is not a parameter, so a value later used as a pointer base traces to a
@@ -375,7 +375,7 @@ void buildPointerRealms(const Instruction* code, UInt from, UInt to, std::map<In
 			int produced;
 			switch (op) {
 				case OP_ADRL: produced = REALM_MYFRAME; break;												// address of a local
-				case OP_MOVE_VC: produced = (code[j].p1.p >= MEMORY_OFFSET) ? REALM_NONFRAME : REALM_UNKNOWN; break;	// global/const symbol vs bare int
+				case OP_MOVE_VC: produced = (code[j].p1.p >= MEMORY_OFFSET - constantsSize) ? REALM_NONFRAME : REALM_UNKNOWN; break;	// global/const symbol vs bare int
 				case OP_MOVE_VV: {
 					const std::map<Int, int>::const_iterator it = realm.find(code[j].p1.i);
 					produced = (it != realm.end()) ? it->second : REALM_BOTTOM;

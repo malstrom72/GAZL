@@ -60,49 +60,48 @@ static int failures = 0;
 			global gOut = a * 10 + (int) global gTrace;			// 50*10 + 3 = 503
 		}
 */
-static const char* P1_SOURCE = R"GAZL(
- 					GLOB *1
- gOut:				DATi #0
- 					GLOB *1
- gTrace:			DATi #0
- helper:			FUNC
- 					$r:			OUTi
- 					$x:			INPi
- 								MULi %0 $x $x
- 								ADDi $r %0 #1
- 								RETU
- mainDirect:		FUNC
- 								PARA *1
- 					$a:			LOCi
- 								MOVi %1 #7
- 								CALL &helper %0 *2
- 								MOVi $a %0
- 								POKE &gOut $a
- 								RETU
- mainBlk:			FUNC
- 								PARA *1
- 					$a:			LOCi
- 								MOVi %1 #7
- 								CALL ^nblk %0 *2
- 								MOVi $a %0
- 								POKE &gOut $a
- 								RETU
- mainFwd:			FUNC
- 								PARA *1
- 					$a:			LOCi
- 								POKE &gTrace #1
- 								MOVi %1 #7
- 								CALL ^nfwd %0 *2
- 								MOVi $a %0
- 								PEEK %0 &gTrace
- 								ADDi %0 %0 #2
- 								POKE &gTrace %0
- 								MULi %0 $a #10
- 								PEEK %1 &gTrace
- 								ADDi %0 %0 %1
- 								POKE &gOut %0
- 								RETU
-)GAZL";
+static const char* P1_SOURCE = "\n"
+		" 					GLOB *1\n"
+		" gOut:				DATi #0\n"
+		" 					GLOB *1\n"
+		" gTrace:			DATi #0\n"
+		" helper:			FUNC\n"
+		" 					$r:			OUTi\n"
+		" 					$x:			INPi\n"
+		" 								MULi %0 $x $x\n"
+		" 								ADDi $r %0 #1\n"
+		" 								RETU\n"
+		" mainDirect:		FUNC\n"
+		" 								PARA *1\n"
+		" 					$a:			LOCi\n"
+		" 								MOVi %1 #7\n"
+		" 								CALL &helper %0 *2\n"
+		" 								MOVi $a %0\n"
+		" 								POKE &gOut $a\n"
+		" 								RETU\n"
+		" mainBlk:			FUNC\n"
+		" 								PARA *1\n"
+		" 					$a:			LOCi\n"
+		" 								MOVi %1 #7\n"
+		" 								CALL ^nblk %0 *2\n"
+		" 								MOVi $a %0\n"
+		" 								POKE &gOut $a\n"
+		" 								RETU\n"
+		" mainFwd:			FUNC\n"
+		" 								PARA *1\n"
+		" 					$a:			LOCi\n"
+		" 								POKE &gTrace #1\n"
+		" 								MOVi %1 #7\n"
+		" 								CALL ^nfwd %0 *2\n"
+		" 								MOVi $a %0\n"
+		" 								PEEK %0 &gTrace\n"
+		" 								ADDi %0 %0 #2\n"
+		" 								POKE &gTrace %0\n"
+		" 								MULi %0 $a #10\n"
+		" 								PEEK %1 &gTrace\n"
+		" 								ADDi %0 %0 %1\n"
+		" 								POKE &gOut %0\n"
+		" 								RETU\n";
 
 /*
 	P2 recursion THROUGH the native (targets: nfwd -> helperF, nblk -> helperB). Impala:
@@ -111,42 +110,41 @@ static const char* P1_SOURCE = R"GAZL(
 		function mainF() { global gOut = (int) nfwd(5); }		// 5+4+3+2+1+0 = 15
 		function mainB() { global gOut = (int) nblk(5); }		// 15 (nested run() five levels deep)
 */
-static const char* P2_SOURCE = R"GAZL(
- 					GLOB *1
- gOut:				DATi #0
- helperF:			FUNC
- 					$r:			OUTi
- 					$x:			INPi
- 								GRTi $x #0 @.f0
- 								MOVi $r #0
- 								GOTO @.e1
- 					.f0:		SUBi %1 $x #1
- 								CALL ^nfwd %0 *2
- 								ADDi $r $x %0
- 					.e1:		RETU
- helperB:			FUNC
- 					$r:			OUTi
- 					$x:			INPi
- 								GRTi $x #0 @.f0
- 								MOVi $r #0
- 								GOTO @.e1
- 					.f0:		SUBi %1 $x #1
- 								CALL ^nblk %0 *2
- 								ADDi $r $x %0
- 					.e1:		RETU
- mainF:				FUNC
- 								PARA *1
- 								MOVi %1 #5
- 								CALL ^nfwd %0 *2
- 								POKE &gOut %0
- 								RETU
- mainB:				FUNC
- 								PARA *1
- 								MOVi %1 #5
- 								CALL ^nblk %0 *2
- 								POKE &gOut %0
- 								RETU
-)GAZL";
+static const char* P2_SOURCE = "\n"
+		" 					GLOB *1\n"
+		" gOut:				DATi #0\n"
+		" helperF:			FUNC\n"
+		" 					$r:			OUTi\n"
+		" 					$x:			INPi\n"
+		" 								GRTi $x #0 @.f0\n"
+		" 								MOVi $r #0\n"
+		" 								GOTO @.e1\n"
+		" 					.f0:		SUBi %1 $x #1\n"
+		" 								CALL ^nfwd %0 *2\n"
+		" 								ADDi $r $x %0\n"
+		" 					.e1:		RETU\n"
+		" helperB:			FUNC\n"
+		" 					$r:			OUTi\n"
+		" 					$x:			INPi\n"
+		" 								GRTi $x #0 @.f0\n"
+		" 								MOVi $r #0\n"
+		" 								GOTO @.e1\n"
+		" 					.f0:		SUBi %1 $x #1\n"
+		" 								CALL ^nblk %0 *2\n"
+		" 								ADDi $r $x %0\n"
+		" 					.e1:		RETU\n"
+		" mainF:				FUNC\n"
+		" 								PARA *1\n"
+		" 								MOVi %1 #5\n"
+		" 								CALL ^nfwd %0 *2\n"
+		" 								POKE &gOut %0\n"
+		" 								RETU\n"
+		" mainB:				FUNC\n"
+		" 								PARA *1\n"
+		" 								MOVi %1 #5\n"
+		" 								CALL ^nblk %0 *2\n"
+		" 								POKE &gOut %0\n"
+		" 								RETU\n";
 
 /*
 	P3 a forwarded callee that itself calls a blocking native (nfwd -> helper, nblk -> square). Impala:
@@ -154,28 +152,27 @@ static const char* P2_SOURCE = R"GAZL(
 		function helper(int x) returns int r { r = (int) nblk(x) + 1; }
 		function main() { global gOut = (int) nfwd(6); }		// 6*6 + 1 = 37
 */
-static const char* P3_SOURCE = R"GAZL(
- 					GLOB *1
- gOut:				DATi #0
- square:			FUNC
- 					$r:			OUTi
- 					$x:			INPi
- 								MULi $r $x $x
- 								RETU
- helper:			FUNC
- 					$r:			OUTi
- 					$x:			INPi
- 								MOVi %1 $x
- 								CALL ^nblk %0 *2
- 								ADDi $r %0 #1
- 								RETU
- main:				FUNC
- 								PARA *1
- 								MOVi %1 #6
- 								CALL ^nfwd %0 *2
- 								POKE &gOut %0
- 								RETU
-)GAZL";
+static const char* P3_SOURCE = "\n"
+		" 					GLOB *1\n"
+		" gOut:				DATi #0\n"
+		" square:			FUNC\n"
+		" 					$r:			OUTi\n"
+		" 					$x:			INPi\n"
+		" 								MULi $r $x $x\n"
+		" 								RETU\n"
+		" helper:			FUNC\n"
+		" 					$r:			OUTi\n"
+		" 					$x:			INPi\n"
+		" 								MOVi %1 $x\n"
+		" 								CALL ^nblk %0 *2\n"
+		" 								ADDi $r %0 #1\n"
+		" 								RETU\n"
+		" main:				FUNC\n"
+		" 								PARA *1\n"
+		" 								MOVi %1 #6\n"
+		" 								CALL ^nfwd %0 *2\n"
+		" 								POKE &gOut %0\n"
+		" 								RETU\n";
 
 /*
 	P4 sequential forwards in a loop (nfwd -> helper). Impala:
@@ -186,29 +183,28 @@ static const char* P3_SOURCE = R"GAZL(
 			global gOut = s;
 		}
 */
-static const char* P4_SOURCE = R"GAZL(
- 					GLOB *1
- gOut:				DATi #0
- helper:			FUNC
- 					$r:			OUTi
- 					$x:			INPi
- 								MULi %0 $x $x
- 								ADDi $r %0 #1
- 								RETU
- main:				FUNC
- 								PARA *1
- 					$i:			LOCi
- 					$s:			LOCi
- 								MOVi $s #0
- 								MOVi $i #0
- 								GEQi #0 #10 @.e0
- 					.l1:		MOVi %1 $i
- 								CALL ^nfwd %0 *2
- 								ADDi $s $s %0
- 								FORi $i #10 @.l1
- 					.e0:		POKE &gOut $s
- 								RETU
-)GAZL";
+static const char* P4_SOURCE = "\n"
+		" 					GLOB *1\n"
+		" gOut:				DATi #0\n"
+		" helper:			FUNC\n"
+		" 					$r:			OUTi\n"
+		" 					$x:			INPi\n"
+		" 								MULi %0 $x $x\n"
+		" 								ADDi $r %0 #1\n"
+		" 								RETU\n"
+		" main:				FUNC\n"
+		" 								PARA *1\n"
+		" 					$i:			LOCi\n"
+		" 					$s:			LOCi\n"
+		" 								MOVi $s #0\n"
+		" 								MOVi $i #0\n"
+		" 								GEQi #0 #10 @.e0\n"
+		" 					.l1:		MOVi %1 $i\n"
+		" 								CALL ^nfwd %0 *2\n"
+		" 								ADDi $s $s %0\n"
+		" 								FORi $i #10 @.l1\n"
+		" 					.e0:		POKE &gOut $s\n"
+		" 								RETU\n";
 
 /*
 	P5 pushCall chains (nchain -> LIFO [inc, double]; nmark -> LIFO [mark1, mark2, mark3]). Impala:
@@ -226,73 +222,72 @@ static const char* P4_SOURCE = R"GAZL(
 			global gOut = gOrder;
 		}
 */
-static const char* P5_SOURCE = R"GAZL(
- 					GLOB *1
- gOut:				DATi #0
- 					GLOB *1
- gOrder:			DATi #0
- double:			FUNC
- 					$r:			OUTi
- 					$x:			INPi
- 								PEEK %0 &gOrder
- 								MULi %0 %0 #10
- 								ADDi %0 %0 #4
- 								POKE &gOrder %0
- 								MULi $r $x #2
- 								RETU
- inc:				FUNC
- 					$r:			OUTi
- 					$x:			INPi
- 								PEEK %0 &gOrder
- 								MULi %0 %0 #10
- 								ADDi %0 %0 #3
- 								POKE &gOrder %0
- 								ADDi $r $x #1
- 								RETU
- mark1:				FUNC
- 								PARA *1
- 								PEEK %0 &gOrder
- 								MULi %0 %0 #10
- 								ADDi %0 %0 #1
- 								POKE &gOrder %0
- 								RETU
- mark2:				FUNC
- 								PARA *1
- 								PEEK %0 &gOrder
- 								MULi %0 %0 #10
- 								ADDi %0 %0 #2
- 								POKE &gOrder %0
- 								RETU
- mark3:				FUNC
- 								PARA *1
- 								PEEK %0 &gOrder
- 								MULi %0 %0 #10
- 								ADDi %0 %0 #3
- 								POKE &gOrder %0
- 								RETU
- mainChain:			FUNC
- 								PARA *1
- 					$t:			LOCi
- 								POKE &gOrder #0
- 								MOVi %1 #7
- 								CALL ^nchain %0 *2
- 								MOVi $t %0
- 								MULi %0 $t #1000
- 								PEEK %1 &gOrder
- 								ADDi %0 %0 %1
- 								POKE &gOut %0
- 								RETU
- mainMarks:			FUNC
- 								PARA *1
- 					$t:			LOCi
- 								POKE &gOrder #0
- 								MOVi %1 #0
- 								CALL ^nmark %0 *2
- 								MOVi $t %0
- 								PEEK %0 &gOrder
- 								POKE &gOut %0
- 								RETU
-)GAZL";
+static const char* P5_SOURCE = "\n"
+		" 					GLOB *1\n"
+		" gOut:				DATi #0\n"
+		" 					GLOB *1\n"
+		" gOrder:			DATi #0\n"
+		" double:			FUNC\n"
+		" 					$r:			OUTi\n"
+		" 					$x:			INPi\n"
+		" 								PEEK %0 &gOrder\n"
+		" 								MULi %0 %0 #10\n"
+		" 								ADDi %0 %0 #4\n"
+		" 								POKE &gOrder %0\n"
+		" 								MULi $r $x #2\n"
+		" 								RETU\n"
+		" inc:				FUNC\n"
+		" 					$r:			OUTi\n"
+		" 					$x:			INPi\n"
+		" 								PEEK %0 &gOrder\n"
+		" 								MULi %0 %0 #10\n"
+		" 								ADDi %0 %0 #3\n"
+		" 								POKE &gOrder %0\n"
+		" 								ADDi $r $x #1\n"
+		" 								RETU\n"
+		" mark1:				FUNC\n"
+		" 								PARA *1\n"
+		" 								PEEK %0 &gOrder\n"
+		" 								MULi %0 %0 #10\n"
+		" 								ADDi %0 %0 #1\n"
+		" 								POKE &gOrder %0\n"
+		" 								RETU\n"
+		" mark2:				FUNC\n"
+		" 								PARA *1\n"
+		" 								PEEK %0 &gOrder\n"
+		" 								MULi %0 %0 #10\n"
+		" 								ADDi %0 %0 #2\n"
+		" 								POKE &gOrder %0\n"
+		" 								RETU\n"
+		" mark3:				FUNC\n"
+		" 								PARA *1\n"
+		" 								PEEK %0 &gOrder\n"
+		" 								MULi %0 %0 #10\n"
+		" 								ADDi %0 %0 #3\n"
+		" 								POKE &gOrder %0\n"
+		" 								RETU\n"
+		" mainChain:			FUNC\n"
+		" 								PARA *1\n"
+		" 					$t:			LOCi\n"
+		" 								POKE &gOrder #0\n"
+		" 								MOVi %1 #7\n"
+		" 								CALL ^nchain %0 *2\n"
+		" 								MOVi $t %0\n"
+		" 								MULi %0 $t #1000\n"
+		" 								PEEK %1 &gOrder\n"
+		" 								ADDi %0 %0 %1\n"
+		" 								POKE &gOut %0\n"
+		" 								RETU\n"
+		" mainMarks:			FUNC\n"
+		" 								PARA *1\n"
+		" 					$t:			LOCi\n"
+		" 								POKE &gOrder #0\n"
+		" 								MOVi %1 #0\n"
+		" 								CALL ^nmark %0 *2\n"
+		" 								MOVi $t %0\n"
+		" 								PEEK %0 &gOrder\n"
+		" 								POKE &gOut %0\n"
+		" 								RETU\n";
 
 // --- harness (assemble + run pattern shared with GAZLJitLowerTest) ---
 
@@ -394,7 +389,7 @@ static void check(const char* label, Symbols& globals, const char* fn, Int fuel,
 	const Status s = runToCompletion(globals, fn, fuel, suspends);
 	UInt sz = 0;
 	const Pointer outPtr = globals.findGlobal("gOut", sz);
-	const Int out = (outPtr != NULL_POINTER) ? gMemory[outPtr - MEMORY_OFFSET].i : -999999;
+	const Int out = (outPtr != NULL_POINTER) ? gMemory[outPtr - MEMORY_OFFSET + (gConstsSize - 1)].i : -999999;	// constants come first
 	const bool good = (s == OK) && (out == wantOut) && (!wantSuspends || suspends > 0);
 	std::printf("  %-36s status=%-3d gOut=%-8d want=%-8d suspends=%-5d %s\n",
 			label, s, out, wantOut, suspends, good ? "OK" : "FAILED");

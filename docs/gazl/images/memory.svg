@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="680" height="410" viewBox="0 0 680 410" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14">
+	<title>GAZL data memory</title>
+	<style>
+		.box { stroke: #57606a; stroke-width: 1.2; }
+		.ro { fill: #ddf4ff; }
+		.rw { fill: #dafbe1; }
+		.stack { fill: #fff8c5; }
+		.guard { fill: #eaeef2; }
+		.in { fill: #1f2328; }
+		.small { font-size: 12px; }
+		.note { fill: #768390; }
+		.rule { stroke: #768390; stroke-width: 1; }
+		.dash { stroke: #768390; stroke-width: 1; stroke-dasharray: 3 3; }
+	</style>
+
+	<!-- the four regions, addresses increasing downward -->
+	<rect class="box ro" x="190" y="30" width="250" height="80"/>
+	<text class="in" x="315" y="64" text-anchor="middle" font-weight="600">Constants</text>
+	<text class="in small" x="315" y="84" text-anchor="middle">CNST sections, switch tables</text>
+
+	<rect class="box rw" x="190" y="110" width="250" height="80"/>
+	<text class="in" x="315" y="144" text-anchor="middle" font-weight="600">Globals</text>
+	<text class="in small" x="315" y="164" text-anchor="middle">GLOB and TEMP sections</text>
+
+	<rect class="box stack" x="190" y="190" width="250" height="140"/>
+	<text class="in" x="315" y="244" text-anchor="middle" font-weight="600">Data stack</text>
+	<text class="in small" x="315" y="264" text-anchor="middle">call frames, each one after the last</text>
+	<text class="in small" x="315" y="282" text-anchor="middle">(section 8)</text>
+
+	<rect class="box guard" x="190" y="330" width="250" height="34"/>
+	<text class="in small" x="315" y="352" text-anchor="middle">Zero guard: one word, always 0</text>
+
+	<!-- addresses on the right -->
+	<line class="dash" x1="440" y1="30" x2="470" y2="30"/>
+	<text class="note" x="476" y="34">base − C</text>
+	<line class="dash" x1="440" y1="110" x2="470" y2="110"/>
+	<text class="note" x="476" y="114" font-weight="600">base = 0x12345678</text>
+	<line class="dash" x1="440" y1="190" x2="470" y2="190"/>
+	<text class="note" x="476" y="194">base + G</text>
+	<line class="dash" x1="440" y1="330" x2="470" y2="330"/>
+	<text class="note" x="476" y="334">base + rw</text>
+
+	<!-- access on the left -->
+	<line class="rule" x1="170" y1="32" x2="170" y2="108"/>
+	<line class="rule" x1="170" y1="32" x2="178" y2="32"/>
+	<line class="rule" x1="170" y1="108" x2="178" y2="108"/>
+	<text class="note" x="160" y="70" text-anchor="end">read-only</text>
+	<text class="note small" x="160" y="88" text-anchor="end">C words</text>
+
+	<line class="rule" x1="170" y1="112" x2="170" y2="328"/>
+	<line class="rule" x1="170" y1="112" x2="178" y2="112"/>
+	<line class="rule" x1="170" y1="328" x2="178" y2="328"/>
+	<text class="note" x="160" y="216" text-anchor="end">writable</text>
+	<text class="note small" x="160" y="234" text-anchor="end">rw words</text>
+
+	<!-- direction -->
+	<line class="rule" x1="40" y1="40" x2="40" y2="350"/>
+	<path d="M34 342 L40 356 L46 342 Z" fill="#768390"/>
+	<text class="note small" x="52" y="200" transform="rotate(90 52 200)" text-anchor="middle">higher addresses</text>
+
+	<text class="note small" x="315" y="392" text-anchor="middle">A read may touch [base − C, base + rw), a write [base, base + rw).</text>
+</svg>

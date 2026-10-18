@@ -1,0 +1,4 @@
+f: FUNC
+$x: LOCi
+ SWCH $x *2147483647 @d
+d: RETU

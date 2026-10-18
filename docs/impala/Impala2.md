@@ -1364,12 +1364,12 @@ function count(int n, int acc) returns int r
 
 Rules and lowering:
 
-- `--gazl2` only (`E466`): it compiles to the GAZL 2 `TAIL` instruction, which exists only on GAZL 2
+- `--gazl2` only (`E468`): it compiles to the GAZL 2 `TAIL` instruction, which exists only on GAZL 2
   engines (an older engine rejects the mnemonic as unknown).
-- The target must be the ENCLOSING function (`E467`): the instruction is general, but checking the
+- The target must be the ENCLOSING function (`E469`): the instruction is general, but checking the
   return contract across two functions is future compiler work (see `design/gazl/TailCalls.md`). When
-  that lands, the same source keeps working and E467 simply disappears.
-- Not in an `inline function` (`E468`): an inline body runs in its caller's frame, so there is nothing
+  that lands, the same source keeps working and E469 simply disappears.
+- Not in an `inline function` (`E470`): an inline body runs in its caller's frame, so there is nothing
   of its own to reuse.
 - The argument list is checked like any call's (E405/E406/E202...), and the arguments marshal into the
   ordinary call window exactly as for a `CALL`, so `tail f(b, a)` never reads an already-overwritten
@@ -1664,9 +1664,11 @@ foo.impala:12:9: note: use a cast: (int pointer)
 | E463 | a named return value is assigned nowhere in the body, so the caller receives whatever was in the slot |
 | E464 | the layout of a body-carrying `extern struct` is needed before the definition the import closure emits later; use the opaque form and a pointer |
 | E465 | a funcptr-type cast: only a funcptr can take one, and not between funcptr types of different shape |
-| E466 | `tail` requires `--gazl2` (the `TAIL` instruction it compiles to exists only on GAZL 2 engines) |
-| E467 | `tail` can only target the enclosing function in Impala 2.0 (self-recursion; the cross-function return-contract check is future work) |
-| E468 | `tail` cannot be used in an `inline function` (an inline body runs in its caller's frame) |
+| E466 | division or modulus by a literal zero (a symbolic zero is left to the assembler) |
+| E467 | a literal `copy` count larger than the room left in a global source or destination array |
+| E468 | `tail` requires `--gazl2` (the `TAIL` instruction it compiles to exists only on GAZL 2 engines) |
+| E469 | `tail` can only target the enclosing function in Impala 2.0 (self-recursion; the cross-function return-contract check is future work) |
+| E470 | `tail` cannot be used in an `inline function` (an inline body runs in its caller's frame) |
 
 E418, E424 and E425 are **not allocated to anything that fires**. They were reserved for extern-struct
 guards that were never needed once the features shipped (`design/impala/StructLayoutConstants.md` records the

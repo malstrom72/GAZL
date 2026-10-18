@@ -1,0 +1,39 @@
+; Compiled with Impala version 2.0
+
+; signatures version=1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ exprBuiltins.impala:6:1
+; signature extern native printInt() -> unknown @ exprBuiltins.impala:7:1
+; signature extern native printFloat() -> unknown @ exprBuiltins.impala:8:1
+; signature extern native printLF() -> unknown @ exprBuiltins.impala:9:1
+
+;-----------------------------------------------------------------------------
+main:	FUNC	; signature func main() -> void @ exprBuiltins.impala:11:1
+		PARA *1
+	$i:	LOCi
+	$f:	LOCf
+;-----------------------------------------------------------------------------
+		MOVi $i #-5 	; i = -5
+		ABSi %1 $i 	; printInt(abs i)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ exprBuiltins.impala:15:17
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ exprBuiltins.impala:15:28
+		MOVf $f #-2.5 	; f = -2.5
+		ABSf %1 $f 	; printFloat(abs f)
+		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ exprBuiltins.impala:17:19
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ exprBuiltins.impala:17:30
+		FLOf %1 #-1.5 	; printFloat(floor -1.5)
+		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ exprBuiltins.impala:18:24
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ exprBuiltins.impala:18:35
+		iTOf %1 #3 #1.0	; printFloat(itof 3)
+		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ exprBuiltins.impala:19:20
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ exprBuiltins.impala:19:31
+		fTOi %1 #2.75 #1.0	; printInt(ftoi 2.75)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ exprBuiltins.impala:20:21
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ exprBuiltins.impala:20:32
+		fTOi %1 #-2.75 #1.0	; printInt(ftoi -2.75)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ exprBuiltins.impala:21:22
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ exprBuiltins.impala:21:33
+		ABSi %1 $i 	; printInt(abs i - 1)
+		SUBi %1 %1 #1
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ exprBuiltins.impala:22:21
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ exprBuiltins.impala:22:32
+		RETU   	; }

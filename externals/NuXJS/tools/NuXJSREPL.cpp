@@ -141,6 +141,21 @@ double getCPUSecs() {
 	assert(success);
 	return ((static_cast<__int64>(userTime.dwHighDateTime) << 32) | userTime.dwLowDateTime) / 10000000.0;
 }
+
+static const char* const THREAD_CPU_UNIT = "Mcyc";		// TSC cycles, which Windows cannot convert to seconds exactly
+
+static double threadCpuTicks() {
+	ULONG64 cycles = 0;
+	const BOOL success = ::QueryThreadCycleTime(::GetCurrentThread(), &cycles);
+	(void)success;
+	assert(success);
+	return static_cast<double>(cycles) / 1e6;
+}
+
+static bool pinToCore(int core) {
+	return (core < static_cast<int>(sizeof (DWORD_PTR) * 8)
+			&& ::SetThreadAffinityMask(::GetCurrentThread(), static_cast<DWORD_PTR>(1) << core) != 0);
+}
 #else
 #include <sys/time.h>
 #include <sys/resource.h>
@@ -151,6 +166,31 @@ double getCPUSecs() {
 	assert(res == 0);
 	return rus.ru_utime.tv_sec + rus.ru_utime.tv_usec / 1000000.0;
 }
+
+static const char* const THREAD_CPU_UNIT = "ms";
+
+static double threadCpuTicks() {
+	timespec ts;
+	const int res = clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ts);
+	(void)res;
+	assert(res == 0);
+	return ts.tv_sec * 1e3 + ts.tv_nsec / 1e6;
+}
+
+#if defined(__APPLE__)
+static bool pinToCore(int) { return false; }		// macOS has no hard affinity
+#else
+#include <sched.h>
+static bool pinToCore(int core) {
+	if (core >= CPU_SETSIZE) {
+		return false;
+	}
+	cpu_set_t set;
+	CPU_ZERO(&set);
+	CPU_SET(core, &set);
+	return (sched_setaffinity(0, sizeof (set), &set) == 0);
+}
+#endif
 #endif
 
 // Lenient UTF-8 -> UTF-16 conversion. Malformed or truncated sequences are replaced with U+FFFD rather
@@ -200,6 +240,7 @@ static const String* utf8ToString(Heap& heap, const char* utf8, size_t size) {
 static bool doQuit = false;			// set by the quit() helper
 static bool pauseBeforeQuit = false;	// -p; read by main()
 static int timeOutSeconds = 0;			// -T; read by compileAndRun(), 0 for no limit
+static bool gcEveryCycle = false;		// -G; read by compileAndRun()
 static bool recordTranscript = false;	// interactive mode: print() output and errors go to the transcript for #save
 
 // In-memory transcript of the interactive session, tagged for #save (see pushIOLines).
@@ -522,15 +563,23 @@ void randomSeed() {
 	srand(seed);
 }
 
+void printVersion() {
+	std::cout << "NuXJS " << NUXJS_VERSION / 100 << '.' << NUXJS_VERSION / 10 % 10 << '.' << NUXJS_VERSION % 10 << std::endl;
+}
+
 void printUsage() {
+	printVersion();
 	std::cout << "Usage: NuXJS [options] [script.js [arguments...]]" << std::endl
 			<< "Options:" << std::endl
 			<< "  -s: suppress the interactive '=<result>' echo" << std::endl
-			<< "  -t: print timing and memory stats" << std::endl
+			<< "  -t: print timing and memory stats, then thread CPU time (Mcyc on Windows, ms elsewhere)" << std::endl
 			<< "  -p: pause before quitting" << std::endl
 			<< "  -n: do not load the standard library" << std::endl
 			<< "  -T, --timeout <seconds>: abort code that runs longer (default: no limit)" << std::endl
+			<< "  -P, --pin <core>: run on that CPU core only, for steadier timings (not on macOS)" << std::endl
+			<< "  -G, --gc-every-cycle: collect garbage after every instruction, to expose unrooted values (slow)" << std::endl
 			<< "  -E, --legacy-exceptions: use legacy exception output" << std::endl
+			<< "  -v, --version: show the NuXJS version" << std::endl
 			<< "  -h, --help: show this usage" << std::endl
 			<< std::endl
 			<< "NuXJS options must appear before the script file name." << std::endl
@@ -553,6 +602,14 @@ static void reportScriptException(Heap& heap, const ScriptException& x, bool leg
 	}
 }
 
+static Var runCollectingEveryCycle(Runtime& rt, Heap& heap, Processor& processor) {
+	while (processor.run(1)) {
+		heap.gc();
+		rt.checkTimeOut();
+	}
+	return Var(rt, processor.getResult());
+}
+
 /*
 	Runs one chunk of source to completion in the global scope: a script file as global code when `scriptFileName` is
 	given, otherwise an interactive chunk compiled as eval code, only for the completion value it echoes on request: its
@@ -566,28 +623,30 @@ static bool compileAndRun(Runtime& rt, MyHeap& heap, const String& source, const
 			rt.resetTimeOut(timeOutSeconds);
 		}
 		const double start = getCPUSecs();
+		const double startTicks = threadCpuTicks();
 		const Code* const code = (scriptFileName != 0 ? rt.compileGlobalCode(source, scriptFileName)
 				: rt.compileEvalCode(new(heap) String(heap.managed(), source.begin(), source.end())));
 		Processor processor(rt);
 		processor.enterGlobalCode(code);
-		const Var result = rt.runUntilReturn(processor);
+		const Var result = (gcEveryCycle ? runCollectingEveryCycle(rt, heap, processor) : rt.runUntilReturn(processor));
 		if (echoResult) {
 			std::wcerr << L"\t=" << result.to<std::wstring>() << std::endl;
 		}
 		if (timing) {
 			std::cerr << (getCPUSecs() - start) << "s" << std::endl
 					<< heap.size() / (1024.0 * 1024.0) << "MiB" << std::endl
-					<< heap.peakSize / (1024.0 * 1024.0) << "MiB" << std::endl;
+					<< heap.peakSize / (1024.0 * 1024.0) << "MiB" << std::endl
+					<< (threadCpuTicks() - startTicks) << THREAD_CPU_UNIT << std::endl;
 		}
 		return true;
 	}
-	catch (const CompilationError& x) {
-		std::wstringstream ss;
-		ss << L"!!!! Line: " << x.lineNumber;
-		reportError(ss.str());
-		reportScriptException(heap, x, legacyExceptions);
-	}
 	catch (const ScriptException& x) {
+		const Error* const error = x.asErrorObject();
+		if (error != 0 && error->getStackString() == 0 && error->getCompilePosition().fileName != 0) {	// did not compile
+			std::wstringstream ss;
+			ss << L"!!!! Line: " << error->getCompilePosition().line;
+			reportError(ss.str());
+		}
 		reportScriptException(heap, x, legacyExceptions);
 	}
 	catch (const std::exception& x) {
@@ -732,8 +791,23 @@ int replMain(int argc, const char* argv[]) {
 				}
 				timeOutSeconds = static_cast<int>(seconds);
 			}
+			else if (strcmp(argv[argi], "--pin") == 0 || strcmp(argv[argi], "-P") == 0) {
+				char* end;
+				const long core = strtol(argi + 1 < argc ? argv[++argi] : "", &end, 10);
+				if (*end != '\0' || core < 0 || core > INT_MAX || !pinToCore(static_cast<int>(core))) {
+					std::cerr << "Expected a core this system can pin to after -P / --pin" << std::endl;
+					return 1;
+				}
+			}
+			else if (strcmp(argv[argi], "--gc-every-cycle") == 0 || strcmp(argv[argi], "-G") == 0) {
+				gcEveryCycle = true;
+			}
 			else if (strcmp(argv[argi], "--legacy-exceptions") == 0 || strcmp(argv[argi], "-E") == 0) {
 				legacyExceptions = true;
+			}
+			else if (strcmp(argv[argi], "--version") == 0 || strcmp(argv[argi], "-v") == 0) {
+				printVersion();
+				return 0;
 			}
 			else if (strcmp(argv[argi], "--help") == 0 || strcmp(argv[argi], "-h") == 0) {
 				printUsage();

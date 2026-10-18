@@ -555,7 +555,7 @@ checkZeroLoop: NOOP
 ;
 ; Divide floats
 ;
-; Division by 0 is considered illegal and should generate a run-time error (or compile-time error if 0 is a constant).
+; Follows IEEE-754: dividing by a zero of either sign gives an infinity of the matching sign, and 0 / 0 gives NaN.
 ;
 ;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 
@@ -566,6 +566,15 @@ checkZeroLoop: NOOP
  SUBf      f3              f3              #456.7
  ABSf      f3              f3
  GRTf      f3              #1.0e-6         @fail
+ MOVf      f0              #0.0
+ DIVf      f1              #1.0            f0                  ; 1 / 0 = +inf, above the largest float
+ LEQf      f1              #3.4028235e38   @fail
+ DIVf      f1              #-1.0           f0                  ; -1 / 0 = -inf
+ GEQf      f1              #-3.4028235e38  @fail
+ DIVf      f1              #1.0            #-0.0               ; folded at assembly: 1 / -0 = -inf
+ GEQf      f1              #-3.4028235e38  @fail
+ DIVf      f1              f0              f0                  ; 0 / 0 = NaN, unequal to itself
+ EQUf      f1              f1              @fail
 
 ;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ;
@@ -1088,6 +1097,20 @@ okLEQf52: NOOP
  LEQf      #120.3          #120.3          @okLEQf53
  GOTO      @fail
 okLEQf53: NOOP
+; Two constants are compared at assembly, which once compared LEQf's bit patterns as INTS: wrong for negatives,
+; -0.0 and NaN. The other float compares are pinned here too, with negatives.
+ LEQf      #-1.0           #-2.0           @fail
+ GEQf      #-2.0           #-1.0           @fail
+ LSSf      #-1.0           #-2.0           @fail
+ GRTf      #-2.0           #-1.0           @fail
+ LEQf      #0.0            #-0.0           @okLEQf60
+ GOTO      @fail
+okLEQf60: NOOP
+ ! ADDf    <Q>             #3.4028234e38   #3.4028234e38
+ ! SUBf    <Q>             #<Q>            #<Q>                    ; inf - inf = NaN
+ LEQf      #<Q>            #1.0            @okLEQf61               ; unordered: taken, as at run time
+ GOTO      @fail
+okLEQf61: NOOP
  LEQf      #456.7          f0              @fail
  LEQf      #-456.7         f0              @okLEQf56
  GOTO      @fail
@@ -2183,11 +2206,9 @@ DEFINED_POINTER: ! DEFp    &gArray:3
 ;
 ; Float literal parsing: correctly rounded and identical on every compiler
 ;
-; stringToFloat must round the decimal literal to the nearest float (it accumulates in double, then converts once),
-; NOT accumulate directly in float32 -- the latter diverged across compilers (clang contracts `d*10+digit` to a
-; single-rounded fmadd, MSVC emits mul+add), e.g. 2147483647.0 parsed to 2^31 on one and 2^31-128 on the other.
-; These compile-time comparisons pin the correctly-rounded result: each literal is not exactly representable and
-; must round to the neighbouring power of two.
+; parseFloat rounds a literal's exact decimal value to the nearest float, ties to even, on every compiler (an older
+; parser accumulated in floating point and diverged across compilers, then rounded exact ties the wrong way).
+; These compile-time comparisons pin the correctly rounded result: each literal is not exactly representable.
 ;
 ;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 
@@ -2197,6 +2218,12 @@ okFParse0: NOOP
  EQUf      #16777217.0      #16777216.0      @okFParse1     ; 2^24+1 not representable -> rounds (to even) to 2^24
  GOTO      @fail
 okFParse1: NOOP
+ EQUf      #2180774.875     #2180775.0       @okFParse2     ; a tie between 2180774.75 and 2180775: to the even one
+ GOTO      @fail
+okFParse2: NOOP
+ EQUf      #1135055.5625    #1135055.5       @okFParse3     ; a tie between 1135055.5 and 1135055.625: to the even one
+ GOTO      @fail
+okFParse3: NOOP
 
     done:               POKE &global.pointer &consts.done
                         RETU

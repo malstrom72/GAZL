@@ -202,9 +202,9 @@ class Arm64Emitter {
 */
 class JitCompilerArm64 : public JitCompiler {
 	public:		virtual void compile(const AssembledProgram& program, JitModule& out);
-	private:	static void lowerFunction(Arm64Emitter& e, const Instruction* code, const Value* memory, UInt funcIndex
-						, UInt funcEnd, const Offsets& o, std::vector<Label>& entryLabels, UInt selfOrdinal
-						, UInt functionCount, Label exitLabel);				// calls the inherited fuel/opcode helpers
+	private:	static void lowerFunction(Arm64Emitter& e, const Instruction* code, const Value* memory
+						, UInt constantsSize, UInt funcIndex, UInt funcEnd, const Offsets& o
+						, std::vector<Label>& entryLabels, UInt selfOrdinal, UInt functionCount, Label exitLabel);	// calls the inherited fuel/opcode helpers
 };
 
 } // namespace GAZL

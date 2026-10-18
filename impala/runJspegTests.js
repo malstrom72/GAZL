@@ -19,6 +19,79 @@ const testsDir = path.join(repoRoot, 'tests', 'impala');
 const sourcesDir = path.join(testsDir, 'sources');
 const goldenDir = path.join(testsDir, 'golden');
 const erroneousDir = path.join(testsDir, 'erroneous');
+/* The conformance suite: one small program per section of docs/impala/Impala.md, its golden beside it.
+   See tests/impala/conformance/README.md. */
+const conformanceDir = path.join(testsDir, 'conformance');
+const referencePath = path.join(repoRoot, 'docs', 'impala', 'Impala.md');
+
+/* A heading's anchor as GitHub renders it: lower case, punctuation other than `-` dropped, spaces to `-`. */
+function headingAnchor(text) {
+        return text.toLowerCase().replace(/[^a-z0-9 _-]/g, '').replace(/ /g, '-');
+}
+
+/* Every language section of the reference must be claimed by a conformance program (`Conformance:
+   Impala.md#anchor` in its header) or listed as exempt in the suite's README with a reason. A section is
+   every heading from "Lexical elements" up to "The Impala tools", except a `##` group heading whose
+   subsections carry the content. Returns the number of problems, each one printed. */
+function checkConformanceCoverage(sources) {
+        const lines = fs.readFileSync(referencePath, 'utf8').split(/\r?\n/);
+        const headings = [];
+        let inLanguage = false;
+        let inFence = false;
+        for (const line of lines) {
+                if (/^```/.test(line)) {
+                        inFence = !inFence;
+                        continue;
+                }
+                const m = !inFence && line.match(/^(#{2,4}) (.*)$/);
+                if (!m) {
+                        continue;
+                }
+                if (m[2] === 'Lexical elements') {
+                        inLanguage = true;
+                } else if (m[2] === 'The Impala tools') {
+                        inLanguage = false;
+                }
+                if (inLanguage) {
+                        headings.push({ level: m[1].length, anchor: headingAnchor(m[2]) });
+                }
+        }
+        const wanted = headings.filter((h, i) => h.level > 2
+                        || !(i + 1 < headings.length && headings[i + 1].level > h.level));
+        const claimed = {};
+        for (const source of sources) {
+                const m = source.text.match(/Conformance: Impala\.md#([a-z0-9_-]+)/);
+                if (m) {
+                        claimed[m[1]] = source.file;
+                }
+        }
+        const readme = fs.readFileSync(path.join(conformanceDir, 'README.md'), 'utf8');
+        const exempt = {};
+        const exemptPattern = /^- `Impala\.md#([a-z0-9_-]+)`/gm;
+        for (let m = exemptPattern.exec(readme); m; m = exemptPattern.exec(readme)) {
+                exempt[m[1]] = true;
+        }
+        let problems = 0;
+        const known = {};
+        for (const h of headings) {
+                known[h.anchor] = true;
+        }
+        for (const h of wanted) {
+                if (claimed[h.anchor] === undefined && !exempt[h.anchor]) {
+                        console.error(`<<< Impala.md#${h.anchor} has no conformance program and is not exempt >>>`);
+                        problems += 1;
+                }
+        }
+        for (const anchor of Object.keys(claimed).concat(Object.keys(exempt))) {
+                if (!known[anchor]) {
+                        console.error(`<<< Impala.md#${anchor} names no section of the language reference >>>`);
+                        problems += 1;
+                }
+        }
+        console.log(`Conformance: ${wanted.length} reference sections, ${Object.keys(claimed).length} claimed, `
+                        + `${Object.keys(exempt).length} exempt, ${problems} problems`);
+        return problems;
+}
 
 function readImpalaFile(filePath) {
         return fs.readFileSync(filePath, IMPALA_ENCODING);
@@ -65,15 +138,21 @@ function main() {
                 console.log(`(no ${path.relative(repoRoot, gazlCmd)} - skipping assemble+run checks)`);
         }
 
-        const sourceFiles = fs
-                .readdirSync(sourcesDir)
-                .filter((file) => file.endsWith('.impala'))
-                .sort();
+        const sourceFiles = [];
+        for (const suite of [ { dir: sourcesDir, golden: goldenDir }, { dir: conformanceDir, golden: conformanceDir } ]) {
+                const files = fs.readdirSync(suite.dir).filter((file) => file.endsWith('.impala')).sort();
+                for (const file of files) {
+                        sourceFiles.push({ file: file, dir: suite.dir, golden: suite.golden });
+                }
+        }
+        errorCount += checkConformanceCoverage(sourceFiles.filter((entry) => entry.dir === conformanceDir)
+                        .map((entry) => ({ file: entry.file, text: readImpalaSource(path.join(entry.dir, entry.file)) })));
 
-        for (const file of sourceFiles) {
+        for (const entry of sourceFiles) {
+                const file = entry.file;
                 const name = path.basename(file, '.impala');
-                const sourcePath = path.join(sourcesDir, file);
-                const goldenPath = path.join(goldenDir, `${name}.gazl`);
+                const sourcePath = path.join(entry.dir, file);
+                const goldenPath = path.join(entry.golden, `${name}.gazl`);
 
                 console.log(`Compiling ${file}`);
 

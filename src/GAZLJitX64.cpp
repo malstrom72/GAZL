@@ -488,9 +488,6 @@ static int loadFloatOperandCached(X64Emitter& emitter, RegisterCache& cache, con
 	emitter.movssRip(static_cast<Reg>(x), emitter.floatLiteral(static_cast<uint32_t>(operand.i)));
 	return x;
 }
-// DIVf with a runtime divisor: match the interpreter's zero-divisor trap (GAZL.cpp CHECK_FLOAT_DIV_BY_ZERO). Test the
-// divisor's bits: (bits << 1) == 0 iff the value is +0.0 or -0.0 (matching `== 0.0f`; NaN/inf fall through). VVC (const
-// divisor) is assemble-time-checked, so it stays on emitBinaryFloat.
 #ifdef GAZL_CANONICAL_NAN
 // strict FP: force any NaN in xmm d to the canonical 0x7FC00000, matching the interpreter's canonicalNaN(), so a
 // NaN's sign/payload (unspecified by IEEE) is identical across interp and JIT. Off by default; only the fuzz build defines it.
@@ -505,21 +502,6 @@ static void emitCanonicalizeNaN(X64Emitter& emitter, int d) {
 #else
 #define EMIT_CANON_NAN(emitter, d) ((void)0)
 #endif
-
-static void emitDivFChecked(X64Emitter& emitter, RegisterCache& cache, const Instruction& instruction, bool source1Const, std::vector<ColdTrap>& coldTraps) {
-	const int a = loadFloatOperandCached(emitter, cache, instruction.p1, source1Const);
-	const int b = loadFloatOperandCached(emitter, cache, instruction.p2, false);
-	ColdTrap trap; trap.label = emitter.newLabel(); trap.status = DIVISION_BY_ZERO;
-	emitter.movdFromXmm(SCRATCH_B, static_cast<Reg>(b));
-	emitter.add(SCRATCH_B, SCRATCH_B);																					// <<1: ZF set iff divisor is +-0.0
-	cache.captureDirtyLines(trap.dirty);																				// the trap exit must leave memory interpreter-identical
-	emitter.jcc(CC_E, trap.label);																						// trap arm is cold, after the mainline
-	coldTraps.push_back(trap);
-	const int d = cache.define(instruction.p0.i, FLOAT_REGISTER);
-	emitTwoOperand(emitter, cache, &X64Emitter::movssReg, &X64Emitter::divss, FLOAT_REGISTER, d, a, b);
-	EMIT_CANON_NAN(emitter, d);
-	cache.endInstruction();
-}
 
 // destination = source1 <fop> source2 through the cache (two-operand: seed dst with s1, then fop dst, s2).
 static void emitBinaryFloat(X64Emitter& emitter, RegisterCache& cache, BinaryOp fop, const Instruction& instruction, bool source1Const, bool source2Const) {
@@ -556,8 +538,17 @@ static void emitBranchFloat(X64Emitter& emitter, RegisterCache& cache, int kind,
 	(suspend → cold stub). GAZL calls/RETU tail-branch directly (the ipStack holds the return address, §5.7.5); native
 	calls run inline; every terminal path sets eax and jumps to the shared `epilogue`. Returns false on an unlowerable opcode.
 */
-void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code, const Value* memory, UInt funcStart,
-		UInt funcEnd, const Offsets& offsets, const std::vector<Label>& entryLabels, Label epilogue, UInt functionCount) {
+void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code, const Value* memory, UInt constantsSize
+		, UInt funcStart, UInt funcEnd, const Offsets& offsets, const std::vector<Label>& entryLabels, Label epilogue
+		, UInt functionCount) {
+	/*
+		`MEMORY_BASE` holds `memoryBase`, the lowest constant, so a pointer plus `readOffset` is its word index from
+		there. A write is range-checked as `pointer - MEMORY_OFFSET` against `rwMemorySize` and stored `constantsSize`
+		words further on (`rwDisplacement`), as in the interpreter.
+	*/
+	const UInt readOffset = constantsSize - MEMORY_OFFSET;
+	const int32_t rwDisplacement = static_cast<int32_t>(constantsSize * 4);
+	const Pointer lowestAddress = MEMORY_OFFSET - constantsSize;
 	const UInt endIndex = funcEnd;																						// a function extends to the next FUNC (functionTable order), NOT to its first RETU: multi-RETU and GOTO-ending functions are legal
 
 	/*
@@ -598,7 +589,7 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 	buildUseSchedule(code, funcStart, endIndex, useSchedule);															// Belady next-read lists (§5.7 v2.0.5)
 	cache.setUseSchedule(&useSchedule);
 	std::map<Int, int> pointerRealm;
-	buildPointerRealms(code, funcStart, endIndex, pointerRealm);															// §1.1 realm stamp (v2.3a): skip flushes for non-frame pointer ops
+	buildPointerRealms(code, funcStart, endIndex, constantsSize, pointerRealm);															// §1.1 realm stamp (v2.3a): skip flushes for non-frame pointer ops
 	const std::map<Int, int>::const_iterator realmEnd = pointerRealm.end();
 	std::map<UInt, UInt> loopExtent;
 	jitResidencyLeaders(code, funcStart, endIndex, memory, loopExtent);													// v2.2: loop headers whose entry state stays register-resident
@@ -729,20 +720,20 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 			case OP_MOVE_VC: { const int d = cache.define(in.p0.i, GENERAL_REGISTER); emitter.movImm(static_cast<Reg>(d), static_cast<uint32_t>(in.p1.i)); cache.endInstruction(); break; }
 
 			// constant-address global access: assembler-validated, cannot touch the frame, so no cache coherence is needed.
-			case OP_PEEK_VC: { const int d = cache.define(in.p0.i, GENERAL_REGISTER); emitter.load(static_cast<Reg>(d), MEMORY_BASE, static_cast<int32_t>((in.p1.p - MEMORY_OFFSET) * 4)); cache.endInstruction(); break; }
-			case OP_POKE_CV: { const int r = cache.read(in.p1.i, GENERAL_REGISTER); emitter.store(MEMORY_BASE, static_cast<int32_t>((in.p0.p - MEMORY_OFFSET) * 4), static_cast<Reg>(r)); cache.endInstruction(); break; }
-			case OP_POKE_CC: { const int r = cache.scratch(GENERAL_REGISTER); emitter.movImm(static_cast<Reg>(r), static_cast<uint32_t>(in.p1.i)); emitter.store(MEMORY_BASE, static_cast<int32_t>((in.p0.p - MEMORY_OFFSET) * 4), static_cast<Reg>(r)); cache.endInstruction(); break; }
+			case OP_PEEK_VC: { const int d = cache.define(in.p0.i, GENERAL_REGISTER); emitter.load(static_cast<Reg>(d), MEMORY_BASE, static_cast<int32_t>((in.p1.p + readOffset) * 4)); cache.endInstruction(); break; }
+			case OP_POKE_CV: { const int r = cache.read(in.p1.i, GENERAL_REGISTER); emitter.store(MEMORY_BASE, static_cast<int32_t>((in.p0.p + readOffset) * 4), static_cast<Reg>(r)); cache.endInstruction(); break; }
+			case OP_POKE_CC: { const int r = cache.scratch(GENERAL_REGISTER); emitter.movImm(static_cast<Reg>(r), static_cast<uint32_t>(in.p1.i)); emitter.store(MEMORY_BASE, static_cast<int32_t>((in.p0.p + readOffset) * 4), static_cast<Reg>(r)); cache.endInstruction(); break; }
 
 			/*
 				var-indexed memory. The no-flush optimization is sound ONLY when the CONST operand is a genuine
-				globals/constants-realm address (>= MEMORY_OFFSET): then the access provably can't reach the frame (§1.1).
+				globals/constants-realm address (>= `lowestAddress`): then the access provably can't reach the frame (§1.1).
 				The scalar/offset pointer-deref idiom `PEEK $x $p` / `POKE $p $x` also finalizes to VCV/CVV (SWAP), but
 				with the const being a small OFFSET and the pointer riding the VARIABLE operand - unknown realm, so it
 				must flush like POKE_VVV. constAddrBase distinguishes the two by the const's range.
 			*/
 			case OP_PEEK_VCV: {																							// dst = memory[C1 + index]
-				const int32_t base = static_cast<int32_t>(in.p1.p - MEMORY_OFFSET);
-				const bool constAddrBase = (in.p1.p >= MEMORY_OFFSET);
+				const int32_t base = static_cast<int32_t>(in.p1.p + readOffset);
+				const bool constAddrBase = (in.p1.p >= lowestAddress);
 				ColdTrap trap; trap.label = emitter.newLabel(); trap.status = BAD_PEEK;
 				const int idx = cache.read(in.p2.i, GENERAL_REGISTER);
 				if (!constAddrBase) { cache.spillDirtyResident(); }														// pointer-in-variable form: flush so the read sees dirty frame lines
@@ -758,7 +749,7 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 			}
 			case OP_POKE_CVV: case OP_POKE_CVC: {																		// memory[C0 + index] = value
 				const int32_t base = static_cast<int32_t>(in.p0.p - MEMORY_OFFSET);
-				const bool constAddrBase = (in.p0.p >= MEMORY_OFFSET);
+				const bool constAddrBase = (in.p0.p >= lowestAddress);
 				ColdTrap trap; trap.label = emitter.newLabel(); trap.status = BAD_POKE;
 				const int idx = cache.read(in.p1.i, GENERAL_REGISTER);
 				int val;
@@ -769,7 +760,7 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 				emitter.load(SCRATCH_B, CONTEXT, offsets.rwmemsize); emitter.cmp(RAX, SCRATCH_B);
 				cache.captureDirtyLines(trap.dirty);																	// the trap exit must leave memory interpreter-identical
 				emitter.jcc(CC_AE, trap.label);																			// trap arm is cold, after the mainline
-				emitter.storeIdx(MEMORY_BASE, RAX, 0, static_cast<Reg>(val));							// index by the CHECKED sum (see OP_PEEK_VCV): a wrapped index must not escape the bound
+				emitter.storeIdx(MEMORY_BASE, RAX, rwDisplacement, static_cast<Reg>(val));				// index by the CHECKED sum (see OP_PEEK_VCV): a wrapped index must not escape the bound
 				cache.endInstruction();
 				if (!constAddrBase) { cache.invalidateAll(); }
 				coldTraps.push_back(trap);
@@ -789,7 +780,7 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 				const int bp = cache.read(in.p1.i, GENERAL_REGISTER);
 				const int ip = cache.read(in.p2.i, GENERAL_REGISTER);
 				if (!nonFrame) { cache.spillDirtyResident(); }
-				emitter.mov(RAX, static_cast<Reg>(bp)); emitter.add(RAX, static_cast<Reg>(ip)); emitter.subImm(RAX, MEMORY_OFFSET);
+				emitter.mov(RAX, static_cast<Reg>(bp)); emitter.add(RAX, static_cast<Reg>(ip)); emitter.addImm(RAX, readOffset);
 				emitter.load(SCRATCH_B, CONTEXT, offsets.memsize); emitter.cmp(RAX, SCRATCH_B);
 				cache.captureDirtyLines(trap.dirty);																	// the trap exit must leave memory interpreter-identical
 				emitter.jcc(CC_AE, trap.label);
@@ -813,7 +804,7 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 				emitter.load(SCRATCH_B, CONTEXT, offsets.rwmemsize); emitter.cmp(RAX, SCRATCH_B);
 				cache.captureDirtyLines(trap.dirty);																	// the trap exit must leave memory interpreter-identical
 				emitter.jcc(CC_AE, trap.label);
-				emitter.storeIdx(MEMORY_BASE, RAX, 0, static_cast<Reg>(val));
+				emitter.storeIdx(MEMORY_BASE, RAX, rwDisplacement, static_cast<Reg>(val));
 				cache.endInstruction();
 				if (!nonFrame) { cache.invalidateAll(); }
 				coldTraps.push_back(trap);
@@ -870,17 +861,17 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 				else { emitter.load(RAX, DSP, in.p0.i * 4); emitter.subImm(RAX, MEMORY_OFFSET); }
 				emitter.load(SCRATCH_B, CONTEXT, offsets.rwmemsize); emitter.cmpImm(SCRATCH_B, static_cast<uint32_t>(in.p2.i)); emitter.jcc(CC_B, copyTrap);	// count alone past the arena
 					emitter.subImm(SCRATCH_B, static_cast<uint32_t>(in.p2.i)); emitter.cmp(RAX, SCRATCH_B); emitter.jcc(CC_A, copyTrap);	// destIdx > rwMemorySize - count. SUBTRACT, never add: destIdx+count wrapped, letting a count of MEMORY_OFFSET past the check
-				if (srcConst) { emitter.movImm(RAX, static_cast<uint32_t>(in.p1.p - MEMORY_OFFSET)); }
-				else { emitter.load(RAX, DSP, in.p1.i * 4); emitter.subImm(RAX, MEMORY_OFFSET); }
+				if (srcConst) { emitter.movImm(RAX, static_cast<uint32_t>(in.p1.p + readOffset)); }
+				else { emitter.load(RAX, DSP, in.p1.i * 4); emitter.addImm(RAX, readOffset); }
 				emitter.load(SCRATCH_B, CONTEXT, offsets.memsize); emitter.cmpImm(SCRATCH_B, static_cast<uint32_t>(in.p2.i)); emitter.jcc(CC_B, copyTrap);		// count alone past the arena
 					emitter.subImm(SCRATCH_B, static_cast<uint32_t>(in.p2.i)); emitter.cmp(RAX, SCRATCH_B); emitter.jcc(CC_A, copyTrap);		// srcIdx > memorySize - count, same reason
 			#if defined(_WIN32)
 				emitter.push(RSI); emitter.push(RDI);																	// Win64: rsi/rdi are callee-saved; rep movsd clobbers them
 			#endif
-				if (destConst) { emitter.movQ(RDI, MEMORY_BASE); emitter.addImmQ(RDI, static_cast<uint32_t>((in.p0.p - MEMORY_OFFSET) * 4)); }
-				else { emitter.load(RAX, DSP, in.p0.i * 4); emitter.subImm(RAX, MEMORY_OFFSET); emitter.shlImm(RAX, 2); emitter.movQ(RDI, MEMORY_BASE); emitter.addQ(RDI, RAX); }
-				if (srcConst) { emitter.movQ(RSI, MEMORY_BASE); emitter.addImmQ(RSI, static_cast<uint32_t>((in.p1.p - MEMORY_OFFSET) * 4)); }
-				else { emitter.load(RAX, DSP, in.p1.i * 4); emitter.subImm(RAX, MEMORY_OFFSET); emitter.shlImm(RAX, 2); emitter.movQ(RSI, MEMORY_BASE); emitter.addQ(RSI, RAX); }
+				if (destConst) { emitter.movQ(RDI, MEMORY_BASE); emitter.addImmQ(RDI, static_cast<uint32_t>((in.p0.p + readOffset) * 4)); }
+				else { emitter.load(RAX, DSP, in.p0.i * 4); emitter.addImm(RAX, readOffset); emitter.shlImm(RAX, 2); emitter.movQ(RDI, MEMORY_BASE); emitter.addQ(RDI, RAX); }
+				if (srcConst) { emitter.movQ(RSI, MEMORY_BASE); emitter.addImmQ(RSI, static_cast<uint32_t>((in.p1.p + readOffset) * 4)); }
+				else { emitter.load(RAX, DSP, in.p1.i * 4); emitter.addImm(RAX, readOffset); emitter.shlImm(RAX, 2); emitter.movQ(RSI, MEMORY_BASE); emitter.addQ(RSI, RAX); }
 				emitter.movImm(RCX, static_cast<uint32_t>(in.p2.i));
 				emitter.cld(); emitter.repMovsd();
 			#if defined(_WIN32)
@@ -892,11 +883,11 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 				break;
 			}
 
-			// address of a local p1 -> dest p0. pointer = MEMORY_OFFSET + wordIndex(dsp) + slot.
+			// address of a local p1 -> dest p0. pointer = lowestAddress + wordIndex(dsp) + slot.
 			case OP_ADRL: {
 				emitter.movQ(RAX, DSP); emitter.subQ(RAX, MEMORY_BASE); emitter.shrImm(RAX, 2);							// (dsp - memoryBase) / 4 = dsp word offset
 				emitter.addImm(RAX, static_cast<uint32_t>(in.p1.i));													// + slot
-				emitter.addImm(RAX, MEMORY_OFFSET);
+				emitter.addImm(RAX, lowestAddress);
 				const int d = cache.define(in.p0.i, GENERAL_REGISTER);
 				emitter.mov(static_cast<Reg>(d), RAX);
 				cache.endInstruction();
@@ -963,9 +954,9 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 			case OP_SUBF_VCV: emitBinaryFloat(emitter, cache, &X64Emitter::subss, in, true, false); break;
 			case OP_MULF_VVV: emitBinaryFloat(emitter, cache, &X64Emitter::mulss, in, false, false); break;
 			case OP_MULF_VVC: emitBinaryFloat(emitter, cache, &X64Emitter::mulss, in, false, true); break;
-			case OP_DIVF_VVV: emitDivFChecked(emitter, cache, in, false, coldTraps); break;
-			case OP_DIVF_VVC: emitBinaryFloat(emitter, cache, &X64Emitter::divss, in, false, true); break;				// const divisor: assemble-checked
-			case OP_DIVF_VCV: emitDivFChecked(emitter, cache, in, true, coldTraps); break;
+			case OP_DIVF_VVV: emitBinaryFloat(emitter, cache, &X64Emitter::divss, in, false, false); break;
+			case OP_DIVF_VVC: emitBinaryFloat(emitter, cache, &X64Emitter::divss, in, false, true); break;
+			case OP_DIVF_VCV: emitBinaryFloat(emitter, cache, &X64Emitter::divss, in, true, false); break;
 			/*
 				FTOI / ITOF carry a scale constant (p2): FTOI = (int)(src * scale) with the interpreter's saturation;
 				ITOF = (float)src * scale.
@@ -1144,8 +1135,8 @@ void JitCompilerX64::compile(const AssembledProgram& program, JitModule& out) {
 		emitter.alignTo(16);																							// 16-align entries: code-layout shifts stay within one function
 		emitter.bind(entryLabels[ordinal]);
 		const UInt funcEnd = ((ordinal + 1 < program.functionCount) ? program.functionTable[ordinal + 1] : program.codeSize) - 1;
-		lowerFunction(emitter, program.code, program.memory, program.functionTable[ordinal], funcEnd, offsets, entryLabels
-				, epilogue, program.functionCount);
+		lowerFunction(emitter, program.code, program.memory + (program.constsSize - 1), program.constsSize - 1
+				, program.functionTable[ordinal], funcEnd, offsets, entryLabels, epilogue, program.functionCount);
 	}
 	/*
 		Shared exit `epilogue` (bound inside emitDispatcher): every terminal path - suspend, OK return, or trap - jumps

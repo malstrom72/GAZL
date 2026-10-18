@@ -2420,8 +2420,6 @@ console.log("impala.jspeg compiler never bounds-checks ADDRESS formation");
 		["an untyped source promises nothing to break", "copy (4 from &global gu[0] to &global gf[0]);"],
 		["an untyped destination, likewise", "copy (4 from &global gf[0] to &global gu[0]);"],
 		["a cast is the escape hatch", "copy (4 from (pointer) &global gi[0] to &global gf[0]);"],
-		["a length past the destination extent is the programmer's, as with memcpy",
-			"copy (64 from &global gi[0] to &global gi[4]);"],
 	]) {
 		expectCompileOutcome("copy element type", label,
 			decls + "function main() { " + body + " }\n", null);
@@ -2432,6 +2430,38 @@ console.log("impala.jspeg compiler never bounds-checks ADDRESS formation");
 	expectCompileOutcome("copy element type", "two untyped spellings do not contradict each other",
 		"global array gu[8]\nfunction main() locals array a[4] { copy (4 from a to &global gu[0]); }\n", null);
 	console.log("impala.jspeg compiler checks copy's element types, and only on a contradiction");
+
+	// A LITERAL count larger than the room left in a global array is E467 (it used to be "the programmer's, as
+	// with memcpy"; the VM stops only a copy that leaves memory, so one into the neighbour succeeded silently).
+	// Anything Impala cannot measure stays unchecked: a symbolic count, a pointer, a symbolic offset.
+	for (const [label, body] of [
+		["past the destination", "copy (64 from &global gi[0] to &global gi[4]);"],
+		["past the source", "copy (5 from &global gi[4] to &global gu[0]);"],
+	]) {
+		expectCompileOutcome("copy count", label, decls + "function main() { " + body + " }\n", "E467");
+	}
+	for (const [label, body] of [
+		["exactly the room left", "copy (4 from &global gi[4] to &global gu[4]);"],
+		["a symbolic count", "copy (N from &global gi[0] to &global gu[0]);"],
+		["a pointer has no extent", "copy (64 from global gp to global gq);"],
+	]) {
+		expectCompileOutcome("copy count", label, "const int N\nglobal pointer gp\nglobal pointer gq\n" + decls
+				+ "function main() { " + body + " }\n", null);
+	}
+	console.log("impala.jspeg compiler refuses a literal copy count larger than a global array's room");
+
+	for (const [label, expr, error] of [
+		["integer division", "i / 0", "E466"],
+		["modulus", "i % 0", "E466"],
+		["float division", "f / 0.0", "E466"],
+		["a hex zero", "i / 0x0", "E466"],
+		["a symbolic zero is the assembler's", "i / Z", null],
+		["a non-zero literal", "i / 2", null],
+	]) {
+		expectCompileOutcome("zero divisor", label, "const int Z\nfunction main() locals int i, float f, int r, float q "
+				+ "{ i = 1; f = 1.0; " + (expr.charAt(0) === 'f' ? "q" : "r") + " = " + expr + "; }\n", error);
+	}
+	console.log("impala.jspeg compiler refuses a literal zero divisor");
 }
 
 // The `; else` detector must not fire on the shapes that legitimately put a `;` or an `else` nearby.
@@ -3644,6 +3674,25 @@ if (diagnosticWarnings.length !== 1 || !/^diag\.impala:1:\d+: warning\[E101\]: /
 }
 console.log("impala.jspeg compiler renders --legacy warnings in the same diagnostic shape");
 
+// Both types are named in a type diagnostic. typeError filled `{$type2}` only when that type was defined, so an
+// untyped shaped array's initializer once reported "int vs {$type2}" (that E422 itself is gone, see below).
+const typedShape = "global int array m[2, 2] = { { 1, 2.5 }, { 3, 4 } }\nfunction main() { }";
+expectCompileOutcome("type-names", "both types named", typedShape, "(float vs int)");
+try {
+	compileWithJsImpala(typedShape + "\n", { randomId: 42 });
+} catch (err) {
+	assert(!/\{\$/.test(err.message), `a diagnostic still carries a raw placeholder\n${err.message}`);
+}
+console.log("impala.jspeg compiler names every type in a type diagnostic, never a raw placeholder");
+
+// An untyped shaped array takes any mix of values, as an untyped flat one does. The buffered initializer path
+// compared each entry with the untyped element's undefined type, so no untyped shaped array could be initialized.
+expectCompileOutcome("untyped-shape", "ints", "global array m[2, 2] = { { 1, 2 }, { 3, 4 } }\nfunction main() { }",
+	null);
+expectCompileOutcome("untyped-shape", "a mix with an omitted entry",
+	"global int array b[4]\nglobal array m[2, 3] = { { 1, 2.5, &global b[2] }, { 4 } }\nfunction main() { }", null);
+console.log("impala.jspeg compiler initializes an untyped shaped array with any mix of values");
+
 // A symbol table is a plain `{}`, so it inherits `constructor`/`valueOf`/`toString`/`hasOwnProperty`/...
 // from Object.prototype. An unguarded `table[name]` read once mistook those user identifiers for
 // pre-existing entries: `function constructor()` crashed the compiler with a RAW, uncoded
@@ -3905,7 +3954,7 @@ function runGazlText(gazlPath, text, cmdArgs, label) {
 // design/gazl/TailCalls.md: the arguments marshal exactly like a call's, then the GAZL 2 TAIL
 // instruction slides the %0 window onto the frame base and re-enters - no frame push, so the callee's
 // RETU returns to the ORIGINAL caller and recursion depth costs nothing. TAIL is an additive mnemonic
-// (usable in dialect-1 text on a GAZL 2 engine, unknown to older engines), hence E466 outside --gazl2.
+// (usable in dialect-1 text on a GAZL 2 engine, unknown to older engines), hence E468 outside --gazl2.
 {
 	const countSrc = "const int DEBUG = 1\n"
 		+ "extern native printInt\nextern native printLF\n"
@@ -3920,14 +3969,14 @@ function runGazlText(gazlPath, text, cmdArgs, label) {
 	assert(/SUBi %1 \$n #1/.test(out) && /ADDi %2 \$acc #1/.test(out),
 		"tail must marshal the new arguments into the %0 call window TAIL consumes");
 
-	expectCompileOutcome("tail", "outside --gazl2", countSrc, "E466");
+	expectCompileOutcome("tail", "outside --gazl2", countSrc, "E468");
 	expectCompileOutcome("tail", "a non-self target",
 		"function other(int n) returns int r { r = n; }\n"
 			+ "function count(int n) returns int r\n{\n\ttail other(n);\n}\nfunction main() { }\n",
-		"E467", true);
+		"E469", true);
 	expectCompileOutcome("tail", "an inline body",
 		"inline function twice(int x) returns int r\n{\n\ttail twice(x);\n}\nfunction main() { }\n",
-		"E468", true);
+		"E470", true);
 	expectCompileOutcome("tail", "a wrong argument count",
 		"function count(int n, int acc) returns int r\n{\n\tif (n == 0) { r = acc; return; }\n"
 			+ "\ttail count(n - 1);\n}\nfunction main() { }\n",

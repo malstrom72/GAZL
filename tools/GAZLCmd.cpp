@@ -24,8 +24,8 @@
 #include <iostream>
 #include <string>
 #include <ctime>
-#include <chrono>
 #include <fstream>
+#include <sstream>
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
@@ -146,7 +146,7 @@ Status print(Processor* vpu) {
 	if (vpu->accessConstMemory(p, 1) == 0) return ACCESS_VIOLATION; // In case we ended up at the "guardian" element...
 	std::cout.flush();
 	return OK;
-};
+}
 
 Status abort(Processor*) {
 	return ABORTED;
@@ -177,14 +177,14 @@ Status printFloat(Processor* vpu) {
 	std::cout << params[1].f;
 	std::cout.flush();
 	return OK;
-};
+}
 
 Status printLF(Processor* vpu) {
 	vpu->resetTimeOut(0x7FFFFFFF);
 	std::cout << std::endl;
 	std::cout.flush();
 	return OK;
-};
+}
 
 Status input(Processor* vpu) {
 	vpu->resetTimeOut(0x7FFFFFFF);
@@ -206,7 +206,7 @@ Status input(Processor* vpu) {
 	bp[i].i = 0;
 	params[0].i = i;
 	return OK;
-};
+}
 
 Status gazlSqrt(Processor* vpu) {
 	Value* params = vpu->accessParams(2);
@@ -215,7 +215,7 @@ Status gazlSqrt(Processor* vpu) {
 	}
 	params[0].f = sqrt(params[1].f);
 	return OK;
-};
+}
 
 Status gazlLog(Processor* vpu) {
 	Value* params = vpu->accessParams(2);
@@ -224,7 +224,7 @@ Status gazlLog(Processor* vpu) {
 	}
 	params[0].f = log(params[1].f);
 	return OK;
-};
+}
 
 Status gazlAtan2(Processor* vpu) {
 	Value* params = vpu->accessParams(3);
@@ -233,7 +233,7 @@ Status gazlAtan2(Processor* vpu) {
 	}
 	params[0].f = atan2(params[1].f, params[2].f);
 	return OK;
-};
+}
 
 Status gazlExit(Processor*) {
 	return TERMINATED;					// expected, clean termination (e.g. a firmware harness reaching its frame budget)
@@ -258,6 +258,7 @@ const int CODE_MEMORY_SIZE = 128 * 1024;
 const int FUNCTION_TABLE_SIZE = CODE_MEMORY_SIZE;	// A function is at least one instruction, so this can never overflow.
 const int CALL_STACK_SIZE = 2048;
 
+#if !defined(LIBFUZZ) && !defined(LIBFUZZ_STANDALONE)			// the fuzz drivers declare their own tables
 static const NativeFunc NATIVE_TABLE[] = {
 	abort, assertFail, printInt, printFloat, print, printLF, input, gazlAtan2, gazlSqrt, gazlLog, gazlExit,
 	forwardNative<0>, forwardNative<1>, forwardNative<2>, forwardNative<3>,							// --forward slots;
@@ -269,6 +270,7 @@ static const char* NATIVE_NAMES[] = {
 };
 
 const int FIRST_FORWARD_INDEX = 11;						// index of forwardNative<0> in NATIVE_TABLE
+#endif
 
 static Value memory[DATA_MEMORY_SIZE];
 static Instruction code[CODE_MEMORY_SIZE];
@@ -739,6 +741,21 @@ long g_fuzzSkips = 0, g_fuzzRan = 0;
 
 #else
 
+/*
+	`input` without the console: what `input` does when the line read is empty. A fuzz target must not read stdin,
+	or a replay depends on how the build was started and can block waiting for a line. Unlike `input` it leaves the
+	fuel alone: refilling it let a program that calls `input` in a loop run forever, past the target's step limit.
+*/
+static Status fuzzInput(Processor* vpu) {
+	Value* params = vpu->accessParams(3);
+	if (params == 0) return DATA_STACK_OVERFLOW;
+	Value* bp = vpu->accessMemory(params[2].p, params[1].i + 1);
+	if (bp == 0) return ACCESS_VIOLATION;
+	bp[0].i = 0;
+	params[0].i = 0;
+	return OK;
+}
+
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size) {
 	memset(memory, 0, sizeof memory);																					// zeroed as in a fresh process, so no crash depends on the previous input
 	memset(code, 0, sizeof code);
@@ -748,7 +765,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size) {
 		Symbols globals;
 
 		static const NativeFunc NATIVE_TABLE[] = {
-			abort, abort, input, gazlAtan2, gazlSqrt, gazlLog, testMul, testCallback
+			abort, abort, fuzzInput, gazlAtan2, gazlSqrt, gazlLog, testMul, testCallback
 		};
 
 		static const char* NATIVE_NAMES[] = {
@@ -786,8 +803,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size) {
 			}
 		}
 	}
-	catch (GAZL::Exception& x) {
-		// std::cerr << "Exception: " << x.what() << std::endl;
+	catch (GAZL::Exception&) {
 		return 0;
 	}
   	return 0;  // Non-zero return values are reserved for future use.
@@ -819,6 +835,35 @@ static void quietAsserts() {
 	_set_abort_behavior(0, _WRITE_ABORT_MSG | _CALL_REPORTFAULT);					// no "abort() has been called" popup either
 #endif
 }
+
+#if !defined(LIBFUZZ) || defined(LIBFUZZ_STANDALONE)
+
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <windows.h>
+#else
+#include <time.h>
+#ifdef __linux__
+#include <sched.h>
+#endif
+#endif
+
+static double wallSeconds() {	/// monotonic wall-clock time in seconds, from an arbitrary start
+#ifdef _WIN32
+	LARGE_INTEGER count;
+	LARGE_INTEGER frequency;
+	QueryPerformanceCounter(&count);
+	QueryPerformanceFrequency(&frequency);
+	return static_cast<double>(count.QuadPart) / static_cast<double>(frequency.QuadPart);
+#else
+	timespec ts;
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+	return static_cast<double>(ts.tv_sec) + static_cast<double>(ts.tv_nsec) * 1e-9;
+#endif
+}
+
+#endif
 
 #ifdef LIBFUZZ_STANDALONE
 
@@ -888,7 +933,7 @@ int main(int argc, const char* argv[]) {
 		}
 		const Pointer mainFunction = globals.findFunction("main");
 #ifdef FUZZ_POISON
-		for (UInt i = program.globalsSize; i + program.constsSize < program.memorySize; ++i) { memory[i].i = 0x7F7F7F7F; }
+		for (UInt i = program.constsSize - 1 + program.globalsSize; i + 1 < program.memorySize; ++i) { memory[i].i = 0x7F7F7F7F; }
 #endif
 		Processor interp(program, CALL_STACK_SIZE, callStack, NT, 0);
 		const Status st = runEngine(interp, mainFunction, 10000000);
@@ -913,7 +958,7 @@ int main(int argc, const char* argv[]) {
 		return 0;
 	}
 #endif
-	const std::chrono::steady_clock::time_point startTime = std::chrono::steady_clock::now();
+	const double startTime = wallSeconds();
 	double budget = 0.0;
 	for (int i = 1; i < argc; ++i) {
 		if (strncmp(argv[i], "--budget=", 9) == 0) {
@@ -923,11 +968,15 @@ int main(int argc, const char* argv[]) {
 		if (argv[i][0] == '@') {
 			FILE* listFile = fopen(argv[i] + 1, "r");
 			if (listFile == 0) { perror(argv[i] + 1); return EXIT_FAILURE; }
-			char line[1024];
-			while (fgets(line, sizeof line, listFile) != 0) {
-				size_t n = strlen(line);
-				while (n > 0 && (line[n - 1] == '\n' || line[n - 1] == '\r')) line[--n] = 0;	// tolerate either line ending
-				if (n > 0) doOne(line);
+			std::string line;					// any length: a fixed buffer split a long path into two wrong ones
+			for (int c = fgetc(listFile); ; c = fgetc(listFile)) {
+				if (c != EOF && c != '\n') {
+					if (c != '\r') line += static_cast<char>(c);		// tolerate either line ending
+					continue;
+				}
+				if (!line.empty()) doOne(line.c_str());
+				line.clear();
+				if (c == EOF) break;
 			}
 			fclose(listFile);
 			continue;
@@ -962,7 +1011,7 @@ int main(int argc, const char* argv[]) {
 		doOne(argv[i]);							// no directory walk here; pass files, or an @listfile
 #endif
 	}
-	const double seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - startTime).count();
+	const double seconds = wallSeconds() - startTime;
 	fprintf(stderr, "Replayed %d inputs in %.1f s\n", replayCount, seconds);
 	if (budget > 0.0 && seconds > budget) {
 		fprintf(stderr, "WARNING: replay took %.1f s, over the %.0f s budget; move the corpus replay to its own script"
@@ -974,17 +1023,6 @@ int main(int argc, const char* argv[]) {
 
 #ifndef LIBFUZZ
 #ifndef LIBFUZZ_STANDALONE
-
-#ifdef _WIN32
-#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
-#include <windows.h>
-#else
-#include <time.h>
-#ifdef __linux__
-#include <sched.h>
-#endif
-#endif
 
 /*
 	CPU time of the calling thread, counted only while it runs. Windows counts constant-rate cycles, elsewhere it
@@ -1022,6 +1060,28 @@ static void pinToCore(int core) {	/// restrict the calling thread to logical pro
 #endif
 }
 
+static std::string statusMessage(const char* call, Status status) {	/// "`call` returned status `status`"
+	std::ostringstream message;
+	message << call << " returned status " << status;
+	return message.str();
+}
+
+/*
+	Enter `function` and run it to completion, chunking across TIME_OUT so long workloads finish. Opcode counts
+	can't be recovered here: the print* natives call resetTimeOut(), which clobbers the cycle budget mid-run, so
+	benchmarks compare the time of the identical workload instead.
+*/
+static void runToCompletion(Processor& machine, Pointer function) {
+	Status status = machine.enterCall(function);
+	if (status != OK) throw CmdException(statusMessage("enterCall", status));
+	do {
+		machine.resetTimeOut(0x7FFFFFFF);
+		status = machine.run();
+	} while (status == TIME_OUT);
+	// TERMINATED is a clean, expected stop via the exit() native (e.g. a firmware harness reaching its budget).
+	if (status != OK && status != TERMINATED) throw CmdException(statusMessage("run", status));
+}
+
 int main(int argc, const char* argv[]) {
 	quietAsserts();																						// build.cmd runs this binary unattended; a dialog would hang it, not fail it
 	try {
@@ -1055,7 +1115,12 @@ int main(int argc, const char* argv[]) {
 				} else if (strcmp(a, "--jit-stats") == 0) {
 					useJit = true; jitStats = true;
 				} else if (strncmp(a, "--pin=", 6) == 0) {
-					pinCore = atoi(a + 6);
+					char* end = 0;
+					const long core = strtol(a + 6, &end, 10);
+					if (end == a + 6 || *end != 0 || core < 0 || core > 63) {
+						throw CmdException("--pin: core must be a number from 0 to 63");
+					}
+					pinCore = static_cast<int>(core);
 				} else if (strcmp(a, "--no-libm") == 0) {
 					noLibm = true;
 				} else if (strncmp(a, "--forward=", 10) == 0) {
@@ -1236,13 +1301,13 @@ int main(int argc, const char* argv[]) {
 			if (useJit && !GAZL::jitAvailable()) {	// host forbids executable memory (entitlement / ACG) - never risk a crash
 				std::cerr << "JIT: this host does not permit executable memory; using the interpreter." << std::endl;
 			} else if (useJit) {
-				const auto t0 = std::chrono::steady_clock::now();
+				const double t0 = wallSeconds();
 				try {
 					NativeJitCompiler compiler;							// the host backend; each instance owns its own
 					compiler.compile(program, module);					// compiles a valid program or throws
-					const auto t1 = std::chrono::steady_clock::now();
+					const double t1 = wallSeconds();
 					if (jitStats) {							// machine-readable line for the benchmark harness
-						const double ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
+						const double ms = (t1 - t0) * 1000.0;
 						std::cerr << "jitstats compile_ms=" << ms << " code_bytes=" << (module.codeWords() * 4)
 								<< " funcs=" << program.functionCount << std::endl;
 					} else {
@@ -1286,32 +1351,18 @@ int main(int argc, const char* argv[]) {
 			Pointer mainFunction = globals.findFunction(mainFunctionName);
 			if (mainFunction == 0) throw CmdException(std::string("Could not locate function: ") + mainFunctionName);
 
-			// Enter `main` and run it to completion, chunking across TIME_OUT so long workloads finish.
-			// (Opcode counts can't be recovered here: the print* natives call resetTimeOut(), which clobbers
-			// the cycle budget mid-run. Benchmarks compare wall time of the identical workload instead.)
-			auto runToCompletion = [&]() {
-				Status status = proc->enterCall(mainFunction);
-				if (status != OK) throw CmdException(std::string("enterCall returned status ") + std::to_string(status));
-				do {
-					proc->resetTimeOut(0x7FFFFFFF);
-					status = proc->run();
-				} while (status == TIME_OUT);
-				// TERMINATED is a clean, expected stop via the exit() native (e.g. a firmware harness reaching its budget).
-				if (status != OK && status != TERMINATED) throw CmdException(std::string("run returned status ") + std::to_string(status));
-			};
-
 			if (benchRepeat > 0) {
 				std::vector<double> samples;			// milliseconds, measured iterations only
 				std::vector<double> cpuSamples;			// millions of `threadCpuTicks`, measured iterations only
 				for (int iter = 0; iter < benchWarmup + benchRepeat; ++iter) {
 					if (iter != 0) remakeProc();		// fresh stacks per iteration (see remakeProc); outside the timed span
 					const uint64_t c0 = threadCpuTicks();
-					auto t0 = std::chrono::steady_clock::now();
-					runToCompletion();
-					auto t1 = std::chrono::steady_clock::now();
+					const double t0 = wallSeconds();
+					runToCompletion(*proc, mainFunction);
+					const double t1 = wallSeconds();
 					const uint64_t c1 = threadCpuTicks();
 					if (iter >= benchWarmup) {
-						samples.push_back(std::chrono::duration<double, std::milli>(t1 - t0).count());
+						samples.push_back((t1 - t0) * 1000.0);
 						cpuSamples.push_back((c1 - c0) / 1e6);
 					}
 				}
@@ -1339,7 +1390,7 @@ int main(int argc, const char* argv[]) {
 						<< "\tcpu_median_" << CPU_TICKS_M_UNIT << "=" << cpuSamples[cpuSamples.size() / 2] << std::endl;
 			} else {
 				clock_t c0 = clock();
-				runToCompletion();
+				runToCompletion(*proc, mainFunction);
 				clock_t c1 = clock();
 
 				std::cerr << "--------------------------------------------------------------------------------"

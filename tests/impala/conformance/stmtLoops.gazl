@@ -1,0 +1,52 @@
+; Compiled with Impala version 2.0
+
+; signatures version=1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ stmtLoops.impala:6:1
+; signature extern native printInt() -> unknown @ stmtLoops.impala:7:1
+; signature extern native printFloat() -> unknown @ stmtLoops.impala:8:1
+; signature extern native printLF() -> unknown @ stmtLoops.impala:9:1
+
+;-----------------------------------------------------------------------------
+main:	FUNC	; signature func main() -> void @ stmtLoops.impala:11:1
+		PARA *1
+	$i:	LOCi
+	$n:	LOCi
+;-----------------------------------------------------------------------------
+		MOVi $n #0 	; n = 0
+		MOVi $i #0 	; for (i = 0 to 5) n = n + i
+		GEQi #0 #5 @.e0
+	.l1:	ADDi $n $n $i	; n = n + i
+		FORi $i #5 @.l1
+	.e0:	MOVi %1 $n 	; printInt(n)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ stmtLoops.impala:16:13
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ stmtLoops.impala:16:24
+		MOVi $i #3 	; i = 3
+		MOVi $n #0 	; n = 0
+		GEQi $i #5 @.e2	; for (i to 5) n = n + i
+	.l3:	ADDi $n $n $i	; n = n + i
+		FORi $i #5 @.l3
+	.e2:	MOVi %1 $n 	; printInt(n)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ stmtLoops.impala:20:13
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ stmtLoops.impala:20:24
+		MOVi $n #0 	; n = 0
+	.l4:	GEQi $n #3 @.e5	; while (n < 3) n = n + 1
+		ADDi $n $n #1	; n = n + 1
+		GOTO @.l4  
+	.e5:	MOVi %1 $n 	; printInt(n)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ stmtLoops.impala:23:13
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ stmtLoops.impala:23:24
+		MOVi $n #0 	; n = 0
+	.l6:	ADDi $n $n #1	; n = n + 1
+		LSSi $n #0 @.l6	; } while (n < 0)
+		MOVi %1 $n 	; printInt(n)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ stmtLoops.impala:26:13
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ stmtLoops.impala:26:24
+		MOVi $n #0 	; n = 0
+	.l7:	NEQi $n #5 @.f8	; if (n == 5) goto finished
+		GOTO @finished  	; goto finished
+	.f8:	ADDi $n $n #1	; n = n + 1
+		GOTO @.l7  	; }
+	finished:	MOVi %1 $n 	; printInt(n)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ stmtLoops.impala:33:13
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ stmtLoops.impala:33:24
+		RETU   	; }
