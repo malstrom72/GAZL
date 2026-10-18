@@ -171,7 +171,7 @@ void JitCompiler::jitFuelSafepoints(const Instruction* code, UInt funcStart, UIn
 	so they stay v2.0 until the general per-block reconciliation lands. Const-address SCALAR PEEK/POKE are globals-realm
 	(§1.1) and flush-free: residency-safe. The INDEXED const forms are flush-free too but burn several scratch registers
 	per op, and inside a resident loop that eviction churn measured 2x SLOWER (spectralnorm) - they stay excluded.
-	DIVI/MODI/DIVF flush dirty lines on their main-path trap spill but keep the map resident (a net win); allowed.
+	DIVI/MODI flush dirty lines on their main-path trap spill but keep the map resident (a net win); allowed.
 */
 static bool jitResidencySafe(Int op) {
 	switch (op) {
@@ -338,7 +338,13 @@ static int joinRealm(int a, int b) {
 	return REALM_UNKNOWN;
 }
 
-void buildPointerRealms(const Instruction* code, UInt from, UInt to, UInt constantsSize, std::map<Int, int>& realm) {
+bool isDataAddress(const AssembledProgram& program, Pointer pointer) {
+	const UInt constantsSize = program.constsSize - 1;
+	return pointer - (MEMORY_OFFSET - constantsSize) < constantsSize + program.globalsSize;
+}
+
+void buildPointerRealms(const AssembledProgram& program, UInt from, UInt to, std::map<Int, int>& realm) {
+	const Instruction* const code = program.code;
 	/*
 		Pass 1: live-in slots (first textual role is a READ, before any WRITE) are received parameters -> NONFRAME. A
 		slot first WRITTEN in the function is not a parameter, so a value later used as a pointer base traces to a
@@ -375,7 +381,7 @@ void buildPointerRealms(const Instruction* code, UInt from, UInt to, UInt consta
 			int produced;
 			switch (op) {
 				case OP_ADRL: produced = REALM_MYFRAME; break;												// address of a local
-				case OP_MOVE_VC: produced = (code[j].p1.p >= MEMORY_OFFSET - constantsSize) ? REALM_NONFRAME : REALM_UNKNOWN; break;	// global/const symbol vs bare int
+				case OP_MOVE_VC: produced = isDataAddress(program, code[j].p1.p) ? REALM_NONFRAME : REALM_UNKNOWN; break;	// global/const symbol vs bare int
 				case OP_MOVE_VV: {
 					const std::map<Int, int>::const_iterator it = realm.find(code[j].p1.i);
 					produced = (it != realm.end()) ? it->second : REALM_BOTTOM;

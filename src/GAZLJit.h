@@ -459,10 +459,12 @@ void filterResidencyMap(const ResidencyMap& full, const LiveSets& liveIn, UInt a
 */
 enum PointerRealm { REALM_BOTTOM = 0, REALM_NONFRAME = 1, REALM_MYFRAME = 2, REALM_UNKNOWN = 3 };
 
-// Stamp each slot's pointer realm over code[from..to] (one function): live-in pointer slots (params) = NONFRAME, ADRL =
+// Stamp each slot's pointer realm over `program.code[from..to]` (one function): live-in pointer slots (params) = NONFRAME, ADRL =
 // MYFRAME, propagated through MOVp/ADDp/SUBp, joined to a fixed point. Absent key => REALM_BOTTOM (treat as must-flush).
-// `constantsSize` is the program's words below `MEMORY_OFFSET`, so a constant address is NONFRAME too.
-void buildPointerRealms(const Instruction* code, UInt from, UInt to, UInt constantsSize, std::map<Int, int>& realm);
+void buildPointerRealms(const AssembledProgram& program, UInt from, UInt to, std::map<Int, int>& realm);
+
+// True if `pointer` is a constant or global of `program`, so it can never reach a frame.
+bool isDataAddress(const AssembledProgram& program, Pointer pointer);
 
 /*
 	v2.0 floating register cache (§5.7.1): a per-function write-back cache of frame slots. The opcode switch routes

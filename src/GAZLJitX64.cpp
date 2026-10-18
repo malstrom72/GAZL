@@ -538,14 +538,18 @@ static void emitBranchFloat(X64Emitter& emitter, RegisterCache& cache, int kind,
 	(suspend → cold stub). GAZL calls/RETU tail-branch directly (the ipStack holds the return address, §5.7.5); native
 	calls run inline; every terminal path sets eax and jumps to the shared `epilogue`. Returns false on an unlowerable opcode.
 */
-void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code, const Value* memory, UInt constantsSize
-		, UInt funcStart, UInt funcEnd, const Offsets& offsets, const std::vector<Label>& entryLabels, Label epilogue
-		, UInt functionCount) {
+void JitCompilerX64::lowerFunction(X64Emitter& emitter, const AssembledProgram& program, UInt funcStart, UInt funcEnd
+		, const Offsets& offsets, const std::vector<Label>& entryLabels, Label epilogue) {
 	/*
 		`MEMORY_BASE` holds `memoryBase`, the lowest constant, so a pointer plus `readOffset` is its word index from
 		there. A write is range-checked as `pointer - MEMORY_OFFSET` against `rwMemorySize` and stored `constantsSize`
-		words further on (`rwDisplacement`), as in the interpreter.
+		words further on (`rwDisplacement`), as in the interpreter. `memory`, for the analyses, is the word at
+		`MEMORY_OFFSET`.
 	*/
+	const Instruction* const code = program.code;
+	const UInt functionCount = program.functionCount;
+	const UInt constantsSize = program.constsSize - 1;
+	const Value* const memory = program.memory + constantsSize;
 	const UInt readOffset = constantsSize - MEMORY_OFFSET;
 	const int32_t rwDisplacement = static_cast<int32_t>(constantsSize * 4);
 	const Pointer lowestAddress = MEMORY_OFFSET - constantsSize;
@@ -589,7 +593,7 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 	buildUseSchedule(code, funcStart, endIndex, useSchedule);															// Belady next-read lists (§5.7 v2.0.5)
 	cache.setUseSchedule(&useSchedule);
 	std::map<Int, int> pointerRealm;
-	buildPointerRealms(code, funcStart, endIndex, constantsSize, pointerRealm);															// §1.1 realm stamp (v2.3a): skip flushes for non-frame pointer ops
+	buildPointerRealms(program, funcStart, endIndex, pointerRealm);															// §1.1 realm stamp (v2.3a): skip flushes for non-frame pointer ops
 	const std::map<Int, int>::const_iterator realmEnd = pointerRealm.end();
 	std::map<UInt, UInt> loopExtent;
 	jitResidencyLeaders(code, funcStart, endIndex, memory, loopExtent);													// v2.2: loop headers whose entry state stays register-resident
@@ -726,14 +730,14 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 
 			/*
 				var-indexed memory. The no-flush optimization is sound ONLY when the CONST operand is a genuine
-				globals/constants-realm address (>= `lowestAddress`): then the access provably can't reach the frame (§1.1).
+				globals/constants-realm address (`isDataAddress`): then the access provably can't reach the frame (§1.1).
 				The scalar/offset pointer-deref idiom `PEEK $x $p` / `POKE $p $x` also finalizes to VCV/CVV (SWAP), but
 				with the const being a small OFFSET and the pointer riding the VARIABLE operand - unknown realm, so it
 				must flush like POKE_VVV. constAddrBase distinguishes the two by the const's range.
 			*/
 			case OP_PEEK_VCV: {																							// dst = memory[C1 + index]
 				const int32_t base = static_cast<int32_t>(in.p1.p + readOffset);
-				const bool constAddrBase = (in.p1.p >= lowestAddress);
+				const bool constAddrBase = isDataAddress(program, in.p1.p);
 				ColdTrap trap; trap.label = emitter.newLabel(); trap.status = BAD_PEEK;
 				const int idx = cache.read(in.p2.i, GENERAL_REGISTER);
 				if (!constAddrBase) { cache.spillDirtyResident(); }														// pointer-in-variable form: flush so the read sees dirty frame lines
@@ -749,7 +753,7 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const Instruction* code,
 			}
 			case OP_POKE_CVV: case OP_POKE_CVC: {																		// memory[C0 + index] = value
 				const int32_t base = static_cast<int32_t>(in.p0.p - MEMORY_OFFSET);
-				const bool constAddrBase = (in.p0.p >= lowestAddress);
+				const bool constAddrBase = isDataAddress(program, in.p0.p);
 				ColdTrap trap; trap.label = emitter.newLabel(); trap.status = BAD_POKE;
 				const int idx = cache.read(in.p1.i, GENERAL_REGISTER);
 				int val;
@@ -1135,8 +1139,7 @@ void JitCompilerX64::compile(const AssembledProgram& program, JitModule& out) {
 		emitter.alignTo(16);																							// 16-align entries: code-layout shifts stay within one function
 		emitter.bind(entryLabels[ordinal]);
 		const UInt funcEnd = ((ordinal + 1 < program.functionCount) ? program.functionTable[ordinal + 1] : program.codeSize) - 1;
-		lowerFunction(emitter, program.code, program.memory + (program.constsSize - 1), program.constsSize - 1
-				, program.functionTable[ordinal], funcEnd, offsets, entryLabels, epilogue, program.functionCount);
+		lowerFunction(emitter, program, program.functionTable[ordinal], funcEnd, offsets, entryLabels, epilogue);
 	}
 	/*
 		Shared exit `epilogue` (bound inside emitDispatcher): every terminal path - suspend, OK return, or trap - jumps
