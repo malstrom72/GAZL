@@ -206,16 +206,18 @@ statements that follow fill it in order:
 
 `TEMP` is `GLOB` that freezing skips (section 11). `CNST` sections are read-only.
 
-**Memory ownership.** Every word of a data section has exactly one owner, and an owner is a label: the section's
+**Memory ownership.** Every word of a data section has at most one owner, and an owner is a label: the section's
 own label, or a label on one of its data statements.
 - **The last label owns.** A word belongs to the last label at or before it in its section. An owner's words run
   from its own word up to the next label, or to the end of the section, unfilled words included.
 - **Labels on the same word.** The later one in the source owns the words; the earlier one owns none, and is not
   an owner.
-- **No owner is an error.** In an unnamed section, data before the first labelled statement would belong to no one,
-  and so would every word of an unnamed section with no labelled statement: `UNNAMED_DATA_SECTION`.
+- **Words with no owner.** In an unnamed section, data before the first labelled statement belongs to no one, and so
+  does every word of an unnamed section with no labelled statement. In a `GLOB` section that is an error,
+  `UNNAMED_DATA_SECTION`, since freezing could not save those words; in `TEMP` and `CNST` sections they are allowed.
 
-So every word is named by exactly one `owner:offset`, and that is what freezing saves (section 11). For example:
+So every word of a `GLOB` section is named by exactly one `owner:offset`, and that is what freezing saves
+(section 11). For example:
 
     buffer: GLOB *40
             DATi #5954          ; buffer:0, the only word buffer owns

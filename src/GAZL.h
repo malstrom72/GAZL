@@ -279,6 +279,7 @@ class Assembler {
 						, const Char* op2End);
 	protected:	void finalizeFunction();
 	protected:	void declareData(const Char* labelBegin, const Char* labelEnd, const Value* first, UInt declaredWords);	// Declare a data label at `first`, and end what the previous one owns there.
+	protected:	bool unownedRefused() const;																			// The current section has unowned words, and is a `GLOB` one, whose words freezing must save by name.
 	protected:	Pointer makeGAZLPointer(const Value* data, bool constant) const;										// The pointer to `data`: up from the base for globals, down from it for constants.
 	protected:	Instruction* const codeBase;
 	protected:	Instruction* const codeEnd;

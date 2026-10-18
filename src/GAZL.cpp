@@ -86,7 +86,7 @@ const char* ASSEMBLER_ERROR_TEXTS[] = {
 	/* , LABEL_ON_FUNCTION							*/	, "Branch target lands on a FUNC"
 	/* , FRAME_TOO_LARGE								*/	, "Frame too large"
 	/* , NON_ASCII_TEXT								*/	, "Non-ASCII character in text"
-	/* , UNNAMED_DATA_SECTION						*/	, "Unnamed data section must start with a labelled data statement"
+	/* , UNNAMED_DATA_SECTION						*/	, "Unnamed GLOB section must start with a labelled data statement"
 };
 
 /*
@@ -1028,12 +1028,12 @@ void Assembler::parseOperand(const Char* b, const Char* e, int accepts, Value* v
 	A data label owns its word and everything after it, up to the next label or the end of the section, and an offset
 	on it may reach any word of the section; a section's own label is simply its first. So each label is declared
 	owning to the end, and the next one ends what the previous one owns. Data before an unnamed section's first label
-	would belong to no name, so freezing could not save it. What the statement itself says, `declaredWords`, is kept
-	beside that for hosts.
+	belongs to no name, which only a `GLOB` section refuses, since freezing could not save it. What the statement
+	itself says, `declaredWords`, is kept beside that for hosts.
 */
 void Assembler::declareData(const Char* labelBegin, const Char* labelEnd, const Value* first, UInt declaredWords) {
 	if (labelBegin == labelEnd) {
-		if (dataOwner == 0) throw Exception(UNNAMED_DATA_SECTION);
+		if (unownedRefused()) throw Exception(UNNAMED_DATA_SECTION);
 		return;
 	}
 	Value v;
@@ -1044,6 +1044,10 @@ void Assembler::declareData(const Char* labelBegin, const Char* labelEnd, const 
 	owner->minOffset = -static_cast<Int>(first - sectionBegin);
 	if (dataOwner != 0) dataOwner->ownedWords = static_cast<UInt>(dataOwner->minOffset - owner->minOffset);
 	dataOwner = owner;
+}
+
+bool Assembler::unownedRefused() const {
+	return (dataOwner == 0 && !dataIsConstant && (dataLabelType & TEMPORARY) == 0);
 }
 
 Pointer Assembler::makeGAZLPointer(const Value* data, bool constant) const {
@@ -1082,7 +1086,7 @@ void Assembler::finalizeFunction() {
 void Assembler::finalize(ProgramSizes& sizes) {
 	newUnit(0);
 	if (dataPointer != 0) {
-		if (dataOwner == 0) throw Exception(UNNAMED_DATA_SECTION);
+		if (unownedRefused()) throw Exception(UNNAMED_DATA_SECTION);
 		memset(dataPointer, 0, (dataEnd - dataPointer) * sizeof (*dataPointer));
 	}
 	globals.resolveForwardRefs();
@@ -1327,12 +1331,12 @@ const Char* Assembler::feed(const Char* line) {
 			case CNST____:	v.i = 1;
 							parseOperand(op0Begin, op0End, op->accepts[0], &v);
 							size = v.i;
-							dataLabel = std::string(labelBegin, labelEnd);
-							dataLabelType = op->declareTypes;
-							if (dataPointer != 0) {
-								if (dataOwner == 0) throw Exception(UNNAMED_DATA_SECTION);
+							if (dataPointer != 0) {																// close the previous section
+								if (unownedRefused()) throw Exception(UNNAMED_DATA_SECTION);
 								memset(dataPointer, 0, (dataEnd - dataPointer) * sizeof (*dataPointer));
 							}
+							dataLabel = std::string(labelBegin, labelEnd);
+							dataLabelType = op->declareTypes;
 							dataOwner = 0;
 							if (constantsPointer - globalsPointer < size) throw Exception(NOT_ENOUGH_MEMORY_SPACE);
 							if (op->opcode == GLOB____) {
