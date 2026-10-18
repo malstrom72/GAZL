@@ -1147,8 +1147,12 @@ int sweepUnnamedSections() {
 	const Case CASES[] = {
 		{ "an unnamed GLOB with unlabelled data", "\tGLOB *1\n\tDATi #0\n", UNNAMED_DATA_SECTION },
 		{ "an unnamed GLOB followed by another section", "\tGLOB *1\n\tDATi #0\nb:\tGLOB *1\n", UNNAMED_DATA_SECTION },
-		{ "an unnamed CNST with unlabelled data", "\tCNST *1\n\tDATi #0\n", UNNAMED_DATA_SECTION },
-		{ "an unnamed TEMP without data", "\tTEMP *1\n", UNNAMED_DATA_SECTION },
+		{ "an unnamed GLOB without data", "\tGLOB *1\nb:\tGLOB *1\n", UNNAMED_DATA_SECTION },
+		{ "an unnamed GLOB without data, last", "\tGLOB *1\n", UNNAMED_DATA_SECTION },
+		{ "an unnamed CNST with unlabelled data", "\tCNST *1\n\tDATi #0\n", -1 },
+		{ "an unnamed TEMP without data", "\tTEMP *1\n", -1 },
+		{ "an unnamed TEMP followed by another section", "\tTEMP *4\nx:\tGLOB *1\n\tDATi #0\n", -1 },
+		{ "data before the first label of an unnamed TEMP", "\tTEMP *2\n\tDATi #0\nb:\tDATi #0\n", -1 },
 		{ "a named section", "s:\tGLOB *1\n\tDATi #0\n", -1 },
 		{ "an unnamed section with a labelled statement", "\tGLOB *1\na:\tDATi #0\n", -1 },
 		{ "data before the first label of an unnamed section", "\tGLOB *2\n\tDATi #0\nb:\tDATi #0\n"

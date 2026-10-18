@@ -1,11 +1,11 @@
 # GAZL 1 Specification
 
-**DRAFT.** This document is meant to let someone who has never seen `src/GAZL.cpp` build a GAZL 1 implementation
+This document is meant to let someone who has never seen `src/GAZL.cpp` build a GAZL 1 implementation
 that runs every existing program with identical results. It defines the machine model, the source format, execution,
 the host interface and the frozen memory format. The per-instruction reference is
 [InstructionSet.md](InstructionSet.md); the conformance suite is [`src/UnitTest.gazl`](../../src/UnitTest.gazl).
-Where this draft and the reference implementation disagree, the disagreement is a bug in one of them and is listed
-under [Not yet implemented](#13-not-yet-implemented).
+Where this specification and the reference implementation disagree, the disagreement is a bug in one of them and is
+listed under [Not yet implemented](#13-not-yet-implemented).
 
 "Must" marks a requirement on every implementation. "Unspecified" means an implementation may produce any result,
 but must stay inside the sandbox (section 10). Nothing in GAZL 1 is undefined in the C sense.
@@ -20,8 +20,7 @@ written. So the format only ever grows:
 - New instructions, new operand forms and new assembly-time constants may be added, but only where the same text
   used to be an assembly error.
 - The meaning of an accepted form never changes, and no accepted form is removed.
-- One exception: a form whose execution could break the sandbox may start being refused at assembly. That has
-  happened once (frames past `INT_MAX`, `FRAME_TOO_LARGE`), and must be recorded in this section when it happens.
+- One exception: a form whose execution could break the sandbox may start being refused at assembly.
 - Every implementation predefines `#GAZL_VERSION`, the version of the engine, and `#GAZL_WORD_SIZE` (32). A GAZL 1
   engine reports 1.
 - Later versions are supersets, not replacements. A GAZL 2 engine reports 2 and assembles every GAZL 1 program
@@ -207,16 +206,18 @@ statements that follow fill it in order:
 
 `TEMP` is `GLOB` that freezing skips (section 11). `CNST` sections are read-only.
 
-**Memory ownership.** Every word of a data section has exactly one owner, and an owner is a label: the section's
+**Memory ownership.** Every word of a data section has at most one owner, and an owner is a label: the section's
 own label, or a label on one of its data statements.
 - **The last label owns.** A word belongs to the last label at or before it in its section. An owner's words run
   from its own word up to the next label, or to the end of the section, unfilled words included.
 - **Labels on the same word.** The later one in the source owns the words; the earlier one owns none, and is not
   an owner.
-- **No owner is an error.** In an unnamed section, data before the first labelled statement would belong to no one,
-  and so would every word of an unnamed section with no labelled statement: `UNNAMED_DATA_SECTION`.
+- **Words with no owner.** In an unnamed section, data before the first labelled statement belongs to no one, and so
+  does every word of an unnamed section with no labelled statement. In a `GLOB` section that is an error,
+  `UNNAMED_DATA_SECTION`, since freezing could not save those words; in `TEMP` and `CNST` sections they are allowed.
 
-So every word is named by exactly one `owner:offset`, and that is what freezing saves (section 11). For example:
+So every word of a `GLOB` section is named by exactly one `owner:offset`, and that is what freezing saves
+(section 11). For example:
 
     buffer: GLOB *40
             DATi #5954          ; buffer:0, the only word buffer owns
