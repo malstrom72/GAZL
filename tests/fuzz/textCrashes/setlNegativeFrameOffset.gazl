@@ -1,0 +1,6 @@
+main:	FUNC
+	$base:	LOCi
+	$idx:	LOCi
+	MOVi $idx #0
+	SETL $base:1099999999999999999999900000 $idx #1234
+	RETU

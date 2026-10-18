@@ -1222,7 +1222,12 @@ int sweepLabelReach() {
 		{ "a local array, past itself to the frame end", FRAME + "\tMOVi b:3 #0\n\tMOVi x:4 #0\n" + END, -1 },
 		{ "a local, past the frame end", FRAME + "\tMOVi y:1 #0\n" + END, OFFSET_OUT_OF_BOUNDS },
 		{ "a local's address that is only a value, past the frame", std::string("main:\tFUNC\nx:\tLOCi\np:\tLOCp\n")
-				+ "\tADRL p x:100 *0\n" + END, -1 }
+				+ "\tADRL p x:100 *0\n" + END, -1 },
+		{ "a local array base, back to the frame start", FRAME + "\tGETL x b:-1 x\n\tSETL b:-1 x #0\n" + END, -1 },
+		{ "a GETL base before the frame start", FRAME + "\tGETL y x:-1 y\n" + END, OFFSET_OUT_OF_BOUNDS },
+		{ "a SETL base before the frame start", FRAME + "\tSETL x:-100000 y #0\n" + END, OFFSET_OUT_OF_BOUNDS },
+		{ "a local's address before the frame start", std::string("main:\tFUNC\nx:\tLOCi\np:\tLOCp\n")
+				+ "\tADRL p x:-1 *0\n" + END, OFFSET_OUT_OF_BOUNDS }
 	};
 	const int count = sizeof (CASES) / sizeof (*CASES);
 	int failures = 0;
