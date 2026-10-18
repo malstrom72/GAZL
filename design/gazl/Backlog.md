@@ -35,11 +35,6 @@ Constant addresses are stored with `MEMORY_OFFSET` added, so `Processor::run` in
 `Char` is `char`, and identifiers and string data are byte-based. Supporting Unicode source needs a decision on
 encoding (UTF-8 in, code points in DATA strings) more than code.
 
-## `lookupConstant` out-parameters
-
-`Symbols::lookupConstant` returns through pointers (`bool* isFloat, Value* value`) where the rest of the API
-uses references. Changing it breaks hosts, so it waits for a version bump.
-
 ## Stack allocation for hosts
 
 There is no host call to reserve space on the GAZL data stack, for a native that needs scratch memory GAZL code

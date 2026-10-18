@@ -796,7 +796,7 @@ const char* Exception::what() const throw() {
 	return whatString.c_str();
 }
 
-Symbols::Symbol* Symbols::define(const std::string& name, int types, Value value, UInt size) {
+Symbols::Symbol* Symbols::define(const std::string& name, int types, Value value, UInt words) {
 	const Char* nameBegin = name.data();
 	const Char* nameEnd = nameBegin + name.size();
 	if (!isValidIdentifier(nameBegin, nameEnd)) throw Exception(INVALID_IDENTIFIER, name);
@@ -805,7 +805,7 @@ Symbols::Symbol* Symbols::define(const std::string& name, int types, Value value
 	if ((types & CONST_INT_N) != 0 && value.i >= 0) types &= ~CONST_INT_N;
 	SymbolMap::iterator it = symbols.find(name);
 	if (it != symbols.end()) throw Exception(SYMBOL_ALREADY_DEFINED, name);
-	return &symbols.insert(it, std::pair<std::string, Symbol>(name, Symbol(types, value, size)))->second;
+	return &symbols.insert(it, std::pair<std::string, Symbol>(name, Symbol(types, value, words)))->second;
 }
 
 void Symbols::registerSwitch(const Char* labelBegin, const Char* labelEnd, UInt switchSize
@@ -883,10 +883,10 @@ void Symbols::registerNative(const Char* name, Int index) {
 	define(name, NATIVE, v, 1);
 }
 
-Pointer Symbols::findGlobal(const Char* name, UInt& size) const {
+Pointer Symbols::findGlobal(const Char* name, UInt& declaredWords) const {
 	GlobalInfo info;
 	if (!getGlobalInfo(name, info)) return NULL_POINTER;
-	size = info.size;
+	declaredWords = info.declaredWords;
 	return info.address;
 }
 
@@ -904,10 +904,15 @@ void Symbols::defineConstant(const Char* name, bool asFloat, const Value& value)
 	define(name, asFloat ? CONST_FLOAT : CONST_INT, value);
 }
 
-bool Symbols::lookupConstant(const Char* name, bool* isFloat, Value* value) const {
+bool Symbols::lookupConstant(const Char* name, ConstantKind& kind, Value& value) const {
+	const Char* const nameEnd = name + strlen(name);
 	int types;
-	if (!lookup(name, name + strlen(name), KONST, types, *value)) return false;
-	*isFloat = ((types & CONST_FLOAT) != 0);
+	if (!isValidIdentifier(name, nameEnd)
+			|| !lookup(name, nameEnd, CONST_INT | CONST_FLOAT | POINTER_CONSTANT | NULL_PTR, types, value)) {
+		return false;
+	}
+	kind = ((types & CONST_FLOAT) != 0 ? FLOAT_CONSTANT
+			: ((types & (POINTER_CONSTANT | NULL_PTR)) != 0 ? ADDRESS_CONSTANT : INT_CONSTANT));
 	return true;
 }
 
@@ -930,7 +935,8 @@ GlobalInfo Symbols::getGlobalInfo(const Iterator& iterator) const {
 	GlobalInfo info;
 	info.name = iterator->first.c_str();
 	info.address = iterator->second.value.p;
-	info.size = iterator->second.size;
+	info.declaredWords = iterator->second.declaredWords;
+	info.ownedWords = iterator->second.ownedWords;
 	const int types = iterator->second.types;
 	info.section = ((types & ADDRESS_W) == 0 ? CNST_SECTION : ((types & TEMPORARY) != 0 ? TEMP_SECTION : GLOB_SECTION));
 	return info;
@@ -939,7 +945,7 @@ GlobalInfo Symbols::getGlobalInfo(const Iterator& iterator) const {
 bool Symbols::getGlobalInfo(const Char* name, GlobalInfo& info) const {
 	const Iterator it = symbols.find(name);
 	if (it == symbols.end() || !isData(it->second.types)) {
-		const GlobalInfo none = { 0, NULL_POINTER, 0, GLOB_SECTION };
+		const GlobalInfo none = { 0, NULL_POINTER, 0, 0, GLOB_SECTION };
 		info = none;
 		return false;
 	}
@@ -969,7 +975,7 @@ Assembler::Assembler(UInt maxCodeSize, Instruction* codeBase, UInt maxFunctionCo
 }
 
 Symbols::Symbol* Assembler::declare(Symbols& where, const Char* labelBegin, const Char* labelEnd, int types, Value value
-		, UInt size) {
+		, UInt words) {
 	assert((types & FORWARD) == 0);
 	if (labelBegin == labelEnd) return 0;
 	const Char* p = reinterpret_cast<const Char*>(memchr(labelBegin, '#', labelEnd - labelBegin));
@@ -983,7 +989,7 @@ Symbols::Symbol* Assembler::declare(Symbols& where, const Char* labelBegin, cons
 		name += '.';
 		name += int2string(v.i, 10, 1, buffer);
 	}
-	return where.define(name, types, value, size);
+	return where.define(name, types, value, words);
 }
 
 int Assembler::operatorCompare(const void* a, const void* b) {
@@ -1089,14 +1095,16 @@ void Assembler::parseOperand(const Char* b, const Char* e, int accepts, Value* v
 /*
 	A data label owns its word and everything after it, up to the next label by address or the end of the section, and
 	an offset on it may reach any word of the section; a section's own label is simply its first. With `SEEK`, labels
-	come in any address order, so they are collected here and `closeDataSection` decides what each owns.
+	come in any address order, so they are collected here and `closeDataSection` decides what each owns. What the
+	statement itself says, `declaredWords`, is kept beside that for hosts.
 */
-void Assembler::declareData(const Char* labelBegin, const Char* labelEnd, const Value* first) {
+void Assembler::declareData(const Char* labelBegin, const Char* labelEnd, const Value* first, UInt declaredWords) {
 	if (labelBegin == labelEnd) return;
 	Value v;
 	v.p = makeGAZLPointer(first, dataIsConstant);
 	Symbols::Symbol* const label = declare(globals, labelBegin, labelEnd, dataLabelType, v
 			, static_cast<UInt>(sectionEnd - first));
+	label->declaredWords = declaredWords;
 	label->minOffset = -static_cast<Int>(first - sectionBegin);
 	dataLabels.push_back(label);
 }
@@ -1116,7 +1124,7 @@ void Assembler::closeDataSection() {
 	if (dataLabels.empty() || dataLabels[0]->value.p != begin) throw Exception(UNNAMED_DATA_SECTION);
 	for (size_t i = 0; i < dataLabels.size(); ++i) {
 		const Pointer next = (i + 1 < dataLabels.size() ? dataLabels[i + 1]->value.p : end);
-		dataLabels[i]->size = static_cast<UInt>(next - dataLabels[i]->value.p);
+		dataLabels[i]->ownedWords = static_cast<UInt>(next - dataLabels[i]->value.p);
 	}
 	dataLabels.clear();
 }
@@ -1348,7 +1356,7 @@ const Char* Assembler::feed(const Char* line) {
 							for (const Char* c = p; c < e; ++c) {
 								if ((*c & 0x80) != 0) throw Exception(NON_ASCII_TEXT, p, e);
 							}
-							declareData(labelBegin, labelEnd, dataPointer);
+							declareData(labelBegin, labelEnd, dataPointer, static_cast<UInt>(e - p));
 							while (p < e) (dataPointer++)->i = *p++;
 							return eatEOL(eatSpace(e));
 						}
@@ -1377,7 +1385,7 @@ const Char* Assembler::feed(const Char* line) {
 								parseOperand(b, e, accepts, dataPointer);
 								++dataPointer;
 							}
-							declareData(labelBegin, labelEnd, first);
+							declareData(labelBegin, labelEnd, first, static_cast<UInt>(dataPointer - first));
 							return eatEOL(p);
 						}
 			
@@ -1489,7 +1497,7 @@ const Char* Assembler::feed(const Char* line) {
 							regionStart = 0;
 							regionExtent = -1;									// The implicit region: offset 0, claims what it writes, fenced by the section end - GAZL 1 verbatim.
 							dataIsConstant = (op->opcode != GLOB____);
-							if (labelBegin != labelEnd) declareData(labelBegin, labelEnd, dataPointer);
+							if (labelBegin != labelEnd) declareData(labelBegin, labelEnd, dataPointer, size);
 							break;
 
 			case GAZL____:	parseOperand(op0Begin, op0End, op->accepts[0], &v);											// GAZL
@@ -1511,7 +1519,7 @@ const Char* Assembler::feed(const Char* line) {
 									throw Exception(OFFSET_OUT_OF_BOUNDS, dataLabel);
 								dataPointer = sectionBegin + regionStart;
 								dataEnd = (regionExtent < 0 ? sectionEnd : dataPointer + regionExtent);
-								declareData(labelBegin, labelEnd, dataPointer);								// an ordinary data label, at the region's first word
+								declareData(labelBegin, labelEnd, dataPointer, static_cast<UInt>(dataEnd - dataPointer));	// an ordinary data label at the region's first word, declaring the region
 								break;
 							}
 					
@@ -2026,14 +2034,14 @@ static void findMemoryOwners(const Symbols& symbols, std::vector<MemoryOwner>& o
 	Symbols::Iterator it;
 	for (bool ok = symbols.findFirstGlobal(it); ok; ok = symbols.findNextGlobal(it)) {
 		const MemoryOwner owner = { symbols.getGlobalInfo(it), static_cast<UInt>(it->first.size()) };
-		if (owner.info.section == GLOB_SECTION && owner.info.size != 0) owners.push_back(owner);
+		if (owner.info.section == GLOB_SECTION && owner.info.ownedWords != 0) owners.push_back(owner);
 	}
 }
 
 static UInt frozenSize(const std::vector<MemoryOwner>& owners) {
 	UInt size = MEMORY_HEADER_SIZE + MEMORY_CHECK_SIZE;
 	for (size_t i = 0; i < owners.size(); ++i) {
-		size += 4 + owners[i].nameLength + memoryPadding(owners[i].nameLength) + 4 + owners[i].info.size * 4;
+		size += 4 + owners[i].nameLength + memoryPadding(owners[i].nameLength) + 4 + owners[i].info.ownedWords * 4;
 	}
 	return size;
 }
@@ -2060,9 +2068,9 @@ UInt freezeMemory(const Processor& processor, const Symbols& symbols, void* buff
 	p = putMemoryCheck(p);
 	for (size_t i = 0; i < owners.size(); ++i) {
 		const GlobalInfo& owner = owners[i].info;
-		const Value* words = processor.accessConstMemory(owner.address, owner.size);
+		const Value* words = processor.accessConstMemory(owner.address, owner.ownedWords);
 		assert(words != 0);
-		p = putMemoryEntry(p, owner.name, owners[i].nameLength, words, owner.size);
+		p = putMemoryEntry(p, owner.name, owners[i].nameLength, words, owner.ownedWords);
 	}
 	assert(static_cast<UInt>(p - start) == needed);					// Byte count must match `frozenSize` exactly.
 	return needed;
@@ -2133,9 +2141,10 @@ MemoryLoad thawMemory(Processor& processor, const Symbols& symbols, const void* 
 		}
 		const MemoryEntry& entry = entries[e++];												// the same name: restored
 		const GlobalInfo& owner = owners[o++].info;
-		exact = exact && entry.wordCount == owner.size;
-		const UInt restored = (entry.wordCount == owner.size || prefix ? minimum(entry.wordCount, owner.size) : 0);
-		Value* const destination = processor.accessMemory(owner.address, owner.size);
+		exact = exact && entry.wordCount == owner.ownedWords;
+		const UInt restored = (entry.wordCount == owner.ownedWords || prefix ? minimum(entry.wordCount, owner.ownedWords)
+				: 0);
+		Value* const destination = processor.accessMemory(owner.address, owner.ownedWords);
 		assert(destination != 0);
 		for (UInt i = 0; i < restored; ++i) destination[i].p = getMemoryWord(entry.words + i * 4);
 	}
@@ -2335,7 +2344,7 @@ bool unitTest() {
 				const GlobalInfo info = globals.getGlobalInfo(it);
 				if (info.section == TEMP_SECTION) continue;
 				const UInt index = info.address - MEMORY_OFFSET + (sizes.constsSize - 1);			// the buffer starts with the constants
-				for (UInt i = 0; i < info.size; ++i) assert(memory2[index + i].i == memory[index + i].i);
+				for (UInt i = 0; i < info.ownedWords; ++i) assert(memory2[index + i].i == memory[index + i].i);
 			}
 			// The restored function pointer resolves to CallBack in the fresh assembly (and equals the original ordinal).
 			UInt gpSize;
