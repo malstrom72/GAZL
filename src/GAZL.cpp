@@ -2415,11 +2415,11 @@ bool unitTest() {
 			assert(measured.codeSize == sizes.codeSize && measured.globalsSize == sizes.globalsSize
 					&& measured.constsSize == sizes.constsSize && measured.functionCount == sizes.functionCount);
 			{
-				bool isFloat = true;
+				ConstantKind kind = FLOAT_CONSTANT;
 				Value constant;
 				constant.i = 0;
-				const bool found = seed.lookupConstant("CR", &isFloat, &constant);		// `CR: ! DEFi #13` in UnitTest.gazl
-				assert(found && !isFloat && constant.i == 13);							// the table really came back, not just the four sizes
+				const bool found = seed.lookupConstant("CR", kind, constant);			// `CR: ! DEFi #13` in UnitTest.gazl
+				assert(found && kind == INT_CONSTANT && constant.i == 13);				// the table really came back, not just the four sizes
 				(void)found;
 			}
 		}
