@@ -764,7 +764,7 @@ void Symbols::resolve(const Reference& ref, const Symbol& symbol) {
 	if (ref.offset == 0) *ref.storage = symbol.value;
 	else {
 		assert((symbol.types & CONST_FLOAT) == 0);
-		ref.storage->i = symbol.value.i + ref.offset;
+		ref.storage->i = static_cast<Int>(static_cast<UInt>(symbol.value.i) + static_cast<UInt>(ref.offset));	// wraps: a huge `k` is caught by the range checks, never undefined
 	}
 }
 
@@ -1012,8 +1012,8 @@ void Assembler::parseOperand(const Char* b, const Char* e, int accepts, Value* v
 
 		default:	assert((accepts & ANY_VAR) != 0);
 					linkWithOffset(locals, b, e, accepts, v);
-					if ((accepts & UNCHECKED_ADDRESS) == 0 && (v->i < 0 || v->i >= static_cast<Int>(localsSize))) {
-						throw Exception(OFFSET_OUT_OF_BOUNDS, b, e);					// the frame's layout is strict: `local:k` may reach all of it
+					if (v->i < 0 || ((accepts & UNCHECKED_ADDRESS) == 0 && v->i >= static_cast<Int>(localsSize))) {
+						throw Exception(OFFSET_OUT_OF_BOUNDS, b, e);					// never below the frame: GETL / SETL check only its top at run time
 					}
 					v->i -= localsSize;
 					break;
