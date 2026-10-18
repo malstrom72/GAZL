@@ -74,7 +74,7 @@ typedef Int Status;																										// Run-time status code
 const int VERSION = 1;
 const int WORD_SIZE = 32;
 const Pointer MEMORY_OFFSET = 0x12345678;																				// All memory pointers in GAZL are offsetted by this amount (thus the address of the first memory word is not zero). This makes it easier to detect invalid memory operations (such as writing to a null-pointer).
-const Pointer FUNCTION_OFFSET = 0x56789ABC;																				// All function pointers in GAZL are offsetted by this amount (thus the ordinal of the first function is not zero). This makes it easier to detect an invalid indirect call, through a null pointer or through a small integer that was never a function pointer at all. A function pointer is an ORDINAL indexing `functionTable`, NOT a code address, which is why this is not an instruction-pointer offset.
+const Pointer FUNCTION_OFFSET = 0x56789ABC;																				// All function pointers in GAZL are offsetted by this amount (thus the ordinal of the first function is not zero). A function pointer is an ordinal indexing `functionTable`, not a code address.
 const Pointer NULL_POINTER = 0;
 
 union Value {
@@ -134,9 +134,7 @@ enum AssemblerError {
 extern const char* ASSEMBLER_ERROR_TEXTS[];
 
 /*
-	Exception thrown by the assembler.
-	
-	Contains the error code and an optional detail string referencing the offending source.
+	Thrown by the assembler; `detail` quotes the offending source when there is one.
 */
 class Exception : public std::exception {
 	public:		Exception(AssemblerError error);
@@ -177,9 +175,7 @@ enum ConstantKind {				// what `Symbols::lookupConstant` found
 };
 
 /*
-	Symbol table shared between assembler and processor.
-
-	Stores function and global definitions, constants and manages forward references during assembly.
+	A program's global names: functions, natives, data labels and named constants.
 */
 class Symbols {
 	friend class Assembler;
@@ -215,7 +211,7 @@ class Symbols {
 				
 	public:		void registerNative(const Char* name, Int index);
 	public:		Pointer findFunction(const Char* name) const;															// Returns `NULL_POINTER` if not found.
-	public:		Pointer findGlobal(const Char* name, UInt& declaredWords) const;										// `declaredWords` is what the source says (see `GlobalInfo`). Returns `NULL_POINTER` if not found (in which case, `declaredWords` is left untouched).
+	public:		Pointer findGlobal(const Char* name, UInt& declaredWords) const;										// Returns `NULL_POINTER` if not found (in which case, `declaredWords` is left untouched).
 	public:		void defineConstant(const Char* name, bool asFloat, const Value& value);
 	public:		bool lookupConstant(const Char* name, ConstantKind& kind, Value& value) const;							// A named constant only, not data or a function. Returns false if `name` is none.
 	public:		bool findFirstGlobal(Iterator& iterator) const;															// Every name of data, `GLOB`, `TEMP` and `CNST` alike, in ascending order (see `GlobalInfo`).
@@ -249,9 +245,7 @@ struct ProgramSizes {
 };
 
 /*
-	Parses GAZL source code and emits executable data.
-
-	Maintains symbol tables and compile-time variables while converting assembly text to a binary representation.
+	Assembles GAZL source, line by line, into the code, function-table and memory buffers the caller provides.
 */
 class Assembler {
 	friend class Symbols;
@@ -377,11 +371,7 @@ enum {
 */
 
 /*
-	Executes compiled bytecode using an internal stack-based VM.
-
-	The processor owns memory and call stacks and provides helper functions for interacting with native code.
-
-	Processor is copyable.
+	Runs an assembled program in memory and call stacks the caller provides. Processor is copyable.
 */
 class Processor {
 	public:		Processor(); 																							// Default-initialized processor. It's illegal to call any methods on a default constructed processor.
@@ -392,12 +382,12 @@ class Processor {
 						, UInt memorySize, Value* memory, UInt constsSize, UInt rwMemorySize, UInt dataStackOffset
 						, UInt dataStackSize, UInt ipStackSize, CallStackEntry* ipStack, NativeFunc const* natives
 						, void* userData = 0);																			// lower level routine, useful for running multiple processors on the same code (i.e. threads) where each processor needs its own stack; `rwMemorySize` and `dataStackOffset` count from the base
-	public:		void resetTimeOut(Int clockCycles); 																	// It is allowed to use `resetTimeOut(0)` from a native call to make the processor return immediately before executing it's next instruction. Alternatively if you want to suspend the processor from a native call, but retry the call when resumed (e.g. simulating a blocking call), return non-zero from the native call and the instruction pointer will not be incremented.
+	public:		void resetTimeOut(Int clockCycles); 																	// It is allowed to use `resetTimeOut(0)` from a native call to make the processor return immediately before executing its next instruction. Alternatively if you want to suspend the processor from a native call, but retry the call when resumed (e.g. simulating a blocking call), return non-zero from the native call and the instruction pointer will not be incremented.
 	public:		const Value* accessConstMemory(Pointer pointer, UInt count) const; 										// If returning null pointer you should normally return `ACCESS_VIOLATION`
 	public:		Value* accessMemory(Pointer pointer, UInt count) const; 												// If returning null pointer you should normally return `ACCESS_VIOLATION`
 	public:		Value* accessParams(UInt count) const; 																	// If returning null pointer you should normally return `DATA_STACK_OVERFLOW`
 	public:		Status enterCall(Pointer functionPointer); 																// After `enterCall()`, call `run()` (and on time out, repeatedly call `run()` until it returns OK). It is ok to call `enterCall()` at any time, current instruction pointer and stack is pushed and popped as expected which makes `enterCall()` double as a mean to issue interrupts.
-	public:		Value* pushCall(Pointer functionPointer);																// Push a call onto the current GAZL continuation, from INSIDE a native callback only: return OK from the native (do not run()) and execution flows into the pushed function; its RETU returns into the GAZL caller, so the `^native` call behaves exactly like a `&function` call. The returned pointer is the argument window ([0] = return value, [1..] = arguments); for a transparent forward the `^call`'s arguments are already in place. Pushing several calls forms a LIFO chain: the last pushed runs first and each RETU flows into the next. All links share the ONE window: each receives the same arguments, each overwrites [0] with its result (so [0] ends as the FIRST-pushed link's result); the typical chain is several argument-less handlers delivered at one safe point. Returns 0 on error (not inside a native call, bad function, ipStack or data-stack overflow).
+	public:		Value* pushCall(Pointer functionPointer);																// From inside a native callback only: when the native returns OK, the function runs as if the `^native` call had called it. Returns its argument window ([0] = result), or 0 on error. Several pushes run last-pushed first and share that one window.
 	public:		Status run();
 	public:		void* getUserData() const;
 	public:		int getClockCyclesLeft() const;
@@ -447,10 +437,7 @@ inline Value* Processor::accessParams(UInt count) const {
 inline void* Processor::getUserData() const { return userData; }
 
 /*
-	Frozen memory ("freeze" / "thaw", docs/gazl/Specification.md section 11). Freezing saves the words of every
-	owner in a `GLOB` section by name; thawing restores them by name into a re-assembled program. Code, constants and
-	which program the frozen memory belongs to are the caller's responsibility. Call only at a quiescent boundary
-	(between `run()` calls, with no active GAZL call).
+	Frozen memory, docs/gazl/Specification.md section 11. Freeze and thaw only between `run()` calls.
 */
 enum MemoryLoad {
 	MEMORY_OK = 0				// Every entry met an owner of the same size, and every owner had an entry.
@@ -466,7 +453,7 @@ enum MemoryLoad {
 UInt freezeMemorySize(const Processor& processor, const Symbols& symbols);												// Exact byte count a freeze will occupy.
 UInt freezeMemory(const Processor& processor, const Symbols& symbols, void* buffer, UInt bufferSize);					// Writes the frozen memory; returns its size (writes nothing and returns the needed size if `bufferSize` is too small).
 MemoryLoad thawMemory(Processor& processor, const Symbols& symbols, const void* buffer, UInt bufferSize
-		, bool prefix);																								// Validates all of `buffer`, then restores it by name; on any validation failure restores nothing. An owner and an entry of different sizes share as many leading words as both have if `prefix`, and are left alone if not.
+		, bool prefix);																								// Restores nothing unless all of `buffer` is valid. If `prefix`, an owner and an entry of different sizes share their common words.
 Float parseFloat(const Char*& p, const Char* e);																		// Reads a float literal at `p`, advancing it, rounded to the nearest float, ties to even.
 
 #if !defined(NDEBUG)

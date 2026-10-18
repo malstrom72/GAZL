@@ -260,11 +260,9 @@ static UInt approximateFloatBits(double value) {
 }
 
 /*
-	Reads a float literal, `[sign] digits [. digits] [e exponent]`, and rounds its exact decimal value to the nearest
-	float, ties to even. A double gives a candidate within a step or so; exact comparisons with the midpoints next
-	to it then move it to the correctly rounded result. A float midpoint has at most 113 significant digits, so the
-	first `MAX_DIGITS` decide every comparison, and the rest only count as a non-zero `tail`. The exact midpoint
-	comparison comes from Numbstrict's `parseReal` (https://github.com/malstrom72/Numbstrict), cut down to float.
+	A double gives a candidate within a step or so, and exact comparisons with the midpoints next to it correct it. A
+	float midpoint has at most 113 significant digits, so `MAX_DIGITS` decide every comparison. From Numbstrict's
+	`parseReal` (https://github.com/malstrom72/Numbstrict), cut down to float.
 */
 Float parseFloat(const Char*& p, const Char* e) {
 	const int MAX_DIGITS = 120;
@@ -1688,11 +1686,8 @@ Status Processor::enterCall(Pointer functionPointer) {
 }
 
 /*
-	pushCall(); the contract is in GAZL.h. The first push in a native call returns to the `^call`'s continuation and
-	restores the caller's frame base (undoing the window advance CALL_NVC performed for the native); every further
-	push chains: its frame resumes at the previously pushed target, so the calls run last-pushed-first, each RETU
-	flowing into the next. Frames store the resume point MINUS ONE because RETU restores and then the dispatch loop
-	increments (`++ip`); for a chain frame that minus-one address is never executed, only incremented over.
+	A frame stores its resume point minus one, because `RETU` restores it and the dispatch loop then increments `ip`.
+	The first push resumes the `^call`'s continuation; each later one resumes the previously pushed function.
 */
 Value* Processor::pushCall(Pointer functionPointer) {
 	assert(codeBase != 0);
@@ -1711,17 +1706,7 @@ Value* Processor::pushCall(Pointer functionPointer) {
 	return this->dsp;
 }
 
-/*
-	Frozen memory, docs/gazl/Specification.md section 11.
-
-	Freezing saves the words of every owner in a `GLOB` section, by name: one entry per label that owns at least one
-	word, in ascending name order, after a fixed check entry. Thawing validates the whole input before it restores
-	anything, then matches entries to the re-assembled program's owners by name. Code, constants and which program
-	the frozen memory belongs to are the host's responsibility.
-
-	Call only at a quiescent boundary (between `run()` calls, with no active GAZL call), so that the data stack, call
-	stack and instruction pointer hold nothing that needs saving.
-*/
+// Frozen memory: docs/gazl/Specification.md section 11.
 const UInt MEMORY_FORMAT_VERSION = 1;
 const UInt MEMORY_HEADER_SIZE = 20;									// magic, format version, GAZL version, word size, entry count
 const UInt MEMORY_CHECK_SIZE = 28;									// the check entry: "$gazl" and three words
@@ -1799,10 +1784,7 @@ struct MemoryOwner {
 	UInt nameLength;
 };
 
-/*
-	The owners of the `GLOB` sections that own at least one word, in ascending name order (the order of `Symbols`):
-	every name of data except those in `TEMP` and `CNST` sections.
-*/
+// The owners in `GLOB` sections that own at least one word, in ascending name order.
 static void findMemoryOwners(const Symbols& symbols, std::vector<MemoryOwner>& owners) {
 	owners.clear();
 	Symbols::Iterator it;
@@ -1850,11 +1832,7 @@ UInt freezeMemory(const Processor& processor, const Symbols& symbols, void* buff
 	return needed;
 }
 
-/*
-	Thawing reads every entry once, then checks them in the order of the specification's validation table, so that
-	nothing is restored unless all of it is valid. Only then are entries and owners, both in ascending name order,
-	merged in one walk.
-*/
+// Checks run in the order of the specification's validation table; restoring starts only once all have passed.
 MemoryLoad thawMemory(Processor& processor, const Symbols& symbols, const void* buffer, UInt bufferSize
 		, bool prefix) {
 	const unsigned char* const start = static_cast<const unsigned char*>(buffer);
