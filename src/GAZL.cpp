@@ -87,7 +87,7 @@ const char* ASSEMBLER_ERROR_TEXTS[] = {
 	/* , LABEL_ON_FUNCTION							*/	, "Branch target lands on a FUNC"
 	/* , FRAME_TOO_LARGE								*/	, "Frame too large"
 	/* , NON_ASCII_TEXT								*/	, "Non-ASCII character in text"
-	/* , UNNAMED_DATA_SECTION						*/	, "Unnamed data section must start with a labelled data statement"
+	/* , UNNAMED_DATA_SECTION						*/	, "Unnamed GLOB section must start with a labelled data statement"
 	/* , UNBALANCED_LOCAL_SCOPE						*/	, "Unbalanced SCOP / ENDS"
 	/* , OVERLAPPING_DATA_REGIONS					*/	, "Data regions overlap"
 	/* , UNSUPPORTED_GAZL_VERSION					*/	, "File requires a newer GAZL engine"
@@ -176,9 +176,7 @@ static Int stringToInt(const Char* &p, const Char* e) {
 	return (Int)(sign < 0 ? 0u - i : i);																	// negate in UNSIGNED: `(Int)i * -1` is signed-overflow UB at i == 2^31, the literal -2147483648
 }
 
-/*
-	An unsigned integer of up to 1024 bits, enough for the exact comparisons in `parseFloat`.
-*/
+// An unsigned integer of up to 1024 bits, enough for the exact comparisons in `parseFloat`.
 class ExactInt {
 	public:		explicit ExactInt(UInt value) : size(1) { words[0] = value; }
 	public:		void multiplyAdd(UInt factor, UInt addend);													// `this` = `this` * `factor` + `addend`
@@ -265,11 +263,9 @@ static UInt approximateFloatBits(double value) {
 }
 
 /*
-	Reads a float literal, `[sign] digits [. digits] [e exponent]`, and rounds its exact decimal value to the nearest
-	float, ties to even. A double gives a candidate within a step or so; exact comparisons with the midpoints next
-	to it then move it to the correctly rounded result. A float midpoint has at most 113 significant digits, so the
-	first `MAX_DIGITS` decide every comparison, and the rest only count as a non-zero `tail`. The exact midpoint
-	comparison comes from Numbstrict's `parseReal` (https://github.com/malstrom72/Numbstrict), cut down to float.
+	A double gives a candidate within a step or so, and exact comparisons with the midpoints next to it correct it. A
+	float midpoint has at most 113 significant digits, so `MAX_DIGITS` decide every comparison. From Numbstrict's
+	`parseReal` (https://github.com/malstrom72/Numbstrict), cut down to float.
 */
 Float parseFloat(const Char*& p, const Char* e) {
 	const int MAX_DIGITS = 120;
@@ -1092,12 +1088,6 @@ void Assembler::parseOperand(const Char* b, const Char* e, int accepts, Value* v
 	}
 }
 
-/*
-	A data label owns its word and everything after it, up to the next label by address or the end of the section, and
-	an offset on it may reach any word of the section; a section's own label is simply its first. With `SEEK`, labels
-	come in any address order, so they are collected here and `closeDataSection` decides what each owns. What the
-	statement itself says, `declaredWords`, is kept beside that for hosts.
-*/
 void Assembler::declareData(const Char* labelBegin, const Char* labelEnd, const Value* first, UInt declaredWords) {
 	if (labelBegin == labelEnd) return;
 	Value v;
@@ -1112,16 +1102,16 @@ void Assembler::declareData(const Char* labelBegin, const Char* labelEnd, const 
 bool Assembler::lowerAddress(const Symbols::Symbol* a, const Symbols::Symbol* b) { return a->value.p < b->value.p; }
 
 /*
-	Every word belongs to the last label at or before it. A stable sort by address keeps source order among labels on
-	one word, so the later one owns its words and the earlier owns none. Words before the first label would belong to
-	no name, so freezing could not save them.
+	A stable sort by address keeps source order among labels on one word, so the later one owns its words. Words before
+	the first label are only refused in a `GLOB` section, whose words freezing must save by name.
 */
 void Assembler::closeDataSection() {
 	if (sectionBegin == 0) return;																// no section yet
 	std::stable_sort(dataLabels.begin(), dataLabels.end(), lowerAddress);
 	const Pointer begin = makeGAZLPointer(sectionBegin, dataIsConstant);
 	const Pointer end = begin + static_cast<Pointer>(sectionEnd - sectionBegin);
-	if (dataLabels.empty() || dataLabels[0]->value.p != begin) throw Exception(UNNAMED_DATA_SECTION);
+	const bool frozen = (!dataIsConstant && (dataLabelType & TEMPORARY) == 0);
+	if (frozen && (dataLabels.empty() || dataLabels[0]->value.p != begin)) throw Exception(UNNAMED_DATA_SECTION);
 	for (size_t i = 0; i < dataLabels.size(); ++i) {
 		const Pointer next = (i + 1 < dataLabels.size() ? dataLabels[i + 1]->value.p : end);
 		dataLabels[i]->ownedWords = static_cast<UInt>(next - dataLabels[i]->value.p);
@@ -1914,11 +1904,8 @@ Status Processor::enterCall(Pointer functionPointer) {
 }
 
 /*
-	pushCall(); the contract is in GAZL.h. The first push in a native call returns to the `^call`'s continuation and
-	restores the caller's frame base (undoing the window advance CALL_NVC performed for the native); every further
-	push chains: its frame resumes at the previously pushed target, so the calls run last-pushed-first, each RETU
-	flowing into the next. Frames store the resume point MINUS ONE because RETU restores and then the dispatch loop
-	increments (`++ip`); for a chain frame that minus-one address is never executed, only incremented over.
+	A frame stores its resume point minus one, because `RETU` restores it and the dispatch loop then increments `ip`.
+	The first push resumes the `^call`'s continuation; each later one resumes the previously pushed function.
 */
 Value* Processor::pushCall(Pointer functionPointer) {
 	assert(codeBase != 0);
@@ -1937,17 +1924,7 @@ Value* Processor::pushCall(Pointer functionPointer) {
 	return this->dsp;
 }
 
-/*
-	Frozen memory, docs/gazl/Specification.md section 11.
-
-	Freezing saves the words of every owner in a `GLOB` section, by name: one entry per label that owns at least one
-	word, in ascending name order, after a fixed check entry. Thawing validates the whole input before it restores
-	anything, then matches entries to the re-assembled program's owners by name. Code, constants and which program
-	the frozen memory belongs to are the host's responsibility.
-
-	Call only at a quiescent boundary (between `run()` calls, with no active GAZL call), so that the data stack, call
-	stack and instruction pointer hold nothing that needs saving.
-*/
+// Frozen memory: docs/gazl/Specification.md section 11.
 const UInt MEMORY_FORMAT_VERSION = 1;
 const UInt MEMORY_HEADER_SIZE = 20;									// magic, format version, GAZL version, word size, entry count
 const UInt MEMORY_CHECK_SIZE = 28;									// the check entry: "$gazl" and three words
@@ -1997,9 +1974,7 @@ struct MemoryEntry {														// One entry of frozen memory, pointing into t
 	const unsigned char* next;												// the entry after this one
 };
 
-/*
-	Reads the entry at `p`, or returns false when its lengths run past `end`.
-*/
+// Reads the entry at `p`, or returns false when its lengths run past `end`.
 static bool getMemoryEntry(const unsigned char* p, const unsigned char* end, MemoryEntry& entry) {
 	if (end - p < 4) return false;
 	entry.nameLength = getMemoryWord(p);
@@ -2025,10 +2000,7 @@ struct MemoryOwner {
 	UInt nameLength;
 };
 
-/*
-	The owners of the `GLOB` sections that own at least one word, in ascending name order (the order of `Symbols`):
-	every name of data except those in `TEMP` and `CNST` sections.
-*/
+// The owners in `GLOB` sections that own at least one word, in ascending name order.
 static void findMemoryOwners(const Symbols& symbols, std::vector<MemoryOwner>& owners) {
 	owners.clear();
 	Symbols::Iterator it;
@@ -2076,11 +2048,7 @@ UInt freezeMemory(const Processor& processor, const Symbols& symbols, void* buff
 	return needed;
 }
 
-/*
-	Thawing reads every entry once, then checks them in the order of the specification's validation table, so that
-	nothing is restored unless all of it is valid. Only then are entries and owners, both in ascending name order,
-	merged in one walk.
-*/
+// Checks run in the order of the specification's validation table; restoring starts only once all have passed.
 MemoryLoad thawMemory(Processor& processor, const Symbols& symbols, const void* buffer, UInt bufferSize
 		, bool prefix) {
 	const unsigned char* const start = static_cast<const unsigned char*>(buffer);
