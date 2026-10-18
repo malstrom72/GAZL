@@ -54,6 +54,7 @@
 	interpreter), unless the host forbids executable memory. Exits non-zero on any failure.
 */
 
+#include <algorithm>
 #include <cstdio>
 #include <stdint.h>
 #include <cstring>
@@ -1032,6 +1033,65 @@ int sweepThawRules() {
 }
 
 /*
+	The check entry (docs/gazl/Specification.md section 11): every single-bit change to any of its 28 bytes must be
+	refused, restoring nothing. A changed name length or word count may instead read as a truncated input; any other
+	byte is `MEMORY_BAD_CANARY`. Returns the number of failures, each one printed.
+*/
+int sweepCanary() {
+	const char* const SOURCE = "a:\tGLOB *2\n\tDATi #1 #2\nmain:\tFUNC\n\tRETU\n";
+	Machine from;
+	Layout layout = Layout();
+	std::string error;
+	if (!assemble(from, SOURCE, layout, error)) {
+		std::printf("FAIL canary: program refused: %s\n", error.c_str());
+		return 1;
+	}
+	const std::vector<unsigned char> frozen = freeze(from);
+	const size_t CHECK_AT = 20;																// after the header
+	const size_t CHECK_SIZE = 28;															// "$gazl", padding and three words
+	const size_t NAME_LENGTH_AT = CHECK_AT;
+	const size_t WORD_COUNT_AT = CHECK_AT + 12;
+	int failures = 0;
+	int probes = 0;
+	for (size_t byte = CHECK_AT; byte < CHECK_AT + CHECK_SIZE; ++byte) {
+		for (int bit = 0; bit < 8; ++bit) {
+			std::vector<unsigned char> bad(frozen);
+			bad[byte] = static_cast<unsigned char>(bad[byte] ^ (1 << bit));
+			Machine to;
+			assemble(to, SOURCE, layout, error);
+			Value* const memory = to.memory();
+			for (UInt w = 0; w < MEMORY_SIZE; ++w) memory[w].i = 99;
+			const MemoryLoad got = thaw(to, bad, true);
+			bool untouched = true;
+			for (UInt w = 0; w < MEMORY_SIZE; ++w) untouched = untouched && memory[w].i == 99;
+			const bool inLength = (byte - NAME_LENGTH_AT < 4 || byte - WORD_COUNT_AT < 4);
+			const bool refused = (got == MEMORY_BAD_CANARY || (inLength && got == MEMORY_TRUNCATED));
+			if (!refused || !untouched) {
+				std::printf("FAIL canary: bit %d of byte %d gave status %d%s\n", bit, (int)byte, (int)got
+						, untouched ? "" : " and restored words");
+				++failures;
+			}
+			++probes;
+		}
+	}
+	// The three check words as a big-endian writer would put them.
+	std::vector<unsigned char> swapped(frozen);
+	for (size_t at = CHECK_AT + 16; at < CHECK_AT + CHECK_SIZE; at += 4) {
+		std::swap(swapped[at], swapped[at + 3]);
+		std::swap(swapped[at + 1], swapped[at + 2]);
+	}
+	Machine to;
+	assemble(to, SOURCE, layout, error);
+	if (thaw(to, swapped, true) != MEMORY_BAD_CANARY) {
+		std::printf("FAIL canary: big-endian check words were not refused as MEMORY_BAD_CANARY\n");
+		++failures;
+	}
+	++probes;
+	std::printf("canary: %d probes, %d failed\n", probes, failures);
+	return failures;
+}
+
+/*
 	The assembler's error for `source`, or -1 when it assembles. One native, `^native`, is registered.
 */
 int assemblyError(const std::string& source) {
@@ -1332,6 +1392,6 @@ int main() {
 	}
 #endif
 	const int hostFailures = sweepNativeAccess() + sweepFrameAndThaw() + sweepFrozenEntries() + sweepThawRules()
-			+ sweepTextEncoding() + sweepUnnamedSections() + sweepLabelReach() + sweepFunctionOffsets();
+			+ sweepCanary() + sweepTextEncoding() + sweepUnnamedSections() + sweepLabelReach() + sweepFunctionOffsets();
 	return (sweep(engineCount) != 0 || hostFailures != 0) ? 1 : 0;
 }
