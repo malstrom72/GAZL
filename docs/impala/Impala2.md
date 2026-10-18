@@ -1241,8 +1241,8 @@ ever needs to exist in the legacy validator path.
 
 > **Status: parked, not available.** `inline function` was implemented, reviewed, and then taken back
 > out; it now lives on the `GAZL2` branch. Writing `inline` is **`E439`**. An expansion has to place its
-> locals with GAZL 2 `SCOP` / `ENDS`, and Impala 2 must keep running on GAZL 1.0 engines, which reject
-> `SCOP` with `Unknown mnemonic`. See [`ParkedFeatures.md`](../../design/ParkedFeatures.md) and
+> locals with GAZL 2 `MARK` / `FREE`, and Impala 2 must keep running on GAZL 1.0 engines, which reject
+> `MARK` with `Unknown mnemonic`. See [`ParkedFeatures.md`](../../design/ParkedFeatures.md) and
 > [`Inlining.md`](../../design/impala/Inlining.md). **The codes below are retired with the feature and must not be
 > reused - except `E432`, RE-ALLOCATED 2026-08-05 to the host-owned-array rank rule**, and its fixtures (`inlineEquivalence*`, `inlineFunctions`, `inlineReview*`) were
 > removed. What follows is the design record for the parked feature, not 2.0 behaviour.
@@ -1638,7 +1638,7 @@ foo.impala:12:9: note: use a cast: (int pointer)
 | E436 | *retired with `inline function`* - do not reuse |
 | E437 | `extern` declaration of a function disagrees with its definition, or with another `extern` |
 | E438 | `extern struct` declarations disagree, or disagree with the definition |
-| E439 | `inline function` is parked for 3.0; it needs GAZL 2 `SCOP`/`ENDS` |
+| E439 | `inline function` is parked for 3.0; it needs GAZL 2 `MARK`/`FREE` |
 | E440 | `functype` redeclared with a different shape (a name CLASH with a struct is E401) |
 | E441 | function or value does not match the funcptr type |
 | E442 | malformed argument list |

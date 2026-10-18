@@ -151,11 +151,11 @@ values (function or funcptr type), `E429` destructuring assignment. Each diagnos
 
 Contains the whole expansion machinery: body capture, per-expansion `_i<N>` label and local renaming,
 argument substitution with an opaque-write marshalling scan, constant folding through a straight-line
-body, transient block relocation, and the `SCOP` / `ENDS` frame scoping that places an expansion's
+body, transient block relocation, and the `MARK` / `FREE` frame scoping that places an expansion's
 locals.
 
 Parked because **an expansion needs GAZL 2 and Impala 2 must stay usable on GAZL 1.0 engines.** A 1.0
-assembler rejects `SCOP` with `Unknown mnemonic`. The transient-based lowering that did work on 1.0 was
+assembler rejects `MARK` with `Unknown mnemonic`. The transient-based lowering that did work on 1.0 was
 the wrong design and is not what is parked: it re-implemented allocation numerically, so an inline local
 whose extent is not a number Impala knows - an `extern struct` array, `t[H * N]` - either got a wrong
 frame or hit `E433`. See [`design/impala/TwoStageConstants.md`](impala/TwoStageConstants.md) for why that class of
@@ -177,7 +177,7 @@ Retired with it: fixtures `inlineEquivalence`, `inlineEquivalenceCall`, `inlineF
 (same program, keyword stripped, must print the same thing). Three silent miscompiles were caught by it.
 `tests/impala/sources/import/mathlib.impala` kept its cross-unit helper as an ordinary function.
 
-What did NOT go with it: extent constants (`design/gazl/SymbolNamespace.md`) and `SCOP` / `ENDS` are
+What did NOT go with it: extent constants (`design/gazl/SymbolNamespace.md`) and `MARK` / `FREE` are
 worth having on their own, and the call-window-in-a-hole guard in `borrowForCall` is an Impala 1.0 bug
 fix that stays.
 
@@ -197,7 +197,7 @@ quoted again. Neither parked feature has that problem.
 since struct layouts shipped, and `structAllocSize` already returns `*.z.Name`. The blocker is that
 Impala's TRANSIENT allocator keys slots by integer index - `claimSlot` looks up `'%'+n`, `borrowForCall`
 compares `maxFree` against `counters-1`, `copyStructArg` iterates `words` slots - and you cannot iterate
-`.z.V` slots. The `SCOP`/`ENDS` remedy that fixed inline locals does NOT transfer: it places NAMED FRAME
+`.z.V` slots. The `MARK`/`FREE` remedy that fixed inline locals does NOT transfer: it places NAMED FRAME
 LOCALS, and there is no assembler-side allocator for transients to delegate to at all (`%N` is an index
 the emitter computes; the assembler only takes a `max`). So the fix is REWRITING Impala's allocator into
 the symbolic position algebra of [`design/gazl/GAZLSymbolicWindows.md`](gazl/GAZLSymbolicWindows.md) - strictly more
@@ -433,7 +433,7 @@ a region of `*size` words at `*offset`, ZERO unless written - subsumes both and 
    real size instead of each field independently landing somewhere.
 
 Cost: the assembler must hold interval state across the data section, where `DATA` is append-only today.
-**BOTH HALVES ARE IMPLEMENTED (2026-08-24)**: the `SEEK` directive in the assembler and Impala emission
+**BOTH HALVES ARE IMPLEMENTED (2026-08-24)**: the `SPAN` directive in the assembler and Impala emission
 under `--gazl2` - see [`GAZL2DataRegions.md`](gazl/GAZL2DataRegions.md). `E459` and `E454` lift under the
 flag; WITHOUT it (the GAZL 1 default) everything in this section still stands, which is why the section
 stays.

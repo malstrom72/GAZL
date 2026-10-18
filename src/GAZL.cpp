@@ -88,7 +88,7 @@ const char* ASSEMBLER_ERROR_TEXTS[] = {
 	/* , FRAME_TOO_LARGE								*/	, "Frame too large"
 	/* , NON_ASCII_TEXT								*/	, "Non-ASCII character in text"
 	/* , UNNAMED_DATA_SECTION						*/	, "Unnamed GLOB section must start with a labelled data statement"
-	/* , UNBALANCED_LOCAL_SCOPE						*/	, "Unbalanced SCOP / ENDS"
+	/* , UNBALANCED_MARK								*/	, "Unbalanced MARK / FREE"
 	/* , OVERLAPPING_DATA_REGIONS					*/	, "Data regions overlap"
 	/* , UNSUPPORTED_GAZL_VERSION					*/	, "File requires a newer GAZL engine"
 	/* , UNCLOSED_GAZL_REGION						*/	, "GAZL 2 region not closed with GAZL #1"
@@ -382,7 +382,7 @@ enum Opcode {
 	, NLSF_VVB, NLSF_VCB, NLSF_CVB, NEQF_VVB, NEQF_VCB
 	, GOTO_B__, SWCH_VCC
 
-	, NOOP____, GLOB____, CNST____, DATA____, LOCA____, OUTP____, SCOP____, ENDS____, SEEK____, GAZL____
+	, NOOP____, GLOB____, CNST____, DATA____, LOCA____, OUTP____, MARK____, FREE____, SPAN____, GAZL____
 	
 	, FIRST_COMPILE_TIME_OPCODE						// the assembler evaluates the opcodes from here on, never `run()`
 	, MOVE_CC_ = FIRST_COMPILE_TIME_OPCODE
@@ -525,7 +525,6 @@ static const Operator OPERATORS[] = {
 	, { " DIVi_vcv", DIVI_VCV,	{ VAR_INT_W		, CONST_INT		, VAR_INT_R		}		, 0				, 0				}
 	, { " DIVi_vvc", DIVI_VVC,	{ VAR_INT_W		, VAR_INT_R		, CONST_INT		}		, CHECK_DIV_BY_0, 0				}
 	, { " DIVi_vvv", DIVI_VVV,	{ VAR_INT_W		, VAR_INT_R		, VAR_INT_R		}		, 0				, 0				}
-	, { " ENDS____", ENDS____,	{ 0				, 0				, 0				}		, 0				, 0				}
 	, { " EQUf_ccb", EQUF_CCB,	{ CONST_FLOAT	, CONST_FLOAT	, FWD_BRANCH	}		, YIELDS_GOTO	, 0				}
 	, { " EQUf_cvb", EQUF_VCB,	{ CONST_FLOAT	, VAR_FLOAT_R	, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
 	, { " EQUf_vcb", EQUF_VCB,	{ VAR_FLOAT_R	, CONST_FLOAT	, FWD_BRANCH	}		, 0				, 0				}
@@ -548,6 +547,7 @@ static const Operator OPERATORS[] = {
 	, { " FORi_vvb", FORi_VVB,	{ VAR_INT_W		, VAR_INT_R		, FWD_BRANCH	}		, 0				, 0				}
 	, { " FORp_vcb", FORi_VCB,	{ VAR_PTR_W		, FWD_FREE		, FWD_BRANCH	}		, 0				, 0				}
 	, { " FORp_vvb", FORi_VVB,	{ VAR_PTR_W		, VAR_PTR_R		, FWD_BRANCH	}		, 0				, 0				}
+	, { " FREE____", FREE____,	{ 0				, 0				, 0				}		, 0				, 0				}
 	, { " FUNC____", FUNC_CC_,	{ 0				, 0				, 0				}		, 0				, FUNC			}
 	, { " GAZL_c__", GAZL____,	{ CONST_INT_P	, 0				, 0				}		, 0				, 0				}
 	, { " GEQf_ccb", NLSF_CCB,	{ CONST_FLOAT	, CONST_FLOAT	, FWD_BRANCH	}		, YIELDS_GOTO	, 0				}
@@ -630,6 +630,7 @@ static const Operator OPERATORS[] = {
 	, { " LSSt_cvb", LSSI_CVB,	{ TGT_FWD_FREE	, VAR_TGT_R		, FWD_BRANCH	}		, 0				, 0				}
 	, { " LSSt_vcb", LSSI_VCB,	{ VAR_TGT_R		, TGT_FWD_FREE	, FWD_BRANCH	}		, 0				, 0				}
 	, { " LSSt_vvb", LSSI_VVB,	{ VAR_TGT_R		, VAR_TGT_R		, FWD_BRANCH	}		, 0				, 0				}
+	, { " MARK____", MARK____,	{ 0				, 0				, 0				}		, 0				, 0				}
 	, { " MODi_vcc", MODI_CCC,	{ VAR_INT_W		, CONST_INT		, CONST_INT		}		, YIELDS_CONST|CHECK_DIV_BY_0, CONST_INT }
 	, { " MODi_vcv", MODI_VCV,	{ VAR_INT_W		, CONST_INT		, VAR_INT_R		}		, 0				, 0				}
 	, { " MODi_vvc", MODI_VVC,	{ VAR_INT_W		, VAR_INT_R		, CONST_INT		}		, CHECK_DIV_BY_0, 0				}
@@ -689,9 +690,6 @@ static const Operator OPERATORS[] = {
 	, { " POKE_vvc", POKE_VVC,	{ VAR_PTR_R		, VAR_INT_R		, KONST			}		, 0				, 0				}
 	, { " POKE_vvv", POKE_VVV,	{ VAR_PTR_R		, VAR_INT_R		, ANY_VAR_R		}		, 0				, 0				}
 	, { " RETU____", RETU_C__,	{ 0				, 0				, 0				}		, 0				, 0				}
-	, { " SCOP____", SCOP____,	{ 0				, 0				, 0				}		, 0				, 0				}
-	, { " SEEK_o__", SEEK____,	{ CONST_INT_P	, 0				, 0				}		, 0				, 0				}
-	, { " SEEK_os_", SEEK____,	{ CONST_INT_P	, CONST_INT_P	, 0				}		, 0				, 0				}
 	, { " SETL_vvc", SETL_VVC,	{ ANY_VAR_FREE_W, VAR_INT_R		, KONST			}		, 0				, 0				}
 	, { " SETL_vvv", SETL_VVV,	{ ANY_VAR_FREE_W, VAR_INT_R		, ANY_VAR_R		}		, 0				, 0				}
 	, { " SHLi_vcc", SHLI_CCC,	{ VAR_INT_W		, CONST_INT		, CONST_INT_P	}		, YIELDS_CONST	, CONST_INT		}
@@ -706,6 +704,7 @@ static const Operator OPERATORS[] = {
 	, { " SHRu_vcv", SHRU_VCV,	{ VAR_INT_W		, CONST_INT		, VAR_INT_R		}		, 0				, 0				}
 	, { " SHRu_vvc", SHRU_VVC,	{ VAR_INT_W		, VAR_INT_R		, CONST_INT_P	}		, 0				, 0				}
 	, { " SHRu_vvv", SHRU_VVV,	{ VAR_INT_W		, VAR_INT_R		, VAR_INT_R		}		, 0				, 0				}
+	, { " SPAN_os_", SPAN____,	{ CONST_INT_P	, CONST_INT_P	, 0				}		, 0				, 0				}
 	, { " SUBf_vcc", SUBF_CCC,	{ VAR_FLOAT_W	, CONST_FLOAT	, CONST_FLOAT	}		, YIELDS_CONST	, CONST_FLOAT	}
 	, { " SUBf_vcv", SUBF_VCV,	{ VAR_FLOAT_W	, CONST_FLOAT	, VAR_FLOAT_R	}		, 0				, 0				}
 	, { " SUBf_vvc", SUBF_VVC,	{ VAR_FLOAT_W	, VAR_FLOAT_R	, CONST_FLOAT	}		, 0				, 0				}
@@ -953,7 +952,7 @@ Assembler::Assembler(UInt maxCodeSize, Instruction* codeBase, UInt maxFunctionCo
 		, UInt maxMemorySize, Value* memoryBase, Symbols& globals)
 		: codeBase(codeBase), codeEnd(codeBase + maxCodeSize), maxFunctionCount(maxFunctionCount)
 		, functionTable(functionTable), memoryBase(memoryBase), memoryEnd(memoryBase + maxMemorySize)
-		, ip(codeBase), functionStart(0), functionCount(0), localsSize(0), maxLocalsSize(0), localScopeDepth(0)
+		, ip(codeBase), functionStart(0), functionCount(0), localsSize(0), maxLocalsSize(0), markDepth(0)
 		, paramsSize(0), globalsPointer(memoryBase)
 		, constantsPointer(memoryEnd), dataLabelType(0), dataPointer(0), dataEnd(0), dataIsConstant(false)
 		, sectionBegin(0), sectionEnd(0), regionStart(0), regionExtent(-1), dialect(1), globals(globals) {
@@ -1055,9 +1054,10 @@ void Assembler::parseConstant(const Char* b, const Char* e, int accepts, Value* 
 void Assembler::parseOperand(const Char* b, const Char* e, int accepts, Value* v) {
 	switch (b < e ? *b : 0) {
 		case 0:		if (accepts != 0) throw Exception(MISSING_OPERAND); break;
+		case '#':	if (dialect >= 2) accepts &= ~(FREE_ADDRESS | TEMPORARY | NULL_PTR | FUNC | TARGET);	// inside a GAZL 2 region `#` names only numbers
+					/* continue */
 		case '*':
-		case ':':
-		case '#':	++b; /* continue */
+		case ':':	++b; /* continue */
 		case '<':	parseConstant(b, e, accepts, v); break;
 		case '@':	locals.link(b + 1, e, v, accepts, -(Int)(ip - codeBase)); break;		
 
@@ -1071,8 +1071,11 @@ void Assembler::parseOperand(const Char* b, const Char* e, int accepts, Value* v
 					linkWithOffset(globals, b + 1, e, accepts, v);
 					break;
 
-		case '&':	if (dialect >= 2 && (accepts & ADDRESS) != 0) {
-						accepts &= ~FUNC;			// inside a GAZL 2 region no data-pointer position takes ANY function constant, GAZL 1-minted included. CALL's slot carries no ADDRESS bits, so cross-dialect calls stay legal.
+		case '&':	if (dialect >= 2) {
+						accepts &= ~(CONST_INT | CONST_FLOAT);	// inside a GAZL 2 region `&` names only pointers
+						if ((accepts & ADDRESS) != 0) {
+							accepts &= ~FUNC;			// nor does a data-pointer position take a function constant, not even a GAZL 1 one (CALL takes no ADDRESS, so calls across dialects stay legal)
+						}
 					}
 					if ((accepts & (ADDRESS | FUNC | TARGET)) == 0) throw Exception(DID_NOT_EXPECT_ADDRESS, b, e);
 					linkWithOffset(globals, b + 1, e, accepts, v);
@@ -1145,7 +1148,7 @@ void Assembler::finalizeFunction() {
 			throw Exception(LABEL_ON_FUNCTION);
 		}
 	}
-	if (localScopeDepth != 0) throw Exception(UNBALANCED_LOCAL_SCOPE);
+	if (markDepth != 0) throw Exception(UNBALANCED_MARK);
 	functionStart->p0.i = maxLocalsSize;
 	functionStart->p1.i = paramsSize;
 	functionStart = 0;
@@ -1198,10 +1201,8 @@ void Assembler::threadBranches() {
 }
 
 /*
-	A region's claim is only known when it CLOSES - an unbounded one claims exactly the words it wrote - so every
-	overlap check happens here, against the claims of the same section's earlier regions. Within a region filling
-	is append-only against `dataEnd`, so disjoint claims mean no word is initialized twice. A section without SEEK
-	is one implicit region and never reaches the loop with a neighbour.
+	Runs when a region closes, because only then is its claim known: the region before the first SPAN claims just the
+	words it wrote. Filling within a region only appends, so disjoint claims mean no word is written twice.
 */
 void Assembler::closeDataRegion() {
 	if (dataPointer == 0) return;
@@ -1482,7 +1483,7 @@ const Char* Assembler::feed(const Char* line) {
 							dataEnd = dataPointer + size;
 							sectionBegin = dataPointer;
 							sectionEnd = dataEnd;
-							memset(dataPointer, 0, size * sizeof (*dataPointer));	// The whole section up front (not the tail at close): a SEEK can leave the cursor below words already written.
+							memset(dataPointer, 0, size * sizeof (*dataPointer));	// The whole section up front (not the tail at close): a SPAN can leave the cursor below words already written.
 							dataRegions.clear();
 							regionStart = 0;
 							regionExtent = -1;									// The implicit region: offset 0, claims what it writes, fenced by the section end - GAZL 1 verbatim.
@@ -1495,20 +1496,17 @@ const Char* Assembler::feed(const Char* line) {
 							dialect = (int)(v.i);								// A mode, not a bracket: `GAZL #2` opens a region, `GAZL #1` restores the default - which is how concatenated units compose in any order. finalize() insists the file ends restored.
 							break;
 
-			case SEEK____:	{																							// SEEK
+			case SPAN____:	{																							// SPAN
 								if (dataPointer == 0) throw Exception(DATA_SECTION_MISSING);
 								closeDataRegion();
 								parseOperand(op0Begin, op0End, op->accepts[0], &v);
 								regionStart = v.i;
-								regionExtent = -1;
-								if (op1Begin != op1End) {
-									parseOperand(op1Begin, op1End, op->accepts[1], &v);
-									regionExtent = v.i;
-								}
-								if (regionStart + (regionExtent < 0 ? 0 : regionExtent) > (Int)(sectionEnd - sectionBegin))
+								parseOperand(op1Begin, op1End, op->accepts[1], &v);
+								regionExtent = v.i;
+								if (regionExtent > static_cast<Int>(sectionEnd - sectionBegin) - regionStart)
 									throw Exception(OFFSET_OUT_OF_BOUNDS, dataLabel);
 								dataPointer = sectionBegin + regionStart;
-								dataEnd = (regionExtent < 0 ? sectionEnd : dataPointer + regionExtent);
+								dataEnd = dataPointer + regionExtent;
 								declareData(labelBegin, labelEnd, dataPointer, static_cast<UInt>(dataEnd - dataPointer));	// an ordinary data label at the region's first word, declaring the region
 								break;
 							}
@@ -1544,30 +1542,26 @@ const Char* Assembler::feed(const Char* line) {
 							break;
 
 			/*
-				SCOP / ENDS bracket a group of declarations whose lifetime does not overlap the next group's.
-				`ENDS` rewinds the bump so a SIBLING group reuses the same offsets, while a NESTED group stacks
-				on top -- which is exactly what an inline expansion needs, including inlines within inlines. The
-				frame is `maxLocalsSize` (the peak over nesting chains), not the sum, and the assembler computes
-				it from RESOLVED sizes, so `LOCA *.z.Struct` overlays correctly even when only the host knows
-				the size. Purely a declaration-time construct: no instruction is emitted and the VM is unchanged.
+				The frame is `maxLocalsSize`, the peak over nesting chains rather than the sum. It is computed from
+				resolved sizes, so `LOCA *.z.Struct` overlays correctly even when only the host knows the size.
 			*/
-			case SCOP____:	if (functionStart == 0 || ip != functionStart + 1) {										// SCOP
+			case MARK____:	if (functionStart == 0 || ip != functionStart + 1) {										// MARK
 								throw Exception(MUST_DEFINE_LOCALS_FIRST);
 							}
-							if (localScopeDepth >= MAX_LOCAL_SCOPE_DEPTH) throw Exception(UNBALANCED_LOCAL_SCOPE);
-							localScopeStack[localScopeDepth++] = localsSize;
+							if (markDepth >= MAX_MARK_DEPTH) throw Exception(UNBALANCED_MARK);
+							markStack[markDepth++] = localsSize;
 							break;
 
-			case ENDS____:	if (functionStart == 0 || ip != functionStart + 1) {										// ENDS
+			case FREE____:	if (functionStart == 0 || ip != functionStart + 1) {										// FREE
 								throw Exception(MUST_DEFINE_LOCALS_FIRST);
 							}
-							if (localScopeDepth == 0) throw Exception(UNBALANCED_LOCAL_SCOPE);
-							localsSize = localScopeStack[--localScopeDepth];
+							if (markDepth == 0) throw Exception(UNBALANCED_MARK);
+							localsSize = markStack[--markDepth];
 							break;
 
 			default:		if (functionStart == 0) throw Exception(MISSING_FUNCTION_DECLARATION);						// The rest
 							if (ip == functionStart + 1) {																// leaving the declaration region
-								if (localScopeDepth != 0) throw Exception(UNBALANCED_LOCAL_SCOPE);
+								if (markDepth != 0) throw Exception(UNBALANCED_MARK);
 								localsSize = maxLocalsSize;	// every local operand and RETU below resolves against the FINAL frame
 							}
 							v.p = (Int)(ip - codeBase);

@@ -3739,9 +3739,9 @@ function runGazlText(gazlPath, text, cmdArgs, label) {
 	return canonicalizeNewlines(run.stdout);
 }
 
-// --- --gazl2: struct initializers are PLACED with SEEK regions ---------------------------------------
+// --- --gazl2: struct initializers are PLACED with SPAN regions ---------------------------------------
 // The flag's contract: (1) default output is untouched - the golden corpus is that gate, so here only
-// "no SEEK without the flag" is pinned; (2) struct data comes out as one SEEK region per leaf field
+// "no SPAN without the flag" is pinned; (2) struct data comes out as one SPAN region per leaf field
 // with TYPED rows; (3) E459 and E454 lift, because every word is placed instead of guessed. The
 // semantic proofs run when GAZLCmd is built: the extern case feeds a host layout in REVERSED field
 // order, and the struct case re-runs with two layout-header labels swapped - both are exactly what
@@ -3762,13 +3762,13 @@ function runGazlText(gazlPath, text, cmdArgs, label) {
 		+ "\tprintFloat(global bank[1].gain); printLF();\n"
 		+ "}\n";
 	const placed = compileWithJsImpala(placedSrc, { randomId: 42, gazl2: true });
-	assert(placed.includes("SEEK :.o.Voice.note *1") && placed.includes("SEEK :<A> *.z.Inner.state"),
-		"--gazl2: struct data must be placed with SEEK regions - a scalar carries its free *1 fence, "
+	assert(placed.includes("SPAN :.o.Voice.note *1") && placed.includes("SPAN :<A> *.z.Inner.state"),
+		"--gazl2: struct data must be placed with SPAN regions - a scalar carries its free *1 fence, "
 			+ "an array field its extent symbol");
 	assert(placed.includes("DATi #60") && placed.includes("DATf #0.5"),
 		"--gazl2: rows must come out TYPED per leaf field, not as one mixed DATA row");
-	assert(!compileWithJsImpala(placedSrc, { randomId: 42 }).includes("SEEK"),
-		"without --gazl2 nothing may emit SEEK - the corpus byte-gate depends on it");
+	assert(!compileWithJsImpala(placedSrc, { randomId: 42 }).includes("SPAN"),
+		"without --gazl2 nothing may emit SPAN - the corpus byte-gate depends on it");
 
 	const externSrc = "const int DEBUG = 1\n"
 		+ "extern struct Host { int mode; float level }\n"
@@ -3777,19 +3777,19 @@ function runGazlText(gazlPath, text, cmdArgs, label) {
 		+ "function main() { printInt(global cfg.mode); printLF(); printFloat(global cfg.level); printLF(); }\n";
 	expectCompileOutcome("gazl2", "extern-struct init stays E459 by default", externSrc, "E459");
 	const externOut = compileWithJsImpala(externSrc, { randomId: 42, gazl2: true });
-	assert(externOut.includes("SEEK :.o.Host.mode"), "--gazl2 must lift E459 via host-offset SEEKs");
+	assert(externOut.includes("SPAN :.o.Host.mode *1"), "--gazl2 must lift E459 via host-offset SPANs");
 
 	const symSrc = "const int DEBUG = 1\nconst int N = 3\n"
 		+ "struct Buf { int array data[N * 1]; int tail }\n"
 		+ "global Buf b = { data: { 7, 8 }, tail: 42 }\n"
 		+ "function main() { }\n";
 	expectCompileOutcome("gazl2", "field behind a symbolic extent stays E454 by default", symSrc, "E454");
-	assert(compileWithJsImpala(symSrc, { randomId: 42, gazl2: true }).includes("SEEK :.o.Buf.tail"),
+	assert(compileWithJsImpala(symSrc, { randomId: 42, gazl2: true }).includes("SPAN :.o.Buf.tail *1"),
 		"--gazl2 must lift E454: the field behind the symbolic array gets its own region");
 
 	if (haveGazlCmd()) {
-		const gazlPath = path.join(dir, "..", "tests", "impala", "erroneous", "gazl2Seek.gazl");
-		const runOne = (text, cmdArgs) => runGazlText(gazlPath, text, cmdArgs, "gazl2 seek");
+		const gazlPath = path.join(dir, "..", "tests", "impala", "erroneous", "gazl2Span.gazl");
+		const runOne = (text, cmdArgs) => runGazlText(gazlPath, text, cmdArgs, "gazl2 span");
 		// `level` at 0 and `mode` at 1 REVERSES declaration order; the values must land right anyway.
 		assert(runOne(externOut, [ "main", ".o.Host.mode", "1", ".o.Host.level", "0", ".z.Host", "2" ])
 				.startsWith("3\n0.5\n"),
@@ -3805,7 +3805,7 @@ function runGazlText(gazlPath, text, cmdArgs, label) {
 			.replace(/^([ \t]*)\.o\.Voice\.__swap__:/m, "$1.o.Voice.gain:");
 		assert(repacked !== placed, "gazl2: the repack swap must have found both layout labels");
 		assert(runOne(repacked, [ "main" ]).startsWith(expected),
-			"gazl2: a layout-header repack must re-assemble to the same answers - the whole point of SEEK");
+			"gazl2: a layout-header repack must re-assemble to the same answers - the whole point of SPAN");
 		// The scalar `*1` fence is what makes a HAND-ADDED surplus row fail at its own line, whether or
 		// not the word it would spill into happens to be initialized.
 		const overrun = placed.replace(/^([ \t]*)(DATi #60)$/m, "$1$2\n$1DATi #99");
@@ -3814,8 +3814,37 @@ function runGazlText(gazlPath, text, cmdArgs, label) {
 		const spill = runGazlCmd(gazlPath, [ "main" ]);
 		assert(!spill.assembled && /Not enough space in data section/.test(spill.report),
 			`gazl2: a surplus row after a scalar's *1 region must be an assembly error, got: ${spill.line}`);
+		// A struct-element array field: each element's regions sit at the field's own offset plus the
+		// element stride, not on the struct's first field.
+		const elemOut = compileWithJsImpala("const int DEBUG = 1\n"
+			+ "struct Elem { int a; float b }\n"
+			+ "struct Own { int mode; Elem array el[2]; float level }\n"
+			+ "extern native printInt\nextern native printLF\n"
+			+ "global Own cfg = { mode: 3, el: { { a: 5 }, { a: 6 } }, level: 0.5 }\n"
+			+ "function main() { printInt(global cfg.mode); printLF(); printInt(global cfg.el[0].a); printLF();\n"
+			+ "\tprintInt(global cfg.el[1].a); printLF(); }\n", { randomId: 42, gazl2: true });
+		assert(runOne(elemOut, [ "main" ]).startsWith("3\n5\n6\n"),
+			"gazl2: a struct-element array field must be placed inside the field");
+		// A host-owned array field is fenced by the host's `.z.Host.buf`, so too many values fail at
+		// assembly instead of spilling into the field after it.
+		const hostSrc = "const int DEBUG = 1\n"
+			+ "extern struct Host { int array buf[]; int mode }\n"
+			+ "extern native printInt\nextern native printLF\n"
+			+ "global Host cfg = { buf: { 1, 2 }, mode: 7 }\n"
+			+ "function main() { printInt(global cfg.buf[1]); printLF(); printInt(global cfg.mode); printLF(); }\n";
+		const hostOut = compileWithJsImpala(hostSrc, { randomId: 42, gazl2: true });
+		assert(hostOut.includes("SPAN :.o.Host.buf *.z.Host.buf"),
+			"gazl2: a host-owned array field's region must be fenced by the host's extent");
+		const hostArgs = [ "main", ".o.Host.buf", "0", ".z.Host.buf", "2", ".o.Host.mode", "2", ".z.Host", "3" ];
+		assert(runOne(hostOut, hostArgs).startsWith("2\n7\n"),
+			"gazl2: a host-owned array field must read back at the host's offsets");
+		fs.writeFileSync(gazlPath, hostOut, IMPALA_ENCODING);
+		const short = runGazlCmd(gazlPath, [ "main", ".o.Host.buf", "0", ".z.Host.buf", "1", ".o.Host.mode", "1",
+				".z.Host", "2" ]);
+		assert(!short.assembled && /Not enough space in data section/.test(short.report),
+			`gazl2: more values than the host's array holds must be an assembly error, got: ${short.line}`);
 	}
-	console.log("impala.jspeg compiler places struct initializers with SEEK regions under --gazl2");
+	console.log("impala.jspeg compiler places struct initializers with SPAN regions under --gazl2");
 }
 
 // --- GAZL #2 regions and the `t` call-target type ----------------------------------------------------
@@ -3846,7 +3875,7 @@ function runGazlText(gazlPath, text, cmdArgs, label) {
 	assert(compileWithJsImpala(diffSrc, { randomId: 42, gazl2: true }).includes("DIFt")
 			&& compileWithJsImpala(diffSrc, { randomId: 42 }).includes("DIFp"),
 		"funcptr difference must render DIFt under --gazl2 and stay DIFp by default");
-	// The remaining funcptr surfaces in one fixture: a struct FIELD (SEEK + DATt through the marker
+	// The remaining funcptr surfaces in one fixture: a struct FIELD (SPAN + DATt through the marker
 	// path), a LOCAL funcptr array (GETL with a t destination), a funcptr PARAMETER (INPt), and the
 	// comparisons (EQUt / NEQt).
 	const kitchenSrc = "const int DEBUG = 1\n"
@@ -3865,7 +3894,7 @@ function runGazlText(gazlPath, text, cmdArgs, label) {
 		+ "\tif (g != twice) { printInt(2); printLF(); }\n"
 		+ "\tprintInt(apply(twice, 21)); printLF();\n}\n";
 	const kitchen = compileWithJsImpala(kitchenSrc, { randomId: 42, gazl2: true });
-	for (const want of [ "SEEK :.o.Handler.fn *1", "DATt", "INPt", "EQUt", "NEQt" ]) {
+	for (const want of [ "SPAN :.o.Handler.fn *1", "DATt", "INPt", "EQUt", "NEQt" ]) {
 		assert(kitchen.includes(want), `gazl2 t: kitchen fixture must emit ${want}`);
 	}
 	const pOut = compileWithJsImpala(fpSrc, { randomId: 42 });
