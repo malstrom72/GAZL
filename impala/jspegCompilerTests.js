@@ -3814,8 +3814,8 @@ function runGazlText(gazlPath, text, cmdArgs, label) {
 		const spill = runGazlCmd(gazlPath, [ "main" ]);
 		assert(!spill.assembled && /Not enough space in data section/.test(spill.report),
 			`gazl2: a surplus row after a scalar's *1 region must be an assembly error, got: ${spill.line}`);
-		// A struct-element array FIELD: each element's regions sit at the field's own offset plus the
-		// element stride. Without the field offset, el[0].a landed on `mode` and the regions overlapped.
+		// A struct-element array field: each element's regions sit at the field's own offset plus the
+		// element stride, not on the struct's first field.
 		const elemOut = compileWithJsImpala("const int DEBUG = 1\n"
 			+ "struct Elem { int a; float b }\n"
 			+ "struct Own { int mode; Elem array el[2]; float level }\n"

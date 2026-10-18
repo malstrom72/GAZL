@@ -542,11 +542,10 @@ Marks the frame's next free word (GAZL 2 and later). Like `LOC` / `PARA` declara
 must appear after a `FUNC` declaration but before any real instruction.
 
 `FREE` frees the words declared since its `MARK`, so the declarations after it reuse the same frame offsets, while a
-`MARK` inside a `MARK` stacks on top. A function's frame is therefore the DEEPEST nesting chain, not the sum of every
-declaration. Use it for groups whose lifetimes do not overlap - an expanded inline body being the motivating case,
-including inlines within inlines.
+`MARK` inside a `MARK` stacks on top. A function's frame is therefore the deepest nesting chain, not the sum of every
+declaration. Use it for groups whose lifetimes do not overlap, such as an expanded inline body.
 
-    $g:     LOCi            ; outlives everything - declared before any MARK
+    $g:     LOCi            ; declared before any MARK, so it outlives them all
             MARK
     $a:     LOCA *SIZE_A    ; offset 1
             MARK
@@ -558,13 +557,13 @@ including inlines within inlines.
             FREE
 
 Sizes are resolved before offsets are assigned, so `LOCA *SOME_CONSTANT` overlays correctly even when only the host
-knows the value - which is what makes this usable for a host-owned struct size. Anything that must outlive a `MARK`
-block has to be declared BEFORE its `MARK`; a declaration placed after `FREE` reuses the freed words.
+knows the value, as for a host-owned struct size. A declaration that must outlive a `MARK` block comes before its
+`MARK`.
 
 Unbalanced `MARK` / `FREE` is an error, as is nesting deeper than 32.
 
 Code that wants to run on either engine can guard its use with `! GEQi #GAZL_VERSION #2 @label`, since a skipped
-conditional region is not parsed for mnemonics - the marked variant is ignored entirely on a GAZL 1 engine. (Use
+conditional region is not parsed for mnemonics, so a GAZL 1 engine ignores the marked variant entirely. (Use
 `! EQUi` instead when you deliberately mean one exact version, as `src/UnitTest.gazl` does.)
 
 ## MODi
@@ -745,7 +744,7 @@ Shift bits right (logical, i.e. shift in zeroes and lose sign)
 
 Open a region of `extent` words at an assemble-time `:offset` from the start of the current data section (GAZL 2 and
 later). The `DAT*` rows that follow fill the region sequentially, exactly as they fill a section. Both operands take
-any assemble-time constant - `.o.` / `.z.` symbols and `<X>` variables included - so data lands at offsets a
+any assemble-time constant, `.o.` / `.z.` symbols and `<X>` variables included, so data lands at offsets a
 host-supplied layout decides, without the emitter knowing the numbers.
 
 Filling past the extent is an error, so a miscounted row fails at that row rather than writing into whatever the
@@ -756,7 +755,7 @@ be opened in any offset order.
             SPAN :.o.Voice.note *1
             DATi #60
             SPAN :.o.Voice.state *.z.Voice.state
-            DATf #1.0 #2.0                       ; 2 of 4 words written - the tail stays zero
+            DATf #1.0 #2.0                       ; 2 of 4 words written, the tail stays zero
             SPAN :.o.Voice.gain *1
             DATf #0.5
 
@@ -764,9 +763,9 @@ A `SPAN` row may carry a label: it is an ordinary data label at the region's fir
 zero-filled space needs no `DAT*` row.
 
     ring:   GLOB *.z.Ring
-    head:   SPAN :.o.Ring.head *1            ; named, zero-initialized - no DAT row needed
+    head:   SPAN :.o.Ring.head *1            ; named and zero, with no DAT row
 
-A section containing no `SPAN` is a single implicit region at offset 0 - GAZL 1 semantics, unchanged. A region
+A section containing no `SPAN` is a single implicit region at offset 0, exactly as in GAZL 1. A region
 reaching past the section is `Offset out of bounds` at the `SPAN` row; two regions of one section overlapping is
 `Data regions overlap`, checked when a region closes (at the next `SPAN`, the next section, or the end of assembly).
 The `! GEQi #GAZL_VERSION #2` guard idiom of [MARK](#mark) applies to `SPAN` equally. The runnable proof that placed

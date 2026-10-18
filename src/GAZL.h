@@ -71,7 +71,7 @@ typedef unsigned int Pointer;																							// Pointer must be unsigned 
 typedef float Float;
 typedef Int Status;																										// Run-time status code
 
-const int VERSION = 2;						// 2 adds MARK / FREE frame reuse, SPAN data regions, strict `#` / `&` prefixes, `GAZL #2` regions with the `t` call-target type, and the TAIL instruction. Pin an exact version with `! EQUi` (as UnitTest.gazl does - it tests one version); require a minimum with `! GEQi #GAZL_VERSION #2 @label`.
+const int VERSION = 2;						// What 2 adds is docs/gazl/Specification.md section 12. A program requires it with `! GEQi #GAZL_VERSION #2 @label`.
 const int WORD_SIZE = 32;
 const Pointer MEMORY_OFFSET = 0x12345678;																				// All memory pointers in GAZL are offsetted by this amount (thus the address of the first memory word is not zero). This makes it easier to detect invalid memory operations (such as writing to a null-pointer).
 const Pointer FUNCTION_OFFSET = 0x56789ABC;																				// All function pointers in GAZL are offsetted by this amount (thus the ordinal of the first function is not zero). A function pointer is an ordinal indexing `functionTable`, not a code address.
@@ -284,7 +284,7 @@ class Assembler {
 	protected:	Instruction* functionStart;
 	protected:	UInt functionCount;					// Running ordinal; assigned to each `FUNC` in declaration order.
 	protected:	UInt localsSize;					// Running bump, rewound by FREE; the final frame size is `maxLocalsSize`.
-	protected:	UInt maxLocalsSize;					// Frame high-water mark. FREE lets later declarations OVERLAY freed words, so the frame is the max over nesting chains, not the sum.
+	protected:	UInt maxLocalsSize;					// Frame high-water mark: the peak over nesting chains, not the sum.
 	protected:	UInt markDepth;
 	protected:	enum { MAX_MARK_DEPTH = 32 };
 	protected:	UInt markStack[MAX_MARK_DEPTH];

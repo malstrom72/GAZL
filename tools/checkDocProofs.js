@@ -72,7 +72,7 @@ const PROOFS = [
 		file: 'design/proofs/spanRegionsRepacked.gazl',
 		doc: 'design/gazl/GAZL2DataRegions.md',
 		args: ['main'],
-		/* Same answer from a re-packed layout - gain first, a pad word, note last - via SPAN regions. */
+		/* Same answer from a re-packed layout (gain first, a pad word, note last) via SPAN regions. */
 		expect: ['60906', 'globals size: 7'],
 	},
 ];

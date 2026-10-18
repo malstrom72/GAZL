@@ -1074,7 +1074,7 @@ void Assembler::parseOperand(const Char* b, const Char* e, int accepts, Value* v
 		case '&':	if (dialect >= 2) {
 						accepts &= ~(CONST_INT | CONST_FLOAT);	// inside a GAZL 2 region `&` names only pointers
 						if ((accepts & ADDRESS) != 0) {
-							accepts &= ~FUNC;			// inside a GAZL 2 region no data-pointer position takes ANY function constant, GAZL 1-minted included. CALL's slot carries no ADDRESS bits, so cross-dialect calls stay legal.
+							accepts &= ~FUNC;			// nor does a data-pointer position take a function constant, not even a GAZL 1 one (CALL takes no ADDRESS, so calls across dialects stay legal)
 						}
 					}
 					if ((accepts & (ADDRESS | FUNC | TARGET)) == 0) throw Exception(DID_NOT_EXPECT_ADDRESS, b, e);
@@ -1201,10 +1201,8 @@ void Assembler::threadBranches() {
 }
 
 /*
-	A region's claim is only known when it CLOSES - the implicit one before the first SPAN claims exactly the words it
-	wrote - so every overlap check happens here, against the claims of the same section's earlier regions. Within a
-	region filling is append-only against `dataEnd`, so disjoint claims mean no word is initialized twice. A section
-	without SPAN is one implicit region and never reaches the loop with a neighbour.
+	Runs when a region closes, because only then is its claim known: the region before the first SPAN claims just the
+	words it wrote. Filling within a region only appends, so disjoint claims mean no word is written twice.
 */
 void Assembler::closeDataRegion() {
 	if (dataPointer == 0) return;
@@ -1544,12 +1542,8 @@ const Char* Assembler::feed(const Char* line) {
 							break;
 
 			/*
-				MARK records the bump and FREE rewinds it, so every declaration after the FREE reuses the freed
-				offsets, while a MARK inside a MARK stacks on top -- which is exactly what an inline expansion
-				needs, including inlines within inlines. The frame is `maxLocalsSize` (the peak over nesting
-				chains), not the sum, and the assembler computes it from RESOLVED sizes, so `LOCA *.z.Struct`
-				overlays correctly even when only the host knows the size. Purely a declaration-time construct: no
-				instruction is emitted and the VM is unchanged.
+				The frame is `maxLocalsSize`, the peak over nesting chains rather than the sum. It is computed from
+				resolved sizes, so `LOCA *.z.Struct` overlays correctly even when only the host knows the size.
 			*/
 			case MARK____:	if (functionStart == 0 || ip != functionStart + 1) {										// MARK
 								throw Exception(MUST_DEFINE_LOCALS_FIRST);
