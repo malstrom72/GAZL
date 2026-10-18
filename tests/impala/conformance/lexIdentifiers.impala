@@ -1,0 +1,19 @@
+/*
+	Conformance: Impala.md#identifiers-and-keywords
+	Identifiers may start with a letter, `_` or `$` and continue with digits too.
+	Expected (GAZLCmd lexIdentifiers.gazl main): 6
+*/
+const int DEBUG = 1
+extern native printInt
+extern native printFloat
+extern native printLF
+
+function main()
+locals int _a, int b$2, int $c, int d4
+{
+	_a = 1;
+	b$2 = 2;
+	d4 = 3;
+	$c = _a + b$2 + d4;
+	printInt($c); printLF();
+}

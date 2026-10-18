@@ -338,7 +338,7 @@ const SAMPLES = [
 	{ name: "destructuring is parked", expect: "E429",
 		src: "function main() locals int a, int b { a, b = 1; }\n" },
 	/* `inline function` is NOT in this list on the GAZL 2 line. E439 is the Impala 2 branch's refusal,
-	   which exists because that branch must run on a GAZL 1.0 engine with no `SCOP`/`ENDS` for an
+	   which exists because that branch must run on a GAZL 1.0 engine with no `MARK`/`FREE` for an
 	   expansion to declare its locals in. Here the instructions exist and the feature is live, so the
 	   sample would compile clean - which is what this gate caught when the two branches met. */
 	{ name: "break is reserved so it can be refused clearly", expect: "E450",
@@ -574,18 +574,18 @@ const SAMPLES = [
 		"\ttail count(n - 1, acc + 1);",
 		"}",
 		"export function main() locals int x { x = count(100000, 0); }", ""].join("\n") },
-	{ name: "tail: requires --gazl2", expect: "E466", src: [
+	{ name: "tail: requires --gazl2", expect: "E468", src: [
 		"function count(int n, int acc) returns int r",
 		"{",
 		"\tif (n == 0) { r = acc; return; }",
 		"\ttail count(n - 1, acc + 1);",
 		"}",
 		"export function main() { }", ""].join("\n") },
-	{ name: "tail: self only", expect: "E467", gazl2: true, src: [
+	{ name: "tail: self only", expect: "E469", gazl2: true, src: [
 		"function other(int n) returns int r { r = n; }",
 		"function count(int n) returns int r { tail other(n); }",
 		"export function main() { }", ""].join("\n") },
-	{ name: "tail: not in an inline body", expect: "E468", gazl2: true, src: [
+	{ name: "tail: not in an inline body", expect: "E470", gazl2: true, src: [
 		"inline function twice(int x) returns int r { tail twice(x); }",
 		"export function main() { }", ""].join("\n") },
 ];

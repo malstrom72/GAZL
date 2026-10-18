@@ -1,0 +1,23 @@
+/*
+	Conformance: Impala.md#built-in-operators
+	The four prefix built-ins: `abs` on int and float, `floor`, `itof` and a truncating `ftoi`, with unary-tight precedence.
+	Expected (GAZLCmd exprBuiltins.gazl main): 5 2.5 -2 3 2 -2 4
+*/
+const int DEBUG = 1
+extern native printInt
+extern native printFloat
+extern native printLF
+
+function main()
+locals int i, float f
+{
+	i = -5;
+	printInt(abs i); printLF();
+	f = -2.5;
+	printFloat(abs f); printLF();
+	printFloat(floor -1.5); printLF();
+	printFloat(itof 3); printLF();
+	printInt(ftoi 2.75); printLF();
+	printInt(ftoi -2.75); printLF();
+	printInt(abs i - 1); printLF();
+}

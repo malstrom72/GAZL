@@ -2,9 +2,9 @@
 
 Status: the `TAIL` instruction is IMPLEMENTED (2026-08-27, GAZL2 branch), and Impala's `tail f(...);`
 terminal statement lowers to it under `--gazl2`. The Impala SURFACE is self-recursion only for now
-(E467) - the instruction itself is general, but the cross-function window/return contract checks in the
-compiler are future work. Diagnostics: E466 (`tail` needs `--gazl2` - the instruction exists only on
-GAZL 2 engines), E467 (target must be the enclosing function), E468 (not in an `inline function`), plus
+(E469) - the instruction itself is general, but the cross-function window/return contract checks in the
+compiler are future work. Diagnostics: E468 (`tail` needs `--gazl2` - the instruction exists only on
+GAZL 2 engines), E469 (target must be the enclosing function), E470 (not in an `inline function`), plus
 the ordinary call checks (E405/E406). Because `tail` is a statement that transfers control, "tail
 position" holds by construction - anything after it on a path is simply unreachable, exactly as after
 `return`.
@@ -87,7 +87,7 @@ An `m <= window` check was in fact implemented first, along with two successivel
 removed the same day, per "no diagnostic for a safe shape". The one load-bearing piece is the
 `paramsSize` fold.
 
-**Additive, not region-gated.** Like `SCOP`/`SEEK`, `TAIL` is a new mnemonic: dialect-1 text may use it
+**Additive, not region-gated.** Like `MARK`/`SPAN`, `TAIL` is a new mnemonic: dialect-1 text may use it
 on a GAZL 2 engine, and an older engine rejects it as an unknown mnemonic - which is the whole version
 story for additions.
 
@@ -159,7 +159,7 @@ one opcode says outright. So `INP*` stays read-only everywhere, and `TAIL` is an
   self-edge changes no closure anyway).
 - **Signature metadata**: a `tail` site emits the same `; expects f(...) -> T` row a call does, so any
   signature-row consumer keeps checking it across units.
-- **Mutual recursion**: the INSTRUCTION covers it already; Impala's surface does not yet (E467). The
+- **Mutual recursion**: the INSTRUCTION covers it already; Impala's surface does not yet (E469). The
   missing piece is compiler-side: checking the RETURN contract across two functions - the target's
   `RETU` fulfils this function's promise to its caller - and the funcptr form (`TAIL_vs_`). State
   machines written as mutually tail-calling handlers are the main thing that unlocks.

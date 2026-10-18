@@ -11,7 +11,7 @@ a program is already doing.
 **Nine new keywords:** `break` `continue` `export` `functype` `import` `inline` `return` `sizeof` `struct`.
 Two of those are not features: `break` and `continue` are `E450`, reserved so the compiler can refuse them
 with an explanation instead of a syntax error. `inline` IS a feature **on this branch** - an expansion
-declares its locals in a GAZL 2 `SCOP`/`ENDS` scope, which is exactly why the Impala 2 line refuses it and
+declares its locals in a GAZL 2 `MARK`/`FREE` scope, which is exactly why the Impala 2 line refuses it and
 this line does not. See [`Inlining.md`](Inlining.md).
 
 For *why* 2.0 is shaped this way, see [`Impala2.md`](Impala2.md). This page is only the what.
@@ -229,9 +229,9 @@ traps with `status -6`.
 
 It is explicit on purpose: silent tail-call elimination decides whether byte-identical source works at
 all, which is the opposite of a predictable cost model. And it is deliberately narrow in 2.0: the target
-must be the enclosing function (`E467` - the GAZL `TAIL` instruction is general, but cross-function
-contract checking is future compiler work), it needs `--gazl2` (`E466` - the instruction exists only on
-GAZL 2 engines), and an `inline function` cannot use it (`E468`). `tail` itself stays a legal name for
+must be the enclosing function (`E469` - the GAZL `TAIL` instruction is general, but cross-function
+contract checking is future compiler work), it needs `--gazl2` (`E468` - the instruction exists only on
+GAZL 2 engines), and an `inline function` cannot use it (`E470`). `tail` itself stays a legal name for
 anything else.
 
 ## Not available
@@ -247,7 +247,7 @@ Reserved so they can be refused clearly, not because they are coming soon in 2.0
 | `break` / `continue` | `E450` - leave a loop with `goto`; a switch arm already does not fall through |
 
 `inline function` is NOT in that table on this branch. The Impala 2 line refuses it, because it has to run
-on a GAZL 1.0 engine; here the `SCOP`/`ENDS` an expansion needs exist, so the feature does too.
+on a GAZL 1.0 engine; here the `MARK`/`FREE` an expansion needs exist, so the feature does too.
 
 [`ParkedFeatures.md`](../../design/ParkedFeatures.md) has the full argument and the branch for every row above.
 

@@ -1,0 +1,72 @@
+; Compiled with Impala version 2.0
+
+; signatures version=1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ typesStruct.impala:6:1
+; signature extern native printInt() -> unknown @ typesStruct.impala:7:1
+; signature extern native printFloat() -> unknown @ typesStruct.impala:8:1
+; signature extern native printLF() -> unknown @ typesStruct.impala:9:1
+	! MOVi <a> #0	; layout of struct Point
+.o.Point.x:	! DEFi #<a>
+	! ADDi <a> #<a> #1
+.o.Point.y:	! DEFi #<a>
+	! ADDi <a> #<a> #1
+.z.Point:	! DEFi #<a>
+; signature struct Point { x : int, y : int } @ typesStruct.impala:11:1
+	! MOVi <a> #0	; layout of struct Body
+.o.Body.pos:	! DEFi #<a>
+	! ADDi <a> #<a> #.z.Point
+.o.Body.mass:	! DEFi #<a>
+	! ADDi <a> #<a> #1
+.o.Body.tags:	! DEFi #<a>
+.z.Body.tags:	! DEFi #4
+	! ADDi <a> #<a> #.z.Body.tags
+.z.Body:	! DEFi #<a>
+; signature struct Body { pos : Point, mass : float, tags : int[4] } @ typesStruct.impala:12:1
+b:	GLOB *.z.Body	; signature global b : Body @ typesStruct.impala:14:1
+origin:	GLOB *.z.Point	; signature global origin : Point @ typesStruct.impala:15:1
+	DATA #1 #2
+
+;-----------------------------------------------------------------------------
+move:	FUNC	; signature func move(Body-ptr bp, int dx) -> void @ typesStruct.impala:17:1
+		PARA *1
+	$bp:	INPp
+	$dx:	INPi
+;-----------------------------------------------------------------------------
+		! ADDi <A> #.o.Body.pos #.o.Point.x	; bp->pos.x = bp->pos.x + dx
+		! ADDi <B> #.o.Body.pos #.o.Point.x
+		PEEK %0 $bp #<B>
+		ADDi %0 %0 $dx
+		POKE $bp #<A> %0
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+main:	FUNC	; signature func main() -> void @ typesStruct.impala:22:1
+		PARA *1
+	$copyOfB:	LOCA *.z.Body
+;-----------------------------------------------------------------------------
+		! ADDi <A> #.o.Body.pos #.o.Point.x	; global b.pos.x = 10
+		POKE &b:<A> #10 
+		MOVp %1 &b 	; move(&global b, 5)
+		MOVi %2 #5 
+		CALL &move %0 *3	; expects move(Body-ptr, int) -> void @ typesStruct.impala:26:20
+		! ADDi <A> #.o.Body.pos #.o.Point.x	; printInt(global b.pos.x)
+		PEEK %1 &b:<A> 
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ typesStruct.impala:27:26
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ typesStruct.impala:27:37
+		PEEK %1 &origin:.o.Point.x 	; printInt(global origin.x)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ typesStruct.impala:28:27
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ typesStruct.impala:28:38
+		PEEK %1 &origin:.o.Point.y 	; printInt(global origin.y)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ typesStruct.impala:29:27
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ typesStruct.impala:29:38
+		MOVi %1 #.z.Body 	; printInt(sizeof(Body))
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ typesStruct.impala:30:24
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ typesStruct.impala:30:35
+		ADRL %0 $copyOfB *0	; copyOfB = global b
+		COPY %0 &b *.z.Body
+		! ADDi <A> #.o.Body.pos #.o.Point.x	; printInt(copyOfB.pos.x)
+		MOVi %1 $copyOfB:<A> 
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ typesStruct.impala:32:25
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ typesStruct.impala:32:36
+		RETU   	; }

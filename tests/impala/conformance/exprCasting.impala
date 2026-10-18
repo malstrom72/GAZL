@@ -1,0 +1,24 @@
+/*
+	Conformance: Impala.md#casting
+	`itof` and `ftoi` convert; a cast only retypes an untyped value, such as a bare array element or a bare pointer.
+	Expected (GAZLCmd exprCasting.gazl main): 3 7 7 8
+*/
+const int DEBUG = 1
+extern native printInt
+extern native printFloat
+extern native printLF
+
+global array untyped[2] = { 7, 0 }
+
+function main()
+locals float f, int n, pointer raw, int pointer p
+{
+	f = itof(3);
+	printFloat(f); printLF();
+	n = ftoi(7.9);
+	printInt(n); printLF();
+	printInt((int) global untyped[0]); printLF();
+	raw = &global untyped[0];
+	p = (int pointer) raw;
+	printInt(*p + 1); printLF();
+}

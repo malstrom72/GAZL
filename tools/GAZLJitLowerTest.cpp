@@ -151,6 +151,9 @@ static bool assemble(const char* source, Symbols& globals) {
 
 static void restoreClean() { std::memcpy(gMemory, gCleanImage.data(), DATA_SIZE * sizeof(Value)); }
 
+// The word at `pointer`: `gMemory` starts with the constants, which sit below `MEMORY_OFFSET`.
+static Value& wordAt(Pointer pointer) { return gMemory[pointer - MEMORY_OFFSET + (gConstsSize - 1)]; }
+
 static std::vector<Value> runInterpreter(Pointer mainPtr, Pointer gInPtr, int n, Status& outStatus,
 		int fuel = 0x7FFFFFFF, int* suspendsOut = 0) {
 	restoreClean();
@@ -223,7 +226,7 @@ static void runKernel(const char* name, const char* source, const int* inputs, s
 			const bool good = (s == wantStatus) && (valueUnspecified || imagesEqual(want, got, diff));
 			std::printf("  n=%-8d %-11s status=%-3d hostcalls=%-5ld suspends=%-5d gOut=%-12d %s\n", n,
 					pass == 0 ? "[fullfuel]" : "[tinyfuel]", s, gNativeCallCount, suspends,
-					gMemory[gOutPtr - MEMORY_OFFSET].i, good ? (valueUnspecified ? "OK (cross-realm: status only)" : "OK") : "MISMATCH");
+					wordAt(gOutPtr).i, good ? (valueUnspecified ? "OK (cross-realm: status only)" : "OK") : "MISMATCH");
 			if (!good) { std::printf("    want status=%d, diff word=%d\n", wantStatus, diff); ++failures; }
 			if (pass == 1 && good) {						// fuel-rate fidelity: JIT charge (per block) vs interpreter (1/instr)
 				Status ds = OK; int interpSuspends = 0;
@@ -470,11 +473,19 @@ static const char* const K_YIELD =			// resetTimeOut(0)+OK cooperative yield nat
 	"main: FUNC\n PARA *2\n$n: LOCi\n"
 	" PEEK $n &gIn\n CALL ^yld %0 *2\n ADDi $n $n $n\n ADDi $n $n #7\n POKE &gOut $n\n RETU\n";	// gOut = 2*gIn + 7
 
-static const char* const K_DIVFZERO =		// DIVf by a runtime zero divisor -> DIVISION_BY_ZERO (matches interp; fuzzer-found)
+static const char* const K_NEGDEREF =		// a negative constant offset off a frame pointer is not a data address: flush + invalidate
+	"gIn: GLOB *1\n DATi #0\n" "gOut: GLOB *1\n DATi #0\n"
+	"main: FUNC\n PARA *1\n$n: LOCi\n$a: LOCi\n$b: LOCi\n$p: LOCp\n$r: LOCi\n"
+	" PEEK $n &gIn\n ADDi $a $n #5\n ADRL $p $a *0\n ADDp $p $p #1\n"
+	" PEEK $r $p #-1\n"										// r = a, read through the pointer while a is dirty in a register
+	" POKE $p #-1 $n\n"										// a = n, written through the pointer while a is cached
+	" ADDi $r $r $a\n POKE &gOut $r\n RETU\n";				// gOut = (n + 5) + n
+
+static const char* const K_DIVFZERO =		// DIVf by a runtime zero divisor: IEEE, an infinity that fTOi saturates
 	"gIn: GLOB *1\n DATi #0\n" "gOut: GLOB *1\n DATi #0\n"
 	"main: FUNC\n PARA *1\n$n: LOCi\n$f: LOCf\n$g: LOCf\n$r: LOCi\n"
 	" PEEK $n &gIn\n iTOf $f $n #1.0\n"						// f = (float)n
-	" MOVf $g #1000.0\n DIVf $g $g $f\n"					// g = 1000.0 / f  (f == 0 when n == 0 -> trap; else divides)
+	" MOVf $g #1000.0\n DIVf $g $g $f\n"					// g = 1000.0 / f  (f == 0 when n == 0 -> +infinity)
 	" fTOi $r $g #1.0\n POKE &gOut $r\n RETU\n";
 
 
@@ -944,7 +955,7 @@ static void runLivenessTest() {
 	UInt end = start;
 	while (gCode[end].opcode != OP_RETU) { ++end; }
 	LiveSets liveIn;
-	liveIn.build(gCode, start, end, gMemory);
+	liveIn.build(gCode, start, end, &wordAt(MEMORY_OFFSET));
 	bool anyNonEmpty = false;
 	for (UInt j = start; j <= end; ++j) { if (!liveIn.empty(j)) { anyNonEmpty = true; break; } }
 	const bool entryEmpty = liveIn.empty(start);
@@ -1026,7 +1037,7 @@ static bool runFarNative(int ordinal) {
 		proc->accessMemory(gInPtr, 1)->i = 12;
 		Status s = proc->enterCall(mainPtr);
 		do { proc->resetTimeOut(0x7FFFFFFF); s = proc->run(); } while (s == TIME_OUT);
-		statuses[engine] = s; outs[engine] = gMemory[gOutPtr - MEMORY_OFFSET].i;
+		statuses[engine] = s; outs[engine] = wordAt(gOutPtr).i;
 		delete proc;
 	}
 	const bool good = statuses[0] == OK && statuses[1] == OK && outs[0] == 144 && outs[1] == 144;
@@ -1122,7 +1133,8 @@ int main() { setvbuf(stdout, 0, _IONBF, 0);
 	runKernel("tail          [GAZL 2 TAIL]", K_TAIL, counts, sizeof(counts) / sizeof(*counts));		// a GAZL_2=0 engine rejects the mnemonic, as a real 1.0 engine does
 	runKernel("tail big      [window 5000, frame >1023]", K_TAILBIG, counts, sizeof(counts) / sizeof(*counts));
 #endif
-	runKernel("divf zero     [DIVf /0 trap]", K_DIVFZERO, signed_, sizeof(signed_) / sizeof(*signed_));
+	runKernel("divf zero     [DIVf /0 IEEE]", K_DIVFZERO, signed_, sizeof(signed_) / sizeof(*signed_));
+	runKernel("neg deref     [frame pointer, offset #-1]", K_NEGDEREF, signed_, sizeof(signed_) / sizeof(*signed_));
 	runReachTests();
 
 	std::printf("%s (%d failure%s)\n", failures == 0 ? "ALL PASS" : "FAILED", failures, failures == 1 ? "" : "s");

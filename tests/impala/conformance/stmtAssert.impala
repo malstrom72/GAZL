@@ -1,0 +1,20 @@
+/*
+	Conformance: Impala.md#assert
+	`assert` is guarded by `DEBUG` at GAZL assembly time; a holding assertion does nothing.
+	Expected (GAZLCmd stmtAssert.gazl main): 1
+*/
+const int DEBUG = 1
+extern native printInt
+extern native printFloat
+extern native printLF
+
+function check(int i) returns int r
+{
+	assert(i != 0);
+	r = 1;
+}
+
+function main()
+{
+	printInt(check(3)); printLF();
+}

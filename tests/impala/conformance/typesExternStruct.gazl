@@ -1,0 +1,29 @@
+; Compiled with Impala version 2.0
+
+; signatures version=1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ typesExternStruct.impala:6:1
+; signature extern native printInt() -> unknown @ typesExternStruct.impala:7:1
+; signature extern native printFloat() -> unknown @ typesExternStruct.impala:8:1
+; signature extern native printLF() -> unknown @ typesExternStruct.impala:9:1
+; signature extern struct HostFrame { width : int, height : int } @ typesExternStruct.impala:11:1
+
+;-----------------------------------------------------------------------------
+main:	FUNC	; signature func main() -> void @ typesExternStruct.impala:13:1
+		PARA *1
+.z.main.raw:	! DEFi #4
+	$raw:	LOCA *.z.main.raw
+	$f:	LOCp
+;-----------------------------------------------------------------------------
+		ADRL $f $raw:0 *0	; f = (HostFrame pointer) &raw[0]
+		POKE $f #.o.HostFrame.width #640	; f->width = 640
+		POKE $f #.o.HostFrame.height #480	; f->height = 480
+		PEEK %1 $f #.o.HostFrame.width	; printInt(f->width)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ typesExternStruct.impala:19:20
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ typesExternStruct.impala:19:31
+		MOVi %1 $raw:0 	; printInt(raw[0])
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ typesExternStruct.impala:20:18
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ typesExternStruct.impala:20:29
+		MOVi %1 #.z.HostFrame 	; printInt(sizeof(HostFrame))
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ typesExternStruct.impala:21:29
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ typesExternStruct.impala:21:40
+		RETU   	; }

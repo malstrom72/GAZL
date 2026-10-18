@@ -1,0 +1,28 @@
+/*
+	Conformance: Impala.md#function-pointers
+	A `funcptr` global is assigned, tested against `nullfunc` and called; `null` is the plain pointer null.
+	Expected (GAZLCmd declFunctionPointers.gazl main): 1 0 1
+*/
+const int DEBUG = 1
+extern native printInt
+extern native printFloat
+extern native printLF
+
+global int calls
+global funcptr fp
+global pointer np = null
+
+function showoff()
+{
+	global calls = global calls + 1;
+}
+
+function main()
+{
+	if (global fp == nullfunc) global fp = showoff;
+	if (global fp != nullfunc) global fp();
+	printInt(global calls); printLF();
+	if (global np == null) printInt(0);
+	printLF();
+	printInt(global calls); printLF();
+}

@@ -30,8 +30,11 @@
 
 	  - integer results wrap at 32 bits, shift counts are taken mod 32, `INT_MIN / -1` is `INT_MIN` and
 	    `INT_MIN % -1` is 0; `FTOi` truncates and saturates, and NaN gives 0
-	  - an address is `base + index` mod 2^32, minus `MEMORY_OFFSET`; it reads [0, memorySize) and writes
-	    [0, rwSize); GETL / SETL index a local array and reach as far as the end of the data stack
+	  - `DIVf` is IEEE division, so a zero divisor gives an infinity or a NaN rather than an error
+	  - an address is `base + index` mod 2^32. The constants sit just below `MEMORY_OFFSET`, the globals and the
+	    data stack from it up, so a read reaches the constants too and a write only from `MEMORY_OFFSET` up; the
+	    zero guard after the data stack is out of reach of both. GETL / SETL index a local array and reach as far
+	    as the end of the data stack
 	  - every instruction costs one unit of fuel, the one that runs out included, as `Processor::run()` charges
 
 	Where the interpreter trusts the assembler (a frame slot inside the data stack, a constant address inside
@@ -64,38 +67,35 @@ typedef Status (*Native)(Machine& machine, Value* window, UInt room);
 
 /*
 	The state of one reference run over one program. Memory is the caller's, laid out as `Processor`'s
-	higher-level constructor lays it out: globals, then the data stack, then the constants.
+	higher-level constructor lays it out: the constants, the globals, the data stack, then the zero guard.
 */
 class Machine {
 	public:
-		Machine(const AssembledProgram& program, UInt ipStackSize, const Native* natives)
-			: code(program.code), codeSize(program.codeSize), functionTable(program.functionTable)
-			, functionCount(program.functionCount), memory(program.memory), memorySize(program.memorySize)
-			, rwSize(program.memorySize - program.constsSize), stackBase(program.globalsSize)
-			, stackEnd(program.memorySize - program.constsSize), ipStackSize(ipStackSize), natives(natives)
-			, fuel(0), unspecified(false) { }
+		Machine(const AssembledProgram& program, UInt ipStackSize, const Native* natives);
 
-		Status call(Pointer function, long long fuel);	/// runs `function` to its return, a fault, or the end of `fuel`
-		Int fuelLeft() const { return (Int)fuel; }
-		void resetFuel(Int newFuel) { fuel = newFuel; }		/// what `Processor::resetTimeOut` is to the interpreter
-		Value* accessMemory(Pointer pointer, UInt count);	/// [pointer, pointer + count) inside writable memory, or 0
+		Status call(Pointer function, long long fuel);		// runs `function` to its return, a fault, or the end of `fuel`
+		Int fuelLeft() const;
+		Value* accessMemory(Pointer pointer, UInt count);	// [pointer, pointer + count) inside writable memory, or 0
 
-		std::string violation;								/// why the run stopped with REFERENCE_VIOLATION
-		bool unspecified;									/// the run did something GAZL leaves undefined
+		std::string violation;								// why the run stopped with REFERENCE_VIOLATION
+		bool unspecified;									// the run did something GAZL leaves undefined
 
 	private:
 		struct Frame { long long ip; long long dsp; };
 
-		Status fail(const std::string& why) { violation = why; return REFERENCE_VIOLATION; }
-		bool slotOk(long long index) const { return index >= (long long)stackBase && index < (long long)stackEnd; }
+		Status fail(const std::string& why);
+		bool slotOk(long long index) const;
+		bool readIndex(Pointer pointer, long long& index) const;		// the word `pointer` reads, if a read may reach it
+		bool writeIndex(Pointer pointer, long long& index) const;	// the word `pointer` writes, if a write may reach it
 
 		const Instruction* code;
 		UInt codeSize;
 		const UInt* functionTable;
 		UInt functionCount;
 		Value* memory;
-		UInt memorySize;
-		UInt rwSize;
+		UInt constantWords;									// the words below `MEMORY_OFFSET`, at the start of `memory`
+		UInt readableWords;									// every word but the zero guard
+		UInt writableWords;									// the globals and the data stack
 		UInt stackBase;
 		UInt stackEnd;
 		UInt ipStackSize;

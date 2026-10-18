@@ -1,0 +1,20 @@
+/*
+	Conformance: Impala.md#string-literals
+	A string literal is an `int pointer` to zero-terminated word characters; escapes include `\t` and `\uXXXX`.
+	Expected (GAZLCmd lexStringLiterals.gazl main): 65 9 66 67 0
+*/
+const int DEBUG = 1
+extern native printInt
+extern native printFloat
+extern native printLF
+
+function main()
+locals int pointer s
+{
+	s = "A\tB\u0043";
+	printInt(s[0]); printLF();
+	printInt(s[1]); printLF();
+	printInt(s[2]); printLF();
+	printInt(s[3]); printLF();
+	printInt(s[4]); printLF();
+}

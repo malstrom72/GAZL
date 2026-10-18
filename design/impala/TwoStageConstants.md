@@ -262,6 +262,50 @@ time because every line is an `!` directive.
 > reads like an internal error. `! FAIL` takes free text. Prefer it.
 
 
+## Every constant check, and what happens when the value is symbolic
+
+Each check below fires with its code when Impala knows the numbers. When a value is a symbol only the
+assembler can resolve, one of four things happens:
+
+1. **Now**: Impala still decides, because the answer does not depend on the value.
+2. **Deferred**: Impala emits a `! <compare>` and `! FAIL` (above), and the load stops with that text.
+3. **Assembler**: the assembler's own check stops the load, with its own message.
+4. **Unchecked**: the program loads and runs. Rule 3 asks that this be visible; this table is where it is.
+
+Verified 2026-10-12 on `Impala2`, by compiling each case and loading it with `GAZLCmd`, the host values given
+on its command line.
+
+| Check | Code | When a value is symbolic | What the user sees then |
+|---|---|---|---|
+| Constant index past a plain array | E461 | 3 | `Offset out of bounds: a` |
+| Negative constant index into a plain array | E461 | 3 | `Incompatible types: K` |
+| Constant index past a struct array field | E461 | 2 | `! FAIL index 5 outside S.v (resolved only at assembly)` |
+| Constant index past an axis of a shaped array | E461 | 2 | `! FAIL index 5 outside g axis 0 (resolved only at assembly)`; axes count from the innermost |
+| Negative extent of a struct array field | E462 | 2 | `! FAIL extent of S.v is negative, which would run the struct layout backwards` |
+| Negative extent or axis of a global or local array | E462 | 3 | `Incompatible types: .z.a` |
+| Initializer longer than an array | E460 | 3 | `Not enough space in data section: a` |
+| Initializer longer than a struct array field | E460 | 2 | `! FAIL too many initializer values for S.v: 4 given, room for .z.S.v` |
+| Shaped initializer, symbolic axis: not rectangular | E460 | 1 | the error, now |
+| Shaped initializer, symbolic axis: wrong length | E460 | 2 | `! FAIL initializer for ... has the wrong length on axis ...` |
+| Non-zero initializer after a struct array field of symbolic extent | E454 | 1 | the error, now: the field's position is unknown |
+| Non-zero initializer for an `extern struct` | E459 | 1 | the error, now: the host owns the layout |
+| `case` value outside the switch range, the range symbolic | E444 | 4 | nothing: the arm is unreachable (`docs/impala/Impala.md`, `switch`) |
+| `case` value symbolic, above a literal range | E444 | 4 | nothing: the arm is unreachable |
+| `case` value naming a host-supplied const, below a literal range | E444 | 4 | nothing: the label is guarded and the arm unreachable (`tests/impala/sources/switchSymbolicCase.impala`) |
+| `case` value an expression over a host-supplied const, below a literal range | E444 | 3 | `Invalid identifier: .s0.-1`: the module does not load |
+| Two `case` values equal, both symbolic | E443 | 3 | `Symbol already defined: .s0.1` |
+| Division or modulus by a constant zero | E466 | 3 | `Constant zero divisor or modulus`; a literal zero is E466 at Impala compile time |
+| `copy` count larger than its source or destination | E467 | 4 | nothing; a literal count is E467 against a global array's room, but the VM stops only a copy that leaves memory |
+
+Candidates, none of them decided:
+
+- A `case` value that is an expression over a host-supplied const (`case K + 1`) below a literal range still makes
+  the module fail to load. Impala cannot tell from the folded `<A>` whether a host const entered it.
+- Four assembler messages name something the user never wrote (`.z.a`, `.s0.1`, `.s0.-1`) or say "incompatible
+  types" for a negative number. A deferred `! FAIL` placed first would read better.
+- A character-literal `case` value (`case '+':`) gets no E443 or E444 check: `constInt` does not read `#'+'`.
+
+
 ## Why this follows from "stay a transliterator"
 
 This is not a separate principle bolted on. It is a direct consequence of Impala's first design

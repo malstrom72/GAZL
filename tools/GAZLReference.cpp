@@ -59,9 +59,39 @@ static Int floatToInt(Float v) {						// already scaled; truncates and saturates
 	return (Int)(long long)v;
 }
 
+Machine::Machine(const AssembledProgram& program, UInt ipStackSize, const Native* natives)
+		: unspecified(false), code(program.code), codeSize(program.codeSize), functionTable(program.functionTable)
+		, functionCount(program.functionCount), memory(program.memory), constantWords(program.constsSize - 1)
+		, readableWords(program.memorySize - 1), writableWords(program.memorySize - program.constsSize)
+		, stackBase(program.constsSize - 1 + program.globalsSize), stackEnd(program.memorySize - 1)
+		, ipStackSize(ipStackSize), natives(natives), fuel(0) {
+}
+
+Int Machine::fuelLeft() const { return (Int)fuel; }
+
+Status Machine::fail(const std::string& why) {
+	violation = why;
+	return REFERENCE_VIOLATION;
+}
+
+bool Machine::slotOk(long long index) const { return index >= (long long)stackBase && index < (long long)stackEnd; }
+
+bool Machine::readIndex(Pointer pointer, long long& index) const {
+	index = (long long)(UInt)(pointer - MEMORY_OFFSET + constantWords);
+	return index < (long long)readableWords;
+}
+
+bool Machine::writeIndex(Pointer pointer, long long& index) const {
+	const long long offset = (long long)(UInt)(pointer - MEMORY_OFFSET);
+	index = constantWords + offset;
+	return offset < (long long)writableWords;
+}
+
 Value* Machine::accessMemory(Pointer pointer, UInt count) {
-	const long long index = (long long)(UInt)(pointer - MEMORY_OFFSET);
-	return (index + (long long)count <= (long long)rwSize) ? &memory[index] : 0;
+	long long index;
+	writeIndex(pointer, index);
+	const long long offset = index - constantWords;
+	return (offset + (long long)count <= (long long)writableWords) ? &memory[index] : 0;
 }
 
 Status Machine::call(Pointer function, long long startFuel) {
@@ -89,8 +119,10 @@ Status Machine::call(Pointer function, long long startFuel) {
 		#define SLOT(c, name)	if (!slotOk(dsp + (c).i)) return fail("slot outside the data stack"); \
 								Value& name = memory[dsp + (c).i];
 		// A constant address (`&address` with no index) is checked at assembly; the reference checks it again.
-		#define CONSTANT_ADDRESS(c, limit, name)	const long long name = (long long)(UInt)((c).p - MEMORY_OFFSET); \
-								if (name >= (long long)(limit)) return fail("constant address outside memory");
+		#define CONSTANT_READ(c, name)	long long name; \
+								if (!readIndex((c).p, name)) return fail("constant address outside memory");
+		#define CONSTANT_WRITE(c, name)	long long name; \
+								if (!writeIndex((c).p, name)) return fail("constant address outside writable memory");
 		#define BRANCH(condition, offset)	if (condition) { ip += (offset).i; continue; }
 
 		switch (in.opcode) {
@@ -161,9 +193,9 @@ Status Machine::call(Pointer function, long long startFuel) {
 			}
 			case MOVE_VV_: { SLOT(c0, v0); SLOT(c1, v1); v0 = v1; break; }
 			case MOVE_VC_: { SLOT(c0, v0); v0 = c1; break; }
-			case PEEK_VC_: { SLOT(c0, v0); CONSTANT_ADDRESS(c1, memorySize, a); v0 = memory[a]; break; }
-			case POKE_CV_: { CONSTANT_ADDRESS(c0, rwSize, a); SLOT(c1, v1); memory[a] = v1; break; }
-			case POKE_CC_: { CONSTANT_ADDRESS(c0, rwSize, a); memory[a] = c1; break; }
+			case PEEK_VC_: { SLOT(c0, v0); CONSTANT_READ(c1, a); v0 = memory[a]; break; }
+			case POKE_CV_: { CONSTANT_WRITE(c0, a); SLOT(c1, v1); memory[a] = v1; break; }
+			case POKE_CC_: { CONSTANT_WRITE(c0, a); memory[a] = c1; break; }
 			case PEEK_VVV:
 			case PEEK_VCV: {							// P1 = the pointer, V2 = the index
 				SLOT(c0, v0);
@@ -175,8 +207,8 @@ Status Machine::call(Pointer function, long long startFuel) {
 					base = c1.p;
 				}
 				SLOT(c2, v2);
-				const long long a = (long long)(UInt)(base + (UInt)v2.i - MEMORY_OFFSET);
-				if (a >= (long long)memorySize) return BAD_PEEK;
+				long long a;
+				if (!readIndex(base + (UInt)v2.i, a)) return BAD_PEEK;
 				v0 = memory[a];
 				break;
 			}
@@ -197,8 +229,8 @@ Status Machine::call(Pointer function, long long startFuel) {
 					SLOT(c2, v2);
 					value = v2;
 				}
-				const long long a = (long long)(UInt)(base + (UInt)v1.i - MEMORY_OFFSET);
-				if (a >= (long long)rwSize) return BAD_POKE;
+				long long a;
+				if (!writeIndex(base + (UInt)v1.i, a)) return BAD_POKE;
 				memory[a] = value;
 				break;
 			}
@@ -225,7 +257,7 @@ Status Machine::call(Pointer function, long long startFuel) {
 				memory[a] = value;
 				break;
 			}
-			case ADRL_VV_: { SLOT(c0, v0); v0.p = (Pointer)(UInt)(dsp + c1.i) + MEMORY_OFFSET; break; }
+			case ADRL_VV_: { SLOT(c0, v0); v0.p = (Pointer)(UInt)(dsp + c1.i - constantWords) + MEMORY_OFFSET; break; }
 			case ABSI_VV_: { SLOT(c0, v0); SLOT(c1, v1); v0.i = absoluteInt(v1.i); break; }
 			case ABSF_VV_: { SLOT(c0, v0); SLOT(c1, v1); v0.f = std::fabs(v1.f); break; }
 			case FLOF_VV_: { SLOT(c0, v0); SLOT(c1, v1); v0.f = std::floor(v1.f); break; }
@@ -288,13 +320,7 @@ Status Machine::call(Pointer function, long long startFuel) {
 				if (op >= ADDF_VVV && op <= ADDF_VVC) r = a + b;
 				else if (op >= SUBF_VVV && op <= SUBF_VCV) r = a - b;
 				else if (op >= MULF_VVV && op <= MULF_VVC) r = a * b;
-				else {
-					if (b == 0.0f) {
-						if (constantB) return fail("constant division by zero");
-						return DIVISION_BY_ZERO;
-					}
-					r = a / b;
-				}
+				else r = a / b;							// IEEE: a zero divisor gives an infinity or a NaN
 			#ifdef GAZL_CANONICAL_NAN
 				if (r != r) {			// the strict-FP build gives every arithmetic NaN one bit pattern
 					v0.i = 0x7FC00000;
@@ -315,9 +341,13 @@ Status Machine::call(Pointer function, long long startFuel) {
 				if (in.opcode == COPY_VVC || in.opcode == COPY_VCC) { SLOT(c0, v0); to = v0.p; }
 				if (in.opcode == COPY_VVC || in.opcode == COPY_CVC) { SLOT(c1, v1); from = v1.p; }
 				const long long count = (long long)(UInt)c2.i;
-				const long long d = (long long)(UInt)(to - MEMORY_OFFSET);
-				const long long s = (long long)(UInt)(from - MEMORY_OFFSET);
-				if (d + count > (long long)rwSize || s + count > (long long)memorySize) return ACCESS_VIOLATION;
+				long long d;
+				long long s;
+				writeIndex(to, d);
+				readIndex(from, s);
+				if (d - constantWords + count > (long long)writableWords || s + count > (long long)readableWords) {
+					return ACCESS_VIOLATION;
+				}
 				if (d < s + count && s < d + count && count > 0 && d != s) unspecified = true;
 				for (long long i = 0; i < count; ++i) memory[d + i] = memory[s + i];
 				break;
@@ -359,15 +389,17 @@ Status Machine::call(Pointer function, long long startFuel) {
 			case SWCH_VCC: {							// V0 = the case, C1 = the default's index, C2 = the table
 				SLOT(c0, v0);
 				const UInt index = ((UInt)v0.i < (UInt)c1.i) ? (UInt)v0.i : (UInt)c1.i;	// out of range -> default
-				const long long t = (long long)(UInt)(c2.p - MEMORY_OFFSET) + index;
-				if (t >= (long long)memorySize) return fail("switch table outside memory");
+				long long t;
+				if (!readIndex(c2.p, t) || t + index >= (long long)readableWords) return fail("switch table outside memory");
+				t += index;
 				ip += memory[t].i;
 				continue;
 			}
 			default: return fail("unknown opcode");
 		}
 		#undef SLOT
-		#undef CONSTANT_ADDRESS
+		#undef CONSTANT_READ
+		#undef CONSTANT_WRITE
 		#undef BRANCH
 		++ip;
 	}

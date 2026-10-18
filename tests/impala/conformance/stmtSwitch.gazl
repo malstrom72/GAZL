@@ -1,0 +1,49 @@
+; Compiled with Impala version 2.0
+
+; signatures version=1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ stmtSwitch.impala:6:1
+; signature extern native printInt() -> unknown @ stmtSwitch.impala:7:1
+; signature extern native printFloat() -> unknown @ stmtSwitch.impala:8:1
+; signature extern native printLF() -> unknown @ stmtSwitch.impala:9:1
+
+;-----------------------------------------------------------------------------
+pick:	FUNC	; signature func pick(int i) -> int @ stmtSwitch.impala:11:1
+	$j:	OUTi
+	$i:	INPi
+;-----------------------------------------------------------------------------
+		SWCH $i *10 @.s0	; switch (i == 0 to 10) 
+	.s0#0:	NOOP
+	.s0#1:	NOOP
+	.s0#2:	MOVi $j #10 	; j = 10
+		RETU   	; }
+	.s0#5:	MOVi $j #50 	; j = 50
+		RETU   
+	.s0:	MOVi $j #-1 	; j = -1
+	.e1:	RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+main:	FUNC	; signature func main() -> void @ stmtSwitch.impala:22:1
+		PARA *1
+;-----------------------------------------------------------------------------
+		MOVi %2 #0 	; printInt(pick(0))
+		CALL &pick %1 *2	; expects pick(int) -> int @ stmtSwitch.impala:24:18
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ stmtSwitch.impala:24:19
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ stmtSwitch.impala:24:30
+		MOVi %2 #2 	; printInt(pick(2))
+		CALL &pick %1 *2	; expects pick(int) -> int @ stmtSwitch.impala:25:18
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ stmtSwitch.impala:25:19
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ stmtSwitch.impala:25:30
+		MOVi %2 #5 	; printInt(pick(5))
+		CALL &pick %1 *2	; expects pick(int) -> int @ stmtSwitch.impala:26:18
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ stmtSwitch.impala:26:19
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ stmtSwitch.impala:26:30
+		MOVi %2 #7 	; printInt(pick(7))
+		CALL &pick %1 *2	; expects pick(int) -> int @ stmtSwitch.impala:27:18
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ stmtSwitch.impala:27:19
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ stmtSwitch.impala:27:30
+		MOVi %2 #10 	; printInt(pick(10))
+		CALL &pick %1 *2	; expects pick(int) -> int @ stmtSwitch.impala:28:19
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ stmtSwitch.impala:28:20
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ stmtSwitch.impala:28:31
+		RETU   	; }

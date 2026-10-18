@@ -1,0 +1,23 @@
+/*
+	Conformance: Impala.md#functype
+	A `functype` names a function-pointer signature; a matching function assigns by bare name and is called through it.
+	Expected (GAZLCmd typesFunctype.gazl main): 7 14
+*/
+const int DEBUG = 1
+extern native printInt
+extern native printFloat
+extern native printLF
+
+functype Step(int frame) returns int r
+
+function tick(int frame) returns int r { r = frame + 4; }
+function tock(int frame) returns int r { r = frame * 2; }
+
+global Step cb = tick
+
+function main()
+{
+	printInt(global cb(3)); printLF();
+	global cb = tock;
+	printInt(global cb(7)); printLF();
+}

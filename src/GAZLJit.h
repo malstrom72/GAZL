@@ -185,7 +185,7 @@ class JitProcessor : public Processor {
 	public:
 		/*
 			Two constructors, mirroring the base Processor's two: the higher-level one (data stack = the whole span
-			between globals and constants) and the lower-level one (explicit rwMemorySize / dataStackOffset /
+			from the end of the globals to the zero guard) and the lower-level one (explicit rwMemorySize / dataStackOffset /
 			dataStackSize, for running several engines over one shared code image - e.g. a JitProcessor per thread, each
 			with its own data + ip stack; the compiled code is immutable after publish, so it is safe to share). Both add
 			the JitModule up front and delegate to the matching Processor constructor.
@@ -406,7 +406,8 @@ template <class LabelType> struct BasicColdEdge {
 // Opcodes whose operands route through the cache; everything else barriers the cache and lowers as v1 (§5.7).
 bool isCacheLowered(Int op);
 
-// SWCH `instructionIndex`'s jump-table targets: absolute instruction indices, in table order.
+// SWCH `instructionIndex`'s jump-table targets: absolute instruction indices, in table order. `memory` is the word at
+// `MEMORY_OFFSET`, with the constants below it, as in every analysis that takes `memory`.
 std::vector<UInt> switchTargets(const Instruction* code, UInt instructionIndex, const Value* memory);
 
 // Scan code[from..to] and record every slot READ per instruction (uses GAZL::operandRoles) into `schedule` (Belady input).
@@ -458,9 +459,12 @@ void filterResidencyMap(const ResidencyMap& full, const LiveSets& liveIn, UInt a
 */
 enum PointerRealm { REALM_BOTTOM = 0, REALM_NONFRAME = 1, REALM_MYFRAME = 2, REALM_UNKNOWN = 3 };
 
-// Stamp each slot's pointer realm over code[from..to] (one function): live-in pointer slots (params) = NONFRAME, ADRL =
+// Stamp each slot's pointer realm over `program.code[from..to]` (one function): live-in pointer slots (params) = NONFRAME, ADRL =
 // MYFRAME, propagated through MOVp/ADDp/SUBp, joined to a fixed point. Absent key => REALM_BOTTOM (treat as must-flush).
-void buildPointerRealms(const Instruction* code, UInt from, UInt to, std::map<Int, int>& realm);
+void buildPointerRealms(const AssembledProgram& program, UInt from, UInt to, std::map<Int, int>& realm);
+
+// True if `pointer` is a constant or global of `program`, so it can never reach a frame.
+bool isDataAddress(const AssembledProgram& program, Pointer pointer);
 
 /*
 	v2.0 floating register cache (§5.7.1): a per-function write-back cache of frame slots. The opcode switch routes

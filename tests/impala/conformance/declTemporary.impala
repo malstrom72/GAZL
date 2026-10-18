@@ -1,0 +1,17 @@
+/*
+	Conformance: Impala.md#temporary
+	A `temporary` global behaves like any global; only state saving differs.
+	Expected (GAZLCmd declTemporary.gazl main): 5
+*/
+const int DEBUG = 1
+extern native printInt
+extern native printFloat
+extern native printLF
+
+temporary int forgetMe
+
+function main()
+{
+	global forgetMe = 5;
+	printInt(global forgetMe); printLF();
+}

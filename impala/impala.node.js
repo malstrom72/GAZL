@@ -52,7 +52,7 @@ function usageAndExit() {
 	console.error('  --dead-strip drops everything unreachable from an `export`');
 	console.error('  --range-checks emits DEBUG-gated runtime bounds tests (off by default: they stay in the');
 	console.error('                 .gazl TEXT even when DEBUG is 0, and that text is what ships)');
-	console.error('  --gazl2 targets the GAZL 2 assembler: struct initializers are placed with SEEK regions,');
+	console.error('  --gazl2 targets the GAZL 2 assembler: struct initializers are placed with SPAN regions,');
 	console.error('          so they survive a layout re-pack and extern structs become initializable');
 	process.exit(1);
 }

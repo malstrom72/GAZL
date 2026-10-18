@@ -1,0 +1,21 @@
+/*
+	Conformance: Impala.md#extern
+	`extern function` forward-declares a function defined later in the source; `extern native` names a host function.
+	Expected (GAZLCmd declExtern.gazl main): 12
+*/
+const int DEBUG = 1
+extern native printInt
+extern native printFloat
+extern native printLF
+
+extern function later(int x) returns int r
+
+function main()
+{
+	printInt(later(5)); printLF();
+}
+
+function later(int x) returns int r
+{
+	r = x + 7;
+}

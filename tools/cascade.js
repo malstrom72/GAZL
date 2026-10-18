@@ -14,11 +14,14 @@
 
 	It stops at the first conflict or failed check. After resolving a conflict, commit the merge on
 	`cascade-<lower>` and run it again: a local `cascade-<lower>` that already contains origin/<upper> is pushed as
-	it is. It never pushes `main`, and never force-pushes.
+	it is. It never pushes `main`, and never force-pushes a long-lived branch.
+
+	--to <branch> ends the chain at <branch>, for both modes. While work on a lower branch is on hold (2026-10-12:
+	GAZL2 and jit-compiler), run it with `--to Impala2`, or it will merge into the branches that are on hold.
 
 	Needs git and an authenticated `gh`. Runs no local build; CI runs build.sh / build.cmd on every pull request.
 
-	Usage: node tools/cascade.js [--merge] [-m "what changed"]
+	Usage: node tools/cascade.js [--merge] [--to <branch>] [-m "what changed"]
 	       (merge commits read "Merge <upper>: what changed", or "Merge <upper>" without -m)
 */
 "use strict";
@@ -60,10 +63,14 @@ const ROOT = path.join(__dirname, "..");
 const args = process.argv.slice(2);
 let doMerge = false;
 let what = "";
+let last = CASCADE.length - 1;
 for (let i = 0; i < args.length; ++i) {
 	if (args[i] === "--merge") doMerge = true;
 	else if (args[i] === "-m" && i + 1 < args.length) what = args[++i];
-	else fail(`unknown argument '${args[i]}' (usage: cascade [--merge] [-m "what changed"])`);
+	else if (args[i] === "--to" && i + 1 < args.length) {
+		last = CASCADE.indexOf(args[++i]);
+		if (last < 1) fail(`--to takes one of ${CASCADE.slice(1).join(", ")}`);
+	} else fail(`unknown argument '${args[i]}' (usage: cascade [--merge] [--to <branch>] [-m "what changed"])`);
 }
 
 git("fetch", "--quiet", "--prune", "origin");
@@ -73,7 +80,7 @@ function behind(upper, lower) {
 }
 
 let anyBehind = false;
-for (let i = 1; i < CASCADE.length; ++i) {
+for (let i = 1; i <= last; ++i) {
 	const n = behind(CASCADE[i - 1], CASCADE[i]);
 	console.log(`${CASCADE[i - 1]} -> ${CASCADE[i]}: ${n === 0 ? "merged" : `${n} commit(s) to merge`}`);
 	if (n !== 0) anyBehind = true;
@@ -84,7 +91,7 @@ if (git("status", "--porcelain", "--untracked-files=no") !== "") fail("the worki
 if (run("gh", ["auth", "status"]).status !== 0) fail("gh is not authenticated (run `gh auth login`)");
 const startBranch = git("rev-parse", "--abbrev-ref", "HEAD");
 
-for (let i = 1; i < CASCADE.length; ++i) {
+for (let i = 1; i <= last; ++i) {
 	const upper = CASCADE[i - 1];
 	const lower = CASCADE[i];
 	if (behind(upper, lower) === 0) continue;
@@ -117,16 +124,23 @@ for (let i = 1; i < CASCADE.length; ++i) {
 		if (pr === "") fail(`cannot find the pull request just opened for ${work}`);
 	}
 
-	// Checks on THIS commit only. `gh pr checks --watch` can return before they are registered, so wait for them first.
+	// Checks on THIS commit only, and ALL of them. `gh pr checks --watch` returns once the checks registered so far
+	// are done, and GitHub registers them as the run starts, so a watch begun early can cover only some. Accept the
+	// set only when every check has completed and two reads 20 seconds apart count the same number.
 	const rollup = () => {
 		const view = JSON.parse(gh("pr", "view", pr, "--json", "headRefOid,statusCheckRollup"));
 		return view.headRefOid === sha ? view.statusCheckRollup : [];
 	};
-	for (let tries = 0; rollup().length === 0; ++tries) {
-		if (tries === 30) fail(`no CI checks appeared on pull request #${pr}`);
-		run(process.execPath, ["-e", "setTimeout(() => {}, 10000)"]);
+	let settled = -1;
+	for (let tries = 0; ; ++tries) {
+		if (tries === 60) fail(`the CI checks on pull request #${pr} did not settle`);
+		run("gh", ["pr", "checks", pr, "--watch", "--interval", "30"], { stdio: "inherit" });
+		run(process.execPath, ["-e", "setTimeout(() => {}, 20000)"]);
+		const seen = rollup();
+		const done = seen.length > 0 && seen.every((c) => c.status === "COMPLETED");
+		if (done && seen.length === settled) break;
+		settled = (done ? seen.length : -1);
 	}
-	run("gh", ["pr", "checks", pr, "--watch", "--interval", "30"], { stdio: "inherit" });
 	const checks = rollup();
 	if (checks.length === 0 || !checks.every((c) => c.conclusion === "SUCCESS")) {
 		fail(`CI did not pass on pull request #${pr}; fix it on ${work} and run this again`);

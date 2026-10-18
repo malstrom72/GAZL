@@ -1,0 +1,39 @@
+/*
+	Regression: the address of a SHAPED array element in an initializer, with another value after it. The element's
+	offset folds at assembly into a scratch, so the value is `&board:<A>`, and a data row holding it must hold nothing
+	else: `declare` hands a scratch back only from a whole operand or its last token. Both initializer paths split
+	rows only on an operand STARTING with `<`, so `DATA &board:<A> #4` leaked `<A>` and the compiler died with
+	"compile-time scratch leak before main" - the flat list (`a`) and the buffered one (the struct and the shaped
+	pointer array) alike.
+
+	What the golden pins: every `&board:<A>` on a DATA row of its own.
+	Expected (GAZLCmd initShapedAddress.gazl main): 12 4 12 1 23 12 7
+*/
+const int DEBUG = 1
+extern native printInt
+extern native printLF
+
+struct S { pointer p; int n }
+
+global int array board[3, 4]
+global array a[3] = { &global board[1, 2], 4, &global board[1, 2] }
+global S s = { p: &global board[1, 2], n: 4 }
+global int pointer array m[2, 2] = { { &global board[1, 2], &global board[0, 1] }, { &global board[2, 3], null } }
+
+function main()
+locals int y, int x, int pointer p
+{
+	for (y = 0 to 3)
+		for (x = 0 to 4)
+			global board[y, x] = y * 10 + x;
+	p = (int pointer) global a[0];
+	printInt(*p); printLF();
+	printInt((int) global a[1]); printLF();
+	p = (int pointer) global s.p;
+	printInt(*p); printLF();
+	printInt(*(global m[0, 1])); printLF();
+	printInt(*(global m[1, 0])); printLF();
+	p = (int pointer) global a[2];
+	printInt(*p); printLF();
+	printInt(sizeof(S) + global s.n + 1); printLF();
+}
