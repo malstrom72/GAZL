@@ -282,7 +282,7 @@ already complete, and `B` cannot have inlined `A`.
 
 ## 8. Locals are real frame locals (GAZL 2)
 
-A callee's declared locals become REAL named locals of the caller, bracketed by `SCOP` / `ENDS`. The
+A callee's declared locals become REAL named locals of the caller, bracketed by `MARK` / `FREE`. The
 assembler owns their placement, exactly as it does for an ordinary local - which is the point: it
 resolves `*.z.Struct` and `*.x.f.name` before assigning offsets, so a host-owned size lands correctly,
 where a compile-time slot count could only ever have been Impala's guess at it.
@@ -291,7 +291,7 @@ Sibling expansions overlay, so a function's frame cost is its LARGEST expansion,
 sound because an expansion's locals are dead once its body ends: the result leaves through the call
 window, never through a local.
 
-Two things had to exist first. **`SCOP` / `ENDS`** (GAZL 2, `docs/gazl/InstructionSet.md`) so the frame is a
+Two things had to exist first. **`MARK` / `FREE`** (GAZL 2, `docs/gazl/InstructionSet.md`) so the frame is a
 max over nesting chains rather than a sum. And a **buffered function head**, because GAZL wants every
 declaration before the first instruction while an expansion happens mid-body - so head lines accumulate
 in `headSink` and are replayed once the body, and therefore every expansion in it, is known.
@@ -303,10 +303,10 @@ CALL window's base must be a transient, so that block cannot be anything else.
 
 Nothing but a declaration line repeating the size operand verbatim:
 
-    SCOP
+    MARK
     $buf_i0:	LOCA *.x.sum3.buf
     $i_i0:	LOCi
-    ENDS
+    FREE
 
 Both size forms are SYMBOLS the assembler resolves - `*.z.Struct` for a struct local, `*.z.f.name` for an array local
 (see `design/gazl/SymbolNamespace.md`). That is what makes the expansion trivial. An extent computed

@@ -46,24 +46,3 @@ Casts are written `static_cast<Int>(v)`, not `(Int)v`, everywhere except the tig
 its operand macros, where the short form stays. `src/GAZL.cpp` still has about 58 C-style casts,
 most of them in the assembler, `finalize` and the snapshot code. Convert them in one pass, leaving `run()` and its
 macros alone, so the pass changes no generated code there.
-
-## GAZL 2: rework `SEEK`
-
-`SEEK :offset [*extent]` (GAZL 2 only) needs another design pass before GAZL 2 is final:
-- `:offset` is measured from the section start, but reads like a relative jump of `offset` words. The base should
-  be explicit, or the mnemonic clearer.
-- It does not really seek. It never leaves the current section, and `*extent` fences the `DAT` rows that follow
-  into an even smaller range, so it opens a part of the section and fills it. A name like `PART`, `SLOT` or `AREA`
-  would say that.
-- The common case, zeros and then more data, would be simpler as plain data, for example `DATz *n` (n zero words),
-  leaving absolute placement to what Impala 2 really needs: struct fields at offsets the host decides.
-- Ownership is settled: a label owns up to the next label by address, decided when the section closes, so regions
-  may come in any order, and a label on a `SEEK` is an ordinary data label at the region's first word.
-
-## GAZL 2: the prefix decides a name's kind
-
-GAZL 1 lets `#name` and `&name` take any name the operand accepts (`#table`, `#NULL`, `DATA &GAZL_VERSION`), because
-compiled programs rely on it: earlier Impala versions wrote `#name` for a `! DEFp` name. Impala now writes `&name`
-for a `pointer` or `funcptr` constant, so its output already meets the strict rule. Inside a `GAZL #2` region it
-should be strict: `#` only numbers (literals, `DEFi`, `DEFf`), `&` only pointers (data labels, functions, `DEFp`,
-`NULL`). That also covers the region's function-pointer rule on the `#` path, which today only the `&` path applies.

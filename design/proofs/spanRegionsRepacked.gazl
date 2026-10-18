@@ -1,6 +1,6 @@
-; SEEK regions: initialized data that survives a repack. This is the runnable proof for
-; design/gazl/GAZL2DataRegions.md: every value is PLACED through `.o.`/`.z.` symbols (SEEK), read back
-; through the same symbols, and the ORIGINAL is seekRegions.gazl; this twin permutes ONLY the layout header
+; SPAN regions: initialized data that survives a repack. This is the runnable proof for
+; design/gazl/GAZL2DataRegions.md: every value is PLACED through `.o.`/`.z.` symbols (SPAN), read back
+; through the same symbols, and the ORIGINAL is spanRegions.gazl; this twin permutes ONLY the layout header
 ; (gain first, a pad word, note last) - every line below the header is byte-identical - yet prints the
 ; same answer, with the state array's zero-filled tail included.
 ;
@@ -8,8 +8,8 @@
 ;               voice = { note: 60, state: { 1, 2, 3 }, gain: 9 }
 ;               print(note * 1000 + state[0..3] + gain * 100)    ; 60906
 ;
-;   output/GAZLCmd design/proofs/seekRegions.gazl main           ; 60906
-;   output/GAZLCmd design/proofs/seekRegionsRepacked.gazl main   ; 60906, .z.Voice 6 -> 7
+;   output/GAZLCmd design/proofs/spanRegions.gazl main           ; 60906
+;   output/GAZLCmd design/proofs/spanRegionsRepacked.gazl main   ; 60906, .z.Voice 6 -> 7
 
 ; layout of struct Voice
 .o.Voice.note:  ! DEFi #6
@@ -19,11 +19,11 @@
 .z.Voice:       ! DEFi #7
 
 voice:          GLOB *.z.Voice
-                SEEK :.o.Voice.note
+                SPAN :.o.Voice.note *1
                 DATi #60
-                SEEK :.o.Voice.state *.z.Voice.state
+                SPAN :.o.Voice.state *.z.Voice.state
                 DATi #1 #2 #3
-                SEEK :.o.Voice.gain
+                SPAN :.o.Voice.gain *1
                 DATi #9
 
 main:           FUNC

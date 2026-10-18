@@ -1238,8 +1238,8 @@ ever needs to exist in the legacy validator path.
 
 ## Inline functions (requires a GAZL 2 engine)
 
-> **Status: available.** An expansion places its locals with GAZL 2 `SCOP` / `ENDS`, so `inline` needs a
-> GAZL 2 engine; a 1.0 engine rejects `SCOP` with `Unknown mnemonic`. It was parked while Impala 2 had to
+> **Status: available.** An expansion places its locals with GAZL 2 `MARK` / `FREE`, so `inline` needs a
+> GAZL 2 engine; a 1.0 engine rejects `MARK` with `Unknown mnemonic`. It was parked while Impala 2 had to
 > keep running on 1.0 engines, and un-parked when this line gained the GAZL 2 engine, so `E439` is no
 > longer emitted. `E432` was RE-ALLOCATED 2026-08-05 to the host-owned-array rank rule while the feature
 > was away and stays there; `E433` was deleted outright by the extent-naming rework. See
