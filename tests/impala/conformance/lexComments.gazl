@@ -1,0 +1,19 @@
+; Compiled with Impala version 2.0
+
+; signatures version=1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ lexComments.impala:6:1
+; signature extern native printInt() -> unknown @ lexComments.impala:7:1
+; signature extern native printFloat() -> unknown @ lexComments.impala:8:1
+; signature extern native printLF() -> unknown @ lexComments.impala:9:1
+
+;-----------------------------------------------------------------------------
+main:	FUNC	; signature func main() -> void @ lexComments.impala:12:1
+		PARA *1
+	$a:	LOCi
+;-----------------------------------------------------------------------------
+		! ADDi <A> #3 #4	; a = 3 /* inside an expression */ + 4
+		MOVi $a <A> 
+		MOVi %1 $a 	; printInt(a)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ lexComments.impala:17:13
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ lexComments.impala:17:24
+		RETU   	; }

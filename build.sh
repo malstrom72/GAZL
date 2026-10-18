@@ -22,6 +22,12 @@ bash tools/test-fuzz.sh
 # Every memory instruction form at every edge of the memory arena, against an oracle (tools/GAZLBoundsSweep.cpp).
 bash tools/test-bounds.sh
 
+# Float literals round correctly, sampled across every float (tools/GAZLFloatLiteralTest.cpp).
+bash tools/test-float-literals.sh
+
+# Several processors in one memory, cooperative and on threads (tools/GAZLMultiProcessorTest.cpp).
+bash tools/test-processors.sh
+
 # Every node-only gate, shared with build.cmd so the two cannot run different subsets.
 bash tools/test-js.sh
 

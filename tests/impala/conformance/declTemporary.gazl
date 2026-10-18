@@ -1,0 +1,19 @@
+; Compiled with Impala version 2.0
+
+; signatures version=1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ declTemporary.impala:6:1
+; signature extern native printInt() -> unknown @ declTemporary.impala:7:1
+; signature extern native printFloat() -> unknown @ declTemporary.impala:8:1
+; signature extern native printLF() -> unknown @ declTemporary.impala:9:1
+	TEMP *1
+forgetMe:	DATi #0	; signature temporary forgetMe : int @ declTemporary.impala:11:1
+
+;-----------------------------------------------------------------------------
+main:	FUNC	; signature func main() -> void @ declTemporary.impala:13:1
+		PARA *1
+;-----------------------------------------------------------------------------
+		POKE &forgetMe #5 	; global forgetMe = 5
+		PEEK %1 &forgetMe 	; printInt(global forgetMe)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ declTemporary.impala:16:27
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ declTemporary.impala:16:38
+		RETU   	; }

@@ -1,0 +1,55 @@
+; Compiled with Impala version 2.0
+
+; signatures version=1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ typesFuncptrOps.impala:6:1
+; signature extern native printInt() -> unknown @ typesFuncptrOps.impala:7:1
+; signature extern native printFloat() -> unknown @ typesFuncptrOps.impala:8:1
+; signature extern native printLF() -> unknown @ typesFuncptrOps.impala:9:1
+
+;-----------------------------------------------------------------------------
+first:	FUNC	; signature func first() -> void @ typesFuncptrOps.impala:11:1
+		PARA *1
+;-----------------------------------------------------------------------------
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+second:	FUNC	; signature func second() -> void @ typesFuncptrOps.impala:12:1
+		PARA *1
+;-----------------------------------------------------------------------------
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+main:	FUNC	; signature func main() -> void @ typesFuncptrOps.impala:14:1
+		PARA *1
+	$f:	LOCp
+	$g:	LOCp
+	$same:	LOCi
+	$differ:	LOCi
+	$before:	LOCi
+;-----------------------------------------------------------------------------
+		MOVp $f &first 	; f = first
+		MOVp $g &second 	; g = second
+		MOVi $same #0 	; same = 0
+		MOVi $differ #0 	; differ = 0
+		MOVi $before #0 	; before = 0
+		NEQp $f &first @.f0	; if (f == first) same = 1
+		MOVi $same #1 	; same = 1
+	.f0:	EQUp $f $g @.f1	; if (f != g) differ = 1
+		MOVi $differ #1 	; differ = 1
+	.f1:	GEQp $f $g @.f2	; if (f < g) before = 1
+		MOVi $before #1 	; before = 1
+	.f2:	MOVi %1 $same 	; printInt(same)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ typesFuncptrOps.impala:25:16
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ typesFuncptrOps.impala:25:27
+		MOVi %1 $differ 	; printInt(differ)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ typesFuncptrOps.impala:26:18
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ typesFuncptrOps.impala:26:29
+		MOVi %1 $before 	; printInt(before)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ typesFuncptrOps.impala:27:18
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ typesFuncptrOps.impala:27:29
+		DIFp %1 $f $g	; printInt(f - g)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ typesFuncptrOps.impala:28:17
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ typesFuncptrOps.impala:28:28
+		RETU   	; }

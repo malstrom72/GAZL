@@ -1,0 +1,41 @@
+; Compiled with Impala version 2.0
+
+; signatures version=1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ declGlobals.impala:6:1
+; signature extern native printInt() -> unknown @ declGlobals.impala:7:1
+; signature extern native printFloat() -> unknown @ declGlobals.impala:8:1
+; signature extern native printLF() -> unknown @ declGlobals.impala:9:1
+	GLOB *1
+uninited:	DATi #0	; signature global uninited : int @ declGlobals.impala:11:1
+	GLOB *1
+inited:	DATi #23	; signature global inited : int @ declGlobals.impala:12:1
+	GLOB *1
+aFloat:	DATf #0.0	; signature global aFloat : float @ declGlobals.impala:13:1
+	GLOB *1
+aPointer:	DATp &aFloat	; signature global aPointer : ptr @ declGlobals.impala:14:1
+.z.defaultArray:	! DEFi #100
+defaultArray:	GLOB *.z.defaultArray	; signature array defaultArray[100] : unknown @ declGlobals.impala:15:1
+
+;-----------------------------------------------------------------------------
+main:	FUNC	; signature func main() -> void @ declGlobals.impala:17:1
+		PARA *1
+;-----------------------------------------------------------------------------
+		PEEK %1 &inited 	; printInt(global inited)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ declGlobals.impala:19:25
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ declGlobals.impala:19:36
+		PEEK %1 &uninited 	; printInt(global uninited)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ declGlobals.impala:20:27
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ declGlobals.impala:20:38
+		POKE &aFloat #1.5 	; global aFloat = 1.5
+		PEEK %1 &aFloat 	; printFloat(global aFloat)
+		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ declGlobals.impala:22:27
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ declGlobals.impala:22:38
+		PEEK %1 &aPointer 	; printFloat((float) *(global aPointer))
+		PEEK %1 %1 
+		CALL ^printFloat %0 *2	; expects printFloat(float) -> unknown @ declGlobals.impala:23:40
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ declGlobals.impala:23:51
+		POKE &defaultArray:99 #9 	; global defaultArray[99] = 9
+		PEEK %1 &defaultArray:99 	; printInt((int) global defaultArray[99])
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ declGlobals.impala:25:41
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ declGlobals.impala:25:52
+		RETU   	; }

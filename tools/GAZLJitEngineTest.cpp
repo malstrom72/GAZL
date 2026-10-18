@@ -178,6 +178,9 @@ namespace {
 	std::vector<Value> gCleanImage;			// gMemory right after assembly, restored before every run
 }
 
+// The index in `gMemory` of the word at `pointer`: the memory starts with the constants, below `MEMORY_OFFSET`.
+static UInt wordIndex(Pointer pointer) { return pointer - MEMORY_OFFSET + (gConstsSize - 1); }
+
 // Assemble the kernel; fill in `layout` and the gIn/gOut pointers. Returns false on failure.
 static bool assembleKernel(Symbols& globals, KernelLayout& layout, Pointer& gInPtr, Pointer& gOutPtr) {
 	UInt codeSize = 0, globalsSize = 0, constsSize = 0, functionCount = 0;
@@ -232,8 +235,8 @@ static bool assembleKernel(Symbols& globals, KernelLayout& layout, Pointer& gInP
 	layout.nOff = static_cast<int>((static_cast<Int>(layout.localsSize) + nSlot) * 4);
 	layout.sumOff = static_cast<int>((static_cast<Int>(layout.localsSize) + sumSlot) * 4);
 	layout.iOff = static_cast<int>((static_cast<Int>(layout.localsSize) + iSlot) * 4);
-	layout.gInOff = static_cast<int>((gInPtr - MEMORY_OFFSET) * 4);
-	layout.gOutOff = static_cast<int>((gOutPtr - MEMORY_OFFSET) * 4);
+	layout.gInOff = static_cast<int>(wordIndex(gInPtr) * 4);
+	layout.gOutOff = static_cast<int>(wordIndex(gOutPtr) * 4);
 	layout.loopIndex = (f + 5) + static_cast<UInt>(in[5].p2.i);		// FORi target = loop head
 	return true;
 }
@@ -362,7 +365,7 @@ int main() {
 		const std::vector<Value> got(gMemory, gMemory + DATA_SIZE);
 		int diff = -1;
 		const bool ok = (s == OK) && imagesEqual(want, got, diff);
-		std::printf("  n=%-6d status=%-3d gOut=%-12d %s\n", n, s, gMemory[gOutPtr - MEMORY_OFFSET].i,
+		std::printf("  n=%-6d status=%-3d gOut=%-12d %s\n", n, s, gMemory[wordIndex(gOutPtr)].i,
 				ok ? "IDENTICAL" : "DIFFERS");
 		if (!ok) {
 			std::printf("    first differing word index=%d\n", diff);
@@ -391,7 +394,7 @@ int main() {
 		int diff = -1;
 		const bool ok = (s == OK) && imagesEqual(want, got, diff);
 		std::printf("  n=%-6d suspended=%s finalStatus=%-3d gOut=%-12d %s\n", n, suspended ? "yes" : "no ", s,
-				gMemory[gOutPtr - MEMORY_OFFSET].i, ok ? "IDENTICAL" : "DIFFERS");
+				gMemory[wordIndex(gOutPtr)].i, ok ? "IDENTICAL" : "DIFFERS");
 		if (!ok) {
 			std::printf("    first differing word index=%d\n", diff);
 			++failures;

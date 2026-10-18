@@ -1,0 +1,39 @@
+/*
+	Conformance: Impala.md#assignment
+	Assignment is an expression and chains right to left; every lvalue form: variable, `*p`, `a[i]`, `s.f` and `p->f`.
+	Expected (GAZLCmd stmtAssignment.gazl main): 0 0 3 7 8 9 10
+*/
+const int DEBUG = 1
+extern native printInt
+extern native printFloat
+extern native printLF
+
+struct Pair { int a; int b }
+global int counter = 4
+
+function next() returns int r
+{
+	global counter = global counter - 1;
+	r = global counter;
+}
+
+function main()
+locals int a, int b, int c, int n, int array arr[2], int pointer p, Pair s, Pair pointer sp
+{
+	a = b = 0;
+	printInt(a); printLF();
+	printInt(b); printLF();
+	n = 0;
+	while ((c = next()) != 0) n = n + 1;
+	printInt(n); printLF();
+	p = &arr[1];
+	*p = 7;
+	printInt(arr[1]); printLF();
+	arr[0] = 8;
+	printInt(arr[0]); printLF();
+	s.a = 9;
+	printInt(s.a); printLF();
+	sp = &s;
+	sp->b = 10;
+	printInt(s.b); printLF();
+}

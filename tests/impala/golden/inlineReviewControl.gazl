@@ -8,27 +8,27 @@ DEBUG:	! DEFi #1	; signature const DEBUG : int @ inlineReviewControl.impala:25:1
 ;-----------------------------------------------------------------------------
 main:	FUNC	; signature func main() -> void @ inlineReviewControl.impala:59:1
 		PARA *1
-		SCOP
+		MARK
 	$t_i0:	LOCi
-		ENDS
-		SCOP
+		FREE
+		MARK
 	$t_i1:	LOCi
-		ENDS
-		SCOP
+		FREE
+		MARK
 	$t_i2:	LOCi
-		ENDS
-		SCOP
+		FREE
+		MARK
 	$i_i7:	LOCi
-		ENDS
-		SCOP
+		FREE
+		MARK
 	$i_i8:	LOCi
-		ENDS
-		SCOP
+		FREE
+		MARK
 	$i_i9:	LOCi
-		ENDS
-		SCOP
+		FREE
+		MARK
 	$i_i10:	LOCi
-		ENDS
+		FREE
 ;-----------------------------------------------------------------------------
 		MOVi $t_i0 #-4 	; t = v
 		GEQi $t_i0 #0 @.f0_i0	; if (t < lo) 

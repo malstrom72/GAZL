@@ -25,11 +25,16 @@
 	Deterministic boundary sweep of every memory-accessing instruction form: PEEK, POKE, GETL, SETL and COPY, in each
 	operand form the assembler accepts, at every edge of the memory arena. Each probe is a tiny generated program
 	whose access lands just before, on, or just after an edge (start of memory, end of globals, end of writable
-	memory, end of memory, and the 32-bit wrap), and every outcome is checked against an oracle written here, not
+	memory, end of memory, the base between constants and globals, and the 32-bit wrap), and every outcome is checked
+	against an oracle written here, not
 	derived from the VM:
 
-	  - memory: an address `a` reads [0, memorySize) and writes [0, rwMemorySize), counted from `MEMORY_OFFSET`, with
-	    the address arithmetic `base + index` wrapping at 32 bits. GETL / SETL index a local array; index `i` is in
+	  - memory: constants lie just below the base, `MEMORY_OFFSET`, and globals and the data stack from it up. An
+	    address reads [base - C, base + rw) and writes [base, base + rw), where C is the constants' size and rw the
+	    words from the base up, with the address arithmetic `base + index` wrapping at 32 bits. The last word, just
+	    above the data stack, is the assembler's zero guard,
+	    which stops a native scanning for a string's terminator; no checked read reaches it, so a native can tell a
+	    string that ran into it from one that ended in real memory. GETL / SETL index a local array; index `i` is in
 	    range when 0 <= i and the slot lies below the end of the data stack.
 	  - an access out of range stops the program with BAD_PEEK / BAD_POKE (ACCESS_VIOLATION for COPY) and changes
 	    nothing; one in range reads or writes exactly the cells it names.
@@ -38,14 +43,20 @@
 	    too, except where the assembler's own rule is stricter than memory: a write through a constant label, an
 	    offset outside the label's section, or a COPY count larger than writable memory.
 
-	The whole memory, plus guard zones on both sides of it, is compared after every run. The only cells exempt are
+	The whole memory, plus canary zones on both sides of it, is compared after every run. The only cells exempt are
 	the probe function's own frame at the bottom of the data stack, which the program writes itself.
+
+	The memory a native reaches through `accessConstMemory` and `accessMemory` is swept too, by the same rule.
+	So are a frame past INT_MAX at assembly and the frozen memory format: what freezing saves, and how thawing
+	validates and restores.
 
 	Built with GAZL_JIT, every probe also runs through the JIT, checked against the same oracle (not against the
 	interpreter), unless the host forbids executable memory. Exits non-zero on any failure.
 */
 
+#include <algorithm>
 #include <cstdio>
+#include <stdint.h>
 #include <cstring>
 #include <cstdlib>
 #include <string>
@@ -60,8 +71,9 @@ using namespace GAZL;
 
 namespace {
 
-const UInt MEMORY_SIZE = 256;					// words, the whole arena: globals, data stack and constants
-const UInt GUARD_SIZE = 64;						// canary words on each side of the arena
+const UInt MEMORY_SIZE = 256;					// words, the whole arena: constants, globals, data stack and the zero guard
+const UInt READABLE_SIZE = MEMORY_SIZE - 1;		// all but the zero guard in the last word
+const UInt CANARY_SIZE = 64;						// canary words on each side of the arena
 const UInt FRAME_ZONE = 32;						// words at the bottom of the data stack the probe's own frame may use
 const int CODE_SIZE = 256;
 const int FUNCTION_COUNT = 16;
@@ -69,11 +81,9 @@ const int CALL_STACK_SIZE = 16;
 
 enum Op { PEEK, POKE, GETL, SETL, COPY };
 
-const char* const OP_NAMES[] = { "PEEK", "POKE", "GETL", "SETL", "COPY" };
-
 /*
-	Where the assembler put things. Constants grow down from the top of memory and an immediate operand can add one,
-	so the layout belongs to each program, and a probe is generated against the layout its own program ends up with.
+	Where the assembler put things. Constants grow down from the base and an immediate operand can add one, so the
+	layout belongs to each program, and a probe is generated against the layout its own program ends up with.
 */
 struct Layout {
 	UInt globalsSize;
@@ -87,7 +97,10 @@ struct Layout {
 				&& outAddress == o.outAddress && gAddress == o.gAddress && cAddress == o.cAddress;
 	}
 	bool operator!=(const Layout& o) const { return !(*this == o); }
-	UInt rwSize() const { return MEMORY_SIZE - constsSize; }
+	UInt rwSize() const { return MEMORY_SIZE - constsSize; }						// words from the base up
+	UInt below() const { return constsSize - 1; }									// constant words below the base
+	UInt low() const { return MEMORY_OFFSET - below(); }							// the lowest readable pointer
+	UInt cell(UInt pointer) const { return pointer - low(); }						// the memory index of `pointer`
 };
 
 /*
@@ -111,15 +124,15 @@ struct Probe {
 	Int value;						// POKE / SETL: the value written
 };
 
-std::string number(long long v) {
+std::string number(int64_t v) {
 	char buffer[32];
-	std::snprintf(buffer, sizeof buffer, "%lld", v);
+	snprintf(buffer, sizeof buffer, "%.0f", (double)v);				// exact: every value here is far below 2^53
 	return buffer;
 }
 
 std::string hex(UInt v) {
 	char buffer[16];
-	std::snprintf(buffer, sizeof buffer, "0x%08X", v);
+	snprintf(buffer, sizeof buffer, "0x%08X", v);
 	return buffer;
 }
 
@@ -158,17 +171,19 @@ std::string program(const std::string& body) {
 }
 
 /*
-	Interesting targets, as offsets from the start of memory: each side of every edge, plus pointers far outside it
-	(null, the sign boundary, the top of the address space). `layout` decides where the edges are.
+	Interesting targets, as pointers: each side of every edge, plus pointers far outside it (null, the sign boundary,
+	the top of the address space). `layout` decides where the edges are.
 */
 std::vector<UInt> targets(const Layout& layout) {
-	const UInt edges[] = { 0, layout.globalsSize, layout.rwSize(), MEMORY_SIZE };
+	const UInt rw = layout.rwSize();
+	const UInt edges[] = { layout.low(), MEMORY_OFFSET, MEMORY_OFFSET + layout.globalsSize, MEMORY_OFFSET + rw
+			, MEMORY_OFFSET + rw + 1 };									// start of memory, base, end of globals, guard, end
 	std::vector<UInt> t;
 	for (size_t e = 0; e < sizeof (edges) / sizeof (*edges); ++e) {
-		for (int d = -1; d <= 1; ++d) t.push_back(MEMORY_OFFSET + edges[e] + (UInt)d);
+		for (int d = -1; d <= 1; ++d) t.push_back(edges[e] + (UInt)d);
 	}
 	t.push_back(0);
-	t.push_back(MEMORY_OFFSET - (UInt)GUARD_SIZE);
+	t.push_back(layout.low() - (UInt)CANARY_SIZE);
 	t.push_back(0x7FFFFFFFu);
 	t.push_back(0x80000000u);
 	t.push_back(0xFFFFFFFFu);
@@ -185,11 +200,12 @@ std::vector<Probe> generate(const Layout& L) {
 	const Int EXTREMES[] = { 0, 1, -1, 0x7FFFFFFF, (Int)0x80000000u };
 	const size_t EXTREME_COUNT = sizeof (EXTREMES) / sizeof (*EXTREMES);
 
-	// Pointer bases for the `ptr` forms: the start of memory, the last writable word, the end, and outside it.
+	// Pointer bases for the `ptr` forms: the start of memory, the base, the last writable word, the end, and outside.
 	std::vector<UInt> bases;
+	bases.push_back(L.low());
 	bases.push_back(MEMORY_OFFSET);
 	bases.push_back(MEMORY_OFFSET + L.rwSize() - 1);
-	bases.push_back(MEMORY_OFFSET + MEMORY_SIZE);
+	bases.push_back(MEMORY_OFFSET + L.rwSize() + 1);
 	bases.push_back(0);
 	bases.push_back(0x80000000u);
 	bases.push_back(0xFFFFFFFFu);
@@ -255,7 +271,7 @@ std::vector<Probe> generate(const Layout& L) {
 		for (size_t x = 0; x < EXTREME_COUNT; ++x) {
 			for (size_t i = 0; i < T.size(); ++i) {
 				char body[96];
-				std::snprintf(body, sizeof body, IMMEDIATE_INDEX_FORMS[f][1], number(EXTREMES[x]).c_str());
+				snprintf(body, sizeof body, IMMEDIATE_INDEX_FORMS[f][1], number(EXTREMES[x]).c_str());
 				Probe p = Probe();
 				p.form = form;
 				p.op = (form[1] == 'E' ? PEEK : POKE);
@@ -284,7 +300,7 @@ std::vector<Probe> generate(const Layout& L) {
 			const std::vector<Int> indexes = IndexSet::make(LABELS[l].pointer, T, EXTREMES, EXTREME_COUNT);
 			for (size_t i = 0; i < indexes.size(); ++i) {
 				char body[96];
-				std::snprintf(body, sizeof body, LABEL_INDEX_FORMS[f][1], LABELS[l].name, LABELS[l].offset);
+				snprintf(body, sizeof body, LABEL_INDEX_FORMS[f][1], LABELS[l].name, LABELS[l].offset);
 				Probe p = Probe();
 				p.form = form;
 				p.op = op;
@@ -293,7 +309,7 @@ std::vector<Probe> generate(const Layout& L) {
 				p.inputs[1] = indexes[i];
 				p.inputs[2] = POKE_VALUE;
 				p.address = LABELS[l].pointer + (UInt)indexes[i];
-				p.refusalOk = (op == POKE && LABELS[l].pointer >= L.cAddress);		// `&address(w)` must be writable
+				p.refusalOk = (op == POKE && LABELS[l].pointer < MEMORY_OFFSET);		// `&address(w)` must be writable
 				p.value = POKE_VALUE;
 				p.what = std::string("&") + LABELS[l].name + ":" + number(LABELS[l].offset)
 						+ " index=" + number(indexes[i]);
@@ -302,7 +318,7 @@ std::vector<Probe> generate(const Layout& L) {
 		}
 	}
 
-	// `&address` alone: no run-time check at all, so the assembler is the only guard. Offsets run to one past each
+	// `&address` alone: no run-time check at all, so the assembler is the only check. Offsets run to one past each
 	// section, and past the end of memory.
 	const char* const LABEL_ONLY_FORMS[][2] = {
 		{ "PEEK var &address", " PEEK rs &%s:%u\n" },
@@ -316,15 +332,15 @@ std::vector<Probe> generate(const Layout& L) {
 		const std::string form = LABEL_ONLY_FORMS[f][0];
 		for (size_t s = 0; s < sizeof (SECTIONS) / sizeof (*SECTIONS); ++s) {
 			const UInt offsets[] = { 0, SECTIONS[s].size - 1, SECTIONS[s].size, SECTIONS[s].size + 1
-					, MEMORY_OFFSET + MEMORY_SIZE - SECTIONS[s].pointer };
+					, MEMORY_OFFSET + L.rwSize() + 1 - SECTIONS[s].pointer };						// to the end of memory
 			for (size_t o = 0; o < sizeof (offsets) / sizeof (*offsets); ++o) {
 				char body[96];
-				std::snprintf(body, sizeof body, LABEL_ONLY_FORMS[f][1], SECTIONS[s].name, offsets[o]);
+				snprintf(body, sizeof body, LABEL_ONLY_FORMS[f][1], SECTIONS[s].name, offsets[o]);
 				Probe p = Probe();
 				p.form = form;
 				p.op = (form[1] == 'E' ? PEEK : POKE);
 				p.allConst = true;
-				p.refusalOk = (offsets[o] >= SECTIONS[s].size || (p.op == POKE && SECTIONS[s].pointer >= L.cAddress));
+				p.refusalOk = (offsets[o] >= SECTIONS[s].size || (p.op == POKE && SECTIONS[s].pointer < MEMORY_OFFSET));
 				p.source = program(body);
 				p.inputs[2] = POKE_VALUE;
 				p.address = SECTIONS[s].pointer + offsets[o];
@@ -376,8 +392,8 @@ std::vector<Probe> generate(const Layout& L) {
 		std::vector<std::pair<UInt, UInt> > pairs;
 		const UInt dsts[] = { MEMORY_OFFSET, MEMORY_OFFSET + rw - small, MEMORY_OFFSET + rw - small + 1
 				, MEMORY_OFFSET - 1, 0xFFFFFFFFu };
-		const UInt srcs[] = { MEMORY_OFFSET + MEMORY_SIZE - small, MEMORY_OFFSET + MEMORY_SIZE - small + 1
-				, MEMORY_OFFSET, MEMORY_OFFSET - 1, 0x80000000u };
+		const UInt srcs[] = { MEMORY_OFFSET + rw - small, MEMORY_OFFSET + rw - small + 1, L.low(), L.low() - 1
+				, 0x80000000u };
 		for (size_t d = 0; d < 5; ++d) for (size_t s = 0; s < 5; ++s) pairs.push_back(std::make_pair(dsts[d], srcs[s]));
 		for (size_t k = 0; k < pairs.size(); ++k) {
 			Probe p = Probe();
@@ -403,7 +419,7 @@ std::vector<Probe> generate(const Layout& L) {
 			p.op = COPY;
 			p.count = count;
 			p.form = "COPY &address &address *size";					// checked at run time like the others
-			p.refusalOk = (count > rw || lp.dstPointer >= L.cAddress);
+			p.refusalOk = (count > rw || lp.dstPointer < MEMORY_OFFSET);
 			p.source = program(std::string(" COPY &") + lp.dst + " &" + lp.src + " *" + number(count) + "\n");
 			p.address = lp.dstPointer;
 			p.source2 = lp.srcPointer;
@@ -432,18 +448,26 @@ std::vector<Probe> generate(const Layout& L) {
 }
 
 struct Machine {
-	std::vector<Value> buffer;					// guard + memory + guard
+	std::vector<Value> buffer;					// canaries + memory + canaries
 	std::vector<Instruction> code;
 	std::vector<UInt> functionTable;
 	std::vector<CallStackEntry> callStack;
 	ProgramSizes sizes;
 	Symbols symbols;
-	Machine() : buffer(GUARD_SIZE + MEMORY_SIZE + GUARD_SIZE), code(CODE_SIZE), functionTable(FUNCTION_COUNT)
+	Machine() : buffer(CANARY_SIZE + MEMORY_SIZE + CANARY_SIZE), code(CODE_SIZE), functionTable(FUNCTION_COUNT)
 			, callStack(CALL_STACK_SIZE) { }
-	Value* memory() { return &buffer[GUARD_SIZE]; }
+	Value* memory() { return &buffer[CANARY_SIZE]; }
 };
 
 UInt canary(size_t i) { return 0xC0DE0000u + (UInt)i; }
+
+/*
+	A processor over the program in `m`, without natives, for the host-side sweeps; they never run it.
+*/
+Processor machineProcessor(Machine& m) {
+	return Processor(m.sizes.codeSize, &m.code[0], m.sizes.functionCount, &m.functionTable[0], MEMORY_SIZE, m.memory()
+			, m.sizes.globalsSize, m.sizes.constsSize, CALL_STACK_SIZE, &m.callStack[0], 0);
+}
 
 /*
 	Assembles `source` into `m` over a canary-filled buffer. Returns false, with the error, when the assembler
@@ -511,9 +535,9 @@ Status run(Machine& m, Engine engine) {
 	return processor.run();
 }
 
-bool inRange(UInt pointer, UInt count, UInt limit) {
-	const long long start = (long long)pointer - (long long)MEMORY_OFFSET;
-	return start >= 0 && start + (long long)count <= (long long)limit;
+bool inRange(UInt pointer, UInt count, UInt from, UInt size) {						// [pointer, pointer + count) in [from, from + size)
+	const int64_t start = (int64_t)pointer - (int64_t)from;
+	return start >= 0 && start + (int64_t)count <= (int64_t)size;
 }
 
 /*
@@ -525,51 +549,52 @@ std::string check(Machine& m, const Probe& p, const Layout& layout, const std::v
 	const Status status = run(m, engine);
 	const Value* mem = m.memory();
 	const UInt rw = layout.rwSize();
-	const UInt arAddress = (UInt)mem[layout.outAddress - MEMORY_OFFSET + 1].i;
+	const UInt arAddress = (UInt)mem[layout.cell(layout.outAddress) + 1].i;
 
 	// The oracle: is the access in range, which status follows, and which cells must change to what.
 	std::vector<Value> want(before);
 	std::vector<bool> known(before.size(), true);
-	const size_t g = GUARD_SIZE;
-	for (UInt i = 0; i < FRAME_ZONE; ++i) known[g + layout.globalsSize + i] = false;
-	known[g + layout.outAddress - MEMORY_OFFSET] = false;
-	known[g + layout.outAddress - MEMORY_OFFSET + 1] = false;
+	const size_t g = CANARY_SIZE;
+	for (UInt i = 0; i < FRAME_ZONE; ++i) known[g + layout.cell(MEMORY_OFFSET + layout.globalsSize) + i] = false;
+	known[g + layout.cell(layout.outAddress)] = false;
+	known[g + layout.cell(layout.outAddress) + 1] = false;
 	bool valid = false;
 	Status failStatus = OK;
 	Int wantRead = 0;
 	bool checkRead = false;
 	switch (p.op) {
 		case PEEK:
-			valid = inRange(p.address, 1, MEMORY_SIZE);
+			valid = inRange(p.address, 1, layout.low(), READABLE_SIZE);
 			failStatus = BAD_PEEK;
-			if (valid && known[g + p.address - MEMORY_OFFSET]) {
-				wantRead = before[g + p.address - MEMORY_OFFSET].i;
+			if (valid && known[g + layout.cell(p.address)]) {
+				wantRead = before[g + layout.cell(p.address)].i;
 				checkRead = true;
 			}
 			break;
 		case POKE:
-			valid = inRange(p.address, 1, rw);
+			valid = inRange(p.address, 1, MEMORY_OFFSET, rw);
 			failStatus = BAD_POKE;
-			if (valid) want[g + p.address - MEMORY_OFFSET].i = p.value;
+			if (valid) want[g + layout.cell(p.address)].i = p.value;
 			break;
 		case GETL:
 		case SETL: {
 			const UInt slot = arAddress + (UInt)p.index;
-			valid = p.index >= 0 && (long long)arAddress + p.index < (long long)(MEMORY_OFFSET + rw);
+			valid = p.index >= 0 && (int64_t)arAddress + p.index < (int64_t)(MEMORY_OFFSET + rw);
 			failStatus = (p.op == GETL ? BAD_PEEK : BAD_POKE);
-			if (valid && p.op == SETL) want[g + slot - MEMORY_OFFSET].i = p.value;
-			if (valid && p.op == GETL && known[g + slot - MEMORY_OFFSET]) {
-				wantRead = before[g + slot - MEMORY_OFFSET].i;
+			if (valid && p.op == SETL) want[g + layout.cell(slot)].i = p.value;
+			if (valid && p.op == GETL && known[g + layout.cell(slot)]) {
+				wantRead = before[g + layout.cell(slot)].i;
 				checkRead = true;
 			}
 			break;
 		}
 		case COPY: {
-			valid = inRange(p.address, p.count, rw) && inRange(p.source2, p.count, MEMORY_SIZE);
+			valid = inRange(p.address, p.count, MEMORY_OFFSET, rw)
+					&& inRange(p.source2, p.count, layout.low(), READABLE_SIZE);
 			failStatus = ACCESS_VIOLATION;
 			if (valid) {
-				const UInt d = p.address - MEMORY_OFFSET;
-				const UInt s = p.source2 - MEMORY_OFFSET;
+				const UInt d = layout.cell(p.address);
+				const UInt s = layout.cell(p.source2);
 				const bool overlap = (d < s + p.count && s < d + p.count);
 				for (UInt i = 0; i < p.count; ++i) {
 					if (overlap || !known[g + s + i]) known[g + d + i] = false;
@@ -582,17 +607,776 @@ std::string check(Machine& m, const Probe& p, const Layout& layout, const std::v
 	const Status wantStatus = valid ? OK : failStatus;
 	if (p.allConst && !valid) return "assembled although out of range, status " + number(status);
 	if (status != wantStatus) return "status " + number(status) + ", want " + number(wantStatus);
-	if (checkRead && mem[layout.outAddress - MEMORY_OFFSET].i != wantRead) {
-		return "read " + number(mem[layout.outAddress - MEMORY_OFFSET].i) + ", want " + number(wantRead);
+	if (checkRead && mem[layout.cell(layout.outAddress)].i != wantRead) {
+		return "read " + number(mem[layout.cell(layout.outAddress)].i) + ", want " + number(wantRead);
 	}
 	for (size_t i = 0; i < want.size(); ++i) {
 		if (known[i] && m.buffer[i].i != want[i].i) {
-			const long long cell = (long long)i - (long long)g;
+			const int64_t cell = (int64_t)i - (int64_t)g;
 			return "cell " + number(cell) + " is " + hex((UInt)m.buffer[i].i) + ", want " + hex((UInt)want[i].i)
-					+ (cell < 0 || cell >= (long long)MEMORY_SIZE ? " (guard zone)" : "");
+					+ (cell < 0 || cell >= (int64_t)MEMORY_SIZE ? " (outside memory)" : "");
 		}
 	}
 	return "";
+}
+
+/*
+	The memory a native reaches through `accessConstMemory` / `accessMemory`: a request for the whole readable (or
+	writable) region succeeds, one word more fails, and the zero guard is out of reach of both. Returns the number
+	of failures, each one printed.
+*/
+int sweepNativeAccess() {
+	Machine m;
+	Layout layout = Layout();
+	std::string error;
+	if (!assemble(m, program(""), layout, error)) {
+		std::printf("native access: baseline program refused: %s\n", error.c_str());
+		return 1;
+	}
+	const Processor processor = machineProcessor(m);
+	const UInt rw = layout.rwSize();
+	const UInt low = layout.low();
+	struct Access { bool writable; UInt pointer; UInt count; bool succeeds; const char* what; };
+	const Access ACCESSES[] = {
+		{ false, low, READABLE_SIZE, true, "accessConstMemory, the whole readable region" },
+		{ false, low, READABLE_SIZE + 1, false, "accessConstMemory, one word more (the zero guard)" },
+		{ false, low + 1, READABLE_SIZE, false, "accessConstMemory, the region shifted one word" },
+		{ false, low - 1, 1, false, "accessConstMemory, the word below the lowest constant" },
+		{ false, low + READABLE_SIZE - 1, 1, true, "accessConstMemory, the last readable word" },
+		{ false, low + READABLE_SIZE, 1, false, "accessConstMemory, the zero guard alone" },
+		{ false, low, 0xFFFFFFFFu, false, "accessConstMemory, a count that wraps" },
+		{ true, MEMORY_OFFSET, rw, true, "accessMemory, the whole writable region" },
+		{ true, MEMORY_OFFSET, rw + 1, false, "accessMemory, one word more (the zero guard)" },
+		{ true, MEMORY_OFFSET + 1, rw, false, "accessMemory, the region shifted one word" },
+		{ true, MEMORY_OFFSET + rw - 1, 1, true, "accessMemory, the last writable word" },
+		{ true, MEMORY_OFFSET - 1, 1, false, "accessMemory, the last constant" },
+		{ true, MEMORY_OFFSET, 0xFFFFFFFFu, false, "accessMemory, a count that wraps" }
+	};
+	const int count = sizeof (ACCESSES) / sizeof (*ACCESSES);
+	int failures = 0;
+	for (int i = 0; i < count; ++i) {
+		const Access& a = ACCESSES[i];
+		const Value* got = a.writable ? processor.accessMemory(a.pointer, a.count)
+				: processor.accessConstMemory(a.pointer, a.count);
+		const Value* want = a.succeeds ? m.memory() + layout.cell(a.pointer) : 0;
+		if (got != want) {
+			std::printf("FAIL native access: %s: %s\n", a.what, got == 0 ? "refused" : "granted");
+			++failures;
+		}
+	}
+	std::printf("native access: %d probes, %d failed\n", count, failures);
+	return failures;
+}
+
+std::vector<unsigned char> freeze(Machine& m) {
+	const Processor processor = machineProcessor(m);
+	std::vector<unsigned char> frozen(freezeMemorySize(processor, m.symbols));
+	freezeMemory(processor, m.symbols, &frozen[0], (UInt)frozen.size());
+	return frozen;
+}
+
+MemoryLoad thaw(Machine& m, const std::vector<unsigned char>& frozen, bool prefix) {
+	Processor processor = machineProcessor(m);
+	return thawMemory(processor, m.symbols, frozen.empty() ? 0 : &frozen[0], (UInt)frozen.size(), prefix);
+}
+
+/*
+	The words the global `name` owns in `m`, the ones thawing restores, as a list of numbers ("1 2 3"), or "?" when
+	there is no such global.
+*/
+std::string globalWords(Machine& m, const char* name) {
+	GlobalInfo info;
+	const Value* words = (m.symbols.getGlobalInfo(name, info)
+			? machineProcessor(m).accessConstMemory(info.address, info.ownedWords) : 0);
+	if (words == 0) return "?";
+	std::string s;
+	for (UInt i = 0; i < info.ownedWords; ++i) s += (i == 0 ? "" : " ") + number(words[i].i);
+	return s;
+}
+
+/*
+	The words the global `name` owns, from `getGlobalInfo`, or 99 when there is no such global.
+*/
+UInt ownedWords(const Symbols& symbols, const char* name) {
+	GlobalInfo info;
+	return (symbols.getGlobalInfo(name, info) ? info.ownedWords : 99);
+}
+
+/*
+	The words the source declares for the global `name`, from `findGlobal`, or 99 when there is no such global.
+*/
+UInt declaredWords(const Symbols& symbols, const char* name) {
+	UInt declared = 99;
+	return (symbols.findGlobal(name, declared) != NULL_POINTER ? declared : 99);
+}
+
+void putWord(std::vector<unsigned char>& b, size_t at, UInt v) {
+	b[at] = (unsigned char)v; b[at + 1] = (unsigned char)(v >> 8); b[at + 2] = (unsigned char)(v >> 16);
+	b[at + 3] = (unsigned char)(v >> 24);
+}
+
+/*
+	Two refusals at the edges a host reaches: a frame summing past INT_MAX is refused at assembly, so a slot offset
+	can never wrap, and `thawMemory` rejects frozen memory cut at every length, without reading past it. Returns the
+	number of failures, each one printed.
+*/
+int sweepFrameAndThaw() {
+	int failures = 0;
+	{
+		Machine m;
+		bool refused = false;
+		try {
+			Assembler assem(CODE_SIZE, &m.code[0], FUNCTION_COUNT, &m.functionTable[0], MEMORY_SIZE, m.memory()
+					, m.symbols);
+			assem.newUnit("frame");
+			const Char* cp = "f: FUNC\n$a: LOCA *2147483647\n$b: LOCA *1\n RETU\n";
+			while (*cp != 0) cp = assem.feed(cp);
+		}
+		catch (const Exception& e) {
+			refused = (e.error == FRAME_TOO_LARGE);
+		}
+		if (!refused) {
+			std::printf("FAIL frame: a frame past INT_MAX was not refused with FRAME_TOO_LARGE\n");
+			++failures;
+		}
+	}
+
+	Machine m;
+	Layout layout = Layout();
+	std::string error;
+	if (!assemble(m, program(""), layout, error)) {
+		std::printf("thaw: baseline program refused: %s\n", error.c_str());
+		return failures + 1;
+	}
+	const std::vector<unsigned char> frozen = freeze(m);
+	int probes = 1;											// the frame above
+	if (thaw(m, frozen, false) != MEMORY_OK) {
+		std::printf("FAIL thaw: the intact frozen memory was rejected\n");
+		++failures;
+	}
+	++probes;
+	for (size_t n = 1; n < frozen.size(); ++n) {
+		const std::vector<unsigned char> prefix(frozen.begin(), frozen.begin() + n);	// exactly `n` bytes, nothing after
+		const MemoryLoad expected = (n < 4 ? MEMORY_BAD_MAGIC : MEMORY_TRUNCATED);
+		if (thaw(m, prefix, false) != expected) {
+			std::printf("FAIL thaw: frozen memory cut to %d bytes was not refused as %s\n", (int)n
+					, n < 4 ? "bad magic" : "truncated");
+			++failures;
+		}
+		++probes;
+	}
+	std::printf("frame and thaw: %d probes, %d failed\n", probes, failures);
+	return failures;
+}
+
+/*
+	What `freezeMemory` saves for each way of naming data (docs/gazl/Specification.md section 6): every label owns
+	the words up to the next label, a section's own label included, and a label that shares its word with a later
+	one owns none. Nothing is saved for `TEMP` or `CNST`. Checks the header, the check entry and every program entry
+	byte for byte. Returns the number of failures, each one printed.
+*/
+int sweepFrozenEntries() {
+	const char* const SOURCE =
+		"\tGLOB *1\n"						// unnamed section, labelled scalar (Impala's scalar form)
+		"clock:\tDATi #7\n"
+		"params:\tGLOB *4\n"				// named section, nothing inside (Impala's array form)
+		"state:\tGLOB *3\n"					// a section label sharing its word with `gain` owns nothing
+		"gain:\tDATf #0.5\n"
+		"level:\tDATi #3\n"
+		"head:\tGLOB *3\n"					// a section label owns the words before its first inner label
+		"\tDATi #61\n"
+		"mid:\tDATi #62\n"
+		"\tGLOB *3\n"						// unnamed section: the label owns the unlabelled line after it too
+		"first:\tDATi #21\n"
+		"\tDATi #22\n"
+		"\tGLOB *8\n"						// labels over several values
+		"multi:\tDATA #31 #32 #33\n"
+		"text:\tDATs abc\n"
+		"scratch:\tTEMP *2\n"				// TEMP, and a label inside it
+		"tmpval:\tDATi #41\n"
+		"table:\tCNST *2\n"					// CNST, and a label inside it
+		"entry:\tDATi #51\n"
+		"alias:\t! DEFp &multi:1\n"			// a pointer constant: an address, but no data of its own
+		"count:\t! DEFi #5\n"
+		"ratio:\t! DEFf #0.5\n"
+		"main:\tFUNC\n"
+		"v:\tLOCi\n"
+		"\tPEEK v &multi:2\n"				// a label's offset is checked against all of its values
+		"\tRETU\n";
+	struct Entry { const char* name; UInt size; UInt words[8]; };
+	const Entry EXPECTED[] = {				// ascending names
+		{ "clock", 1, { 7 } },
+		{ "first", 3, { 21, 22, 0 } },
+		{ "gain", 1, { 0x3F000000u } },
+		{ "head", 1, { 61 } },
+		{ "level", 2, { 3, 0 } },
+		{ "mid", 2, { 62, 0 } },
+		{ "multi", 3, { 31, 32, 33 } },
+		{ "params", 4, { 0, 0, 0, 0 } },
+		{ "text", 5, { 'a', 'b', 'c', 0, 0 } }
+	};
+	const int count = sizeof (EXPECTED) / sizeof (*EXPECTED);
+	const unsigned char HEADER_AND_CHECK[20 + 28] = {
+		'G', 'Z', 'M', 'M', 1, 0, 0, 0, VERSION, 0, 0, 0, 32, 0, 0, 0, count + 1, 0, 0, 0
+		, 5, 0, 0, 0, '$', 'g', 'a', 'z', 'l', 0, 0, 0, 3, 0, 0, 0
+		, 0x04, 0x03, 0x02, 0x01, 0x00, 0x00, 0x80, 0x3F, 0x01, 0x00, 0x80, 0x7F
+	};
+
+	Machine m;
+	Layout layout = Layout();
+	std::string error;
+	if (!assemble(m, SOURCE, layout, error)) {
+		std::printf("FAIL frozen entries: program refused: %s\n", error.c_str());
+		return 1;
+	}
+	const std::vector<unsigned char> frozen = freeze(m);
+	if (frozen.size() < sizeof (HEADER_AND_CHECK)
+			|| memcmp(&frozen[0], HEADER_AND_CHECK, sizeof (HEADER_AND_CHECK)) != 0) {
+		std::printf("FAIL frozen entries: the header or the check entry is not the specified bytes\n");
+		return 1;
+	}
+	size_t at = sizeof (HEADER_AND_CHECK);
+	int failures = 0;
+	for (int i = 0; i < count && failures == 0; ++i) {
+		std::vector<unsigned char> expected(4);
+		const UInt length = (UInt)strlen(EXPECTED[i].name);
+		putWord(expected, 0, length);
+		expected.insert(expected.end(), EXPECTED[i].name, EXPECTED[i].name + length);
+		expected.resize(expected.size() + (4 - length % 4) % 4 + 4, 0);
+		putWord(expected, expected.size() - 4, EXPECTED[i].size);
+		for (UInt w = 0; w < EXPECTED[i].size; ++w) {
+			expected.resize(expected.size() + 4);
+			putWord(expected, expected.size() - 4, EXPECTED[i].words[w]);
+		}
+		if (frozen.size() - at < expected.size() || memcmp(&frozen[at], &expected[0], expected.size()) != 0) {
+			std::printf("FAIL frozen entries: entry %d is not %s (%u words)\n", i, EXPECTED[i].name, EXPECTED[i].size);
+			++failures;
+		}
+		at += expected.size();
+	}
+	if (failures == 0 && at != frozen.size()) {
+		std::printf("FAIL frozen entries: %d bytes follow the last expected entry\n", (int)(frozen.size() - at));
+		++failures;
+	}
+	// A label that owns nothing is still a name: `findGlobal` resolves it, with what its statement declares.
+	UInt stateSize = 99;
+	UInt gainSize = 99;
+	UInt levelSize = 99;
+	const Pointer stateAddress = m.symbols.findGlobal("state", stateSize);
+	if (stateSize != 3 || ownedWords(m.symbols, "state") != 0
+			|| m.symbols.findGlobal("gain", gainSize) != stateAddress || gainSize != 1
+			|| ownedWords(m.symbols, "gain") != 1
+			|| m.symbols.findGlobal("level", levelSize) != stateAddress + 1 || levelSize != 1
+			|| ownedWords(m.symbols, "level") != 2) {
+		std::printf("FAIL frozen entries: the labels in `state` do not declare and own what they should\n");
+		++failures;
+	}
+	// By name, `getGlobalInfo` knows all data, `TEMP` and `CNST` included, and nothing else.
+	GlobalInfo temp;
+	GlobalInfo head;
+	GlobalInfo entry;
+	GlobalInfo nosuch;
+	GlobalInfo function;
+	GlobalInfo alias;
+	nosuch.declaredWords = 1;
+	nosuch.ownedWords = 1;
+	function.address = 1;
+	alias.address = 1;
+	if (!m.symbols.getGlobalInfo("entry", entry) || entry.section != CNST_SECTION || entry.declaredWords != 1
+			|| entry.ownedWords != 2
+			|| m.symbols.getGlobalInfo("alias", alias) || alias.address != NULL_POINTER
+			|| m.symbols.getGlobalInfo("nosuch", nosuch) || nosuch.declaredWords != 0 || nosuch.ownedWords != 0
+			|| nosuch.name != 0
+			|| m.symbols.getGlobalInfo("main", function) || function.address != NULL_POINTER
+			|| !m.symbols.getGlobalInfo("tmpval", temp) || temp.section != TEMP_SECTION || temp.declaredWords != 1
+			|| temp.ownedWords != 2
+			|| !m.symbols.getGlobalInfo("head", head) || strcmp(head.name, "head") != 0
+			|| head.declaredWords != 3 || head.ownedWords != 1 || head.section != GLOB_SECTION) {
+		std::printf("FAIL frozen entries: getGlobalInfo by name reports the wrong global\n");
+		++failures;
+	}
+	// `lookupConstant` finds named constants of each kind, and not data or functions.
+	ConstantKind kind = INT_CONSTANT;
+	Value value;
+	value.i = 0;
+	UInt multiSize = 0;
+	const Pointer multi = m.symbols.findGlobal("multi", multiSize);
+	if (!m.symbols.lookupConstant("alias", kind, value) || kind != ADDRESS_CONSTANT || value.p != multi + 1
+			|| !m.symbols.lookupConstant("NULL", kind, value) || kind != ADDRESS_CONSTANT || value.p != NULL_POINTER
+			|| !m.symbols.lookupConstant("count", kind, value) || kind != INT_CONSTANT || value.i != 5
+			|| !m.symbols.lookupConstant("ratio", kind, value) || kind != FLOAT_CONSTANT || value.f != 0.5f
+			|| m.symbols.lookupConstant("multi", kind, value) || m.symbols.lookupConstant("main", kind, value)
+			|| m.symbols.lookupConstant("no such", kind, value)) {
+		std::printf("FAIL frozen entries: lookupConstant reports the wrong constant\n");
+		++failures;
+	}
+	// A data line without values is legal and writes nothing, so its label owns no words.
+	const char* const EMPTY[] = { "DATi", "DATf ; none", "DATp", "DATA" };
+	const int emptyCount = sizeof (EMPTY) / sizeof (*EMPTY);
+	for (int i = 0; i < emptyCount; ++i) {
+		Machine e;
+		Layout eLayout = Layout();
+		UInt xSize = 99;
+		UInt ySize = 99;
+		const bool assembled = assemble(e, std::string("\tGLOB *2\nx:\t") + EMPTY[i] + "\ny:\tDATi #5\n", eLayout
+				, error);
+		const Pointer x = e.symbols.findGlobal("x", xSize);
+		if (!assembled || x == NULL_POINTER || xSize != 0 || e.symbols.findGlobal("y", ySize) != x || ySize != 1
+				|| ownedWords(e.symbols, "y") != 2) {
+			std::printf("FAIL frozen entries: `x: %s` is not an empty label at `y`\n", EMPTY[i]);
+			++failures;
+		}
+	}
+	std::printf("frozen entries: %d checked, %d failed\n", count + 4 + emptyCount, failures);
+	return failures;
+}
+
+/*
+	Thawing (docs/gazl/Specification.md section 11): each row of the validation table, in its order, restoring
+	nothing; then the restore rules under both policies. Returns the number of failures, each one printed.
+*/
+int sweepThawRules() {
+	int failures = 0;
+	int checks = 0;
+	const char* const FROM = "a:\tGLOB *2\n\tDATi #1 #2\nb:\tGLOB *1\n\tDATi #3\nc:\tGLOB *1\n\tDATi #4\n";
+	const std::string MAIN = "main:\tFUNC\n\tRETU\n";
+	Machine from;
+	Layout layout = Layout();
+	std::string error;
+	if (!assemble(from, FROM + MAIN, layout, error)) {
+		std::printf("FAIL thaw rules: program refused: %s\n", error.c_str());
+		return 1;
+	}
+	const std::vector<unsigned char> frozen = freeze(from);	// $gazl at 20, a at 48, b at 68, c at 84; 100 bytes
+
+	struct Invalid { const char* what; size_t at; UInt word; int cut; MemoryLoad expected; };	// `cut` < 0 adds bytes
+	const Invalid INVALID[] = {
+		{ "wrong magic", 0, 0x4D4D5A48u, 0, MEMORY_BAD_MAGIC },
+		{ "3 bytes", 0, 0, 97, MEMORY_BAD_MAGIC },
+		{ "a header of 19 bytes", 0, 0, 81, MEMORY_TRUNCATED },
+		{ "format version 2", 4, 2, 0, MEMORY_BAD_VERSION },
+		{ "GAZL version 0", 8, 0, 0, MEMORY_BAD_VERSION },
+		{ "a newer GAZL version", 8, (UInt)VERSION + 1, 0, MEMORY_BAD_VERSION },
+		{ "word size 64", 12, 64, 0, MEMORY_BAD_WORDSIZE },
+		{ "one entry too many", 16, 5, 0, MEMORY_TRUNCATED },
+		{ "a name length past the end", 48, 0xFFFFFFF0u, 0, MEMORY_TRUNCATED },
+		{ "a word count past the end", 92, 2, 0, MEMORY_TRUNCATED },
+		{ "no entries", 16, 0, 0, MEMORY_BAD_CANARY },
+		{ "a quiet NaN in the check entry", 44, 0x7FC00000u, 0, MEMORY_BAD_CANARY },
+		{ "a name that is not an identifier", 52, '1', 0, MEMORY_MALFORMED },
+		{ "padding that is not zero", 52, 'a' | ('x' << 8), 0, MEMORY_MALFORMED },
+		{ "names out of order", 52, 'c', 0, MEMORY_MALFORMED },
+		{ "the same name twice", 72, 'a', 0, MEMORY_MALFORMED },
+		{ "bytes after the last entry", 100, 0, -4, MEMORY_MALFORMED },
+		{ "trailing bytes and a damaged check entry", 36, 0x01020305u, -4, MEMORY_BAD_CANARY }
+	};
+	for (size_t i = 0; i < sizeof (INVALID) / sizeof (*INVALID); ++i) {
+		const Invalid& v = INVALID[i];
+		std::vector<unsigned char> bad(frozen);
+		if (v.cut > 0) {
+			bad.resize(bad.size() - v.cut);
+		} else {
+			bad.resize(bad.size() - v.cut, 0);
+			putWord(bad, v.at, v.word);
+		}
+		Machine to;
+		assemble(to, FROM + MAIN, layout, error);
+		Value* const memory = to.memory();
+		for (UInt w = 0; w < MEMORY_SIZE; ++w) memory[w].i = 99;
+		const MemoryLoad got = thaw(to, bad, true);
+		bool untouched = true;
+		for (UInt w = 0; w < MEMORY_SIZE; ++w) untouched = untouched && memory[w].i == 99;
+		if (got != v.expected || !untouched) {
+			std::printf("FAIL thaw rules: %s gave status %d%s, expected %d\n", v.what, (int)got
+					, untouched ? "" : " and restored words", (int)v.expected);
+			++failures;
+		}
+		++checks;
+	}
+
+	struct Restore { const char* what; std::string to; bool prefix; MemoryLoad expected; const char* words; };
+	const std::string B_AND_C = "b:\tGLOB *1\n\tDATi #7\nc:\tGLOB *1\n\tDATi #7\n";			// as frozen, but holding 7s
+	const Restore RESTORES[] = {
+		{ "the same program", FROM, false, MEMORY_OK, "1 2|3|4|?" },
+		{ "a larger owner, prefix", "a:\tGLOB *3\n\tDATi #7 #7 #7\n" + B_AND_C, true, MEMORY_MISMATCH, "1 2 7|3|4|?" },
+		{ "a larger owner, skip", "a:\tGLOB *3\n\tDATi #7 #7 #7\n" + B_AND_C, false, MEMORY_MISMATCH, "7 7 7|3|4|?" },
+		{ "a smaller owner, prefix", "a:\tGLOB *1\n\tDATi #7\n" + B_AND_C, true, MEMORY_MISMATCH, "1|3|4|?" },
+		{ "an entry with no owner", "a:\tGLOB *2\n\tDATi #7 #7\nc:\tGLOB *1\n\tDATi #7\n", false, MEMORY_MISMATCH
+				, "1 2|?|4|?" },
+		{ "an owner with no entry", "a:\tGLOB *2\n\tDATi #7 #7\n" + B_AND_C + "d:\tGLOB *1\n\tDATi #7\n", false
+				, MEMORY_MISMATCH, "1 2|3|4|7" },
+		{ "an owner moved into a TEMP section", "a:\tGLOB *2\n\tDATi #7 #7\nb:\tTEMP *1\n\tDATi #7\nc:\tGLOB *1\n"
+				"\tDATi #7\n", false, MEMORY_MISMATCH, "1 2|7|4|?" },
+		{ "a label that owns nothing", "s:\tGLOB *2\na:\tDATi #7 #7\n" + B_AND_C, false, MEMORY_OK, "1 2|3|4|?" }
+	};
+	const char* const NAMES[] = { "a", "b", "c", "d" };
+	for (size_t i = 0; i < sizeof (RESTORES) / sizeof (*RESTORES); ++i) {
+		const Restore& r = RESTORES[i];
+		Machine to;
+		if (!assemble(to, r.to + MAIN, layout, error)) {
+			std::printf("FAIL thaw rules: %s: program refused: %s\n", r.what, error.c_str());
+			++failures;
+			continue;
+		}
+		const MemoryLoad got = thaw(to, frozen, r.prefix);
+		std::string words;
+		for (int n = 0; n < 4; ++n) words += (n == 0 ? "" : "|") + globalWords(to, NAMES[n]);
+		if (got != r.expected || words != r.words) {
+			std::printf("FAIL thaw rules: %s gave status %d and %s, expected %d and %s\n", r.what, (int)got
+					, words.c_str(), (int)r.expected, r.words);
+			++failures;
+		}
+		++checks;
+	}
+	std::printf("thaw rules: %d checked, %d failed\n", checks, failures);
+	return failures;
+}
+
+/*
+	The check entry (docs/gazl/Specification.md section 11): every single-bit change to any of its 28 bytes must be
+	refused, restoring nothing. A changed name length or word count may instead read as a truncated input; any other
+	byte is `MEMORY_BAD_CANARY`. Returns the number of failures, each one printed.
+*/
+int sweepCanary() {
+	const char* const SOURCE = "a:\tGLOB *2\n\tDATi #1 #2\nmain:\tFUNC\n\tRETU\n";
+	Machine from;
+	Layout layout = Layout();
+	std::string error;
+	if (!assemble(from, SOURCE, layout, error)) {
+		std::printf("FAIL canary: program refused: %s\n", error.c_str());
+		return 1;
+	}
+	const std::vector<unsigned char> frozen = freeze(from);
+	const size_t CHECK_AT = 20;																// after the header
+	const size_t CHECK_SIZE = 28;															// "$gazl", padding and three words
+	const size_t NAME_LENGTH_AT = CHECK_AT;
+	const size_t WORD_COUNT_AT = CHECK_AT + 12;
+	int failures = 0;
+	int probes = 0;
+	for (size_t byte = CHECK_AT; byte < CHECK_AT + CHECK_SIZE; ++byte) {
+		for (int bit = 0; bit < 8; ++bit) {
+			std::vector<unsigned char> bad(frozen);
+			bad[byte] = static_cast<unsigned char>(bad[byte] ^ (1 << bit));
+			Machine to;
+			assemble(to, SOURCE, layout, error);
+			Value* const memory = to.memory();
+			for (UInt w = 0; w < MEMORY_SIZE; ++w) memory[w].i = 99;
+			const MemoryLoad got = thaw(to, bad, true);
+			bool untouched = true;
+			for (UInt w = 0; w < MEMORY_SIZE; ++w) untouched = untouched && memory[w].i == 99;
+			const bool inLength = (byte - NAME_LENGTH_AT < 4 || byte - WORD_COUNT_AT < 4);
+			const bool refused = (got == MEMORY_BAD_CANARY || (inLength && got == MEMORY_TRUNCATED));
+			if (!refused || !untouched) {
+				std::printf("FAIL canary: bit %d of byte %d gave status %d%s\n", bit, (int)byte, (int)got
+						, untouched ? "" : " and restored words");
+				++failures;
+			}
+			++probes;
+		}
+	}
+	// The three check words as a big-endian writer would put them.
+	std::vector<unsigned char> swapped(frozen);
+	for (size_t at = CHECK_AT + 16; at < CHECK_AT + CHECK_SIZE; at += 4) {
+		std::swap(swapped[at], swapped[at + 3]);
+		std::swap(swapped[at + 1], swapped[at + 2]);
+	}
+	Machine to;
+	assemble(to, SOURCE, layout, error);
+	if (thaw(to, swapped, true) != MEMORY_BAD_CANARY) {
+		std::printf("FAIL canary: big-endian check words were not refused as MEMORY_BAD_CANARY\n");
+		++failures;
+	}
+	++probes;
+	std::printf("canary: %d probes, %d failed\n", probes, failures);
+	return failures;
+}
+
+/*
+	The assembler's error for `source`, or -1 when it assembles. One native, `^native`, is registered.
+*/
+int assemblyError(const std::string& source) {
+	Machine m;
+	m.symbols.registerNative("native", 0);
+	try {
+		Assembler assem(CODE_SIZE, &m.code[0], FUNCTION_COUNT, &m.functionTable[0], MEMORY_SIZE, m.memory(), m.symbols);
+		assem.newUnit("text");
+		const Char* cp = source.c_str();
+		while (*cp != 0) cp = assem.feed(cp);
+		ProgramSizes sizes = { 0, 0, 0, 0 };
+		assem.finalize(sizes);
+	}
+	catch (const Exception& e) {
+		return e.error;
+	}
+	return -1;
+}
+
+/*
+	Source text is ASCII: a byte above 0x7F in `DATs` text or in a quoted literal is refused, while a comment may
+	hold any bytes. Returns the number of failures, each one printed.
+*/
+int sweepTextEncoding() {
+	struct Case { const char* what; const char* source; int error; };
+	const Case CASES[] = {
+		{ "DATs with a byte above 0x7F", "\tGLOB *4\n\tDATs abc\xE5\n", NON_ASCII_TEXT },
+		{ "a quoted literal with a byte above 0x7F", "\tGLOB *1\n\tDATi #'\xE5'\n", NON_ASCII_TEXT },
+		{ "a comment with bytes above 0x7F", "t:\tGLOB *1\n\tDATi #1 ; \xE5\xE4\xF6 \xC3\xA5\n; \xFF\n", -1 },
+		{ "ASCII DATs text", "t:\tGLOB *3\n\tDATs abc\n", -1 },
+		{ "an ASCII quoted literal", "t:\tGLOB *1\n\tDATi #'AB'\n", -1 }
+	};
+	const int count = sizeof (CASES) / sizeof (*CASES);
+	int failures = 0;
+	for (int i = 0; i < count; ++i) {
+		const int error = assemblyError(CASES[i].source);
+		if (error != CASES[i].error) {
+			std::printf("FAIL text encoding: %s gave error %d, expected %d\n", CASES[i].what, error, CASES[i].error);
+			++failures;
+		}
+	}
+	std::printf("text encoding: %d checked, %d failed\n", count, failures);
+	return failures;
+}
+
+/*
+	Data in an unnamed section before its first label belongs to no name, so freezing could not save it, and the
+	assembler refuses it: at the statement, or for a section with no data, when the next section opens or at
+	`finalize`. Returns the number of failures, each one printed.
+*/
+int sweepUnnamedSections() {
+	struct Case { const char* what; const char* source; int error; };
+	const Case CASES[] = {
+		{ "an unnamed GLOB with unlabelled data", "\tGLOB *1\n\tDATi #0\n", UNNAMED_DATA_SECTION },
+		{ "an unnamed GLOB followed by another section", "\tGLOB *1\n\tDATi #0\nb:\tGLOB *1\n", UNNAMED_DATA_SECTION },
+		{ "an unnamed GLOB without data", "\tGLOB *1\nb:\tGLOB *1\n", UNNAMED_DATA_SECTION },
+		{ "an unnamed GLOB without data, last", "\tGLOB *1\n", UNNAMED_DATA_SECTION },
+		{ "an unnamed CNST with unlabelled data", "\tCNST *1\n\tDATi #0\n", -1 },
+		{ "an unnamed TEMP without data", "\tTEMP *1\n", -1 },
+		{ "an unnamed TEMP followed by another section", "\tTEMP *4\nx:\tGLOB *1\n\tDATi #0\n", -1 },
+		{ "data before the first label of an unnamed TEMP", "\tTEMP *2\n\tDATi #0\nb:\tDATi #0\n", -1 },
+		{ "a named section", "s:\tGLOB *1\n\tDATi #0\n", -1 },
+		{ "an unnamed section with a labelled statement", "\tGLOB *1\na:\tDATi #0\n", -1 },
+		{ "data before the first label of an unnamed section", "\tGLOB *2\n\tDATi #0\nb:\tDATi #0\n"
+				, UNNAMED_DATA_SECTION }
+	};
+	const int count = sizeof (CASES) / sizeof (*CASES);
+	int failures = 0;
+	for (int i = 0; i < count; ++i) {
+		const int error = assemblyError(CASES[i].source);
+		if (error != CASES[i].error) {
+			std::printf("FAIL unnamed sections: %s gave error %d, expected %d\n", CASES[i].what, error, CASES[i].error);
+			++failures;
+		}
+	}
+	// A label owns the unlabelled statements after it, up to the next label.
+	Machine m;
+	Layout layout = Layout();
+	std::string error;
+	UInt sSize = 0;
+	UInt tSize = 0;
+	const bool assembled = assemble(m, "\tGLOB *20\ns:\tDATs blahblah\n\tDATi #10\n\tDATs yaddayadda\nt:\tDATi #1\n"
+			, layout, error);
+	const Pointer sAddress = m.symbols.findGlobal("s", sSize);
+	if (!assembled || sAddress == NULL_POINTER || sSize != 8 || ownedWords(m.symbols, "s") != 19
+			|| m.symbols.findGlobal("t", tSize) != sAddress + 19 || tSize != 1) {
+		std::printf("FAIL unnamed sections: a label does not cover the unlabelled lines after it (%s)\n", error.c_str());
+		++failures;
+	}
+	// A label with a `#` part is declared as `name.n`, and the next label still ends what it owns.
+	Machine h;
+	if (!assemble(h, "h:\tGLOB *4\nx#1:\tDATi #1\ny:\tDATi #2\n", layout, error) || ownedWords(h.symbols, "h") != 0
+			|| ownedWords(h.symbols, "x.1") != 1 || ownedWords(h.symbols, "y") != 3) {
+		std::printf("FAIL unnamed sections: a `#` label does not end where the next label starts (%s)\n", error.c_str());
+		++failures;
+	}
+	std::printf("unnamed sections: %d checked, %d failed\n", count + 2, failures);
+	return failures;
+}
+
+/*
+	An access through a label may reach any word of its section, before or after the label, and an offset on a local
+	any declared word of its frame, but no further (docs/gazl/Specification.md sections 5 and 6). An address that is
+	only a value is not checked. Returns the number of failures, each one printed.
+*/
+int sweepLabelReach() {
+	const std::string NAMED = "s:\tGLOB *4\na:\tDATi #1\nb:\tDATi #2\nmain:\tFUNC\nv:\tLOCi\np:\tLOCp\n";
+	const std::string UNNAMED = "\tGLOB *4\na:\tDATi #1\nb:\tDATi #2\nmain:\tFUNC\nv:\tLOCi\n";
+	const std::string FRAME = "main:\tFUNC\nx:\tLOCi\nb:\tLOCA *3\ny:\tLOCi\n";
+	const std::string END = "\tRETU\n";
+	struct Text { const char* what; std::string source; int error; };
+	const Text CASES[] = {
+		{ "a section label, to its last word", NAMED + "\tPEEK v &s:3\n\tPOKE &s:3 v\n" + END, -1 },
+		{ "a section label, past its end", NAMED + "\tPEEK v &s:4\n" + END, OFFSET_OUT_OF_BOUNDS },
+		{ "a section label, before its start", NAMED + "\tPEEK v &s:-1\n" + END, OFFSET_OUT_OF_BOUNDS },
+		{ "an inner label, past the next label", NAMED + "\tPEEK v &a:3\n\tPOKE &a:3 v\n" + END, -1 },
+		{ "an inner label, past the section end", NAMED + "\tPEEK v &a:4\n" + END, OFFSET_OUT_OF_BOUNDS },
+		{ "an inner label, back to the section start", NAMED + "\tPEEK v &b:-1\n\tPOKE &b:-1 v\n" + END, -1 },
+		{ "an inner label, before the section start", NAMED + "\tPOKE &b:-2 v\n" + END, OFFSET_OUT_OF_BOUNDS },
+		{ "an address that is only a value, before the section", NAMED + "\tMOVp p &s:-5\n" + END, -1 },
+		{ "a label in an unnamed section, past the next label", UNNAMED + "\tPEEK v &a:3\n" + END, -1 },
+		{ "a label in an unnamed section, before it", UNNAMED + "\tPEEK v &b:-1\n" + END, -1 },
+		{ "a label that owns nothing, to the section end", "\tGLOB *4\na:\tDATi\nb:\tDATi #2\nmain:\tFUNC\nv:\tLOCi\n"
+				"\tPEEK v &a:3\n" + END, -1 },
+		{ "a named constant as a negative offset", "NEG:\t! DEFi #-1\n" + NAMED + "\tPEEK v &b:NEG\n" + END, -1 },
+		{ "a local, back to the frame start", FRAME + "\tMOVi y:-4 #0\n\tMOVi b:-1 #0\n" + END, -1 },
+		{ "a local, before the frame start", FRAME + "\tMOVi x:-1 #0\n" + END, OFFSET_OUT_OF_BOUNDS },
+		{ "a local array, past itself to the frame end", FRAME + "\tMOVi b:3 #0\n\tMOVi x:4 #0\n" + END, -1 },
+		{ "a local, past the frame end", FRAME + "\tMOVi y:1 #0\n" + END, OFFSET_OUT_OF_BOUNDS },
+		{ "a local's address that is only a value, past the frame", std::string("main:\tFUNC\nx:\tLOCi\np:\tLOCp\n")
+				+ "\tADRL p x:100 *0\n" + END, -1 },
+		{ "a local array base, back to the frame start", FRAME + "\tGETL x b:-1 x\n\tSETL b:-1 x #0\n" + END, -1 },
+		{ "a GETL base before the frame start", FRAME + "\tGETL y x:-1 y\n" + END, OFFSET_OUT_OF_BOUNDS },
+		{ "a SETL base before the frame start", FRAME + "\tSETL x:-100000 y #0\n" + END, OFFSET_OUT_OF_BOUNDS },
+		{ "a local's address before the frame start", std::string("main:\tFUNC\nx:\tLOCi\np:\tLOCp\n")
+				+ "\tADRL p x:-1 *0\n" + END, OFFSET_OUT_OF_BOUNDS }
+	};
+	const int count = sizeof (CASES) / sizeof (*CASES);
+	int failures = 0;
+	for (int i = 0; i < count; ++i) {
+		const int error = assemblyError(CASES[i].source);
+		if (error != CASES[i].error) {
+			std::printf("FAIL label reach: %s gave error %d, expected %d\n", CASES[i].what, error, CASES[i].error);
+			++failures;
+		}
+	}
+	std::printf("label reach: %d checked, %d failed\n", count, failures);
+	return failures;
+}
+
+/*
+	A `SPAN` region takes its extent, never more, and must fit its section. With `SPAN`, labels come in any address
+	order, and each still owns the words up to the next label by address. Words before an unnamed section's first
+	label, by address, belong to no one. Returns the number of failures, each one printed.
+*/
+int sweepSpanRegions() {
+	struct Case { const char* what; const char* source; int error; };
+	const Case CASES[] = {
+		{ "a region filled to its extent", "s:\tGLOB *4\n\tSPAN :1 *2\n\tDATi #1 #2\n", -1 },
+		{ "a region filled past its extent", "s:\tGLOB *4\n\tSPAN :1 *2\n\tDATi #1 #2 #3\n", DATA_SECTION_FULL },
+		{ "a region without an extent", "s:\tGLOB *4\n\tSPAN :1\n", INVALID_INSTRUCTION },
+		{ "a region to the section end", "s:\tGLOB *4\n\tSPAN :1 *3\n", -1 },
+		{ "a region past the section end", "s:\tGLOB *4\n\tSPAN :1 *4\n", OFFSET_OUT_OF_BOUNDS },
+		{ "a region whose end overflows an int", "s:\tGLOB *4\n\tSPAN :2147483647 *2147483647\n", OFFSET_OUT_OF_BOUNDS },
+		{ "two regions that overlap", "s:\tGLOB *4\n\tSPAN :0 *2\n\tSPAN :1 *1\n\tDATi #1\n", OVERLAPPING_DATA_REGIONS },
+		{ "a region outside any section", "\tSPAN :0 *1\n", DATA_SECTION_MISSING }
+	};
+	const int count = sizeof (CASES) / sizeof (*CASES);
+	int failures = 0;
+	for (int i = 0; i < count; ++i) {
+		const int error = assemblyError(CASES[i].source);
+		if (error != CASES[i].error) {
+			std::printf("FAIL span regions: %s gave error %d, expected %d\n", CASES[i].what, error, CASES[i].error);
+			++failures;
+		}
+	}
+	Machine m;
+	Layout layout = Layout();
+	std::string error;
+	const bool assembled = assemble(m, "s:\tGLOB *6\n\tSPAN :4 *2\nb:\tDATi #4 #5\n\tSPAN :0 *4\n\tDATi #1\n"
+			"a:\tDATi #2 #3\nmain:\tFUNC\n\tRETU\n", layout, error);
+	if (!assembled || ownedWords(m.symbols, "s") != 1 || ownedWords(m.symbols, "a") != 3
+			|| ownedWords(m.symbols, "b") != 2 || globalWords(m, "a") != "2 3 0") {
+		std::printf("FAIL span regions: labels out of address order own the wrong words (%s)\n", error.c_str());
+		++failures;
+	}
+	const int unowned = assemblyError("\tGLOB *4\n\tSPAN :2 *2\nx:\tDATi #1\n\tSPAN :0 *2\n\tDATi #9\n"
+			"main:\tFUNC\n\tRETU\n");
+	if (unowned != UNNAMED_DATA_SECTION) {
+		std::printf("FAIL span regions: words before the first label by address gave error %d\n", unowned);
+		++failures;
+	}
+	std::printf("span regions: %d checked, %d failed\n", count + 2, failures);
+	return failures;
+}
+
+/*
+	Inside a `GAZL #2` region `#` takes only numbers and `&` only pointers; outside one either takes any name the
+	operand accepts (docs/gazl/Specification.md sections 5 and 12). Returns the number of failures, each one printed.
+*/
+int sweepPrefixes() {
+	const std::string HEAD = "t:\tGLOB *2\n\tDATi #1\nK:\t! DEFi #3\nF:\t! DEFf #0.5\nP:\t! DEFp &t:1\n"
+			"main:\tFUNC\ni:\tLOCi\nf:\tLOCf\np:\tLOCp\nc:\tLOCt\n";
+	const std::string END = "\tRETU\ng:\tFUNC\n\tRETU\n";
+	struct Text { const char* what; std::string body; int gazl1Error; int gazl2Error; };
+	const Text CASES[] = {
+		{ "numbers with #", "\tMOVi i #K\n\tMOVf f #F\n\tMOVi i #7\n", -1, -1 },
+		{ "pointers with &", "\tMOVp p &t\n\tMOVp p &P\n\tMOVp p &NULL\n\tMOVp p &t:1\n", -1, -1 },
+		{ "a function with &", "\tCALL &g %0 *0\n", -1, -1 },
+		{ "a data label with #", "\tMOVp p #t\n", -1, INCOMPATIBLE_TYPES },
+		{ "a DEFp name with #", "\tMOVp p #P\n", -1, INCOMPATIBLE_TYPES },
+		{ "NULL with #", "\tMOVp p #NULL\n", -1, INCOMPATIBLE_TYPES },
+		{ "a later data label with #", "\tMOVp p #u\n", -1, INCOMPATIBLE_TYPES },
+		{ "a DEFi name with & in DATA", "\tRETU\nw:\tGLOB *1\n\tDATA &K\nh:\tFUNC\n", -1, INCOMPATIBLE_TYPES },
+		{ "a data label with # in DATA", "\tRETU\nw:\tGLOB *1\n\tDATA #t\nh:\tFUNC\n", -1, INCOMPATIBLE_TYPES },
+		{ "a DEFi name with & where only numbers go", "\tMOVi i &K\n", DID_NOT_EXPECT_ADDRESS, DID_NOT_EXPECT_ADDRESS }
+	};
+	const int count = sizeof (CASES) / sizeof (*CASES);
+	int failures = 0;
+	for (int i = 0; i < count; ++i) {
+		const std::string body = HEAD + CASES[i].body + END + "u:\tGLOB *1\n";
+		const int gazl1 = assemblyError(body);
+		const int gazl2 = assemblyError("\tGAZL #2\n" + body + "\tGAZL #1\n");
+		if (gazl1 != CASES[i].gazl1Error || gazl2 != CASES[i].gazl2Error) {
+			std::printf("FAIL prefixes: %s gave errors %d and %d, expected %d and %d\n", CASES[i].what, gazl1, gazl2
+					, CASES[i].gazl1Error, CASES[i].gazl2Error);
+			++failures;
+		}
+	}
+	std::printf("prefixes: %d checked, %d failed\n", count * 2, failures);
+	return failures;
+}
+
+/*
+	Only data labels and locals take an offset, not even `:0` on anything else: `&main:1` would name whichever function
+	was declared next, and `&NULL:1` no pointer at all. Checked where a function is already known and where it is a
+	forward reference. Returns the number of failures, each one printed.
+*/
+int sweepFunctionOffsets() {
+	struct Case { const char* what; const char* source; int error; };
+	const Case CASES[] = {
+		{ "an offset on a known function", "main:\tFUNC\np:\tLOCp\n\tMOVp p &main:1\n\tRETU\n", OFFSET_OUT_OF_BOUNDS },
+		{ "an offset on a forward function", "\tGLOB *1\nfp:\tDATp &main:1\nmain:\tFUNC\n\tRETU\n"
+				, OFFSET_OUT_OF_BOUNDS },
+		{ "a zero offset on a function", "main:\tFUNC\np:\tLOCp\n\tMOVp p &main:0\n\tRETU\n", OFFSET_OUT_OF_BOUNDS },
+		{ "a negative offset on a forward function", "\tGLOB *1\nfp:\tDATp &main:-1\nmain:\tFUNC\n\tRETU\n"
+				, OFFSET_OUT_OF_BOUNDS },
+		{ "an offset on NULL", "main:\tFUNC\np:\tLOCp\n\tMOVp p &NULL:1\n\tRETU\n", OFFSET_OUT_OF_BOUNDS },
+		{ "a zero offset on NULL", "\tGLOB *1\nn:\tDATp &NULL:0\nmain:\tFUNC\n\tRETU\n", OFFSET_OUT_OF_BOUNDS },
+		{ "a zero offset on a number", "\tGLOB *1\nv:\tDATA &GAZL_VERSION:0\nmain:\tFUNC\n\tRETU\n"
+				, OFFSET_OUT_OF_BOUNDS },
+		{ "an offset on a pointer constant", "g:\tGLOB *2\nP:\t! DEFp &g\nmain:\tFUNC\np:\tLOCp\n\tMOVp p &P:1\n"
+				"\tRETU\n", OFFSET_OUT_OF_BOUNDS },
+		{ "a zero offset on a pointer constant", "g:\tGLOB *2\nP:\t! DEFp &g\n\tDATp &P:0\nmain:\tFUNC\n\tRETU\n"
+				, OFFSET_OUT_OF_BOUNDS },
+		{ "a function address without an offset", "\tGLOB *1\nfp:\tDATp &main\nmain:\tFUNC\n\tRETU\n", -1 },
+		{ "a zero offset on a called function", "f:\tFUNC\n\tRETU\nmain:\tFUNC\n\tCALL &f:0 %0 *0\n\tRETU\n"
+				, OFFSET_OUT_OF_BOUNDS },
+		{ "a zero offset on a native", "main:\tFUNC\n\tCALL ^native:0 %0 *0\n\tRETU\n", OFFSET_OUT_OF_BOUNDS },
+		{ "an offset on a native", "main:\tFUNC\n\tCALL ^native:1 %0 *0\n\tRETU\n", OFFSET_OUT_OF_BOUNDS },
+		{ "a native without an offset", "main:\tFUNC\n\tCALL ^native %0 *0\n\tRETU\n", -1 },
+		{ "a number written as a pointer, which GAZL 1 accepts", "\tGLOB *1\ng:\tDATA &GAZL_VERSION\nmain:\tFUNC\n"
+				"\tRETU\n", -1 },
+		{ "an address written as a number, which GAZL 1 accepts", "g:\tGLOB *1\n\tDATA #g\nmain:\tFUNC\n\tRETU\n", -1 },
+		{ "an address written as a number in DATp, which GAZL 1 accepts", "g:\tGLOB *1\n\tDATp #g\nmain:\tFUNC\n\tRETU\n"
+				, -1 },
+		{ "NULL written as a number, which GAZL 1 accepts", "main:\tFUNC\np:\tLOCp\n\tMOVp p #NULL\n\tRETU\n", -1 },
+		{ "a pointer constant written as a number, as Impala writes it", "g:\tGLOB *2\nP:\t! DEFp &g:1\nmain:\tFUNC\n"
+				"v:\tLOCi\n\tPEEK v #P\n\tRETU\n", -1 },
+		{ "a number, a pointer constant and NULL, each as written", "N:\t! DEFi #2\ng:\tGLOB *4\nP:\t! DEFp &g:1\n"
+				"\tDATA #N #GAZL_VERSION &NULL &P\nmain:\tFUNC\n\tRETU\n", -1 },
+		{ "a number defined after its use", "g:\tGLOB *1\n\tDATA #LATER\nLATER:\t! DEFi #5\nmain:\tFUNC\n\tRETU\n"
+				, -1 }
+	};
+	const int count = sizeof (CASES) / sizeof (*CASES);
+	int failures = 0;
+	for (int i = 0; i < count; ++i) {
+		const int error = assemblyError(CASES[i].source);
+		if (error != CASES[i].error) {
+			std::printf("FAIL function offsets: %s gave error %d, expected %d\n", CASES[i].what, error, CASES[i].error);
+			++failures;
+		}
+	}
+	std::printf("function offsets: %d checked, %d failed\n", count, failures);
+	return failures;
 }
 
 struct Totals { int probes; int failures; };
@@ -608,6 +1392,10 @@ int sweep(int engineCount) {
 		std::printf("baseline program refused: %s\n", error.c_str());
 		return 1;
 	}
+	if (m.memory()[MEMORY_SIZE - 1].i != 0) {
+		std::printf("bounds sweep: the last word of memory is not the zero guard\n");
+		return 1;
+	}
 	const size_t probeCount = generate(base).size();
 
 	for (size_t n = 0; n < probeCount; ++n) {
@@ -615,11 +1403,13 @@ int sweep(int engineCount) {
 		Layout layout = base;
 		Probe p;
 		bool assembled = false;
-		for (int tries = 0; tries < 4; ++tries) {
+		bool stable = false;
+		for (int tries = 0; tries < 4 && !stable; ++tries) {
 			p = generate(layout)[n];
 			Layout got = Layout();
 			assembled = assemble(m, p.source, got, error);
-			if (!assembled || got == layout) break;
+			if (!assembled) break;
+			stable = (got == layout);
 			layout = got;
 		}
 		Totals& t = totals[p.form];
@@ -629,9 +1419,14 @@ int sweep(int engineCount) {
 
 		if (!assembled) {
 			bool valid = true;
-			if (p.op == PEEK) valid = inRange(p.address, 1, MEMORY_SIZE);
-			else if (p.op == POKE) valid = inRange(p.address, 1, rw);
-			else if (p.op == COPY) valid = inRange(p.address, p.count, rw) && inRange(p.source2, p.count, MEMORY_SIZE);
+			if (p.op == PEEK) {
+				valid = inRange(p.address, 1, layout.low(), READABLE_SIZE);
+			} else if (p.op == POKE) {
+				valid = inRange(p.address, 1, MEMORY_OFFSET, rw);
+			} else if (p.op == COPY) {
+				valid = inRange(p.address, p.count, MEMORY_OFFSET, rw)
+						&& inRange(p.source2, p.count, layout.low(), READABLE_SIZE);
+			}
 			if (p.refusalOk) {
 				// the assembler's own rule, stricter than memory: see `refusalOk`
 			} else if (valid || p.op == GETL || p.op == SETL) {
@@ -639,19 +1434,21 @@ int sweep(int engineCount) {
 			} else if (!p.allConst) {
 				problems.push_back("refused: " + error);
 			}
+		} else if (!stable) {
+			problems.push_back("the layout never settled, so the probe's edges would be the wrong ones");
 		} else {
 			if (p.fromEnd) {
 				// A first run learns where `ar` is; the index is then set relative to the end of the data stack.
 				const std::vector<Value> image(m.buffer);
 				run(m, INTERPRETER);
-				const UInt arAddress = (UInt)m.memory()[layout.outAddress - MEMORY_OFFSET + 1].i;
+				const UInt arAddress = (UInt)m.memory()[layout.cell(layout.outAddress) + 1].i;
 				m.buffer = image;
 				p.index = (Int)(MEMORY_OFFSET + rw - arAddress) + p.index;
 				p.inputs[1] = p.index;
 			}
 			if (p.op == GETL || p.op == SETL) p.what = "index=" + number(p.index);
 			Value* mem = m.memory();
-			for (int i = 0; i < 3; ++i) mem[layout.inAddress - MEMORY_OFFSET + i].i = p.inputs[i];
+			for (int i = 0; i < 3; ++i) mem[layout.cell(layout.inAddress) + i].i = p.inputs[i];
 			const std::vector<Value> before(m.buffer);
 			for (int e = 0; e < engineCount; ++e) {
 				const std::string problem = check(m, p, layout, before, static_cast<Engine>(e));
@@ -686,5 +1483,8 @@ int main() {
 		std::printf("bounds sweep: this host forbids executable memory; the JIT is NOT swept\n");
 	}
 #endif
-	return sweep(engineCount);
+	const int hostFailures = sweepNativeAccess() + sweepFrameAndThaw() + sweepFrozenEntries() + sweepThawRules()
+			+ sweepCanary() + sweepTextEncoding() + sweepUnnamedSections() + sweepLabelReach() + sweepFunctionOffsets()
+			+ sweepSpanRegions() + sweepPrefixes();
+	return (sweep(engineCount) != 0 || hostFailures != 0) ? 1 : 0;
 }

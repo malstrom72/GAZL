@@ -68,7 +68,8 @@ static std::string islot(const Value& p) { return "dsp[" + I(p.i) + "].i"; }
 static std::string fslot(const Value& p) { return "dsp[" + I(p.i) + "].f"; }
 // A float constant is stored as its bit pattern in the operand's int field; rebuild it via f32().
 static std::string fconst(const Value& p) { return "f32(" + U(static_cast<UInt>(p.i)) + ")"; }
-static std::string memIndex(const Value& p) { return U(static_cast<UInt>(p.p - MEMORY_OFFSET)); }
+// `MEM` starts with the constants, so a pointer plus `readOffset` (constants count minus `MEMORY_OFFSET`) indexes it.
+static std::string memIndex(const Value& p, UInt readOffset) { return U(static_cast<UInt>(p.p + readOffset)); }
 static std::string label(UInt j, Int off) { std::ostringstream s; s << "L_" << (static_cast<Int>(j) + off); return s.str(); }
 
 /*
@@ -159,7 +160,8 @@ static void promoteFunctionLocals(std::string& text, Int localsSize) {
 }
 
 // Emit one function body; returns false on an unsupported opcode. `sharedWindow` = the caller-shared slot count (see above).
-static bool emitFunction(std::ostringstream& out, const Instruction* code, UInt funcIndex, UInt endIndex, UInt ordinal, bool promoteLocals, Int sharedWindow) {
+static bool emitFunction(std::ostringstream& out, const Instruction* code, UInt readOffset, UInt funcIndex, UInt endIndex
+		, UInt ordinal, bool promoteLocals, Int sharedWindow) {
 	/*
 		The extent is the caller-supplied end (the next FUNC in functionTable order), NOT the first RETU. Multi-RETU
 		and GOTO-ending functions are legal - and Assembler::threadBranches rewrites every GOTO-onto-a-RETU into an
@@ -193,12 +195,12 @@ static bool emitFunction(std::ostringstream& out, const Instruction* code, UInt 
 			case OP_MOVE_VV: s = "dsp[" + I(in.p0.i) + "] = dsp[" + I(in.p1.i) + "];"; break;
 			case OP_MOVE_VC: s = islot(in.p0) + " = " + I(in.p1.i) + ";"; break;
 
-			case OP_PEEK_VC: s = "dsp[" + I(in.p0.i) + "] = MEM[" + memIndex(in.p1) + "];"; break;
-			case OP_POKE_CV: s = "MEM[" + memIndex(in.p0) + "] = dsp[" + I(in.p1.i) + "];"; break;
-			case OP_POKE_CC: s = "MEM[" + memIndex(in.p0) + "].i = " + I(in.p1.i) + ";"; break;
-			case OP_PEEK_VCV: s = "dsp[" + I(in.p0.i) + "] = MEM[" + memIndex(in.p1) + " + (UInt)" + islot(in.p2) + "];"; break;
-			case OP_POKE_CVV: s = "MEM[" + memIndex(in.p0) + " + (UInt)" + islot(in.p1) + "] = dsp[" + I(in.p2.i) + "];"; break;
-			case OP_POKE_CVC: s = "MEM[" + memIndex(in.p0) + " + (UInt)" + islot(in.p1) + "].i = " + I(in.p2.i) + ";"; break;
+			case OP_PEEK_VC: s = "dsp[" + I(in.p0.i) + "] = MEM[" + memIndex(in.p1, readOffset) + "];"; break;
+			case OP_POKE_CV: s = "MEM[" + memIndex(in.p0, readOffset) + "] = dsp[" + I(in.p1.i) + "];"; break;
+			case OP_POKE_CC: s = "MEM[" + memIndex(in.p0, readOffset) + "].i = " + I(in.p1.i) + ";"; break;
+			case OP_PEEK_VCV: s = "dsp[" + I(in.p0.i) + "] = MEM[" + memIndex(in.p1, readOffset) + " + (UInt)" + islot(in.p2) + "];"; break;
+			case OP_POKE_CVV: s = "MEM[" + memIndex(in.p0, readOffset) + " + (UInt)" + islot(in.p1) + "] = dsp[" + I(in.p2.i) + "];"; break;
+			case OP_POKE_CVC: s = "MEM[" + memIndex(in.p0, readOffset) + " + (UInt)" + islot(in.p1) + "].i = " + I(in.p2.i) + ";"; break;
 
 			case OP_ABSI: s = islot(in.p0) + " = " + islot(in.p1) + " < 0 ? ineg(" + islot(in.p1) + ") : " + islot(in.p1) + ";"; break;
 			case OP_ADDI_VVV: s = icall(in, "iadd", false, false); break;
@@ -299,7 +301,8 @@ std::string translateToCpp(const AssembledProgram& program, UInt mainOrdinal, bo
 	const UInt memorySize = program.memorySize;
 	const UInt codeSize = program.codeSize;
 	const UInt globalsSize = program.globalsSize;
-	const UInt constsSize = program.constsSize;
+	const UInt constantsSize = program.constsSize - 1;																// the constants, without the zero guard at the end
+	const UInt readOffset = constantsSize - MEMORY_OFFSET;
 
 	// Caller-shared window per callee: the widest `*N` any CALL_CVC passes it (its OUT/INP region; excluded from promotion).
 	std::vector<Int> sharedWindow(functionCount, 0);
@@ -316,7 +319,9 @@ std::string translateToCpp(const AssembledProgram& program, UInt mainOrdinal, bo
 	std::ostringstream body;
 	for (UInt ord = 0; ord < functionCount; ++ord) {
 		const UInt funcEnd = (ord + 1 < functionCount ? functionTable[ord + 1] : codeSize);
-		if (!emitFunction(body, code, functionTable[ord], funcEnd, ord, promoteLocals, sharedWindow[ord])) { return std::string(); }
+		if (!emitFunction(body, code, readOffset, functionTable[ord], funcEnd, ord, promoteLocals, sharedWindow[ord])) {
+			return std::string();
+		}
 	}
 
 	std::ostringstream out;
@@ -324,7 +329,7 @@ std::string translateToCpp(const AssembledProgram& program, UInt mainOrdinal, bo
 	out << "#include <cstdio>\n#include <cstdint>\n#include <cstring>\n#include <cmath>\n#include <chrono>\n\n";
 	out << "typedef int32_t Int; typedef uint32_t UInt; typedef uint32_t Ptr;\n";
 	out << "union Value { Int i; float f; Ptr p; };\n";
-	out << "static const Ptr MEMORY_OFFSET = 0x12345678u;\n";
+	out << "static const Ptr READ_OFFSET = " << U(readOffset) << ";\n";
 	out << "static inline float f32(uint32_t b) { float r; std::memcpy(&r, &b, 4); return r; }\n";
 	out << "static inline Int iadd(Int a, Int b) { return (Int)((UInt)a + (UInt)b); }\n";							// wrap semantics, verbatim from the interpreter (see icall)
 	out << "static inline Int isub(Int a, Int b) { return (Int)((UInt)a - (UInt)b); }\n";
@@ -347,7 +352,7 @@ std::string translateToCpp(const AssembledProgram& program, UInt mainOrdinal, bo
 	out << "static int nat_stub(Value*) { return -1; }\n";
 	out << "static int nat_printInt(Value* p) { std::printf(\"%d\", p[1].i); return 0; }\n";
 	out << "static int nat_printFloat(Value* p) { std::printf(\"%g\", (double)p[1].f); return 0; }\n";
-	out << "static int nat_print(Value* p) { const Value* v = &MEM[p[1].p - MEMORY_OFFSET]; for (; v->i; ++v) std::putchar((int)v->i); return 0; }\n";
+	out << "static int nat_print(Value* p) { const Value* v = &MEM[p[1].p + READ_OFFSET]; for (; v->i; ++v) std::putchar((int)v->i); return 0; }\n";
 	out << "static int nat_printLF(Value*) { std::putchar('\\n'); return 0; }\n";
 	out << "static int nat_sqrt(Value* p) { p[0].f = (float)std::sqrt(p[1].f); return 0; }\n";
 	out << "static int nat_log(Value* p) { p[0].f = (float)std::log(p[1].f); return 0; }\n";
@@ -361,19 +366,16 @@ std::string translateToCpp(const AssembledProgram& program, UInt mainOrdinal, bo
 	for (UInt ord = 0; ord < functionCount; ++ord) { out << "static int gazl_fn_" << ord << "(Value* dsp);\n"; }
 	out << "\n" << body.str();
 
-	// Sparse memory-image init (globals at the front, consts at the back; the data stack stays zero).
+	// Sparse memory-image init (constants, then globals; the data stack and the zero guard stay zero).
 	out << "static void init_mem() {\n";
-	for (UInt k = 0; k < globalsSize && k < memorySize; ++k) {
-		if (memory[k].i != 0) { out << "\tMEM[" << k << "].i = " << I(memory[k].i) << ";\n"; }
-	}
-	for (UInt k = (constsSize <= memorySize ? memorySize - constsSize : 0); k < memorySize; ++k) {
+	for (UInt k = 0; k < constantsSize + globalsSize && k < memorySize; ++k) {
 		if (memory[k].i != 0) { out << "\tMEM[" << k << "].i = " << I(memory[k].i) << ";\n"; }
 	}
 	out << "}\n\n";
 
 	out << "int main() {\n";
 	out << "\tinit_mem();\n";
-	out << "\tValue* dsp = MEM + " << globalsSize << ";\n";
+	out << "\tValue* dsp = MEM + " << (constantsSize + globalsSize) << ";\n";
 	out << "\tstd::chrono::steady_clock::time_point t0 = std::chrono::steady_clock::now();\n";
 	out << "\tint st = gazl_fn_" << mainOrdinal << "(dsp);\n";
 	out << "\tstd::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();\n";

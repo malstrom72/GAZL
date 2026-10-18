@@ -1,0 +1,77 @@
+; Compiled with Impala version 2.0
+
+; signatures version=1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ stmtAssignment.impala:6:1
+; signature extern native printInt() -> unknown @ stmtAssignment.impala:7:1
+; signature extern native printFloat() -> unknown @ stmtAssignment.impala:8:1
+; signature extern native printLF() -> unknown @ stmtAssignment.impala:9:1
+	! MOVi <a> #0	; layout of struct Pair
+.o.Pair.a:	! DEFi #<a>
+	! ADDi <a> #<a> #1
+.o.Pair.b:	! DEFi #<a>
+	! ADDi <a> #<a> #1
+.z.Pair:	! DEFi #<a>
+; signature struct Pair { a : int, b : int } @ stmtAssignment.impala:11:1
+	GLOB *1
+counter:	DATi #4	; signature global counter : int @ stmtAssignment.impala:12:1
+
+;-----------------------------------------------------------------------------
+next:	FUNC	; signature func next() -> int @ stmtAssignment.impala:14:1
+	$r:	OUTi
+;-----------------------------------------------------------------------------
+		PEEK %0 &counter 	; global counter = global counter - 1
+		SUBi %0 %0 #1
+		POKE &counter %0 
+		PEEK $r &counter 	; r = global counter
+		RETU   	; }
+
+
+;-----------------------------------------------------------------------------
+main:	FUNC	; signature func main() -> void @ stmtAssignment.impala:20:1
+		PARA *1
+	$a:	LOCi
+	$b:	LOCi
+	$c:	LOCi
+	$n:	LOCi
+.z.main.arr:	! DEFi #2
+	$arr:	LOCA *.z.main.arr
+	$p:	LOCp
+	$s:	LOCA *.z.Pair
+	$sp:	LOCp
+;-----------------------------------------------------------------------------
+		MOVi $b #0 	; a = b = 0
+		MOVi $a #0 
+		MOVi %1 $a 	; printInt(a)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ stmtAssignment.impala:24:13
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ stmtAssignment.impala:24:24
+		MOVi %1 $b 	; printInt(b)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ stmtAssignment.impala:25:13
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ stmtAssignment.impala:25:24
+		MOVi $n #0 	; n = 0
+	.l0:	CALL &next %0 *1	; expects next() -> int @ stmtAssignment.impala:27:20
+		MOVi $c %0 
+		EQUi %0 #0 @.e1
+		ADDi $n $n #1	; n = n + 1
+		GOTO @.l0  
+	.e1:	MOVi %1 $n 	; printInt(n)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ stmtAssignment.impala:28:13
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ stmtAssignment.impala:28:24
+		ADRL $p $arr:1 *0	; p = &arr[1]
+		POKE $p #7 	; *p = 7
+		MOVi %1 $arr:1 	; printInt(arr[1])
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ stmtAssignment.impala:31:18
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ stmtAssignment.impala:31:29
+		MOVi $arr:0 #8 	; arr[0] = 8
+		MOVi %1 $arr:0 	; printInt(arr[0])
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ stmtAssignment.impala:33:18
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ stmtAssignment.impala:33:29
+		MOVi $s:.o.Pair.a #9 	; s.a = 9
+		MOVi %1 $s:.o.Pair.a 	; printInt(s.a)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ stmtAssignment.impala:35:15
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ stmtAssignment.impala:35:26
+		ADRL $sp $s *0	; sp = &s
+		POKE $sp #.o.Pair.b #10	; sp->b = 10
+		MOVi %1 $s:.o.Pair.b 	; printInt(s.b)
+		CALL ^printInt %0 *2	; expects printInt(int) -> unknown @ stmtAssignment.impala:38:15
+		CALL ^printLF %0 *1	; expects printLF() -> unknown @ stmtAssignment.impala:38:26
+		RETU   	; }

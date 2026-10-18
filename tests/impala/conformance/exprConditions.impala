@@ -1,0 +1,33 @@
+/*
+	Conformance: Impala.md#conditions-and-boolean-expressions
+	`&&` and `||` short-circuit and `!` negates, inside a condition.
+	Expected (GAZLCmd exprConditions.gazl main): 1 0 1 1
+*/
+const int DEBUG = 1
+extern native printInt
+extern native printFloat
+extern native printLF
+
+global int calls
+
+function bump() returns int r
+{
+	global calls = global calls + 1;
+	r = 1;
+}
+
+function main()
+locals int x, int ok
+{
+	x = 5;
+	ok = 0;
+	if (0 <= x && x < 10) ok = 1;
+	printInt(ok); printLF();
+	if (x < 0 && bump() != 0) ok = 2;
+	printInt(global calls); printLF();
+	if (x > 0 || bump() != 0) ok = 3;
+	printInt(global calls + 1); printLF();
+	ok = 0;
+	if (!(x == 4)) ok = 1;
+	printInt(ok); printLF();
+}

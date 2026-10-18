@@ -422,7 +422,15 @@ void Arm64Emitter::finalize() {
 // GAZLJitMem*.cpp backend (GAZLJitMemPosix.cpp is enough for the encoding tests).
 // ============================================================================================================
 
-// --- emit helpers (x0=ctx, x1=dsp, x2=membase, w3=fuel, x4=ipsp; scratch x9..x12) ---
+// --- emit helpers (x0=ctx, x1=dsp, x2=membase, w3=fuel, x4=ipsp, x20=GLOBALS_BASE; scratch x9..x12) ---
+
+/*
+	`memoryBase` (x2) is the lowest constant: reads are range-checked from there, so they address from there.
+	`GLOBALS_BASE` is the first global, `MEMORY_OFFSET`: writes are range-checked from there, so they address from
+	there, and so do constant-address globals, which keeps them in the imm12 reach. The dispatcher sets it once;
+	it is callee-saved, so natives keep it.
+*/
+static const Reg GLOBALS_BASE = X20;
 
 static void reloadState(Arm64Emitter& e, const Offsets& o) {
 	e.ldrX(X1, X0, o.dsp); e.ldrX(X2, X0, o.mb); e.ldrW(W3, X0, o.fuel); e.ldrX(X4, X0, o.ipsp);
@@ -493,18 +501,18 @@ static void storeSlotF(Arm64Emitter& e, Reg s, Int slot) {
 	else { matConst(e, W13, slot); e.strSxs(s, X1, W13); }
 }
 /*
-	PEEK/POKE at a compile-time-constant memory word index (off memoryBase, X2). The scaled imm12 form reaches word
+	PEEK/POKE at a compile-time-constant word index off `base` (X2 or GLOBALS_BASE). The scaled imm12 form reaches word
 	index 4095 (16 KB in); past that - large globals/consts such as audio tables - materialize the index and use the
 	scaled register-offset form, mirroring loadSlot/storeSlot. W13 is the dedicated addressing scratch (kept distinct
 	from the W9..W12 operand scratches), so callers may still hold a value in W9..W12 across these.
 */
-static void loadMemConst(Arm64Emitter& e, Reg r, uint32_t wordIndex) {
-	if (wordIndex < 0x1000u) { e.ldrW(r, X2, wordIndex * 4u); }
-	else { matConst(e, W13, static_cast<Int>(wordIndex)); e.ldrWx(r, X2, W13); }
+static void loadMemConst(Arm64Emitter& e, Reg r, Reg base, uint32_t wordIndex) {
+	if (wordIndex < 0x1000u) { e.ldrW(r, base, wordIndex * 4u); }
+	else { matConst(e, W13, static_cast<Int>(wordIndex)); e.ldrWx(r, base, W13); }
 }
-static void storeMemConst(Arm64Emitter& e, Reg r, uint32_t wordIndex) {
-	if (wordIndex < 0x1000u) { e.strW(r, X2, wordIndex * 4u); }
-	else { matConst(e, W13, static_cast<Int>(wordIndex)); e.strWx(r, X2, W13); }
+static void storeMemConst(Arm64Emitter& e, Reg r, Reg base, uint32_t wordIndex) {
+	if (wordIndex < 0x1000u) { e.strW(r, base, wordIndex * 4u); }
+	else { matConst(e, W13, static_cast<Int>(wordIndex)); e.strWx(r, base, W13); }
 }
 
 /*
@@ -600,24 +608,6 @@ static void emitBinaryF(Arm64Emitter& e, RegisterCache& cache, void (Arm64Emitte
 	cache.endInstruction();
 }
 
-// DIVf with a runtime divisor: the interpreter traps a zero divisor (GAZL.cpp CHECK_FLOAT_DIV_BY_ZERO), so match it.
-// VVC (const divisor) is assemble-time-checked, so it stays on emitBinaryF.
-static void emitDivFChecked(Arm64Emitter& e, RegisterCache& cache, const Instruction& in, bool s1Const, std::vector<ColdTrap>& coldTraps) {
-	const int a = loadFloatOperand(e, cache, in.p1, s1Const);
-	const int b = loadFloatOperand(e, cache, in.p2, false);
-	ColdTrap trap; trap.label = e.newLabel(); trap.status = DIVISION_BY_ZERO;
-	const int zero = cache.scratch(FLOAT_REGISTER);
-	e.fmovSW(static_cast<Reg>(zero), WZR);																				// 0.0f
-	e.fcmpS(static_cast<Reg>(b), static_cast<Reg>(zero));
-	cache.captureDirtyLines(trap.dirty);																				// the trap exit must leave memory interpreter-identical
-	e.bcond(EQ, trap.label);																							// == 0 (ordered) → trap arm, cold; NaN is unordered → divide
-	coldTraps.push_back(trap);
-	const int d = cache.define(in.p0.i, FLOAT_REGISTER);
-	e.fdivS(static_cast<Reg>(d), static_cast<Reg>(a), static_cast<Reg>(b));
-	EMIT_CANON_NAN(e, cache, d);
-	cache.endInstruction();
-}
-
 /*
 	Emit a shift `dst = value <shift> count`. kind: 0=lsl, 1=asr (SHRi), 2=lsr (SHRu). form: 0=VVV, 1=VVC, 2=VCV.
 	value is p1 (a slot for VVV/VVC, a const for VCV); count is p2 (a const for VVC, else a slot, masked mod 32 by HW).
@@ -677,8 +667,18 @@ static void emitDivMod(Arm64Emitter& e, RegisterCache& cache, bool rem, const In
 	are pre-created (for direct calls); the entry label records this function's native word offset. Returns
 	false on an unsupported opcode.
 */
-void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, const Value* memory, UInt funcIndex, UInt funcEnd, const Offsets& o,
-		std::vector<Label>& entryLabels, UInt selfOrdinal, UInt functionCount, Label exitLabel) {
+void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const AssembledProgram& program, UInt funcIndex, UInt funcEnd
+		, const Offsets& o, std::vector<Label>& entryLabels, UInt selfOrdinal, Label exitLabel) {
+	/*
+		A read's index is `pointer + readOffset`, off X2; a write's is `pointer - MEMORY_OFFSET`, off GLOBALS_BASE. Each
+		is the value its range check tests. `memory`, for the analyses, is the word at `MEMORY_OFFSET`.
+	*/
+	const Instruction* const code = program.code;
+	const UInt functionCount = program.functionCount;
+	const UInt constantsSize = program.constsSize - 1;
+	const Value* const memory = program.memory + constantsSize;
+	const UInt readOffset = constantsSize - MEMORY_OFFSET;
+	const Pointer lowestAddress = MEMORY_OFFSET - constantsSize;
 	const UInt retIndex = funcEnd;																						// a function extends to the next FUNC (functionTable order), NOT to its first RETU: multi-RETU and GOTO-ending functions are legal
 
 	/*
@@ -723,7 +723,7 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 	buildUseSchedule(code, funcIndex, retIndex, useSchedule);															// Belady next-read lists (§5.7 v2.0.5)
 	cache.setUseSchedule(&useSchedule);
 	std::map<Int, int> pointerRealm;
-	buildPointerRealms(code, funcIndex, retIndex, pointerRealm);															// §1.1 realm stamp (v2.3a): skip flushes for non-frame pointer ops
+	buildPointerRealms(program, funcIndex, retIndex, pointerRealm);															// §1.1 realm stamp (v2.3a): skip flushes for non-frame pointer ops
 	const std::map<Int, int>::const_iterator realmEnd = pointerRealm.end();
 	std::map<UInt, UInt> loopExtent;
 	jitResidencyLeaders(code, funcIndex, retIndex, memory, loopExtent);													// v2.2: loop headers whose entry state stays register-resident
@@ -852,22 +852,28 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 			case OP_MOVE_VC: { const int d = cache.define(in.p0.i, GENERAL_REGISTER); matConst(e, static_cast<Reg>(d), in.p1.i); cache.endInstruction(); break; }
 			case OP_MOVE_VV: { const int s = cache.read(in.p1.i, GENERAL_REGISTER); const int d = cache.define(in.p0.i, GENERAL_REGISTER); e.mov(static_cast<Reg>(d), static_cast<Reg>(s)); cache.endInstruction(); break; }
 			// constant-address global access: assembler-validated, cannot touch the frame, so no cache coherence is needed.
-			case OP_PEEK_VC: { const int d = cache.define(in.p0.i, GENERAL_REGISTER); loadMemConst(e, static_cast<Reg>(d), static_cast<uint32_t>(in.p1.p - MEMORY_OFFSET)); cache.endInstruction(); break; }
-			case OP_POKE_CV: { const int r = cache.read(in.p1.i, GENERAL_REGISTER); storeMemConst(e, static_cast<Reg>(r), static_cast<uint32_t>(in.p0.p - MEMORY_OFFSET)); cache.endInstruction(); break; }
-			case OP_POKE_CC: { const int r = cache.scratch(GENERAL_REGISTER); matConst(e, static_cast<Reg>(r), in.p1.i); storeMemConst(e, static_cast<Reg>(r), static_cast<uint32_t>(in.p0.p - MEMORY_OFFSET)); cache.endInstruction(); break; }
+			case OP_PEEK_VC: {																							// a global off GLOBALS_BASE, a constant off X2
+				const int d = cache.define(in.p0.i, GENERAL_REGISTER);
+				if (in.p1.p >= MEMORY_OFFSET) { loadMemConst(e, static_cast<Reg>(d), GLOBALS_BASE, in.p1.p - MEMORY_OFFSET); }
+				else { loadMemConst(e, static_cast<Reg>(d), X2, in.p1.p + readOffset); }
+				cache.endInstruction();
+				break;
+			}
+			case OP_POKE_CV: { const int r = cache.read(in.p1.i, GENERAL_REGISTER); storeMemConst(e, static_cast<Reg>(r), GLOBALS_BASE, in.p0.p - MEMORY_OFFSET); cache.endInstruction(); break; }
+			case OP_POKE_CC: { const int r = cache.scratch(GENERAL_REGISTER); matConst(e, static_cast<Reg>(r), in.p1.i); storeMemConst(e, static_cast<Reg>(r), GLOBALS_BASE, in.p0.p - MEMORY_OFFSET); cache.endInstruction(); break; }
 			/*
 				var-indexed memory. No-flush is sound ONLY when the CONST operand is a genuine globals/constants-realm
-				address (>= MEMORY_OFFSET): then it can't reach the frame (§1.1). The scalar/offset deref `PEEK $x $p` /
+				address (`isDataAddress`): then it can't reach the frame (§1.1). The scalar/offset deref `PEEK $x $p` /
 				`POKE $p $x` also finalizes to VCV/CVV (SWAP) but with a small OFFSET const and the pointer in the
 				VARIABLE operand (unknown realm) - must flush like POKE_VVV. constAddrBase tells them apart.
 			*/
 			case OP_PEEK_VCV: {																							// dst = memory[C1 + index]
-				const bool constAddrBase = (in.p1.p >= MEMORY_OFFSET);
+				const bool constAddrBase = isDataAddress(program, in.p1.p);
 				ColdTrap trap; trap.label = e.newLabel(); trap.status = BAD_PEEK;
 				const int idx = cache.read(in.p2.i, GENERAL_REGISTER);
 				if (!constAddrBase) { cache.spillDirtyResident(); }														// pointer-in-variable form: flush so the read sees dirty frame lines
 				const int addr = cache.scratch(GENERAL_REGISTER);
-				matConst(e, static_cast<Reg>(addr), static_cast<Int>(in.p1.p - MEMORY_OFFSET)); e.add(static_cast<Reg>(addr), static_cast<Reg>(addr), static_cast<Reg>(idx));
+				matConst(e, static_cast<Reg>(addr), static_cast<Int>(in.p1.p + readOffset)); e.add(static_cast<Reg>(addr), static_cast<Reg>(addr), static_cast<Reg>(idx));
 				const int lim = cache.scratch(GENERAL_REGISTER);
 				e.ldrW(static_cast<Reg>(lim), X0, o.memsize); e.cmp(static_cast<Reg>(addr), static_cast<Reg>(lim));
 				cache.captureDirtyLines(trap.dirty);																	// the trap exit must leave memory interpreter-identical
@@ -891,9 +897,9 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 				const int idx = cache.read(in.p2.i, GENERAL_REGISTER);
 				if (!nonFrame) { cache.spillDirtyResident(); }
 				const int addr = cache.scratch(GENERAL_REGISTER);
-				const int tmp = cache.scratch(GENERAL_REGISTER);														// MEMORY_OFFSET, then reused for the size limit
+				const int tmp = cache.scratch(GENERAL_REGISTER);														// `readOffset`, then reused for the size limit
 				e.add(static_cast<Reg>(addr), static_cast<Reg>(base), static_cast<Reg>(idx));
-				matConst(e, static_cast<Reg>(tmp), static_cast<Int>(MEMORY_OFFSET)); e.sub(static_cast<Reg>(addr), static_cast<Reg>(addr), static_cast<Reg>(tmp));
+				matConst(e, static_cast<Reg>(tmp), static_cast<Int>(readOffset)); e.add(static_cast<Reg>(addr), static_cast<Reg>(addr), static_cast<Reg>(tmp));
 				e.ldrW(static_cast<Reg>(tmp), X0, o.memsize); e.cmp(static_cast<Reg>(addr), static_cast<Reg>(tmp));
 				cache.captureDirtyLines(trap.dirty);																	// the trap exit must leave memory interpreter-identical
 				e.bcond(HS, trap.label);
@@ -904,7 +910,7 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 				break;
 			}
 			case OP_POKE_CVV: case OP_POKE_CVC: {																		// memory[C0 + index] = value
-				const bool constAddrBase = (in.p0.p >= MEMORY_OFFSET);
+				const bool constAddrBase = isDataAddress(program, in.p0.p);
 				ColdTrap trap; trap.label = e.newLabel(); trap.status = BAD_POKE;
 				const int idx = cache.read(in.p1.i, GENERAL_REGISTER);
 				int val;
@@ -917,7 +923,7 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 				e.ldrW(static_cast<Reg>(lim), X0, o.rwmemsize); e.cmp(static_cast<Reg>(addr), static_cast<Reg>(lim));
 				cache.captureDirtyLines(trap.dirty);																	// the trap exit must leave memory interpreter-identical
 				e.bcond(HS, trap.label);																				// trap arm is cold, after the mainline
-				e.strWx(static_cast<Reg>(val), X2, static_cast<Reg>(addr));
+				e.strWx(static_cast<Reg>(val), GLOBALS_BASE, static_cast<Reg>(addr));
 				cache.endInstruction();
 				if (!constAddrBase) { cache.invalidateAll(); }
 				coldTraps.push_back(trap);
@@ -940,7 +946,7 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 				e.ldrW(static_cast<Reg>(tmp), X0, o.rwmemsize); e.cmp(static_cast<Reg>(addr), static_cast<Reg>(tmp));
 				cache.captureDirtyLines(trap.dirty);																	// the trap exit must leave memory interpreter-identical
 				e.bcond(HS, trap.label);
-				e.strWx(static_cast<Reg>(val), X2, static_cast<Reg>(addr));
+				e.strWx(static_cast<Reg>(val), GLOBALS_BASE, static_cast<Reg>(addr));
 				cache.endInstruction();
 				if (!nonFrame) { cache.invalidateAll(); }
 				coldTraps.push_back(trap);
@@ -988,11 +994,11 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 				const bool destConst = (op == OP_COPY_CVC || op == OP_COPY_CCC);
 				const bool srcConst = (op == OP_COPY_VCC || op == OP_COPY_CCC);
 				Label trap = e.newLabel(), cont = e.newLabel(), lp = e.newLabel(), ldone = e.newLabel();
-				// destIdx (W9) and srcIdx (W10) = ptr - MEMORY_OFFSET (word index into memoryBase)
+				// destIdx (W9) = ptr - MEMORY_OFFSET, off GLOBALS_BASE; srcIdx (W10) = ptr + readOffset, off memoryBase
 				if (destConst) { matConst(e, W9, in.p0.i - static_cast<Int>(MEMORY_OFFSET)); }
 				else { loadSlot(e, W9, in.p0.i); matConst(e, W12, static_cast<Int>(MEMORY_OFFSET)); e.sub(W9, W9, W12); }
-				if (srcConst) { matConst(e, W10, in.p1.i - static_cast<Int>(MEMORY_OFFSET)); }
-				else { loadSlot(e, W10, in.p1.i); matConst(e, W12, static_cast<Int>(MEMORY_OFFSET)); e.sub(W10, W10, W12); }
+				if (srcConst) { matConst(e, W10, static_cast<Int>(in.p1.p + readOffset)); }
+				else { loadSlot(e, W10, in.p1.i); matConst(e, W12, static_cast<Int>(readOffset)); e.add(W10, W10, W12); }
 				matConst(e, W15, in.p2.i);																				// count
 				e.ldrW(W14, X0, o.rwmemsize); e.cmp(W15, W14); e.bcond(HI, trap);										// count alone past the arena
 				e.sub(W14, W14, W15); e.cmp(W9, W14); e.bcond(HI, trap);												// destIdx > rwMemorySize - count. SUBTRACT, never add: destIdx+count wrapped, letting a count of MEMORY_OFFSET past the check
@@ -1002,7 +1008,7 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 				e.bind(lp);
 				e.cmp(W11, W15); e.bcond(HS, ldone);																	// i >= count → done
 				e.add(W12, W10, W11); e.ldrWx(W12, X2, W12);															// val = memoryBase[srcIdx+i]
-				e.add(W14, W9, W11); e.strWx(W12, X2, W14);																// memoryBase[destIdx+i] = val
+				e.add(W14, W9, W11); e.strWx(W12, GLOBALS_BASE, W14);													// GLOBALS_BASE[destIdx+i] = val
 				e.addImm(W11, W11, 1); e.b(lp);
 				e.bind(ldone); e.b(cont);
 				e.bind(trap); e.movn(W0, static_cast<uint16_t>(~ACCESS_VIOLATION)); e.b(exitLabel);
@@ -1014,7 +1020,7 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 				const int d = cache.define(in.p0.i, GENERAL_REGISTER);
 				e.sub(static_cast<Reg>(t), W1, W2);																		// (dsp - memoryBase) in bytes (low 32 valid within buffer)
 				e.lsrImm(static_cast<Reg>(t), static_cast<Reg>(t), 2);													//   -> Value units
-				matConst(e, static_cast<Reg>(d), static_cast<Int>(MEMORY_OFFSET) + in.p1.i);
+				matConst(e, static_cast<Reg>(d), static_cast<Int>(lowestAddress) + in.p1.i);
 				e.add(static_cast<Reg>(d), static_cast<Reg>(d), static_cast<Reg>(t));
 				cache.endInstruction();
 				break;
@@ -1060,9 +1066,9 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 			case OP_SUBF_VCV: emitBinaryF(e, cache, &Arm64Emitter::fsubS, in, true, false); break;
 			case OP_MULF_VVV: emitBinaryF(e, cache, &Arm64Emitter::fmulS, in, false, false); break;
 			case OP_MULF_VVC: emitBinaryF(e, cache, &Arm64Emitter::fmulS, in, false, true); break;
-			case OP_DIVF_VVV: emitDivFChecked(e, cache, in, false, coldTraps); break;
-			case OP_DIVF_VVC: emitBinaryF(e, cache, &Arm64Emitter::fdivS, in, false, true); break;						// const divisor: assemble-checked
-			case OP_DIVF_VCV: emitDivFChecked(e, cache, in, true, coldTraps); break;
+			case OP_DIVF_VVV: emitBinaryF(e, cache, &Arm64Emitter::fdivS, in, false, false); break;
+			case OP_DIVF_VVC: emitBinaryF(e, cache, &Arm64Emitter::fdivS, in, false, true); break;
+			case OP_DIVF_VCV: emitBinaryF(e, cache, &Arm64Emitter::fdivS, in, true, false); break;
 			case OP_FTOI_VVC: {																							// int(V * scale), scale = C2 (saturating fcvtzs)
 				const int src = cache.read(in.p1.i, FLOAT_REGISTER);
 				const int bits = cache.scratch(GENERAL_REGISTER);
@@ -1223,14 +1229,15 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const Instruction* code, c
 	and call natives inline (no host round-trip per call/return); a suspend, a top-level return, or a trap branches to
 	EXIT with the Status in w0. Returns the trampoline's word offset in the buffer.
 */
-static size_t emitDispatcher(Arm64Emitter& e, const Offsets& o, Label exitLabel) {
+static size_t emitDispatcher(Arm64Emitter& e, const Offsets& o, Label exitLabel, UInt constantsSize) {
 	const size_t entry = e.wordCount();
-	e.subImmX(SP, SP, 16); e.strX(X19, SP, 0); e.strX(X30, SP, 8);														// save the ctx holder (x19) + return addr (x30)
+	e.subImmX(SP, SP, 32); e.strX(X19, SP, 0); e.strX(X30, SP, 8); e.strX(GLOBALS_BASE, SP, 16);						// save the ctx holder (x19), return addr (x30) and GLOBALS_BASE
 	e.addImmX(X19, X0, 0);																								// x19 = ctx (callee-saved → survives inline native calls)
 	reloadState(e, o);																									// load the pins from ctx once (x0 = ctx)
+	addImmXBig(e, GLOBALS_BASE, X2, constantsSize * 4);																	// the first global, past the constants
 	e.ldrX(X9, X0, o.resume); e.br(X9);																					// branch into RESUME (hot; pins live)
 	e.bind(exitLabel);																									// segments branch here with w0 = Status (suspend / finish / trap)
-	e.ldrX(X19, SP, 0); e.ldrX(X30, SP, 8); e.addImmX(SP, SP, 16); e.ret();
+	e.ldrX(X19, SP, 0); e.ldrX(X30, SP, 8); e.ldrX(GLOBALS_BASE, SP, 16); e.addImmX(SP, SP, 32); e.ret();
 	return entry;
 }
 
@@ -1249,10 +1256,9 @@ void JitCompilerArm64::compile(const AssembledProgram& program, JitModule& out) 
 	Label exitLabel = e.newLabel();																						// the one dispatcher EXIT; every segment terminal branches here (§5.4 (b))
 	for (UInt ord = 0; ord < program.functionCount; ++ord) {
 		const UInt funcEnd = ((ord + 1 < program.functionCount) ? program.functionTable[ord + 1] : program.codeSize) - 1;
-		lowerFunction(e, program.code, program.memory, program.functionTable[ord], funcEnd, o, entryLabels, ord
-				, program.functionCount, exitLabel);
+		lowerFunction(e, program, program.functionTable[ord], funcEnd, o, entryLabels, ord, exitLabel);
 	}
-	const size_t dispatchOffset = emitDispatcher(e, o, exitLabel);
+	const size_t dispatchOffset = emitDispatcher(e, o, exitLabel, program.constsSize - 1);
 	e.finalize();
 	// AArch64 emits 32-bit instruction words directly; entry/dispatch offsets are in words, scaled to bytes for the module.
 	const size_t words = e.wordCount();

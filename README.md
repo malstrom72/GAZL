@@ -92,7 +92,7 @@ It prints the `Code size:` banner - that line is the proof it assembled - then
 - `tools/buildGAZLCmd.sh` / `.cmd` - build just `GAZLCmd` (VM executable)
 - `tools/BuildNuXJS.sh` / `.cmd` - build the NuXJS command-line JavaScript runtime
 - `tools/BuildImpala.sh` / `.cmd` - build NuXJS and stage the JSPEG Impala compiler into `output/`
-- `tools/buildGazlFuzz.sh` - build libFuzzer harness for `GAZLCmd` (shell only; no `.cmd`)
+- `tools/buildGazlFuzz.sh` / `.cmd` - build the libFuzzer harness for `GAZLCmd` (clang on POSIX, MSVC on Windows)
 - `tools/buildGazlWasm.sh` - build `impala/gazlVm.js`, the wasm VM the browser playground runs on
 - `tools/checkInstructionSet.sh` / `.cmd` - check `docs/gazl/InstructionSet.md` against the assembler
 - `tools/runPermut8Firmware.sh` / `.cmd` - run a Permut8 firmware image against the VM through `tools/permut8Host.js`

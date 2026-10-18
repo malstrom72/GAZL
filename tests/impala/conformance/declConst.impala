@@ -1,0 +1,24 @@
+/*
+	Conformance: Impala.md#const
+	A valued `const` is emitted by name, never folded; a valueless one is supplied by the host (here 6) and works as an array size.
+	Expected (GAZLCmd declConst.gazl main HOST_N 6): 4 6 7 8
+*/
+const int DEBUG = 1
+extern native printInt
+extern native printFloat
+extern native printLF
+
+const int SOME_COUNT = 4
+const int HOST_N
+
+function main()
+locals int array buf[HOST_N + 1], int i, int n
+{
+	printInt(SOME_COUNT); printLF();
+	printInt(HOST_N); printLF();
+	n = 0;
+	for (i = 0 to HOST_N + 1) n = n + 1;
+	printInt(n); printLF();
+	buf[HOST_N] = SOME_COUNT * 2;
+	printInt(buf[HOST_N]); printLF();
+}

@@ -35,12 +35,14 @@ Constant addresses are stored with `MEMORY_OFFSET` added, so `Processor::run` in
 `Char` is `char`, and identifiers and string data are byte-based. Supporting Unicode source needs a decision on
 encoding (UTF-8 in, code points in DATA strings) more than code.
 
-## `lookupConstant` out-parameters
-
-`Symbols::lookupConstant` returns through pointers (`bool* isFloat, Value* value`) where the rest of the API
-uses references. Changing it breaks hosts, so it waits for a version bump.
-
 ## Stack allocation for hosts
 
 There is no host call to reserve space on the GAZL data stack, for a native that needs scratch memory GAZL code
 can see. `accessParams` covers arguments only.
+
+## C-style casts outside the dispatch loop
+
+Casts are written `static_cast<Int>(v)`, not `(Int)v`, everywhere except the tight VM loop in `Processor::run` and
+its operand macros, where the short form stays. `src/GAZL.cpp` still has about 58 C-style casts,
+most of them in the assembler, `finalize` and the snapshot code. Convert them in one pass, leaving `run()` and its
+macros alone, so the pass changes no generated code there.

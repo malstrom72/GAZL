@@ -273,6 +273,10 @@ namespace {
 	void* gEntryAddr[FUNCTION_TABLE_SIZE];		// ordinal -> native entry address (filled after mapping; for CALL_VVC)
 }
 
+// A pointer plus this is its index in `gMemory`, which starts with the constants, below `MEMORY_OFFSET`.
+static UInt readOffset() { return (gConstsSize - 1) - MEMORY_OFFSET; }
+static UInt memIndex(Pointer pointer) { return pointer + readOffset(); }
+
 // A native, in both flavors: the interpreter's (Processor*, reads via accessParams) and the JIT's (params = dsp+window,
 // baked as an absolute call). Both compute r = x*x, so interpreter and JIT agree. Ordinal 0 = "nsq".
 static Status nsqInterp(Processor* p) { Value* q = p->accessParams(2); if (q == 0) { return DATA_STACK_OVERFLOW; } q[0].i = q[1].i * q[1].i; return OK; }
@@ -427,7 +431,7 @@ static bool lowerBody(X64Emitter& e, const Instruction* code, UInt funcStart, co
 	for (UInt j = funcStart; j <= end; ++j) {
 		if (code[j].opcode == OP_SWCH) {			// every jump-table entry (read from const memory) is a target
 			const UInt sz = static_cast<UInt>(code[j].p1.i) + 1;
-			const UInt tbl = static_cast<UInt>(code[j].p2.p - MEMORY_OFFSET);
+			const UInt tbl = memIndex(code[j].p2.p);
 			for (UInt kk = 0; kk < sz; ++kk) {
 				const UInt t = static_cast<UInt>(static_cast<Int>(j) + gMemory[tbl + kk].i);
 				if (!lbl.count(t)) { lbl[t] = e.newLabel(); }
@@ -487,21 +491,21 @@ static bool lowerBody(X64Emitter& e, const Instruction* code, UInt funcStart, co
 			case OP_MOVE_VV: e.load(A, DSP, in.p1.i * 4); e.store(DSP, in.p0.i * 4, A); break;
 			case OP_MOVE_VC: e.movImm(A, static_cast<uint32_t>(in.p1.i)); e.store(DSP, in.p0.i * 4, A); break;
 
-			case OP_PEEK_VC: e.load(A, MEM, static_cast<int32_t>((in.p1.p - MEMORY_OFFSET) * 4)); e.store(DSP, in.p0.i * 4, A); break;
-			case OP_POKE_CV: e.load(A, DSP, in.p1.i * 4); e.store(MEM, static_cast<int32_t>((in.p0.p - MEMORY_OFFSET) * 4), A); break;
-			case OP_POKE_CC: e.movImm(A, static_cast<uint32_t>(in.p1.i)); e.store(MEM, static_cast<int32_t>((in.p0.p - MEMORY_OFFSET) * 4), A); break;
+			case OP_PEEK_VC: e.load(A, MEM, static_cast<int32_t>(memIndex(in.p1.p) * 4)); e.store(DSP, in.p0.i * 4, A); break;
+			case OP_POKE_CV: e.load(A, DSP, in.p1.i * 4); e.store(MEM, static_cast<int32_t>(memIndex(in.p0.p) * 4), A); break;
+			case OP_POKE_CC: e.movImm(A, static_cast<uint32_t>(in.p1.i)); e.store(MEM, static_cast<int32_t>(memIndex(in.p0.p) * 4), A); break;
 
 			// var-indexed global memory: base const (p1/p0), index var, value var/const. [MEM + index*4 + base*4]
 			case OP_PEEK_VCV:
 				e.load(A, DSP, in.p2.i * 4);
-				e.loadIdx(A, MEM, A, static_cast<int32_t>((in.p1.p - MEMORY_OFFSET) * 4));
+				e.loadIdx(A, MEM, A, static_cast<int32_t>(memIndex(in.p1.p) * 4));
 				e.store(DSP, in.p0.i * 4, A); break;
 			case OP_POKE_CVV:
 				e.load(A, DSP, in.p1.i * 4); e.load(B, DSP, in.p2.i * 4);
-				e.storeIdx(MEM, A, static_cast<int32_t>((in.p0.p - MEMORY_OFFSET) * 4), B); break;
+				e.storeIdx(MEM, A, static_cast<int32_t>(memIndex(in.p0.p) * 4), B); break;
 			case OP_POKE_CVC:
 				e.load(A, DSP, in.p1.i * 4); e.movImm(B, static_cast<uint32_t>(in.p2.i));
-				e.storeIdx(MEM, A, static_cast<int32_t>((in.p0.p - MEMORY_OFFSET) * 4), B); break;
+				e.storeIdx(MEM, A, static_cast<int32_t>(memIndex(in.p0.p) * 4), B); break;
 
 			// local array (frame): base = dsp + C (p1 for GETL, p0 for SETL), index var. [DSP + index*4 + C*4]
 			case OP_GETL_VVV:
@@ -520,20 +524,20 @@ static bool lowerBody(X64Emitter& e, const Instruction* code, UInt funcStart, co
 			case OP_COPY_VVC: case OP_COPY_VCC: case OP_COPY_CVC: case OP_COPY_CCC: {
 				const bool dstConst = (op == OP_COPY_CVC || op == OP_COPY_CCC);
 				const bool srcConst = (op == OP_COPY_VCC || op == OP_COPY_CCC);
-				if (dstConst) { e.movQ(RDI, MEM); e.addImmQ(RDI, static_cast<uint32_t>((in.p0.p - MEMORY_OFFSET) * 4)); }
-				else { e.load(RAX, DSP, in.p0.i * 4); e.subImm(RAX, MEMORY_OFFSET); e.shlImm(RAX, 2); e.movQ(RDI, MEM); e.addQ(RDI, RAX); }
-				if (srcConst) { e.movQ(RSI, MEM); e.addImmQ(RSI, static_cast<uint32_t>((in.p1.p - MEMORY_OFFSET) * 4)); }
-				else { e.load(RAX, DSP, in.p1.i * 4); e.subImm(RAX, MEMORY_OFFSET); e.shlImm(RAX, 2); e.movQ(RSI, MEM); e.addQ(RSI, RAX); }
+				if (dstConst) { e.movQ(RDI, MEM); e.addImmQ(RDI, static_cast<uint32_t>(memIndex(in.p0.p) * 4)); }
+				else { e.load(RAX, DSP, in.p0.i * 4); e.addImm(RAX, readOffset()); e.shlImm(RAX, 2); e.movQ(RDI, MEM); e.addQ(RDI, RAX); }
+				if (srcConst) { e.movQ(RSI, MEM); e.addImmQ(RSI, static_cast<uint32_t>(memIndex(in.p1.p) * 4)); }
+				else { e.load(RAX, DSP, in.p1.i * 4); e.addImm(RAX, readOffset()); e.shlImm(RAX, 2); e.movQ(RSI, MEM); e.addQ(RSI, RAX); }
 				e.movImm(RCX, static_cast<uint32_t>(in.p2.i));
 				e.cld(); e.repMovsd();
 				break;
 			}
 
-			// address of a local p1 -> dest p0. pointer = MEMORY_OFFSET + wordIndex(dsp) + slot.
+			// address of a local p1 -> dest p0. pointer = wordIndex(dsp) + slot - readOffset().
 			case OP_ADRL:
 				e.movQ(RAX, DSP); e.subQ(RAX, MEM); e.shrImm(RAX, 2);	// (dsp - membase) / 4 = dsp word offset
 				e.addImm(RAX, static_cast<uint32_t>(in.p1.i));			// + slot
-				e.addImm(RAX, MEMORY_OFFSET);
+				e.addImm(RAX, 0u - readOffset());
 				e.store(DSP, in.p0.i * 4, RAX); break;
 
 			case OP_ADDI_VVV: emitBin(e, &X64Emitter::add, in, false, false); break;
@@ -629,7 +633,7 @@ static bool lowerBody(X64Emitter& e, const Instruction* code, UInt funcStart, co
 
 			case OP_SWCH: {						// index = min(unsigned(V0), C1); jump into a table of `jmp case`
 				const UInt sz = static_cast<UInt>(in.p1.i) + 1;
-				const UInt tbl = static_cast<UInt>(in.p2.p - MEMORY_OFFSET);
+				const UInt tbl = memIndex(in.p2.p);
 				e.load(A, DSP, in.p0.i * 4);
 				e.cmpImm(A, static_cast<uint32_t>(in.p1.i));
 				Label keep = e.newLabel();
@@ -709,9 +713,9 @@ static void runKernel(const char* name, const char* source, const int* inputs, s
 		Status wantStatus = OK;
 		const int want = interpreterRun(globals, gInPtr, gOutPtr, n, wantStatus);
 		std::memcpy(gMemory, gClean, sizeof(gMemory));	// JIT run too
-		gMemory[gInPtr - MEMORY_OFFSET].i = n;
-		const int st = jit(&gMemory[gGlobalsSize], &gMemory[0]);
-		const int got = gMemory[gOutPtr - MEMORY_OFFSET].i;
+		gMemory[memIndex(gInPtr)].i = n;
+		const int st = jit(&gMemory[gConstsSize - 1 + gGlobalsSize], &gMemory[0]);
+		const int got = gMemory[memIndex(gOutPtr)].i;
 		const bool ok = (st == static_cast<int>(wantStatus)) && (wantStatus != OK || got == want);
 		std::printf("  n=%-8d interp=%-12d/%d jit=%-12d/%d %s\n", n, want, static_cast<int>(wantStatus), got, st, ok ? "OK" : "MISMATCH");
 		if (!ok) { ++failures; }
