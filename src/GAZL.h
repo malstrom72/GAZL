@@ -320,6 +320,9 @@ enum {
 };
 
 /*
+	What a `Processor` runs in: the labels are its constructor's parameters, and the frames below are the call frames
+	`run()` builds.
+
 						 +-----------------------+ <- memory pointer
 						 | Constants | Read Only |
 						 |           | Memory    |
@@ -362,7 +365,7 @@ enum {
 						   +------------+
 */
 
-// Runs an assembled program in memory and call stacks the caller provides. Processor is copyable.
+// Processor is copyable.
 class Processor {
 	public:		Processor(); 																							// Default-initialized processor. It's illegal to call any methods on a default constructed processor.
 	public:		Processor(UInt codeSize, const Instruction* code, UInt functionCount, const UInt* functionTable
