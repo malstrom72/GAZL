@@ -21,8 +21,7 @@ written. So the format only ever grows:
 - New instructions, new operand forms and new assembly-time constants may be added, but only where the same text
   used to be an assembly error.
 - The meaning of an accepted form never changes, and no accepted form is removed.
-- One exception: a form whose execution could break the sandbox may start being refused at assembly. That has
-  happened once (frames past `INT_MAX`, `FRAME_TOO_LARGE`), and must be recorded in this section when it happens.
+- One exception: a form whose execution could break the sandbox may start being refused at assembly.
 - Every implementation predefines `#GAZL_VERSION`, the version of the engine, and `#GAZL_WORD_SIZE` (32). A GAZL 1
   engine reports 1.
 - Later versions are supersets, not replacements. A GAZL 2 engine reports 2 and assembles every GAZL 1 program
@@ -207,16 +206,18 @@ statements that follow fill it in order:
 
 `TEMP` is `GLOB` that freezing skips (section 11). `CNST` sections are read-only.
 
-**Memory ownership.** Every word of a data section has exactly one owner, and an owner is a label: the section's
+**Memory ownership.** Every word of a data section has at most one owner, and an owner is a label: the section's
 own label, or a label on one of its data statements.
 - **The last label owns.** A word belongs to the last label at or before it in its section. An owner's words run
   from its own word up to the next label, or to the end of the section, unfilled words included.
 - **Labels on the same word.** The later one in the source owns the words; the earlier one owns none, and is not
   an owner.
-- **No owner is an error.** In an unnamed section, data before the first labelled statement would belong to no one,
-  and so would every word of an unnamed section with no labelled statement: `UNNAMED_DATA_SECTION`.
+- **Words with no owner.** In an unnamed section, data before the first labelled statement belongs to no one, and so
+  does every word of an unnamed section with no labelled statement. In a `GLOB` section that is an error,
+  `UNNAMED_DATA_SECTION`, since freezing could not save those words; in `TEMP` and `CNST` sections they are allowed.
 
-So every word is named by exactly one `owner:offset`, and that is what freezing saves (section 11). For example:
+So every word of a `GLOB` section is named by exactly one `owner:offset`, and that is what freezing saves
+(section 11). For example:
 
     buffer: GLOB *40
             DATi #5954          ; buffer:0, the only word buffer owns
@@ -504,8 +505,8 @@ operands take any assembly-time constant.
   region at offset 0, as in GAZL 1.
 - **Labels.** A label on a `SEEK` is an ordinary data label at the region's first word.
 - **Ownership.** Section 6 applies by address, whatever order the regions come in: a word belongs to the last label
-  at or before it, and of two labels on one word the later in the source owns it. So an unnamed section needs a
-  label on its first word; otherwise the words before its first label are `UNNAMED_DATA_SECTION`.
+  at or before it, and of two labels on one word the later in the source owns it. So an unnamed `GLOB`
+  section needs a label on its first word; otherwise the words before its first label are `UNNAMED_DATA_SECTION`.
 
 **Open.** The syntax of `SEEK` is not final, and will be settled before GAZL 2 is.
 

@@ -93,6 +93,7 @@ corrupt them. Each runs clean on a current engine and reproduces its defect on t
 | `peekIndexOverflowsInt`       | `PEEK`'s bounds check summed a biased address in `Int`, overflowing it   |
 | `pokeIndexOverflowsInt`       | the same, for `POKE`                                                     |
 | `swchSizeOverflowsInt`        | `SWCH *2147483647` computed its table size as `Int + 1`, a signed overflow (UBSan catches it) |
+| `setlNegativeFrameOffset`     | a negative `local:k` on `SETL`'s base reached below the frame, which run time does not check |
 
 Only inputs for FIXED defects belong here. An input for a defect that is still open goes somewhere else until the fix
 lands, or it aborts a strict run while the corpus is still loading.
