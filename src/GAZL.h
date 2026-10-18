@@ -133,9 +133,7 @@ enum AssemblerError {
 
 extern const char* ASSEMBLER_ERROR_TEXTS[];
 
-/*
-	Thrown by the assembler; `detail` quotes the offending source when there is one.
-*/
+// Thrown by the assembler; `detail` quotes the offending source when there is one.
 class Exception : public std::exception {
 	public:		Exception(AssemblerError error);
 	public:		Exception(AssemblerError error, const Char* b, const Char* e);
@@ -157,9 +155,7 @@ enum DataSection {
 	, CNST_SECTION				// read-only
 };
 
-/*
-	What `Symbols::getGlobalInfo` reports about one name of data: a section's label, or a label on a data statement.
-*/
+// What `Symbols::getGlobalInfo` reports about one name of data: a section's label, or a label on a data statement.
 struct GlobalInfo {
 	const char* name;				// valid as long as the `Symbols` it came from
 	Pointer address;
@@ -174,9 +170,7 @@ enum ConstantKind {				// what `Symbols::lookupConstant` found
 	, ADDRESS_CONSTANT				// a `DEFp`, or `NULL`
 };
 
-/*
-	A program's global names: functions, natives, data labels and named constants.
-*/
+// A program's global names: functions, natives, data labels and named constants.
 class Symbols {
 	friend class Assembler;
 	/*
@@ -244,9 +238,7 @@ struct ProgramSizes {
 	UInt constsSize;
 };
 
-/*
-	Assembles GAZL source, line by line, into the code, function-table and memory buffers the caller provides.
-*/
+// Assembles GAZL source, line by line, into the code, function-table and memory buffers the caller provides.
 class Assembler {
 	friend class Symbols;
 	public:		Assembler(UInt maxCodeSize, Instruction* codeBase, UInt maxFunctionCount, UInt* functionTable, UInt maxMemorySize, Value* memoryBase, Symbols& globals); // Create an assembler for the provided buffers. `functionTable` maps each function's ordinal to its code offset (see `finalize`).
@@ -370,9 +362,7 @@ enum {
 						   +------------+
 */
 
-/*
-	Runs an assembled program in memory and call stacks the caller provides. Processor is copyable.
-*/
+// Runs an assembled program in memory and call stacks the caller provides. Processor is copyable.
 class Processor {
 	public:		Processor(); 																							// Default-initialized processor. It's illegal to call any methods on a default constructed processor.
 	public:		Processor(UInt codeSize, const Instruction* code, UInt functionCount, const UInt* functionTable
@@ -436,9 +426,7 @@ inline Value* Processor::accessParams(UInt count) const {
 
 inline void* Processor::getUserData() const { return userData; }
 
-/*
-	Frozen memory, docs/gazl/Specification.md section 11. Freeze and thaw only between `run()` calls.
-*/
+// Frozen memory, docs/gazl/Specification.md section 11. Freeze and thaw only between `run()` calls.
 enum MemoryLoad {
 	MEMORY_OK = 0				// Every entry met an owner of the same size, and every owner had an entry.
 	, MEMORY_BAD_MAGIC = 1		// Not frozen memory.

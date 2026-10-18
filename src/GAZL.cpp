@@ -171,9 +171,7 @@ static Int stringToInt(const Char* &p, const Char* e) {
 	return (Int)(sign < 0 ? 0u - i : i);																	// negate in UNSIGNED: `(Int)i * -1` is signed-overflow UB at i == 2^31, the literal -2147483648
 }
 
-/*
-	An unsigned integer of up to 1024 bits, enough for the exact comparisons in `parseFloat`.
-*/
+// An unsigned integer of up to 1024 bits, enough for the exact comparisons in `parseFloat`.
 class ExactInt {
 	public:		explicit ExactInt(UInt value) : size(1) { words[0] = value; }
 	public:		void multiplyAdd(UInt factor, UInt addend);													// `this` = `this` * `factor` + `addend`
@@ -1756,9 +1754,7 @@ struct MemoryEntry {														// One entry of frozen memory, pointing into t
 	const unsigned char* next;												// the entry after this one
 };
 
-/*
-	Reads the entry at `p`, or returns false when its lengths run past `end`.
-*/
+// Reads the entry at `p`, or returns false when its lengths run past `end`.
 static bool getMemoryEntry(const unsigned char* p, const unsigned char* end, MemoryEntry& entry) {
 	if (end - p < 4) return false;
 	entry.nameLength = getMemoryWord(p);
