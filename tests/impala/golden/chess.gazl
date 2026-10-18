@@ -2218,7 +2218,7 @@ printBoard:	FUNC	; signature func printBoard(int frm, int t) -> void @ 1211:21
 		PEEK %0 &board $i	; c = (int) global PIECE_CHARS[(int) global board[i] & (PIECE_MASK | BLACK)]
 		! IORi <B> #PIECE_MASK #BLACK
 		ANDi %0 %0 <B>
-		PEEK $c #PIECE_CHARS %0
+		PEEK $c &PIECE_CHARS %0
 		NEQi $c #' ' @.f11	; if (c == ' ' && ((x ^ y) & 1) == 1) c = '.'
 		XORi %0 $x $y
 		ANDi %0 %0 #1

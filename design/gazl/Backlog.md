@@ -69,7 +69,7 @@ macros alone, so the pass changes no generated code there.
 ## GAZL 2: the prefix decides a name's kind
 
 GAZL 1 lets `#name` and `&name` take any name the operand accepts (`#table`, `#NULL`, `DATA &GAZL_VERSION`), because
-compiled programs rely on it: Impala writes `#name` for a `! DEFp` name. Inside a `GAZL #2` region it should be
-strict: `#` only numbers (literals, `DEFi`, `DEFf`), `&` only pointers (data labels, functions, `DEFp`, `NULL`).
-That also covers the region's function-pointer rule on the `#` path, which today only the `&` path applies. Impala's
-`--gazl2` output then writes `&name` for a `DEFp`.
+compiled programs rely on it: earlier Impala versions wrote `#name` for a `! DEFp` name. Impala now writes `&name`
+for a `pointer` or `funcptr` constant, so its output already meets the strict rule. Inside a `GAZL #2` region it
+should be strict: `#` only numbers (literals, `DEFi`, `DEFf`), `&` only pointers (data labels, functions, `DEFp`,
+`NULL`). That also covers the region's function-pointer rule on the `#` path, which today only the `&` path applies.

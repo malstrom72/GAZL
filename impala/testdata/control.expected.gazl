@@ -37,8 +37,8 @@
  								GEQi #0 #3 @.e5
  					.l6:		ADDi $sum $sum $index			; sum = sum + index
  								FORi $index #3 @.l6				; }
- 					.e5:		MOVp $src #SOURCE 				; src = SOURCE
- 								MOVp $dst #TARGET 				; dst = TARGET
+ 					.e5:		MOVp $src &SOURCE 				; src = SOURCE
+ 								MOVp $dst &TARGET 				; dst = TARGET
  								COPY $dst $src *2				; copy (2 from src to dst)
  								SUBi %0 $sum #5					; switch (sum == 5 to 10) 
  								SWCH %0 *5 @.s7
