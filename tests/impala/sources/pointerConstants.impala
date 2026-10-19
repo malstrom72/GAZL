@@ -20,5 +20,5 @@ function main() locals pointer p, funcptr f {
 	assert(p == null);
 	f = HELPER;
 	assert((int) f() == 42);
-	assert((int) global ELEMENT[2] == 40);
+	assert((int) ELEMENT[2] == 40);
 }
