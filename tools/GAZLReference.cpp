@@ -21,8 +21,8 @@
 	OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include "assert.h"
 #include <cmath>
-#include <cstring>
 #include <vector>
 #include "GAZLReference.h"
 #include "../src/GAZLOpcodes.h"
@@ -32,377 +32,413 @@ namespace GAZLReference {
 // Adding a run-time opcode must break this build until the reference has a case for it.
 typedef char FinalizedOpcodeCountCheck[(FINALIZED_OPCODE_COUNT == 93) ? 1 : -1];
 
-static Int wrap(long long v) { return (Int)(UInt)(unsigned long long)v; }
+// Thrown inside a run when the program breaks a guarantee the assembler gives the interpreter.
+struct Violation {
+	explicit Violation(const char* why) : why(why) { }
+	const char* why;
+};
 
-static Int divide(Int a, Int b) {						// b != 0; truncates toward zero; INT_MIN / -1 wraps to INT_MIN
-	return wrap((long long)a / (long long)b);
+static Int wrap(long long value) { return static_cast<Int>(static_cast<UInt>(value)); }
+
+static Int floatToInt(Float value) {														// already scaled; truncates and saturates, NaN is 0
+	if (value != value) {
+		return 0;
+	}
+	if (static_cast<double>(value) >= 2147483648.0) {
+		return 0x7FFFFFFF;
+	}
+	if (static_cast<double>(value) < -2147483648.0) {
+		return static_cast<Int>(0x80000000u);
+	}
+	return static_cast<Int>(static_cast<long long>(value));
 }
 
-static Int modulus(Int a, Int b) {					// b != 0; the sign of the dividend; INT_MIN % -1 is 0
-	return wrap((long long)a % (long long)b);
+// Whether an opcode takes its first or second SOURCE operand as a constant: the `C` in `_VCV`, `_VVC` or `_CVB`.
+static bool isFirstSourceConstant(int opcode) {
+	switch (opcode) {
+		case SUBI_VCV: case DIVI_VCV: case MODI_VCV: case SHLI_VCV: case SHRI_VCV: case SHRU_VCV:
+		case SUBF_VCV: case DIVF_VCV:
+		case LSSI_CVB: case NLSI_CVB: case LSSF_CVB: case NLSF_CVB:
+			return true;
+		default:
+			return false;
+	}
 }
 
-static Int shiftLeft(Int a, Int n) { return wrap((long long)((unsigned long long)(UInt)a << (n & 31))); }
-
-static Int shiftRightArithmetic(Int a, Int n) {			// a negative `a` shifts in ones: ~(~a >> n), all unsigned
-	return (a >= 0) ? (Int)((UInt)a >> (n & 31)) : (Int)~(~(UInt)a >> (n & 31));
+static bool isSecondSourceConstant(int opcode) {
+	switch (opcode) {
+		case ADDI_VVC: case SUBI_VVC: case MULI_VVC: case DIVI_VVC: case MODI_VVC: case ANDI_VVC: case IORI_VVC:
+		case XORI_VVC: case SHLI_VVC: case SHRI_VVC: case SHRU_VVC:
+		case ADDF_VVC: case SUBF_VVC: case MULF_VVC: case DIVF_VVC:
+		case LSSI_VCB: case EQUI_VCB: case NLSI_VCB: case NEQI_VCB: case LSSF_VCB: case EQUF_VCB: case NLSF_VCB:
+		case NEQF_VCB:
+			return true;
+		default:
+			return false;
+	}
 }
 
-static Int shiftRightLogical(Int a, Int n) { return (Int)((UInt)a >> (n & 31)); }
+/*
+	Integer arithmetic in the plainest form: wrap at 32 bits, shift counts mod 32. `b` is not 0 for a division. Done in
+	64 bits, `INT_MIN / -1` wraps back to `INT_MIN` and `INT_MIN % -1` is 0.
+*/
+static Int integerResult(int opcode, Int a, Int b) {
+	const UInt shift = static_cast<UInt>(b) & 31;
+	switch (opcode) {
+		case ADDI_VVV: case ADDI_VVC: return wrap(static_cast<long long>(a) + b);
+		case SUBI_VVV: case SUBI_VVC: case SUBI_VCV: return wrap(static_cast<long long>(a) - b);
+		case MULI_VVV: case MULI_VVC: return wrap(static_cast<long long>(a) * b);
+		case DIVI_VVV: case DIVI_VVC: case DIVI_VCV: return wrap(static_cast<long long>(a) / b);
+		case MODI_VVV: case MODI_VVC: case MODI_VCV: return wrap(static_cast<long long>(a) % b);
+		case ANDI_VVV: case ANDI_VVC: return a & b;
+		case IORI_VVV: case IORI_VVC: return a | b;
+		case XORI_VVV: case XORI_VVC: return a ^ b;
+		case SHLI_VVV: case SHLI_VVC: case SHLI_VCV: return static_cast<Int>(static_cast<UInt>(a) << shift);
+		case SHRI_VVV: case SHRI_VVC: case SHRI_VCV:											// a negative `a` shifts in ones
+			return static_cast<Int>(a >= 0 ? static_cast<UInt>(a) >> shift : ~(~static_cast<UInt>(a) >> shift));
+		default:
+			assert(opcode == SHRU_VVV || opcode == SHRU_VVC || opcode == SHRU_VCV);
+			return static_cast<Int>(static_cast<UInt>(a) >> shift);
+	}
+}
 
-static Int absoluteInt(Int a) { return wrap(a < 0 ? -(long long)a : (long long)a); }	// INT_MIN stays INT_MIN
+static Float floatResult(int opcode, Float a, Float b) {
+	switch (opcode) {
+		case ADDF_VVV: case ADDF_VVC: return a + b;
+		case SUBF_VVV: case SUBF_VVC: case SUBF_VCV: return a - b;
+		case MULF_VVV: case MULF_VVC: return a * b;
+		default:
+			assert(opcode == DIVF_VVV || opcode == DIVF_VVC || opcode == DIVF_VCV);
+			return a / b;																	// IEEE: a zero divisor gives an infinity or a NaN
+	}
+}
 
-static Int floatToInt(Float v) {						// already scaled; truncates and saturates, NaN is 0
-	if (v != v) return 0;
-	if ((double)v >= 2147483648.0) return 0x7FFFFFFF;
-	if ((double)v < -2147483648.0) return (Int)0x80000000u;
-	return (Int)(long long)v;
+static bool isBranchTaken(int opcode, const Value& a, const Value& b) {
+	switch (opcode) {
+		case LSSI_VVB: case LSSI_VCB: case LSSI_CVB: return a.i < b.i;
+		case EQUI_VVB: case EQUI_VCB: return a.i == b.i;
+		case NLSI_VVB: case NLSI_VCB: case NLSI_CVB: return !(a.i < b.i);
+		case NEQI_VVB: case NEQI_VCB: return a.i != b.i;
+		case LSSF_VVB: case LSSF_VCB: case LSSF_CVB: return a.f < b.f;
+		case EQUF_VVB: case EQUF_VCB: return a.f == b.f;
+		case NLSF_VVB: case NLSF_VCB: case NLSF_CVB: return !(a.f < b.f);					// true when either is NaN
+		default:
+			assert(opcode == NEQF_VVB || opcode == NEQF_VCB);
+			return a.f != b.f;
+	}
 }
 
 Machine::Machine(const AssembledProgram& program, UInt ipStackSize, const Native* natives)
-		: unspecified(false), code(program.code), codeSize(program.codeSize), functionTable(program.functionTable)
+		: code(program.code), codeSize(program.codeSize), functionTable(program.functionTable)
 		, functionCount(program.functionCount), memory(program.memory), constantWords(program.constsSize - 1)
 		, readableWords(program.memorySize - 1), writableWords(program.memorySize - program.constsSize)
 		, stackBase(program.constsSize - 1 + program.globalsSize), stackEnd(program.memorySize - 1)
-		, ipStackSize(ipStackSize), natives(natives), fuel(0) {
-}
-
-Int Machine::fuelLeft() const { return (Int)fuel; }
-
-Status Machine::fail(const std::string& why) {
-	violation = why;
-	return REFERENCE_VIOLATION;
-}
-
-bool Machine::slotOk(long long index) const { return index >= (long long)stackBase && index < (long long)stackEnd; }
-
-bool Machine::readIndex(Pointer pointer, long long& index) const {
-	index = (long long)(UInt)(pointer - MEMORY_OFFSET + constantWords);
-	return index < (long long)readableWords;
-}
-
-bool Machine::writeIndex(Pointer pointer, long long& index) const {
-	const long long offset = (long long)(UInt)(pointer - MEMORY_OFFSET);
-	index = constantWords + offset;
-	return offset < (long long)writableWords;
-}
-
-Value* Machine::accessMemory(Pointer pointer, UInt count) {
-	long long index;
-	writeIndex(pointer, index);
-	const long long offset = index - constantWords;
-	return (offset + (long long)count <= (long long)writableWords) ? &memory[index] : 0;
+		, ipStackSize(ipStackSize), natives(natives), fuel(0), ip(0), dsp(0), unspecified(false) {
+	assert(program.constsSize >= 1 && program.globalsSize + program.constsSize <= program.memorySize);
 }
 
 Status Machine::call(Pointer function, long long startFuel) {
 	fuel = startFuel;
-	unspecified = false;
 	violation.clear();
+	unspecified = false;
+	try {
+		return run(function);
+	}
+	catch (const Violation& v) {
+		violation = v.why;
+		return REFERENCE_VIOLATION;
+	}
+}
 
-	const UInt ordinal = (UInt)(function - FUNCTION_OFFSET);
-	if (ordinal >= functionCount) return BAD_CALL;
-	if (ipStackSize < 2) return IP_STACK_OVERFLOW;		// `enterCall` takes two entries: the caller and the return mark
+Int Machine::fuelLeft() const { return static_cast<Int>(fuel); }
 
-	std::vector<Frame> calls;							// the GAZL calls made since the entry, one entry each
-	long long ip = functionTable[ordinal];
-	long long dsp = stackBase;
+Value* Machine::accessMemory(Pointer pointer, UInt count) {
+	const long long offset = writeOffset(pointer);
+	return (offset + count <= writableWords ? &memory[constantWords + offset] : 0);
+}
 
+const std::string& Machine::getViolation() const { return violation; }
+
+bool Machine::isUnspecified() const { return unspecified; }
+
+Value& Machine::stackWord(long long index) {
+	if (index < stackBase || index >= stackEnd) {
+		throw Violation("word outside the data stack");
+	}
+	return memory[index];
+}
+
+// A variable operand is a frame slot: `dsp` plus the operand. The assembler keeps it inside the frame.
+Value& Machine::slot(const Value& operand) { return stackWord(dsp + operand.i); }
+
+long long Machine::readWord(Pointer pointer) const {
+	return static_cast<UInt>(pointer - MEMORY_OFFSET + constantWords);
+}
+
+long long Machine::writeOffset(Pointer pointer) const { return static_cast<UInt>(pointer - MEMORY_OFFSET); }
+
+// A constant address (`&address` with no index) is checked at assembly; the reference checks it again.
+long long Machine::constantReadWord(Pointer pointer) const {
+	const long long word = readWord(pointer);
+	if (word >= readableWords) {
+		throw Violation("constant address outside memory");
+	}
+	return word;
+}
+
+long long Machine::constantWriteWord(Pointer pointer) const {
+	const long long offset = writeOffset(pointer);
+	if (offset >= writableWords) {
+		throw Violation("constant address outside writable memory");
+	}
+	return constantWords + offset;
+}
+
+// GETL / SETL reach from the local array to the end of the data stack; a frame operand below the stack is a violation.
+long long Machine::localArrayWord(const Value& arraySlot, Int index) const {
+	const long long word = dsp + arraySlot.i + index;
+	if (index < 0 || word >= stackEnd) {
+		return -1;
+	}
+	if (word < stackBase) {
+		throw Violation("local array below the data stack");
+	}
+	return word;
+}
+
+long long Machine::functionEntry(UInt ordinal) const {
+	const UInt entry = functionTable[ordinal];
+	if (entry >= codeSize || code[entry].opcode != FUNC_CC_) {
+		throw Violation("call target is not a FUNC");
+	}
+	return entry;
+}
+
+Status Machine::run(Pointer function) {
+	const UInt ordinal = static_cast<UInt>(function - FUNCTION_OFFSET);
+	if (ordinal >= functionCount) {
+		return BAD_CALL;
+	}
+	if (ipStackSize < 2) {																	// `enterCall` takes two entries: the caller and the return mark
+		return IP_STACK_OVERFLOW;
+	}
+	std::vector<Frame> calls;																// the GAZL calls made since the entry, one entry each
+	ip = functionEntry(ordinal);
+	dsp = stackBase;
 	for (;;) {
-		if (--fuel < 0) return TIME_OUT;
-		if (ip < 0 || ip >= (long long)codeSize) return fail("instruction pointer outside the code");
-		const Instruction& in = code[ip];
-		const Value& c0 = in.p0;
-		const Value& c1 = in.p1;
-		const Value& c2 = in.p2;
-
-		// A variable operand is a frame slot: `dsp` plus the operand. The assembler keeps it inside the frame.
-		#define SLOT(c, name)	if (!slotOk(dsp + (c).i)) return fail("slot outside the data stack"); \
-								Value& name = memory[dsp + (c).i];
-		// A constant address (`&address` with no index) is checked at assembly; the reference checks it again.
-		#define CONSTANT_READ(c, name)	long long name; \
-								if (!readIndex((c).p, name)) return fail("constant address outside memory");
-		#define CONSTANT_WRITE(c, name)	long long name; \
-								if (!writeIndex((c).p, name)) return fail("constant address outside writable memory");
-		#define BRANCH(condition, offset)	if (condition) { ip += (offset).i; continue; }
-
-		switch (in.opcode) {
-			case FUNC_CC_: {							// C0 = locals, C1 = the deepest call window after them
-				if ((long long)(UInt)c0.i + (long long)(UInt)c1.i > (long long)stackEnd - dsp) {
+		--fuel;
+		if (fuel < 0) {
+			return TIME_OUT;
+		}
+		if (ip < 0 || ip >= codeSize) {
+			throw Violation("instruction pointer outside the code");
+		}
+		const int opcode = code[ip].opcode;
+		const Value& c0 = code[ip].p0;
+		const Value& c1 = code[ip].p1;
+		const Value& c2 = code[ip].p2;
+		switch (opcode) {
+			case FUNC_CC_: {																// C0 = locals, C1 = the deepest call window after them
+				const long long frameWords = static_cast<long long>(static_cast<UInt>(c0.i)) + static_cast<UInt>(c1.i);
+				if (frameWords > stackEnd - dsp) {
 					return DATA_STACK_OVERFLOW;
 				}
-				dsp += (UInt)c0.i;
+				dsp += static_cast<UInt>(c0.i);
 				break;
 			}
 			case CALL_VVC:
-			case CALL_CVC: {							// P0 = the function, C1 = the callee's window
-				Pointer target;
-				if (in.opcode == CALL_VVC) {
-					SLOT(c0, v0);
-					target = v0.p;
-				} else {
-					target = c0.p;
+			case CALL_CVC: {																// P0 = the function, C1 = the callee's window
+				const UInt callee = static_cast<UInt>((opcode == CALL_VVC ? slot(c0).p : c0.p) - FUNCTION_OFFSET);
+				if (callee >= functionCount) {
+					return BAD_CALL;
 				}
-				const UInt callee = (UInt)(target - FUNCTION_OFFSET);
-				if (callee >= functionCount) return BAD_CALL;
-				if (calls.size() + 2 >= ipStackSize) return IP_STACK_OVERFLOW;
-				Frame frame = { ip, dsp };
+				if (calls.size() + 2 >= ipStackSize) {
+					return IP_STACK_OVERFLOW;
+				}
+				const Frame frame = { ip, dsp };
 				calls.push_back(frame);
-				dsp += (UInt)c1.i;
-				ip = functionTable[callee];
-				if (ip >= (long long)codeSize || code[ip].opcode != FUNC_CC_) return fail("call target is not a FUNC");
+				dsp += static_cast<UInt>(c1.i);
+				ip = functionEntry(callee);
 				continue;
 			}
-			case CALL_NVC: {							// C0 = the native's index, C1 = its window
-				const long long window = dsp + (UInt)c1.i;
-				if (!slotOk(window)) return fail("native window outside the data stack");
+			case CALL_NVC: {																// C0 = the native's index, C1 = its window
+				const long long window = dsp + static_cast<UInt>(c1.i);
 				const long long fuelBefore = fuel;
-				const Status s = natives[c0.i](*this, &memory[window], (UInt)((long long)stackEnd - window));
-				if (s != OK) {
-					fuel = fuelBefore;					// a native that fails leaves the fuel as it found it
-					return s;
+				const Status status = natives[c0.i](*this, &stackWord(window), static_cast<UInt>(stackEnd - window));
+				if (status != OK) {
+					fuel = fuelBefore;														// a native that fails leaves the fuel as it found it
+					return status;
 				}
 				break;
 			}
 			case RETU_C__: {
-				if (calls.empty()) return OK;			// back to the native caller
+				if (calls.empty()) {
+					return OK;																// back to the native caller
+				}
 				ip = calls.back().ip;
 				dsp = calls.back().dsp;
 				calls.pop_back();
 				break;
 			}
 			case TAIL_CC_:
-			case TAIL_VC_: {							// P0 = the function, C1 = window words, C2 = this frame's size
-				Pointer target;
-				if (in.opcode == TAIL_VC_) {
-					SLOT(c0, v0);
-					target = v0.p;
-				} else {
-					target = c0.p;
+			case TAIL_VC_: {																// P0 = the function, C1 = window words, C2 = this frame's size
+				const UInt callee = static_cast<UInt>((opcode == TAIL_VC_ ? slot(c0).p : c0.p) - FUNCTION_OFFSET);
+				if (callee >= functionCount) {
+					return BAD_CALL;
 				}
-				const UInt callee = (UInt)(target - FUNCTION_OFFSET);
-				if (callee >= functionCount) return BAD_CALL;
-				const long long base = dsp - (UInt)c2.i;
-				for (long long i = 0; i < (long long)(UInt)c1.i; ++i) {		// ascending: the window slides down
-					if (!slotOk(base + i) || !slotOk(dsp + i)) return fail("TAIL window outside the data stack");
-					memory[base + i] = memory[dsp + i];
+				const long long base = dsp - static_cast<UInt>(c2.i);
+				for (long long i = 0; i < static_cast<UInt>(c1.i); ++i) {					// ascending: the window slides down
+					stackWord(base + i) = stackWord(dsp + i);
 				}
 				dsp = base;
-				ip = functionTable[callee];
-				if (ip >= (long long)codeSize || code[ip].opcode != FUNC_CC_) return fail("tail target is not a FUNC");
+				ip = functionEntry(callee);
 				continue;
 			}
-			case MOVE_VV_: { SLOT(c0, v0); SLOT(c1, v1); v0 = v1; break; }
-			case MOVE_VC_: { SLOT(c0, v0); v0 = c1; break; }
-			case PEEK_VC_: { SLOT(c0, v0); CONSTANT_READ(c1, a); v0 = memory[a]; break; }
-			case POKE_CV_: { CONSTANT_WRITE(c0, a); SLOT(c1, v1); memory[a] = v1; break; }
-			case POKE_CC_: { CONSTANT_WRITE(c0, a); memory[a] = c1; break; }
+			case MOVE_VV_: slot(c0) = slot(c1); break;
+			case MOVE_VC_: slot(c0) = c1; break;
+			case PEEK_VC_: slot(c0) = memory[constantReadWord(c1.p)]; break;
+			case POKE_CV_: memory[constantWriteWord(c0.p)] = slot(c1); break;
+			case POKE_CC_: memory[constantWriteWord(c0.p)] = c1; break;
 			case PEEK_VVV:
-			case PEEK_VCV: {							// P1 = the pointer, V2 = the index
-				SLOT(c0, v0);
-				Pointer base;
-				if (in.opcode == PEEK_VVV) {
-					SLOT(c1, v1);
-					base = v1.p;
-				} else {
-					base = c1.p;
+			case PEEK_VCV: {																// P1 = the pointer, V2 = the index
+				const Pointer base = (opcode == PEEK_VVV ? slot(c1).p : c1.p);
+				const long long word = readWord(base + static_cast<UInt>(slot(c2).i));
+				if (word >= readableWords) {
+					return BAD_PEEK;
 				}
-				SLOT(c2, v2);
-				long long a;
-				if (!readIndex(base + (UInt)v2.i, a)) return BAD_PEEK;
-				v0 = memory[a];
+				slot(c0) = memory[word];
 				break;
 			}
 			case POKE_VVV:
 			case POKE_CVV:
 			case POKE_VVC:
-			case POKE_CVC: {							// P0 = the pointer, V1 = the index, P2 = the value
-				Pointer base;
-				if (in.opcode == POKE_VVV || in.opcode == POKE_VVC) {
-					SLOT(c0, v0);
-					base = v0.p;
-				} else {
-					base = c0.p;
+			case POKE_CVC: {																// P0 = the pointer, V1 = the index, P2 = the value
+				const Pointer base = (opcode == POKE_VVV || opcode == POKE_VVC ? slot(c0).p : c0.p);
+				const Value value = (opcode == POKE_VVV || opcode == POKE_CVV ? slot(c2) : c2);
+				const long long offset = writeOffset(base + static_cast<UInt>(slot(c1).i));
+				if (offset >= writableWords) {
+					return BAD_POKE;
 				}
-				SLOT(c1, v1);
-				Value value = c2;
-				if (in.opcode == POKE_VVV || in.opcode == POKE_CVV) {
-					SLOT(c2, v2);
-					value = v2;
-				}
-				long long a;
-				if (!writeIndex(base + (UInt)v1.i, a)) return BAD_POKE;
-				memory[a] = value;
+				memory[constantWords + offset] = value;
 				break;
 			}
-			case GETL_VVV: {							// V0 = the result, C1 = the local array's slot, V2 = the index
-				SLOT(c0, v0);
-				SLOT(c2, v2);
-				const long long a = dsp + c1.i + (long long)v2.i;
-				if (v2.i < 0 || a >= (long long)stackEnd) return BAD_PEEK;
-				if (!slotOk(a)) return fail("GETL below the data stack");
-				v0 = memory[a];
+			case GETL_VVV: {																// V0 = the result, C1 = the local array's slot, V2 = the index
+				const long long word = localArrayWord(c1, slot(c2).i);
+				if (word < 0) {
+					return BAD_PEEK;
+				}
+				slot(c0) = memory[word];
 				break;
 			}
 			case SETL_VVV:
-			case SETL_VVC: {							// C0 = the local array's slot, V1 = the index, P2 = the value
-				SLOT(c1, v1);
-				Value value = c2;
-				if (in.opcode == SETL_VVV) {
-					SLOT(c2, v2);
-					value = v2;
+			case SETL_VVC: {																// C0 = the local array's slot, V1 = the index, P2 = the value
+				const Value value = (opcode == SETL_VVV ? slot(c2) : c2);
+				const long long word = localArrayWord(c0, slot(c1).i);
+				if (word < 0) {
+					return BAD_POKE;
 				}
-				const long long a = dsp + c0.i + (long long)v1.i;
-				if (v1.i < 0 || a >= (long long)stackEnd) return BAD_POKE;
-				if (!slotOk(a)) return fail("SETL below the data stack");
-				memory[a] = value;
+				memory[word] = value;
 				break;
 			}
-			case ADRL_VV_: { SLOT(c0, v0); v0.p = (Pointer)(UInt)(dsp + c1.i - constantWords) + MEMORY_OFFSET; break; }
-			case ABSI_VV_: { SLOT(c0, v0); SLOT(c1, v1); v0.i = absoluteInt(v1.i); break; }
-			case ABSF_VV_: { SLOT(c0, v0); SLOT(c1, v1); v0.f = std::fabs(v1.f); break; }
-			case FLOF_VV_: { SLOT(c0, v0); SLOT(c1, v1); v0.f = std::floor(v1.f); break; }
-
-			// Two-operand arithmetic: V0 = P1 op P2, the operand kinds read from the opcode name.
+			case ADRL_VV_: slot(c0).p = static_cast<Pointer>(dsp + c1.i - constantWords) + MEMORY_OFFSET; break;
+			case ABSI_VV_: slot(c0).i = wrap(slot(c1).i < 0 ? -static_cast<long long>(slot(c1).i) : slot(c1).i); break;
+			case ABSF_VV_: slot(c0).f = std::fabs(slot(c1).f); break;
+			case FLOF_VV_: slot(c0).f = std::floor(slot(c1).f); break;
+			case FTOI_VVC: slot(c0).i = floatToInt(slot(c1).f * c2.f); break;				// C2 = scale
+			case ITOF_VVC: slot(c0).f = static_cast<Float>(slot(c1).i) * c2.f; break;		// C2 = scale
 			case ADDI_VVV: case ADDI_VVC: case SUBI_VVV: case SUBI_VVC: case SUBI_VCV:
 			case MULI_VVV: case MULI_VVC: case DIVI_VVV: case DIVI_VVC: case DIVI_VCV:
 			case MODI_VVV: case MODI_VVC: case MODI_VCV: case ANDI_VVV: case ANDI_VVC:
 			case IORI_VVV: case IORI_VVC: case XORI_VVV: case XORI_VVC:
 			case SHLI_VVV: case SHLI_VVC: case SHLI_VCV: case SHRI_VVV: case SHRI_VVC: case SHRI_VCV:
-			case SHRU_VVV: case SHRU_VVC: case SHRU_VCV: {
-				SLOT(c0, v0);
-				const int op = in.opcode;
-				const bool constantA = (op == SUBI_VCV || op == DIVI_VCV || op == MODI_VCV || op == SHLI_VCV
-						|| op == SHRI_VCV || op == SHRU_VCV);
-				const bool constantB = (op == ADDI_VVC || op == SUBI_VVC || op == MULI_VVC || op == DIVI_VVC
-						|| op == MODI_VVC || op == ANDI_VVC || op == IORI_VVC || op == XORI_VVC || op == SHLI_VVC
-						|| op == SHRI_VVC || op == SHRU_VVC);
-				Int a = c1.i;
-				Int b = c2.i;
-				if (!constantA) { SLOT(c1, v1); a = v1.i; }
-				if (!constantB) { SLOT(c2, v2); b = v2.i; }
-				Int r = 0;
-				if (op >= ADDI_VVV && op <= ADDI_VVC) r = wrap((long long)a + b);
-				else if (op >= SUBI_VVV && op <= SUBI_VCV) r = wrap((long long)a - b);
-				else if (op >= MULI_VVV && op <= MULI_VVC) r = wrap((long long)a * b);
-				else if (op >= DIVI_VVV && op <= DIVI_VCV) {
-					if (b == 0) {
-						if (constantB) return fail("constant division by zero");
-						return DIVISION_BY_ZERO;
+			case SHRU_VVV: case SHRU_VVC: case SHRU_VCV: {									// V0 = P1 op P2
+				const Int a = (isFirstSourceConstant(opcode) ? c1.i : slot(c1).i);
+				const Int b = (isSecondSourceConstant(opcode) ? c2.i : slot(c2).i);
+				const bool isDivision = (opcode == DIVI_VVV || opcode == DIVI_VVC || opcode == DIVI_VCV
+						|| opcode == MODI_VVV || opcode == MODI_VVC || opcode == MODI_VCV);
+				if (isDivision && b == 0) {
+					if (isSecondSourceConstant(opcode)) {
+						throw Violation("constant division by zero");
 					}
-					r = divide(a, b);
-				} else if (op >= MODI_VVV && op <= MODI_VCV) {
-					if (b == 0) {
-						if (constantB) return fail("constant division by zero");
-						return DIVISION_BY_ZERO;
-					}
-					r = modulus(a, b);
+					return DIVISION_BY_ZERO;
 				}
-				else if (op >= ANDI_VVV && op <= ANDI_VVC) r = a & b;
-				else if (op >= IORI_VVV && op <= IORI_VVC) r = a | b;
-				else if (op >= XORI_VVV && op <= XORI_VVC) r = a ^ b;
-				else if (op >= SHLI_VVV && op <= SHLI_VCV) r = shiftLeft(a, b);
-				else if (op >= SHRI_VVV && op <= SHRI_VCV) r = shiftRightArithmetic(a, b);
-				else r = shiftRightLogical(a, b);
-				v0.i = r;
+				slot(c0).i = integerResult(opcode, a, b);
 				break;
 			}
 			case ADDF_VVV: case ADDF_VVC: case SUBF_VVV: case SUBF_VVC: case SUBF_VCV:
-			case MULF_VVV: case MULF_VVC: case DIVF_VVV: case DIVF_VVC: case DIVF_VCV: {
-				SLOT(c0, v0);
-				const int op = in.opcode;
-				const bool constantA = (op == SUBF_VCV || op == DIVF_VCV);
-				const bool constantB = (op == ADDF_VVC || op == SUBF_VVC || op == MULF_VVC || op == DIVF_VVC);
-				Float a = c1.f;
-				Float b = c2.f;
-				if (!constantA) { SLOT(c1, v1); a = v1.f; }
-				if (!constantB) { SLOT(c2, v2); b = v2.f; }
-				Float r;
-				if (op >= ADDF_VVV && op <= ADDF_VVC) r = a + b;
-				else if (op >= SUBF_VVV && op <= SUBF_VCV) r = a - b;
-				else if (op >= MULF_VVV && op <= MULF_VVC) r = a * b;
-				else r = a / b;							// IEEE: a zero divisor gives an infinity or a NaN
+			case MULF_VVV: case MULF_VVC: case DIVF_VVV: case DIVF_VVC: case DIVF_VCV: {	// V0 = P1 op P2
+				const Float a = (isFirstSourceConstant(opcode) ? c1.f : slot(c1).f);
+				const Float b = (isSecondSourceConstant(opcode) ? c2.f : slot(c2).f);
+				const Float result = floatResult(opcode, a, b);
+				Value& target = slot(c0);
+				target.f = result;
 			#ifdef GAZL_CANONICAL_NAN
-				if (r != r) {			// the strict-FP build gives every arithmetic NaN one bit pattern
-					v0.i = 0x7FC00000;
-					break;
+				if (result != result) {
+					target.i = 0x7FC00000;													// the strict-FP build gives every arithmetic NaN one bit pattern
 				}
 			#endif
-				v0.f = r;
 				break;
 			}
-			case FTOI_VVC: { SLOT(c0, v0); SLOT(c1, v1); v0.i = floatToInt(v1.f * c2.f); break; }		// C2 = scale
-			case ITOF_VVC: { SLOT(c0, v0); SLOT(c1, v1); v0.f = (Float)v1.i * c2.f; break; }			// C2 = scale
 			case COPY_VVC:
 			case COPY_VCC:
 			case COPY_CVC:
-			case COPY_CCC: {							// P0 = destination, P1 = source, C2 = words
-				Pointer to = c0.p;
-				Pointer from = c1.p;
-				if (in.opcode == COPY_VVC || in.opcode == COPY_VCC) { SLOT(c0, v0); to = v0.p; }
-				if (in.opcode == COPY_VVC || in.opcode == COPY_CVC) { SLOT(c1, v1); from = v1.p; }
-				const long long count = (long long)(UInt)c2.i;
-				long long d;
-				long long s;
-				writeIndex(to, d);
-				readIndex(from, s);
-				if (d - constantWords + count > (long long)writableWords || s + count > (long long)readableWords) {
+			case COPY_CCC: {																// P0 = destination, P1 = source, C2 = words
+				const Pointer to = (opcode == COPY_VVC || opcode == COPY_VCC ? slot(c0).p : c0.p);
+				const Pointer from = (opcode == COPY_VVC || opcode == COPY_CVC ? slot(c1).p : c1.p);
+				const long long wordCount = static_cast<UInt>(c2.i);
+				const long long destinationOffset = writeOffset(to);
+				const long long source = readWord(from);
+				if (destinationOffset + wordCount > writableWords || source + wordCount > readableWords) {
 					return ACCESS_VIOLATION;
 				}
-				if (d < s + count && s < d + count && count > 0 && d != s) unspecified = true;
-				for (long long i = 0; i < count; ++i) memory[d + i] = memory[s + i];
+				const long long destination = constantWords + destinationOffset;
+				if (wordCount > 0 && destination != source && destination < source + wordCount
+						&& source < destination + wordCount) {
+					unspecified = true;
+				}
+				for (long long i = 0; i < wordCount; ++i) {
+					memory[destination + i] = memory[source + i];
+				}
 				break;
 			}
 			case FORi_VVB:
-			case FORi_VCB: {							// V0 = the counter, P1 = the limit, C2 = the branch
-				SLOT(c0, v0);
-				Int limit = c1.i;
-				if (in.opcode == FORi_VVB) { SLOT(c1, v1); limit = v1.i; }
-				v0.i = wrap((long long)v0.i + 1);
-				BRANCH(v0.i < limit, c2);
+			case FORi_VCB: {																// V0 = the counter, P1 = the limit, C2 = the branch
+				Value& counter = slot(c0);
+				const Int limit = (opcode == FORi_VVB ? slot(c1).i : c1.i);
+				counter.i = wrap(static_cast<long long>(counter.i) + 1);
+				if (counter.i < limit) {
+					ip += c2.i;
+					continue;
+				}
 				break;
 			}
 			case LSSI_VVB: case LSSI_VCB: case LSSI_CVB: case EQUI_VVB: case EQUI_VCB:
 			case NLSI_VVB: case NLSI_VCB: case NLSI_CVB: case NEQI_VVB: case NEQI_VCB:
 			case LSSF_VVB: case LSSF_VCB: case LSSF_CVB: case EQUF_VVB: case EQUF_VCB:
-			case NLSF_VVB: case NLSF_VCB: case NLSF_CVB: case NEQF_VVB: case NEQF_VCB: {
-				const int op = in.opcode;				// P0 compared with P1, C2 = the branch
-				const bool constantA = (op == LSSI_CVB || op == NLSI_CVB || op == LSSF_CVB || op == NLSF_CVB);
-				const bool constantB = (op == LSSI_VCB || op == EQUI_VCB || op == NLSI_VCB || op == NEQI_VCB
-						|| op == LSSF_VCB || op == EQUF_VCB || op == NLSF_VCB || op == NEQF_VCB);
-				Value a = c0;
-				Value b = c1;
-				if (!constantA) { SLOT(c0, v0); a = v0; }
-				if (!constantB) { SLOT(c1, v1); b = v1; }
-				bool taken;
-				if (op >= LSSI_VVB && op <= LSSI_CVB) taken = (a.i < b.i);
-				else if (op >= EQUI_VVB && op <= EQUI_VCB) taken = (a.i == b.i);
-				else if (op >= NLSI_VVB && op <= NLSI_CVB) taken = !(a.i < b.i);
-				else if (op >= NEQI_VVB && op <= NEQI_VCB) taken = (a.i != b.i);
-				else if (op >= LSSF_VVB && op <= LSSF_CVB) taken = (a.f < b.f);
-				else if (op >= EQUF_VVB && op <= EQUF_VCB) taken = (a.f == b.f);
-				else if (op >= NLSF_VVB && op <= NLSF_CVB) taken = !(a.f < b.f);	// true when either is NaN
-				else taken = (a.f != b.f);
-				BRANCH(taken, c2);
+			case NLSF_VVB: case NLSF_VCB: case NLSF_CVB: case NEQF_VVB: case NEQF_VCB: {	// P0 compared with P1, C2 = the branch
+				const Value a = (isFirstSourceConstant(opcode) ? c0 : slot(c0));
+				const Value b = (isSecondSourceConstant(opcode) ? c1 : slot(c1));
+				if (isBranchTaken(opcode, a, b)) {
+					ip += c2.i;
+					continue;
+				}
 				break;
 			}
-			case GOTO_B__: { ip += c0.i; continue; }
-			case SWCH_VCC: {							// V0 = the case, C1 = the default's index, C2 = the table
-				SLOT(c0, v0);
-				const UInt index = ((UInt)v0.i < (UInt)c1.i) ? (UInt)v0.i : (UInt)c1.i;	// out of range -> default
-				long long t;
-				if (!readIndex(c2.p, t) || t + index >= (long long)readableWords) return fail("switch table outside memory");
-				t += index;
-				ip += memory[t].i;
+			case GOTO_B__: ip += c0.i; continue;
+			case SWCH_VCC: {																// V0 = the case, C1 = the default's index, C2 = the table
+				const UInt value = static_cast<UInt>(slot(c0).i);
+				const UInt choice = (value < static_cast<UInt>(c1.i) ? value : static_cast<UInt>(c1.i));	// out of range: the default
+				const long long word = readWord(c2.p) + choice;
+				if (word >= readableWords) {
+					throw Violation("switch table outside memory");
+				}
+				ip += memory[word].i;
 				continue;
 			}
-			default: return fail("unknown opcode");
+			default: throw Violation("unknown opcode");
 		}
-		#undef SLOT
-		#undef CONSTANT_READ
-		#undef CONSTANT_WRITE
-		#undef BRANCH
 		++ip;
 	}
 }
 
-}																														// namespace GAZLReference
+}																															// namespace GAZLReference

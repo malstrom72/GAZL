@@ -41,8 +41,8 @@
 	memory, a branch target inside the code), this checks instead and stops with REFERENCE_VIOLATION and a message,
 	so a broken assumption shows up as a difference rather than as memory corruption.
 
-	Overlapping COPY is undefined in GAZL. It runs here as an ascending copy and sets `unspecified`, so a caller can
-	compare status only.
+	Overlapping COPY is undefined in GAZL. It runs here as an ascending copy and marks the run unspecified, so a caller
+	can compare status only.
 */
 
 #ifndef GAZLReference_h
@@ -72,35 +72,45 @@ typedef Status (*Native)(Machine& machine, Value* window, UInt room);
 class Machine {
 	public:
 		Machine(const AssembledProgram& program, UInt ipStackSize, const Native* natives);
-
-		Status call(Pointer function, long long fuel);		// runs `function` to its return, a fault, or the end of `fuel`
+		Status call(Pointer function, long long startFuel);		// runs `function` to its return, a fault, or the end of `startFuel`
 		Int fuelLeft() const;
-		Value* accessMemory(Pointer pointer, UInt count);	// [pointer, pointer + count) inside writable memory, or 0
-
-		std::string violation;								// why the run stopped with REFERENCE_VIOLATION
-		bool unspecified;									// the run did something GAZL leaves undefined
+		Value* accessMemory(Pointer pointer, UInt count);		// [pointer, pointer + count) inside writable memory, or 0
+		const std::string& getViolation() const;				// why the last run stopped with REFERENCE_VIOLATION
+		bool isUnspecified() const;								// the last run did something GAZL leaves undefined
 
 	private:
-		struct Frame { long long ip; long long dsp; };
+		struct Frame {
+			long long ip;
+			long long dsp;
+		};
 
-		Status fail(const std::string& why);
-		bool slotOk(long long index) const;
-		bool readIndex(Pointer pointer, long long& index) const;		// the word `pointer` reads, if a read may reach it
-		bool writeIndex(Pointer pointer, long long& index) const;	// the word `pointer` writes, if a write may reach it
+		Status run(Pointer function);
+		Value& stackWord(long long index);
+		Value& slot(const Value& operand);
+		long long readWord(Pointer pointer) const;				// the word `pointer` reads; readable below `readableWords`
+		long long writeOffset(Pointer pointer) const;			// `pointer` past `MEMORY_OFFSET`; writable below `writableWords`
+		long long constantReadWord(Pointer pointer) const;
+		long long constantWriteWord(Pointer pointer) const;
+		long long localArrayWord(const Value& arraySlot, Int index) const;	// -1 when `index` is outside the array's reach
+		long long functionEntry(UInt ordinal) const;
 
-		const Instruction* code;
-		UInt codeSize;
-		const UInt* functionTable;
-		UInt functionCount;
-		Value* memory;
-		UInt constantWords;									// the words below `MEMORY_OFFSET`, at the start of `memory`
-		UInt readableWords;									// every word but the zero guard
-		UInt writableWords;									// the globals and the data stack
-		UInt stackBase;
-		UInt stackEnd;
-		UInt ipStackSize;
-		const Native* natives;
+		const Instruction* const code;
+		const UInt codeSize;
+		const UInt* const functionTable;
+		const UInt functionCount;
+		Value* const memory;
+		const UInt constantWords;								// the words below `MEMORY_OFFSET`, at the start of `memory`
+		const UInt readableWords;								// every word but the zero guard
+		const UInt writableWords;								// the globals and the data stack
+		const UInt stackBase;
+		const UInt stackEnd;
+		const UInt ipStackSize;
+		const Native* const natives;
 		long long fuel;
+		long long ip;
+		long long dsp;
+		std::string violation;
+		bool unspecified;
 };
 
 }																														// namespace GAZLReference

@@ -310,32 +310,44 @@ namespace ReferenceNatives {
 	using GAZLReference::Machine;
 	static Status abortNative(Machine&, Value*, UInt) { return ABORTED; }
 	static Status stub(Machine&, Value*, UInt) { return OK; }
-	static Status input(Machine& m, Value* w, UInt room) {										// `fuzzInput`'s twin: it leaves the fuel alone
-		if (room < 3) return DATA_STACK_OVERFLOW;
-		Value* bp = m.accessMemory(w[2].p, w[1].i + 1);
-		if (bp == 0) return ACCESS_VIOLATION;
-		bp[0].i = 0;
-		w[0].i = 0;
+	static Status input(Machine& machine, Value* window, UInt room) {						// `fuzzInput`'s twin: it leaves the fuel alone
+		if (room < 3) {
+			return DATA_STACK_OVERFLOW;
+		}
+		Value* const buffer = machine.accessMemory(window[2].p, window[1].i + 1);
+		if (buffer == 0) {
+			return ACCESS_VIOLATION;
+		}
+		buffer[0].i = 0;
+		window[0].i = 0;
 		return OK;
 	}
-	static Status atan2Native(Machine&, Value* w, UInt room) {
-		if (room < 3) return DATA_STACK_OVERFLOW;
-		w[0].f = atan2(w[1].f, w[2].f);
+	static Status atan2Native(Machine&, Value* window, UInt room) {
+		if (room < 3) {
+			return DATA_STACK_OVERFLOW;
+		}
+		window[0].f = atan2(window[1].f, window[2].f);
 		return OK;
 	}
-	static Status sqrtNative(Machine&, Value* w, UInt room) {
-		if (room < 2) return DATA_STACK_OVERFLOW;
-		w[0].f = sqrt(w[1].f);
+	static Status sqrtNative(Machine&, Value* window, UInt room) {
+		if (room < 2) {
+			return DATA_STACK_OVERFLOW;
+		}
+		window[0].f = sqrt(window[1].f);
 		return OK;
 	}
-	static Status logNative(Machine&, Value* w, UInt room) {
-		if (room < 2) return DATA_STACK_OVERFLOW;
-		w[0].f = log(w[1].f);
+	static Status logNative(Machine&, Value* window, UInt room) {
+		if (room < 2) {
+			return DATA_STACK_OVERFLOW;
+		}
+		window[0].f = log(window[1].f);
 		return OK;
 	}
-	static Status testMul(Machine&, Value* w, UInt room) {
-		if (room < 3) return DATA_STACK_OVERFLOW;
-		w[0].f = w[1].f * w[2].f;
+	static Status testMul(Machine&, Value* window, UInt room) {
+		if (room < 3) {
+			return DATA_STACK_OVERFLOW;
+		}
+		window[0].f = window[1].f * window[2].f;
 		return OK;
 	}
 }
@@ -354,26 +366,28 @@ static void requireReference(const char* which, const uint8_t* data, size_t size
 	copy.memory = image;
 	GAZLReference::Machine reference(copy, CALL_STACK_SIZE, natives);
 	const Status status = reference.call(mainFunction, fuel);
-	int diffWord = -1;
-	if (!reference.unspecified) {
-		for (int i = 0; i < DATA_MEMORY_SIZE; ++i) {
-			if (interpImage[i].i == image[i].i) continue;
-			if (interpImage[i].f != interpImage[i].f && image[i].f != image[i].f) continue;
-			diffWord = i;
-			break;
+	int differingWord = -1;
+	for (int i = 0; !reference.isUnspecified() && differingWord < 0 && i < DATA_MEMORY_SIZE; ++i) {
+		const bool bothNaN = (interpImage[i].f != interpImage[i].f && image[i].f != image[i].f);
+		if (interpImage[i].i != image[i].i && !bothNaN) {
+			differingWord = i;
 		}
 	}
 	const bool fuelDiffers = (interpFuelLeft != INT_MIN && interpFuelLeft != reference.fuelLeft());
-	if (status == interpStatus && diffWord < 0 && !fuelDiffers) return;
+	if (status == interpStatus && differingWord < 0 && !fuelDiffers) {
+		return;
+	}
 	std::fprintf(stderr, "\n=== interpreter/reference divergence (%s): interpreter status=%d reference status=%d", which
 			, static_cast<int>(interpStatus), static_cast<int>(status));
-	if (status == GAZLReference::REFERENCE_VIOLATION) std::fprintf(stderr, " (%s)", reference.violation.c_str());
+	if (status == GAZLReference::REFERENCE_VIOLATION) {
+		std::fprintf(stderr, " (%s)", reference.getViolation().c_str());
+	}
 	if (fuelDiffers) {
 		std::fprintf(stderr, "; fuel left interpreter=%d reference=%d", interpFuelLeft, reference.fuelLeft());
 	}
-	if (diffWord >= 0) {
-		std::fprintf(stderr, "; word[%d] interpreter=%d reference=%d", diffWord, interpImage[diffWord].i
-				, image[diffWord].i);
+	if (differingWord >= 0) {
+		std::fprintf(stderr, "; word[%d] interpreter=%d reference=%d", differingWord, interpImage[differingWord].i
+				, image[differingWord].i);
 	}
 	std::fprintf(stderr, " ===\n%.*s\n", static_cast<int>(size), reinterpret_cast<const char*>(data));
 	std::fflush(stderr);
@@ -783,9 +797,9 @@ static void runDiff(const std::string& programText) {
 			Processor interp(program, CALL_STACK_SIZE, callStack, NATIVE_TABLE, 0);
 			if (interp.enterCall(mainFunction) == OK) {
 				interp.resetTimeOut(TEXT_FUEL);
-				const Status s = interp.run();
+				const Status status = interp.run();
 				requireReference("text lane", Data, Size, program, mainFunction, REFERENCE_NATIVES, snapshot, TEXT_FUEL
-						, s, interp.getClockCyclesLeft(), memory);
+						, status, interp.getClockCyclesLeft(), memory);
 			}
 		}
 		std::memcpy(memory, snapshot, sizeof (memory));
