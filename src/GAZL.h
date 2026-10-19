@@ -68,7 +68,7 @@ typedef char Char;
 typedef int Int;
 typedef unsigned int UInt;
 typedef unsigned int Pointer;																							// Pointer must be unsigned and the same size as Int
-typedef Pointer Target;																									// A call target: the word a function is called through, `FUNCTION_OFFSET` + its ordinal.
+typedef unsigned int Target;																							// A call target: `FUNCTION_OFFSET` + a function's ordinal. Unsigned and the same size as Int, like Pointer.
 typedef float Float;
 typedef Int Status;																										// Run-time status code
 
