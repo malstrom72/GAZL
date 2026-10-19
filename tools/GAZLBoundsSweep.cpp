@@ -508,7 +508,7 @@ const char* const ENGINE_NAMES[] = { "interpreter", "JIT" };
 	little for programs this small; without it, the JIT engine is never asked for.
 */
 Status run(Machine& m, Engine engine) {
-	const Pointer mainFunction = m.symbols.findFunction("main");
+	const Target mainFunction = m.symbols.findFunction("main");
 #ifdef GAZL_JIT
 	if (engine == JIT) {
 		const AssembledProgram program = { &m.code[0], m.sizes.codeSize, &m.functionTable[0], m.sizes.functionCount
@@ -802,7 +802,13 @@ int sweepFrozenEntries() {
 		"main:\tFUNC\n"
 		"v:\tLOCi\n"
 		"\tPEEK v &multi:2\n"				// a label's offset is checked against all of its values
-		"\tRETU\n";
+		"\tRETU\n"
+		"fnalias:\t! DEFp &main\n"			// a pointer constant of a function is a target constant
+		"\tGAZL #2\n"
+		"tfn:\tFUNC\n"
+		"\tRETU\n"
+		"\tGAZL #1\n"
+		"target:\t! DEFt &tfn\n";
 	struct Entry { const char* name; UInt size; UInt words[8]; };
 	const Entry EXPECTED[] = {				// ascending names
 		{ "clock", 1, { 7 } },
@@ -895,7 +901,8 @@ int sweepFrozenEntries() {
 		std::printf("FAIL frozen entries: getGlobalInfo by name reports the wrong global\n");
 		++failures;
 	}
-	// `lookupConstant` finds named constants of each kind, and not data or functions.
+	// `lookupConstant` finds named constants of each kind, a constant of a function as a target, and not data or
+	// functions themselves.
 	ConstantKind kind = INT_CONSTANT;
 	Value value;
 	value.i = 0;
@@ -905,6 +912,10 @@ int sweepFrozenEntries() {
 			|| !m.symbols.lookupConstant("NULL", kind, value) || kind != ADDRESS_CONSTANT || value.p != NULL_POINTER
 			|| !m.symbols.lookupConstant("count", kind, value) || kind != INT_CONSTANT || value.i != 5
 			|| !m.symbols.lookupConstant("ratio", kind, value) || kind != FLOAT_CONSTANT || value.f != 0.5f
+			|| !m.symbols.lookupConstant("target", kind, value) || kind != TARGET_CONSTANT
+			|| value.t != m.symbols.findFunction("tfn")
+			|| !m.symbols.lookupConstant("fnalias", kind, value) || kind != TARGET_CONSTANT
+			|| value.t != m.symbols.findFunction("main")
 			|| m.symbols.lookupConstant("multi", kind, value) || m.symbols.lookupConstant("main", kind, value)
 			|| m.symbols.lookupConstant("no such", kind, value)) {
 		std::printf("FAIL frozen entries: lookupConstant reports the wrong constant\n");
