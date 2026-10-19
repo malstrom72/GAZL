@@ -94,6 +94,9 @@ corrupt them. Each runs clean on a current engine and reproduces its defect on t
 | `pokeIndexOverflowsInt`       | the same, for `POKE`                                                     |
 | `swchSizeOverflowsInt`        | `SWCH *2147483647` computed its table size as `Int + 1`, a signed overflow (UBSan catches it) |
 | `setlNegativeFrameOffset`     | a negative `local:k` on `SETL`'s base reached below the frame, which run time does not check |
+| `defpOffsetPastSection`       | a `! DEFp` name took any offset, and `PEEK`/`POKE` through it checked only the name, never the section |
+| `defpOfCompileTimeAddress`    | the same, for a `! DEFp` name of an assembly-time address                |
+| `compileTimeAddressAccess`    | `PEEK`/`POKE` through an assembly-time address, which names no label to check against |
 
 Only inputs for FIXED defects belong here. An input for a defect that is still open goes somewhere else until the fix
 lands, or it aborts a strict run while the corpus is still loading.

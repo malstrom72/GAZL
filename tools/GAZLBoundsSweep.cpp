@@ -1379,6 +1379,106 @@ int sweepFunctionOffsets() {
 	return failures;
 }
 
+/*
+	A `! DEFp` name keeps the kind of what it names. An access through a constant address is checked only at assembly,
+	so a name of `NULL` or of a function must never pass as a data address, and a name of constant data must stay
+	read-only. An assembly-time address names no label to check against, so no access passes through it, while it
+	still works as a value. Returns the number of failures, each one printed.
+*/
+int sweepPointerConstantKinds() {
+	struct Case { const char* what; const char* source; int error; };
+	const Case CASES[] = {
+		{ "a name of NULL", "N:\t! DEFp &NULL\nmain:\tFUNC\np:\tLOCp\n\tMOVp p &N\n\tRETU\n", -1 },
+		{ "a PEEK through a name of NULL", "N:\t! DEFp &NULL\nmain:\tFUNC\nv:\tLOCi\n\tPEEK v &N\n\tRETU\n"
+				, INCOMPATIBLE_TYPES },
+		{ "a PEEK through a name of NULL written as a number", "N:\t! DEFp &NULL\nmain:\tFUNC\nv:\tLOCi\n"
+				"\tPEEK v #N\n\tRETU\n", INCOMPATIBLE_TYPES },
+		{ "a POKE through a name of NULL with an index", "N:\t! DEFp &NULL\nmain:\tFUNC\nv:\tLOCi\n\tPOKE &N v v\n"
+				"\tRETU\n", INCOMPATIBLE_TYPES },
+		{ "a CALL through a name of a function", "f:\tFUNC\n\tRETU\nF:\t! DEFp &f\nmain:\tFUNC\n\tCALL &F %0 *0\n"
+				"\tRETU\n", -1 },
+		{ "a POKE through a name of a function", "f:\tFUNC\n\tRETU\nF:\t! DEFp &f\nmain:\tFUNC\nv:\tLOCi\n"
+				"\tPOKE &F v\n\tRETU\n", INCOMPATIBLE_TYPES },
+		{ "a PEEK through a name of a function", "f:\tFUNC\n\tRETU\nF:\t! DEFp &f\nmain:\tFUNC\nv:\tLOCi\n"
+				"\tPEEK v &F\n\tRETU\n", INCOMPATIBLE_TYPES },
+		{ "an offset on a name of NULL", "N:\t! DEFp &NULL\nmain:\tFUNC\np:\tLOCp\n\tMOVp p &N:1\n\tRETU\n"
+				, OFFSET_OUT_OF_BOUNDS },
+		{ "a PEEK through a name of constant data", "c:\tCNST *1\n\tDATA #1\nC:\t! DEFp &c\nmain:\tFUNC\nv:\tLOCi\n"
+				"\tPEEK v &C\n\tRETU\n", -1 },
+		{ "a POKE through a name of constant data", "c:\tCNST *1\n\tDATA #1\nC:\t! DEFp &c\nmain:\tFUNC\nv:\tLOCi\n"
+				"\tPOKE &C v\n\tRETU\n", INCOMPATIBLE_TYPES },
+		{ "a name of a name of NULL", "N:\t! DEFp &NULL\nM:\t! DEFp &N\nmain:\tFUNC\nv:\tLOCi\n\tPEEK v &M\n\tRETU\n"
+				, INCOMPATIBLE_TYPES },
+		{ "a PEEK through a name defined later, outside its section", "g:\tGLOB *2\nmain:\tFUNC\nv:\tLOCi\n"
+				"\tPEEK v &P\n\tRETU\nP:\t! DEFp &g:2\n", OFFSET_OUT_OF_BOUNDS },
+		{ "a PEEK through a name defined later, inside its section", "g:\tGLOB *2\nmain:\tFUNC\nv:\tLOCi\n"
+				"\tPEEK v &P\n\tRETU\nP:\t! DEFp &g:1\n", -1 },
+		{ "a PEEK through an assembly-time address", "g:\tGLOB *2\n\t! ADDp <P> &g #1\nmain:\tFUNC\nv:\tLOCi\n"
+				"\tPEEK v <P>\n\tRETU\n", OFFSET_OUT_OF_BOUNDS },
+		{ "a POKE through an assembly-time address", "g:\tGLOB *2\n\t! ADDp <P> &g #1\nmain:\tFUNC\nv:\tLOCi\n"
+				"\tPOKE <P> v\n\tRETU\n", OFFSET_OUT_OF_BOUNDS },
+		{ "a POKE of a constant through an assembly-time address", "g:\tGLOB *2\n\t! ADDp <P> &g #1\nmain:\tFUNC\n"
+				"\tPOKE <P> #1\n\tRETU\n", OFFSET_OUT_OF_BOUNDS },
+		{ "a PEEK through a name of an assembly-time address", "g:\tGLOB *2\n\t! ADDp <P> &g #1\nR:\t! DEFp <P>\n"
+				"main:\tFUNC\nv:\tLOCi\n\tPEEK v &R\n\tRETU\n", OFFSET_OUT_OF_BOUNDS },
+		{ "an assembly-time address as a value", "g:\tGLOB *2\n\t! ADDp <P> &g #1\nmain:\tFUNC\np:\tLOCp\n"
+				"\tMOVp p <P>\n\tRETU\n", -1 },
+		{ "a name of an assembly-time address as a value", "g:\tGLOB *2\n\t! ADDp <P> &g #1\nR:\t! DEFp <P>\n"
+				"main:\tFUNC\np:\tLOCp\n\tMOVp p &R\n\tRETU\n", -1 }
+	};
+	const int count = sizeof (CASES) / sizeof (*CASES);
+	int failures = 0;
+	for (int i = 0; i < count; ++i) {
+		const int error = assemblyError(CASES[i].source);
+		if (error != CASES[i].error) {
+			std::printf("FAIL pointer constant kinds: %s gave error %d, expected %d\n", CASES[i].what, error
+					, CASES[i].error);
+			++failures;
+		}
+	}
+	std::printf("pointer constant kinds: %d checked, %d failed\n", count, failures);
+	return failures;
+}
+
+/*
+	`PEEK var &address` and `POKE &address` are checked only at assembly, so one through a `! DEFp` name must reach a
+	word in the section of the label it was defined from: here at every edge of a `GLOB`, `TEMP` and `CNST` section,
+	through a name of the name too. Returns the number of failures, each one printed.
+*/
+int sweepPointerConstantReach() {
+	const char* const SECTIONS = "\tGLOB *1\nbefore:\tDATi #0\n\tGLOB *3\na:\tDATi #1\nb:\tDATi #2\n\tDATi #3\n"
+			"\tGLOB *1\nafter:\tDATi #0\nt:\tTEMP *1\n\tCNST *2\nc:\tDATi #4\n\tDATi #5\n";
+	struct Reach { const char* label; int offset; bool isInside; };
+	const Reach REACHES[] = {
+		{ "b", -2000000000, false }, { "b", -2, false }, { "b", -1, true }, { "b", 0, true }, { "b", 1, true }
+		, { "b", 2, false }, { "b", 2000000000, false }, { "t", -1, false }, { "t", 0, true }, { "t", 1, false }
+		, { "c", -1, false }, { "c", 0, true }, { "c", 1, true }, { "c", 2, false }
+	};
+	const char* const ACCESSES[] = { "PEEK v &P", "PEEK v #P", "PEEK v &Q", "POKE &P v", "POKE &P #1", "POKE &Q v" };
+	int count = 0;
+	int failures = 0;
+	for (size_t i = 0; i < sizeof (REACHES) / sizeof (*REACHES); ++i) {
+		const Reach& reach = REACHES[i];
+		const bool isConstant = (reach.label[0] == 'c');
+		for (size_t j = 0; j < sizeof (ACCESSES) / sizeof (*ACCESSES); ++j) {
+			const bool isWrite = (ACCESSES[j][1] == 'O');
+			const std::string source = std::string(SECTIONS) + "P:\t! DEFp &" + reach.label + ":" + number(reach.offset)
+					+ "\nQ:\t! DEFp &P\nmain:\tFUNC\nv:\tLOCi\n\t" + ACCESSES[j] + "\n\tRETU\n";
+			const int expected = (isWrite && isConstant ? INCOMPATIBLE_TYPES										// the kind is checked before the reach
+					: (reach.isInside ? -1 : OFFSET_OUT_OF_BOUNDS));
+			const int error = assemblyError(source);
+			if (error != expected) {
+				std::printf("FAIL pointer constant reach: %s through &%s:%d gave error %d, expected %d\n", ACCESSES[j]
+						, reach.label, reach.offset, error, expected);
+				++failures;
+			}
+			++count;
+		}
+	}
+	std::printf("pointer constant reach: %d checked, %d failed\n", count, failures);
+	return failures;
+}
+
 struct Totals { int probes; int failures; };
 
 int sweep(int engineCount) {
@@ -1485,6 +1585,6 @@ int main() {
 #endif
 	const int hostFailures = sweepNativeAccess() + sweepFrameAndThaw() + sweepFrozenEntries() + sweepThawRules()
 			+ sweepCanary() + sweepTextEncoding() + sweepUnnamedSections() + sweepLabelReach() + sweepFunctionOffsets()
-			+ sweepSpanRegions() + sweepPrefixes();
+			+ sweepSpanRegions() + sweepPrefixes() + sweepPointerConstantKinds() + sweepPointerConstantReach();
 	return (sweep(engineCount) != 0 || hostFailures != 0) ? 1 : 0;
 }

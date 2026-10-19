@@ -1595,7 +1595,9 @@
         var cls = '%';              /* default stock   */
         var t   = op1Prefix + op2Prefix;
 
-        if (t.length > 0 && span(t, '#<') === t.length && span('<', classes) === 1) {
+        /* a PEEK never folds: GAZL has no assembly-time PEEK, and a `pointer` const is `#name` here too */
+        if (t.length > 0 && span(t, '#<') === t.length && span('<', classes) === 1
+                && $$parser.META_TO_GAZL[op] !== 'PEEK') {
             expr.operator = '<> ' + op;     /* compile-time op */
             cls = '<';
         }
@@ -4214,10 +4216,11 @@ var _sn = $$parser.strideStruct(field.elem);
             
 
             } else {
-                /* general indexed read */
-                $$parser.makeMeta(leftx, operator, tp, null,
-                                  $$parser.makeRValue(leftx),
-                                  $$parser.makeRValue(rightx));
+                /* general indexed read; GAZL has no `PEEK var &address #int`, so a constant index on a constant
+                   base goes into a transient */
+                var base = $$parser.makeRValue(leftx);
+                var index = $$parser.makeRValue(rightx, (span(base[0], '#<') === 1 ? '&^$%' : undefined));
+                $$parser.makeMeta(leftx, operator, tp, null, base, index);
             }
             leftx.oobIndex = xOob;                    /* after the makeMeta above, which clears it */
 

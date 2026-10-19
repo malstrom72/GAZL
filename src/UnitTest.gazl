@@ -419,6 +419,8 @@ checkZeroLoop: NOOP
  CALL      p0
  CALL      p1              %0              *1
  NEQi      %0              #GOOD           @fail
+ CALL      &CallPointerConstants %0        *1
+ NEQi      %0              #GOOD           @fail
 
 ;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ;
@@ -459,10 +461,11 @@ checkZeroLoop: NOOP
 ;          ptr             &address(r)     *size
 ;          ptr             ptr             *size
 ;
-; Copies memory. Behaviour is undefined if target and source overlaps. This instruction can be used to accelerate
-; memory access since global and constant data must otherwise be accessed with individual PEEK and POKE instructions.
-; With COPY you can copy a range of global / constant data to a local array which can then be used directly with
-; arbitrary instructions. (Just remember that you need to use ADRL to obtain the address to the local array.)
+; Copies memory forward, one word at a time from the lowest address up, so overlapping ranges have a defined result.
+; This instruction can be used to accelerate memory access since global and constant data must otherwise be accessed
+; with individual PEEK and POKE instructions. With COPY you can copy a range of global / constant data to a local array
+; which can then be used directly with arbitrary instructions. (Just remember that you need to use ADRL to obtain the
+; address to the local array.)
 ;
 ;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 
@@ -2303,6 +2306,25 @@ CallBack:               FUNC
                         PEEK pointerContents &global.pointer
                         NEQp expect pointerContents @fail
                         POKE &global.pointer changeTo
+                        RETU
+    fail:               CALL ^assertFail
+                        RETU
+
+;-------------------------------------------------------------------------------
+EARTH_CHECK:            ! DEFp &EarthCheck
+NO_POINTER:             ! DEFp &NULL
+CallPointerConstants:   FUNC
+    howAreWe:           OUTi
+;
+; A `! DEFp` name keeps the kind of what it names: one of a function can be
+; called, and one of `NULL` is a null pointer.
+;-------------------------------------------------------------------------------
+    nothing:            LOCp
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+                        MOVp nothing &NO_POINTER
+                        NEQp nothing &NULL @fail
+                        CALL &EARTH_CHECK %0 *1
+                        MOVi howAreWe %0
                         RETU
     fail:               CALL ^assertFail
                         RETU
