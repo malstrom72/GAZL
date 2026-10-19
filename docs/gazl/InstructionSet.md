@@ -131,7 +131,8 @@ Define a compile‑time constant pointer
 - `ptr             &address(r)     *size`
 - `ptr             ptr             *size`
 
-Copies memory. Behaviour is undefined if target and source overlaps. This instruction can be used to accelerate memory
+Copies memory forward, one word at a time from the lowest address up, so overlapping ranges have a defined result
+(`Specification.md` section 3). This instruction can be used to accelerate memory
 access since global and constant data must otherwise be accessed with individual PEEK and POKE instructions. With COPY
 you can copy a range of global / constant data to a local array which can then be used directly with arbitrary
 instructions. (Just remember that you need to use ADRL to obtain the address to the local array.)
