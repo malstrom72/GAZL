@@ -1,0 +1,24 @@
+/*
+	Named pointer constants stay named in the GAZL output, so each must assemble as what it is: null, a function and
+	an element read with a constant index.
+*/
+
+const int DEBUG = 1
+
+global array TABLE[4] = { 10, 20, 30, 40 }
+
+function helper() returns int result {
+	result = 42;
+}
+
+const pointer NOTHING = null
+const funcptr HELPER = helper
+const pointer ELEMENT = &global TABLE[1]
+
+function main() locals pointer p, funcptr f {
+	p = NOTHING;
+	assert(p == null);
+	f = HELPER;
+	assert((int) f() == 42);
+	assert((int) global ELEMENT[2] == 40);
+}
