@@ -118,6 +118,44 @@ private:
 #endif
 };
 
+/*
+	Turns the host's flush-to-zero on for its lifetime: FTZ and DAZ on x86, FZ on ARM (docs/gazl/Specification.md
+	section 4). Used inside a StandardFPEnvScope, so everything else about the environment stays standard.
+*/
+class FlushToZeroScope {
+	public:
+		FlushToZeroScope();
+		~FlushToZeroScope();
+		static bool isAvailable();				// this host can switch it; elsewhere the flush-to-zero runs are skipped
+
+	private:
+	#if defined(__SSE2__) || defined(_M_X64) || defined(_M_IX86)
+		unsigned int previousMXCSR;
+	#elif defined(__aarch64__)
+		unsigned long long previousFPCR;
+	#endif
+};
+
+#if defined(__SSE2__) || defined(_M_X64) || defined(_M_IX86)
+FlushToZeroScope::FlushToZeroScope() : previousMXCSR(_mm_getcsr()) {
+	_mm_setcsr(previousMXCSR | _MM_FLUSH_ZERO_MASK | _MM_DENORMALS_ZERO_MASK);
+}
+FlushToZeroScope::~FlushToZeroScope() { _mm_setcsr(previousMXCSR); }
+bool FlushToZeroScope::isAvailable() { return true; }
+#elif defined(__aarch64__)
+FlushToZeroScope::FlushToZeroScope() {
+	asm volatile("mrs %0, fpcr" : "=r"(previousFPCR));
+	const unsigned long long flushing = previousFPCR | (1ull << 24);
+	asm volatile("msr fpcr, %0" :: "r"(flushing));
+}
+FlushToZeroScope::~FlushToZeroScope() { asm volatile("msr fpcr, %0" :: "r"(previousFPCR)); }
+bool FlushToZeroScope::isAvailable() { return true; }
+#else
+FlushToZeroScope::FlushToZeroScope() { }
+FlushToZeroScope::~FlushToZeroScope() { }
+bool FlushToZeroScope::isAvailable() { return false; }
+#endif
+
 using namespace GAZL;
 
 class CmdException : public std::exception {
@@ -352,6 +390,63 @@ namespace ReferenceNatives {
 	}
 }
 
+static float floatFromBits(UInt bits) {
+	float value;
+	std::memcpy(&value, &bits, sizeof (value));
+	return value;
+}
+
+/*
+	Which way this host's flush-to-zero decides the one case where hardware may differ (Specification.md section 4):
+	2^-126 * (1 - 2^-26), which rounds up to the smallest normal float, is kept by x86 and flushed by ARM's default.
+*/
+static GAZLReference::DenormalMode measureFlushMode() {
+	FlushToZeroScope flush;
+	const volatile float x = floatFromBits(0x3F000400u);								// 0.5 * (1 + 2^-13)
+	const volatile float y = floatFromBits(0x00FFF800u);								// 2^-126 * (2 - 2^-12)
+	const float product = x * y;
+	UInt bits;
+	std::memcpy(&bits, &product, sizeof (bits));
+	if (bits != 0x00800000u && bits != 0) {
+		std::fprintf(stderr, "\n=== flush-to-zero on, but 2^-126 * (1 - 2^-26) gave %08X ===\n", bits);
+		std::fflush(stderr);
+		std::abort();
+	}
+	return (bits != 0 ? GAZLReference::FLUSH_AFTER_ROUNDING : GAZLReference::FLUSH_BEFORE_ROUNDING);
+}
+
+static GAZLReference::DenormalMode hostFlushMode() {
+	static const GAZLReference::DenormalMode mode = measureFlushMode();
+	return mode;
+}
+
+/*
+	The reference's own float arithmetic against this host's, in both modes, once per process before the first
+	comparison: an oracle whose arithmetic drifted would blame a correct interpreter.
+*/
+static void requireReferenceFloats() {
+	static bool isChecked = false;
+	if (isChecked) {
+		return;
+	}
+	isChecked = true;
+	StandardFPEnvScope fpEnv;
+	const int64_t keptMismatchCount = GAZLReference::countFloatMismatches(1000000, GAZLReference::KEEP_DENORMALS);
+	int64_t flushedMismatchCount = 0;
+	if (FlushToZeroScope::isAvailable()) {
+		const GAZLReference::DenormalMode flushMode = hostFlushMode();
+		FlushToZeroScope flush;
+		flushedMismatchCount = GAZLReference::countFloatMismatches(1000000, flushMode);
+	}
+	if (keptMismatchCount != 0 || flushedMismatchCount != 0) {
+		std::fprintf(stderr, "\n=== the reference's float arithmetic differs from this host's in %lld of 1000000 cases"
+				" with denormals kept and %lld with flush-to-zero ===\n", static_cast<long long>(keptMismatchCount)
+				, static_cast<long long>(flushedMismatchCount));
+		std::fflush(stderr);
+		std::abort();
+	}
+}
+
 /*
 	Runs `program` from `snapshot` on the reference and requires the interpreter's outcome: the same status, the same
 	fuel left (unless `interpFuelLeft` is INT_MIN) and the same memory, a NaN matching any NaN. A difference, or a
@@ -359,12 +454,13 @@ namespace ReferenceNatives {
 */
 static void requireReference(const char* which, const uint8_t* data, size_t size, const AssembledProgram& program
 		, Pointer mainFunction, const GAZLReference::Native* natives, const Value* snapshot, int64_t fuel
-		, Status interpStatus, Int interpFuelLeft, const Value* interpImage) {
+		, Status interpStatus, Int interpFuelLeft, const Value* interpImage, GAZLReference::DenormalMode denormalMode) {
+	requireReferenceFloats();
 	static Value image[DATA_MEMORY_SIZE];
 	std::memcpy(image, snapshot, sizeof (image));
 	AssembledProgram copy = program;
 	copy.memory = image;
-	GAZLReference::Machine reference(copy, CALL_STACK_SIZE, natives);
+	GAZLReference::Machine reference(copy, CALL_STACK_SIZE, natives, denormalMode);
 	const Status status = reference.call(mainFunction, fuel);
 	int differingWord = -1;
 	for (int i = 0; differingWord < 0 && i < DATA_MEMORY_SIZE; ++i) {
@@ -373,7 +469,7 @@ static void requireReference(const char* which, const uint8_t* data, size_t size
 			differingWord = i;
 		}
 	}
-	const bool fuelDiffers = (interpFuelLeft != INT_MIN && interpFuelLeft != reference.fuelLeft());
+	const bool fuelDiffers = (interpFuelLeft != INT_MIN && interpFuelLeft != reference.fuelLeft());	// INT_MIN: not compared
 	if (status == interpStatus && differingWord < 0 && !fuelDiffers) {
 		return;
 	}
@@ -383,7 +479,8 @@ static void requireReference(const char* which, const uint8_t* data, size_t size
 		std::fprintf(stderr, " (%s)", reference.getViolation().c_str());
 	}
 	if (fuelDiffers) {
-		std::fprintf(stderr, "; fuel left interpreter=%d reference=%d", interpFuelLeft, reference.fuelLeft());
+		std::fprintf(stderr, "; fuel left interpreter=%d reference=%lld", static_cast<int>(interpFuelLeft)
+				, static_cast<long long>(reference.fuelLeft()));
 	}
 	if (differingWord >= 0) {
 		std::fprintf(stderr, "; word[%d] interpreter=%d reference=%d", differingWord, interpImage[differingWord].i
@@ -799,7 +896,18 @@ static void runDiff(const std::string& programText) {
 				interp.resetTimeOut(TEXT_FUEL);
 				const Status status = interp.run();
 				requireReference("text lane", Data, Size, program, mainFunction, REFERENCE_NATIVES, snapshot, TEXT_FUEL
-						, status, interp.getClockCyclesLeft(), memory);
+						, status, interp.getClockCyclesLeft(), memory, GAZLReference::KEEP_DENORMALS);
+			}
+		}
+		if (FlushToZeroScope::isAvailable()) {									// the same again on a flush-to-zero host
+			FlushToZeroScope flush;
+			std::memcpy(memory, snapshot, sizeof (memory));
+			Processor interp(program, CALL_STACK_SIZE, callStack, NATIVE_TABLE, 0);
+			if (interp.enterCall(mainFunction) == OK) {
+				interp.resetTimeOut(TEXT_FUEL);
+				const Status status = interp.run();
+				requireReference("text lane, flush-to-zero", Data, Size, program, mainFunction, REFERENCE_NATIVES, snapshot
+						, TEXT_FUEL, status, interp.getClockCyclesLeft(), memory, hostFlushMode());
 			}
 		}
 		std::memcpy(memory, snapshot, sizeof (memory));
@@ -811,7 +919,21 @@ static void runDiff(const std::string& programText) {
 		std::memcpy(interpImage, memory, sizeof (memory));
 		// ...itself checked against the reference executor, run to completion as runEngine does (fuel is not compared).
 		requireReference("generated", Data, Size, program, mainFunction, REFERENCE_NATIVES, snapshot, 1000000000000LL
-				, interpStatus, INT_MIN, interpImage);
+				, interpStatus, INT_MIN, interpImage, GAZLReference::KEEP_DENORMALS);
+		if (FlushToZeroScope::isAvailable()) {									// on a flush-to-zero host the JIT must still match
+			static Value flushedImage[DATA_MEMORY_SIZE];
+			FlushToZeroScope flush;
+			std::memcpy(memory, snapshot, sizeof (memory));
+			Processor flushedInterp(program, CALL_STACK_SIZE, callStack, NATIVE_TABLE, 0);
+			const Status flushedStatus = runEngine(flushedInterp, mainFunction, 10000000);
+			std::memcpy(flushedImage, memory, sizeof (memory));
+			requireReference("generated, flush-to-zero", Data, Size, program, mainFunction, REFERENCE_NATIVES, snapshot
+					, 1000000000000LL, flushedStatus, INT_MIN, flushedImage, hostFlushMode());
+			std::memcpy(memory, snapshot, sizeof (memory));
+			JitProcessor jit(module, program, CALL_STACK_SIZE, callStack, NATIVE_TABLE);
+			const Status jitStatus = runEngine(jit, mainFunction, 10000000);
+			requireMatch("jit full-fuel, flush-to-zero", Data, Size, flushedStatus, flushedImage, jitStatus, memory);
+		}
 
 		std::memcpy(memory, snapshot, sizeof (memory));
 		{ JitProcessor jit(module, program, CALL_STACK_SIZE, callStack, NATIVE_TABLE); const Status s = runEngine(jit, mainFunction, 10000000); requireMatch("jit full-fuel", Data, Size, interpStatus, interpImage, s, memory); }
@@ -919,7 +1041,18 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size) {
 				pmachine.resetTimeOut(10000000);
 				status = pmachine.run();
 				requireReference("text", Data, Size, program, mainFunction, REFERENCE_NATIVES, snapshot, 10000000
-						, status, pmachine.getClockCyclesLeft(), memory);
+						, status, pmachine.getClockCyclesLeft(), memory, GAZLReference::KEEP_DENORMALS);
+				if (FlushToZeroScope::isAvailable()) {								// the same again on a flush-to-zero host
+					FlushToZeroScope flush;
+					std::memcpy(memory, snapshot, sizeof (memory));
+					Processor flushed(program, CALL_STACK_SIZE, callStack, NATIVE_TABLE, 0);
+					status = flushed.enterCall(mainFunction);
+					assert(status == OK);
+					flushed.resetTimeOut(10000000);
+					status = flushed.run();
+					requireReference("text, flush-to-zero", Data, Size, program, mainFunction, REFERENCE_NATIVES, snapshot
+							, 10000000, status, flushed.getClockCyclesLeft(), memory, hostFlushMode());
+				}
 			}
 		}
 	}

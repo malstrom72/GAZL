@@ -22,6 +22,8 @@
 */
 
 #include "assert.h"
+#include <cmath>
+#include <cstring>
 #include <vector>
 #include "GAZLReference.h"
 #include "../src/GAZLOpcodes.h"
@@ -77,11 +79,24 @@ static Unpacked unpack(UInt bits) {
 	return unpacked;
 }
 
+// `normalized` without its low `droppedBits` bits, rounded to nearest, ties to even.
+static uint64_t roundedBits(uint64_t normalized, int droppedBits) {
+	if (droppedBits > 64) {
+		return 0;																			// below half the lowest kept bit
+	}
+	const uint64_t kept = (droppedBits == 64 ? 0 : normalized >> droppedBits);
+	const uint64_t droppedMask = (droppedBits == 64 ? ~static_cast<uint64_t>(0)
+			: (static_cast<uint64_t>(1) << droppedBits) - 1);
+	const uint64_t dropped = normalized & droppedMask;
+	const uint64_t half = static_cast<uint64_t>(1) << (droppedBits - 1);
+	return kept + ((dropped > half || (dropped == half && (kept & 1) != 0)) ? 1 : 0);
+}
+
 /*
 	The float nearest to `significand` times 2 to the `exponent`, with `sign`. Bit 0 of `significand` may be a sticky
 	bit standing for nonzero bits below it: every caller leaves it at least two bits below the rounding position.
 */
-static UInt roundToFloat(UInt sign, uint64_t significand, int exponent) {
+static UInt roundToFloat(UInt sign, uint64_t significand, int exponent, DenormalMode mode) {
 	if (significand == 0) {
 		return sign;
 	}
@@ -91,19 +106,14 @@ static UInt roundToFloat(UInt sign, uint64_t significand, int exponent) {
 	if (field >= 255) {
 		return sign | INFINITY_BITS;
 	}
-	const int droppedBits = (field >= 1 ? 40 : 41 - field);								// a denormal keeps fewer bits
-	if (droppedBits > 64) {
-		return sign;																		// below half the smallest denormal
-	}
-	const uint64_t kept = (droppedBits == 64 ? 0 : normalized >> droppedBits);
-	const uint64_t droppedMask = (droppedBits == 64 ? ~static_cast<uint64_t>(0)
-			: (static_cast<uint64_t>(1) << droppedBits) - 1);
-	const uint64_t dropped = normalized & droppedMask;
-	const uint64_t half = static_cast<uint64_t>(1) << (droppedBits - 1);
-	const uint64_t rounded = kept + ((dropped > half || (dropped == half && (kept & 1) != 0)) ? 1 : 0);
 	if (field < 1) {
-		return sign | static_cast<UInt>(rounded);											// rounding up into bit 23 gives the smallest normal
+		if (mode == KEEP_DENORMALS) {
+			return sign | static_cast<UInt>(roundedBits(normalized, 41 - field));			// rounding up into bit 23 gives the smallest normal
+		}
+		const bool roundsUpToNormal = (field == 0 && (roundedBits(normalized, 40) >> 24) != 0);	// at full precision
+		return sign | (mode == FLUSH_AFTER_ROUNDING && roundsUpToNormal ? 0x00800000u : 0);
 	}
+	const uint64_t rounded = roundedBits(normalized, 40);
 	const bool carried = (rounded >> 24) != 0;
 	const UInt finalField = static_cast<UInt>(field) + (carried ? 1 : 0);
 	if (finalField >= 255) {
@@ -123,7 +133,7 @@ static uint64_t shiftRightSticky(uint64_t value, int distance) {
 	return (value >> distance) | (lost ? 1 : 0);
 }
 
-static UInt floatAdd(UInt a, UInt b) {
+static UInt floatAdd(UInt a, UInt b, DenormalMode mode) {
 	if (isNaN(a) || isNaN(b) || (isInfinite(a) && isInfinite(b) && ((a ^ b) & SIGN_BIT) != 0)) {
 		return QUIET_NAN;
 	}
@@ -146,16 +156,16 @@ static UInt floatAdd(UInt a, UInt b) {
 	const uint64_t lowSignificand = shiftRightSticky(low.significand, distance - headroom);
 	const int exponent = high.exponent - headroom;
 	if (highSign == lowSign) {
-		return roundToFloat(highSign, highSignificand + lowSignificand, exponent);
+		return roundToFloat(highSign, highSignificand + lowSignificand, exponent, mode);
 	}
 	if (highSignificand == lowSignificand) {
 		return 0;																			// an exact cancellation is +0
 	}
-	return (highSignificand > lowSignificand ? roundToFloat(highSign, highSignificand - lowSignificand, exponent)
-			: roundToFloat(lowSign, lowSignificand - highSignificand, exponent));
+	return (highSignificand > lowSignificand ? roundToFloat(highSign, highSignificand - lowSignificand, exponent, mode)
+			: roundToFloat(lowSign, lowSignificand - highSignificand, exponent, mode));
 }
 
-static UInt floatMultiply(UInt a, UInt b) {
+static UInt floatMultiply(UInt a, UInt b, DenormalMode mode) {
 	const UInt sign = (a ^ b) & SIGN_BIT;
 	if (isNaN(a) || isNaN(b) || (isInfinite(a) && isZero(b)) || (isZero(a) && isInfinite(b))) {
 		return QUIET_NAN;
@@ -165,10 +175,10 @@ static UInt floatMultiply(UInt a, UInt b) {
 	}
 	const Unpacked aParts = unpack(a);
 	const Unpacked bParts = unpack(b);
-	return roundToFloat(sign, aParts.significand * bParts.significand, aParts.exponent + bParts.exponent);
+	return roundToFloat(sign, aParts.significand * bParts.significand, aParts.exponent + bParts.exponent, mode);
 }
 
-static UInt floatDivide(UInt a, UInt b) {
+static UInt floatDivide(UInt a, UInt b, DenormalMode mode) {
 	const UInt sign = (a ^ b) & SIGN_BIT;
 	if (isNaN(a) || isNaN(b) || (isInfinite(a) && isInfinite(b)) || (isZero(a) && isZero(b))) {
 		return QUIET_NAN;
@@ -185,12 +195,12 @@ static UInt floatDivide(UInt a, UInt b) {
 	const uint64_t dividend = aParts.significand << shift;
 	const uint64_t quotient = dividend / bParts.significand;
 	const uint64_t sticky = (dividend % bParts.significand != 0 ? 1 : 0);
-	return roundToFloat(sign, quotient | sticky, aParts.exponent - shift - bParts.exponent);
+	return roundToFloat(sign, quotient | sticky, aParts.exponent - shift - bParts.exponent, mode);
 }
 
 static UInt floatFloor(UInt bits) {
 	if (isNaN(bits)) {
-		return QUIET_NAN;
+		return bits | 0x00400000u;															// quieted, sign and payload kept, as IEEE propagates a NaN
 	}
 	const UInt field = (bits >> 23) & 0xFF;
 	if (field >= 150 || isZero(bits)) {
@@ -223,7 +233,7 @@ static Int floatToInt(UInt bits) {															// truncates and saturates; NaN
 
 static UInt intToFloat(Int value) {
 	const int64_t wide = value;
-	return roundToFloat((value < 0 ? SIGN_BIT : 0), static_cast<uint64_t>(wide < 0 ? -wide : wide), 0);
+	return roundToFloat((value < 0 ? SIGN_BIT : 0), static_cast<uint64_t>(wide < 0 ? -wide : wide), 0, KEEP_DENORMALS);	// never tiny
 }
 
 // Orders floats as numbers, -0 and +0 alike. Not for NaN.
@@ -281,20 +291,26 @@ static Int integerResult(int opcode, Int a, Int b) {
 	}
 }
 
-static UInt floatResult(int opcode, UInt a, UInt b) {
+static UInt floatResult(int opcode, UInt a, UInt b, DenormalMode mode) {
 	switch (opcode) {
-		case ADDF_VVV: case ADDF_VVC: return floatAdd(a, b);
-		case SUBF_VVV: case SUBF_VVC: case SUBF_VCV: return floatAdd(a, b ^ SIGN_BIT);
-		case MULF_VVV: case MULF_VVC: return floatMultiply(a, b);
+		case ADDF_VVV: case ADDF_VVC: return floatAdd(a, b, mode);
+		case SUBF_VVV: case SUBF_VVC: case SUBF_VCV: return floatAdd(a, b ^ SIGN_BIT, mode);
+		case MULF_VVV: case MULF_VVC: return floatMultiply(a, b, mode);
 		default:
 			assert(opcode == DIVF_VVV || opcode == DIVF_VVC || opcode == DIVF_VCV);
-			return floatDivide(a, b);
+			return floatDivide(a, b, mode);
 	}
 }
 
-static bool isBranchTaken(int opcode, const Value& a, const Value& b) {
-	const UInt x = bitsOf(a);
-	const UInt y = bitsOf(b);
+// A float operand as arithmetic reads it: under flush-to-zero a denormal is a zero of the same sign.
+static UInt operandBits(UInt bits, DenormalMode mode) {
+	const bool isDenormal = ((bits >> 23) & 0xFF) == 0;
+	return (mode != KEEP_DENORMALS && isDenormal ? bits & SIGN_BIT : bits);
+}
+
+static bool isBranchTaken(int opcode, const Value& a, const Value& b, DenormalMode mode) {
+	const UInt x = operandBits(bitsOf(a), mode);
+	const UInt y = operandBits(bitsOf(b), mode);
 	const bool isOrdered = (!isNaN(x) && !isNaN(y));
 	switch (opcode) {
 		case LSSI_VVB: case LSSI_VCB: case LSSI_CVB: return a.i < b.i;
@@ -310,12 +326,12 @@ static bool isBranchTaken(int opcode, const Value& a, const Value& b) {
 	}
 }
 
-Machine::Machine(const AssembledProgram& program, UInt ipStackSize, const Native* natives)
+Machine::Machine(const AssembledProgram& program, UInt ipStackSize, const Native* natives, DenormalMode denormalMode)
 		: code(program.code), codeSize(program.codeSize), functionTable(program.functionTable)
 		, functionCount(program.functionCount), memory(program.memory), constantWords(program.constsSize - 1)
 		, readableWords(program.memorySize - 1), writableWords(program.memorySize - program.constsSize)
 		, stackBase(program.constsSize - 1 + program.globalsSize), stackEnd(program.memorySize - 1)
-		, ipStackSize(ipStackSize), natives(natives), fuel(0), ip(0), dsp(0) {
+		, ipStackSize(ipStackSize), natives(natives), denormalMode(denormalMode), fuel(0), ip(0), dsp(0) {
 	assert(program.constsSize >= 1 && program.globalsSize + program.constsSize <= program.memorySize);
 }
 
@@ -331,7 +347,9 @@ Status Machine::call(Pointer function, int64_t startFuel) {
 	}
 }
 
-Int Machine::fuelLeft() const { return static_cast<Int>(fuel); }
+int64_t Machine::fuelLeft() const { return fuel; }
+
+UInt Machine::floatOperand(const Value& operand) const { return operandBits(bitsOf(operand), denormalMode); }
 
 Value* Machine::accessMemory(Pointer pointer, UInt count) {
 	const int64_t offset = writeOffset(pointer);
@@ -522,9 +540,17 @@ Status Machine::run(Pointer function) {
 			case ADRL_VV_: slot(c0).p = static_cast<Pointer>(dsp + c1.i - constantWords) + MEMORY_OFFSET; break;
 			case ABSI_VV_: slot(c0).i = wrap(slot(c1).i < 0 ? -static_cast<int64_t>(slot(c1).i) : slot(c1).i); break;
 			case ABSF_VV_: slot(c0).i = static_cast<Int>(bitsOf(slot(c1)) & MAGNITUDE_BITS); break;
-			case FLOF_VV_: slot(c0).i = static_cast<Int>(floatFloor(bitsOf(slot(c1)))); break;
-			case FTOI_VVC: slot(c0).i = floatToInt(floatMultiply(bitsOf(slot(c1)), bitsOf(c2))); break;	// C2 = scale
-			case ITOF_VVC: slot(c0).i = static_cast<Int>(floatMultiply(intToFloat(slot(c1).i), bitsOf(c2))); break;	// C2 = scale
+			case FLOF_VV_: slot(c0).i = static_cast<Int>(floatFloor(floatOperand(slot(c1)))); break;
+			case FTOI_VVC: {																// C2 = scale
+				const UInt scaled = floatMultiply(floatOperand(slot(c1)), floatOperand(c2), denormalMode);
+				slot(c0).i = floatToInt(scaled);
+				break;
+			}
+			case ITOF_VVC: {																// C2 = scale
+				const UInt scaled = floatMultiply(intToFloat(slot(c1).i), floatOperand(c2), denormalMode);
+				slot(c0).i = static_cast<Int>(scaled);
+				break;
+			}
 			case ADDI_VVV: case ADDI_VVC: case SUBI_VVV: case SUBI_VVC: case SUBI_VCV:
 			case MULI_VVV: case MULI_VVC: case DIVI_VVV: case DIVI_VVC: case DIVI_VCV:
 			case MODI_VVV: case MODI_VVC: case MODI_VCV: case ANDI_VVV: case ANDI_VVC:
@@ -546,9 +572,9 @@ Status Machine::run(Pointer function) {
 			}
 			case ADDF_VVV: case ADDF_VVC: case SUBF_VVV: case SUBF_VVC: case SUBF_VCV:
 			case MULF_VVV: case MULF_VVC: case DIVF_VVV: case DIVF_VVC: case DIVF_VCV: {	// V0 = P1 op P2
-				const UInt a = bitsOf(isFirstSourceConstant(opcode) ? c1 : slot(c1));
-				const UInt b = bitsOf(isSecondSourceConstant(opcode) ? c2 : slot(c2));
-				slot(c0).i = static_cast<Int>(floatResult(opcode, a, b));
+				const UInt a = floatOperand(isFirstSourceConstant(opcode) ? c1 : slot(c1));
+				const UInt b = floatOperand(isSecondSourceConstant(opcode) ? c2 : slot(c2));
+				slot(c0).i = static_cast<Int>(floatResult(opcode, a, b, denormalMode));
 				break;
 			}
 			case COPY_VVC:
@@ -586,7 +612,7 @@ Status Machine::run(Pointer function) {
 			case NLSF_VVB: case NLSF_VCB: case NLSF_CVB: case NEQF_VVB: case NEQF_VCB: {	// P0 compared with P1, C2 = the branch
 				const Value a = (isFirstSourceConstant(opcode) ? c0 : slot(c0));
 				const Value b = (isSecondSourceConstant(opcode) ? c1 : slot(c1));
-				if (isBranchTaken(opcode, a, b)) {
+				if (isBranchTaken(opcode, a, b, denormalMode)) {
 					ip += c2.i;
 					continue;
 				}
@@ -607,6 +633,70 @@ Status Machine::run(Pointer function) {
 		}
 		++ip;
 	}
+}
+
+static float hostFloat(UInt bits) {
+	float value;
+	std::memcpy(&value, &bits, sizeof (value));
+	return value;
+}
+
+static UInt hostBits(float value) {
+	UInt bits;
+	std::memcpy(&bits, &value, sizeof (bits));
+	return bits;
+}
+
+static bool isSameFloat(UInt x, UInt y) { return x == y || (isNaN(x) && isNaN(y)); }
+
+/*
+	Operands drawn to reach the hard cases: any bits, close exponents, denormals and the smallest normals, near-equal
+	pairs, and values around 1. A xorshift keeps the sequence the same on every host.
+*/
+static UInt testOperand(uint64_t& state, int kind, UInt other) {
+	state ^= state << 13;
+	state ^= state >> 7;
+	state ^= state << 17;
+	const UInt r = static_cast<UInt>(state >> 16);
+	switch (kind) {
+		case 0: return r;
+		case 1: return (other & 0xFF800000u) ^ (r & 0x807FFFFFu) ^ ((r >> 3) & 0x01800000u);
+		case 2: return (r & 0x807FFFFFu) | ((r & 1) != 0 ? 0 : 0x00800000u);
+		case 3: return other ^ (r & 0x0000000Fu) ^ (r & SIGN_BIT);
+		default: return (r & 0x803FFFFFu) | 0x3F000000u | ((r & 7) << 23);
+	}
+}
+
+int64_t countFloatMismatches(int64_t caseCount, DenormalMode mode) {
+	uint64_t state = 0x9E3779B97F4A7C15ull;
+	int64_t mismatchCount = 0;
+	for (int64_t n = 0; n < caseCount; ++n) {
+		const bool isBoundary = (n < 4);												// first the one case flush modes may decide differently
+		const UInt randomA = testOperand(state, static_cast<int>(n % 5), 0);
+		const UInt randomB = testOperand(state, static_cast<int>((n / 5) % 5), randomA);
+		const UInt rawA = (isBoundary ? 0x3F000400u ^ ((n & 1) != 0 ? SIGN_BIT : 0) : randomA);	// 2^-126 * (1 - 2^-26) as a product
+		const UInt rawB = (isBoundary ? 0x00FFF800u ^ ((n & 2) != 0 ? SIGN_BIT : 0) : randomB);
+		const volatile float x = hostFloat(rawA);										// volatile: each host operation is one SSE / NEON instruction
+		const volatile float y = hostFloat(rawB);
+		const UInt a = operandBits(rawA, mode);
+		const UInt b = operandBits(rawB, mode);
+		const bool isOrdered = (!isNaN(a) && !isNaN(b));
+		const Int expectedInt = (x != x ? 0 : (x >= 2147483648.0f ? 0x7FFFFFFF
+				: (x < -2147483648.0f ? static_cast<Int>(0x80000000u) : static_cast<Int>(x))));
+		const bool isMismatch = !isSameFloat(hostBits(x + y), floatAdd(a, b, mode))
+				|| !isSameFloat(hostBits(x - y), floatAdd(a, b ^ SIGN_BIT, mode))
+				|| !isSameFloat(hostBits(x * y), floatMultiply(a, b, mode))
+				|| !isSameFloat(hostBits(x / y), floatDivide(a, b, mode))
+				|| !isSameFloat(hostBits(std::floor(static_cast<float>(x))), floatFloor(a))
+				|| hostBits(static_cast<float>(static_cast<Int>(rawA))) != intToFloat(static_cast<Int>(rawA))
+				|| expectedInt != floatToInt(a)
+				|| (x < y) != (isOrdered && orderKey(a) < orderKey(b))
+				|| (x == y) != (isOrdered && orderKey(a) == orderKey(b));
+		if (isMismatch) {
+			++mismatchCount;
+		}
+	}
+	return mismatchCount;
 }
 
 }																															// namespace GAZLReference

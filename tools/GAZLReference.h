@@ -31,8 +31,10 @@
 	  - integer results wrap at 32 bits, shift counts are taken mod 32, `INT_MIN / -1` is `INT_MIN` and
 	    `INT_MIN % -1` is 0; `FTOi` truncates and saturates, and NaN gives 0
 	  - floats are IEEE-754 binary32 computed with integer operations only, so no compiler or FPU setting can change
-	    them: rounding to nearest even, gradual underflow, and every arithmetic NaN is 0x7FC00000. `DIVf` by zero gives
-	    an infinity or a NaN rather than an error
+	    them: rounding to nearest even, and denormals kept or flushed as `DenormalMode` says. `DIVf` by zero gives an
+	    infinity or a NaN rather than an error. An arithmetic NaN is always 0x7FC00000, which matches an interpreter
+	    built with GAZL_CANONICAL_NAN; the specification leaves NaN bits unspecified, so a caller compares against
+	    such a build
 	  - an address is `base + index` mod 2^32. The constants sit just below `MEMORY_OFFSET`, the globals and the
 	    data stack from it up, so a read reaches the constants too and a write only from `MEMORY_OFFSET` up; the
 	    zero guard after the data stack is out of reach of both. GETL / SETL index a local array and reach as far
@@ -59,6 +61,16 @@ const Status REFERENCE_VIOLATION = -1000;			// not a GAZL status: the program br
 
 class Machine;
 
+// How float arithmetic treats denormals (docs/gazl/Specification.md section 4).
+enum DenormalMode {
+	KEEP_DENORMALS,				// gradual underflow, the standard
+	FLUSH_AFTER_ROUNDING,		// flush-to-zero; a result that rounds up to the smallest normal float is kept (x86)
+	FLUSH_BEFORE_ROUNDING		// flush-to-zero; that result is flushed too (ARM by default)
+};
+
+// This module's binary32 arithmetic against the host's own, which the caller has set to `mode`.
+int64_t countFloatMismatches(int64_t caseCount, DenormalMode mode);
+
 /*
 	A native function as the reference calls it: `window[0]` is the result, `window[1..]` the arguments, and `room`
 	the number of words from `window` to the end of the data stack.
@@ -71,9 +83,9 @@ typedef Status (*Native)(Machine& machine, Value* window, UInt room);
 */
 class Machine {
 	public:
-		Machine(const AssembledProgram& program, UInt ipStackSize, const Native* natives);
+		Machine(const AssembledProgram& program, UInt ipStackSize, const Native* natives, DenormalMode denormalMode);
 		Status call(Pointer function, int64_t startFuel);		// runs `function` to its return, a fault, or the end of `startFuel`
-		Int fuelLeft() const;
+		int64_t fuelLeft() const;
 		Value* accessMemory(Pointer pointer, UInt count);		// [pointer, pointer + count) inside writable memory, or 0
 		const std::string& getViolation() const;				// why the last run stopped with REFERENCE_VIOLATION
 
@@ -92,6 +104,7 @@ class Machine {
 		int64_t constantWriteWord(Pointer pointer) const;
 		int64_t localArrayWord(const Value& arraySlot, Int index) const;	// -1 when `index` is outside the array's reach
 		int64_t functionEntry(UInt ordinal) const;
+		UInt floatOperand(const Value& operand) const;			// its bits, a denormal read as zero under flush-to-zero
 
 		const Instruction* const code;
 		const UInt codeSize;
@@ -105,6 +118,7 @@ class Machine {
 		const UInt stackEnd;
 		const UInt ipStackSize;
 		const Native* const natives;
+		const DenormalMode denormalMode;
 		int64_t fuel;
 		int64_t ip;
 		int64_t dsp;
