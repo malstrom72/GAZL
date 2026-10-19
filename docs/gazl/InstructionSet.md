@@ -85,9 +85,9 @@ stack frame sizes or for bounds checking etc.
 > call window, so an exhausted stack is reported at entry rather than deeper in. See `docs/impala/MemorySafetyModel.md`.
 
 A function pointer (the value of `&function`) is an opaque handle: a stable ordinal assigned in function declaration
-order, not a code address. Only equality (`EQUp` / `NEQp`) and calling are defined operations on a function pointer;
-ordering (`LSSp`, `GEQp` etc.) and arithmetic (`ADDp`, `SUBp`, `DIFp`) applied to a function pointer yield an
-unspecified (but memory-safe) result.
+order, not a code address. Equality (`EQUp` / `NEQp`), ordering (`LSSp`, `GEQp` etc.), the difference of two
+(`DIFp`, their ordinal distance) and calling are defined on function pointers. Arithmetic that produces one (`ADDp`,
+`SUBp`) yields an unspecified result, and so does ordering or subtracting `NULL` against any pointer.
 
 > **GAZL 1 does not enforce that contract, and GAZL 2 should.** All of those assemble today, because `p`
 > covers both data pointers and function pointers. `ADDp` is the one that bites: `&one + 1` is a valid
