@@ -1444,7 +1444,24 @@ int sweepPointerConstantKinds() {
 		{ "an offset on a target name", "\tGAZL #2\nf:\tFUNC\n\tRETU\nT:\t! DEFt &f\nmain:\tFUNC\nx:\tLOCt\n"
 				"\tMOVt x &T:0\n\tRETU\n\tGAZL #1\n", OFFSET_OUT_OF_BOUNDS },
 		{ "a target name written as a number in a GAZL 2 region", "\tGAZL #2\nf:\tFUNC\n\tRETU\nT:\t! DEFt &f\n"
-				"main:\tFUNC\nx:\tLOCt\n\tMOVt x #T\n\tRETU\n\tGAZL #1\n", INCOMPATIBLE_TYPES }
+				"main:\tFUNC\nx:\tLOCt\n\tMOVt x #T\n\tRETU\n\tGAZL #1\n", INCOMPATIBLE_TYPES },
+		{ "a target name of data with an offset", "g:\tGLOB *2\nT:\t! DEFt &g:1\nmain:\tFUNC\n\tRETU\n"
+				, INCOMPATIBLE_TYPES },
+		{ "a target name of a pointer name of data", "g:\tGLOB *2\nP:\t! DEFp &g\nT:\t! DEFt &P\nmain:\tFUNC\n\tRETU\n"
+				, INCOMPATIBLE_TYPES },
+		{ "a target name of a pointer name of a GAZL 1 function", "f:\tFUNC\n\tRETU\nP:\t! DEFp &f\nT:\t! DEFt &P\n"
+				"main:\tFUNC\n\tRETU\n", INCOMPATIBLE_TYPES },
+		{ "a target name of an assembly-time address", "g:\tGLOB *2\n\t! ADDp <A> &g #1\nT:\t! DEFt <A>\n"
+				"main:\tFUNC\n\tRETU\n", INCOMPATIBLE_COMPILE_TIME_VARIABLE_TYPE },
+		{ "a target name of a number", "T:\t! DEFt #5\nmain:\tFUNC\n\tRETU\n", DID_NOT_EXPECT_CONSTANT_INT },
+		{ "a pointer name of a GAZL 1 function inside a GAZL 2 region", "f:\tFUNC\n\tRETU\n\tGAZL #2\nP:\t! DEFp &f\n"
+				"\tGAZL #1\nmain:\tFUNC\n\tRETU\n", INCOMPATIBLE_TYPES },
+		{ "a pointer name of a target name", "\tGAZL #2\nf:\tFUNC\n\tRETU\n\tGAZL #1\nT:\t! DEFt &f\nP:\t! DEFp &T\n"
+				"main:\tFUNC\n\tRETU\n", INCOMPATIBLE_TYPES },
+		{ "a target name of a pointer name of NULL", "P:\t! DEFp &NULL\nT:\t! DEFt &P\nmain:\tFUNC\nx:\tLOCt\n"
+				"\tMOVt x &T\n\tRETU\n", -1 },
+		{ "a pointer name of a target name of NULL", "T:\t! DEFt &NULL\nP:\t! DEFp &T\nmain:\tFUNC\np:\tLOCp\n"
+				"\tMOVp p &P\n\tRETU\n", -1 }
 	};
 	const int count = sizeof (CASES) / sizeof (*CASES);
 	int failures = 0;
