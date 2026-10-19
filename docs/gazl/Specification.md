@@ -167,10 +167,13 @@ The prefix does not restrict the kind of name: `#name` and `&name` both take any
 - **Accesses are checked at assembly.** Where an instruction reads or writes the word at `&label:k` (`PEEK`,
   `POKE`, `COPY`), that word must lie within the label's section, before or after the label; it may be owned by
   another label (section 6). The word at `local:k` must lie within the frame's parameters and locals (section 6).
-  Anything else is `OFFSET_OUT_OF_BOUNDS`.
+  An access through a `! DEFp` name, which takes no offset, is checked against the address the name was defined
+  with: with `P: ! DEFp &table:4`, `PEEK v &P` is allowed exactly when `PEEK v &table:4` is. An access through an
+  assembly-time variable, such as `PEEK v <A>`, or through a `! DEFp` name of one, is always refused: there is no
+  label to check it against. A failed check is `OFFSET_OUT_OF_BOUNDS`.
 - **Addresses are not.** Where `&label:k` is only a value (`MOVp`, `ADDp`, `DIFp`, pointer compares, `FORp`,
-  `DATp`, `DATA`), any offset is accepted. So is any `local:k` that is the local of `ADRL` or the array of `GETL`
-  and `SETL`. Accesses through these are checked at run time (sections 3 and 8).
+  `DATp`, `DATA`, `! DEFp`), any offset is accepted. So is any `local:k` that is the local of `ADRL` or the array
+  of `GETL` and `SETL`. Accesses through these are checked at run time (sections 3 and 8).
 - **Nothing else takes an offset.** Any `:k` on a function, a native, `&NULL`, a `! DEFp` name or a number, `:0`
   included, is `OFFSET_OUT_OF_BOUNDS`: on a function it would name another function, and on the others it names
   nothing.
@@ -193,6 +196,17 @@ keeping the literal's sign. There is no literal for infinity or NaN.
 A program is one or more **units** (source files) assembled in order into one program.
 - **Shared across units:** global names, meaning data sections, functions and named constants.
 - **Reset per unit:** assembly-time variables.
+
+**Forward references.** A global name may be used before its definition, in the same unit or an earlier one,
+wherever the assembler does not need its value at once. Such a use is checked when the program is finished, by the
+same rules as a use after the definition.
+- **Data labels, functions and `! DEFp` names** may be used wherever a pointer goes: as a call target, as an
+  address that `PEEK`, `POKE` or `COPY` reads or writes, or as a pointer value, as in `MOVp`, `DATp` and `DATA`.
+- **Number names** (`! DEFi`, `! DEFf`) may be used only where a value is stored without a type: in `DATA`, and as
+  the value `POKE` or `SETL` stores. Anywhere else, `DATi` and `DATf` included, the assembler needs the value at
+  once, to check its type, its sign or a zero divisor, or to fold the instruction, so the definition must come
+  first.
+- **The operands of a `!` statement** must be defined before it, since it runs as it is read (section 7).
 
 **Data sections.** `GLOB *n`, `TEMP *n` and `CNST *n` each reserve a section of exactly `n` words. The statement's
 label, if it has one, names the section and its first word; a section without a label is unnamed. The data
@@ -240,8 +254,8 @@ Without the `DATi #5954` row, `tail` would own all 40 words and `buffer` none. O
   move several locals. With `ADRL p x *n`, `n > 0`, the program promises to use `p` only within the `n` words from
   `x`; an access through it outside them gives an unspecified result.
 - **Ending.** The last instruction must be `RETU` or `GOTO`.
-- **Labels** are local to their function. A branch may not target the position where the next `FUNC` starts
-  (`LABEL_ON_FUNCTION`).
+- **Labels** are local to their function, and may be used before they appear in it. A branch may not target the
+  position where the next `FUNC` starts (`LABEL_ON_FUNCTION`).
 - **`NOOP`** generates nothing; it exists so a line can carry a label.
 
 **Frame size.** A function's frame is its parameters and locals, plus its transients: one word past the highest
@@ -251,7 +265,11 @@ Without the `DATi #5954` row, `tail` would own all 40 words and `buffer` none. O
 
 A statement prefixed with `!` runs while the program is assembled and generates no code:
 - `! DEFi`, `! DEFf` and `! DEFp` define a named constant: the statement's label. `DEFi` and `DEFf` name a number,
-  written `#name`, and `DEFp` a pointer, written `&name`.
+  written `#name`, and `DEFp` a pointer, written `&name`. A `DEFp` name is the same kind of pointer as its operand:
+  data, constant data, a function or `NULL`. So `CALL &F` works for a name of a function, while `PEEK` and `POKE`
+  refuse a name of a function or of `NULL`, and `POKE` refuses a name of constant data. The operand is only a
+  value, so `P: ! DEFp &table:100` assembles whatever the size of `table`'s section; only an access through `P` is
+  then refused (**Offsets**, section 5).
 - `! MOVi <A> #1`, `! ADDi <A> <A> #2` and so on compute into assembly-time variables. A variable's name is exactly
   one identifier character (section 5) between `<` and `>`, so there are 65 of them. Names are case-sensitive: `<a>`
   and `<A>` are different variables. All are cleared at the start of each unit, and reading one that the unit has not

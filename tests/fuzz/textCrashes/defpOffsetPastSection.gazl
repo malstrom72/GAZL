@@ -1,0 +1,7 @@
+g:	GLOB *2
+P:	! DEFp &g:2000000000
+main:	FUNC
+v:	LOCi
+	PEEK v &P
+	POKE &P v
+	RETU

@@ -322,6 +322,8 @@ checkZeroLoop: NOOP
  CALL      p0
  CALL      p1              %0              *1
  NEQi      %0              #GOOD           @fail
+ CALL      &CallPointerConstants %0        *1
+ NEQi      %0              #GOOD           @fail
 
 ;///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ;
@@ -2175,6 +2177,25 @@ CallBack:               FUNC
                         PEEK pointerContents &global.pointer
                         NEQp expect pointerContents @fail
                         POKE &global.pointer changeTo
+                        RETU
+    fail:               CALL ^assertFail
+                        RETU
+
+;-------------------------------------------------------------------------------
+EARTH_CHECK:            ! DEFp &EarthCheck
+NO_POINTER:             ! DEFp &NULL
+CallPointerConstants:   FUNC
+    howAreWe:           OUTi
+;
+; A `! DEFp` name keeps the kind of what it names: one of a function can be
+; called, and one of `NULL` is a null pointer.
+;-------------------------------------------------------------------------------
+    nothing:            LOCp
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+                        MOVp nothing &NO_POINTER
+                        NEQp nothing &NULL @fail
+                        CALL &EARTH_CHECK %0 *1
+                        MOVi howAreWe %0
                         RETU
     fail:               CALL ^assertFail
                         RETU

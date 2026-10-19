@@ -48,6 +48,9 @@ bash tools/gazl-validate.sh \
 	impala/ImpalaDemo.impala output/ImpalaDemo.gazl 0x4d2 impala/ImpalaDemo.impala
 ./output/GAZLCmd output/ImpalaDemo.gazl main
 
+# Impala keeps named constants in its output, so a golden that only matches text can still fail to assemble.
+./output/GAZLCmd tests/impala/golden/pointerConstants.gazl main
+
 # The staging above only proves the compiler fits TODAY's nesting limit. This fails while there is still headroom,
 # because the limit is NuXJS's to change: when it dropped to 48, GAZL stopped building with no prior warning.
 bash tools/checkImpalaNesting.sh
