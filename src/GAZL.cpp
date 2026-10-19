@@ -1536,7 +1536,7 @@ const Char* Assembler::feed(const Char* line) {
 							}
 					
 			case FUNC_CC_:	if (functionCount >= maxFunctionCount) throw Exception(NOT_ENOUGH_FUNCTION_SPACE);			// FUNC
-							v.t = static_cast<Target>(FUNCTION_OFFSET + functionCount);
+							v.t = FUNCTION_OFFSET + functionCount;
 							functionTable[functionCount] = (UInt)(ip - codeBase);
 							++functionCount;
 							declare(globals, labelBegin, labelEnd,
@@ -1737,12 +1737,12 @@ Int Processor::run() {
 	while (--clockCyclesLeft >= 0) {
 		switch (ip->opcode) {
 			case FUNC_CC_:	if ((UInt)C0.i + (UInt)C1.i > (UInt)(dataStackEnd - dsp)) { err = DATA_STACK_OVERFLOW; goto ret; } dsp += (UInt)(C0.i); break;
-			case CALL_VVC:	ui = (Pointer)V0.t - FUNCTION_OFFSET;															// ui = function ordinal
+			case CALL_VVC:	ui = V0.t - FUNCTION_OFFSET;																// ui = function ordinal
 							if (ui >= functionCount) { err = BAD_CALL; goto ret; }
 							ui = functionTable[ui];																		// ui = code offset
 							assert((codeBase + ui)->opcode == FUNC_CC_);
 							goto call;
-			case CALL_CVC:	ui = (Pointer)C0.t - FUNCTION_OFFSET;															// ui = function ordinal (constant, validated at assembly)
+			case CALL_CVC:	ui = C0.t - FUNCTION_OFFSET;																// ui = function ordinal (constant, validated at assembly)
 							assert(ui < functionCount);
 							ui = functionTable[ui];																		// ui = code offset
 							assert((codeBase + ui)->opcode == FUNC_CC_);
@@ -1771,10 +1771,10 @@ Int Processor::run() {
 							dsp = ipsp->dsp;
 							if (dsp == 0) { dsp = (--ipsp)->dsp; assert(ipsp->ip == ip); err = OK; goto ret; }
 							break;
-			case TAIL_CC_:	ui = (Pointer)C0.t - FUNCTION_OFFSET;					// ui = function ordinal (constant, validated at assembly)
+			case TAIL_CC_:	ui = C0.t - FUNCTION_OFFSET;						// ui = function ordinal (constant, validated at assembly)
 							assert(ui < functionCount);
 							goto tail;
-			case TAIL_VC_:	ui = (Pointer)V0.t - FUNCTION_OFFSET;
+			case TAIL_VC_:	ui = V0.t - FUNCTION_OFFSET;
 							if (ui >= functionCount) { err = BAD_CALL; goto ret; }
 			tail:			{																// slide the %0 window onto the frame base, no return push: the callee's RETU returns to OUR caller
 								const Value* sp = dsp;
@@ -1908,7 +1908,7 @@ ret:
 
 Status Processor::enterCall(Target target) {
 	assert(codeBase != 0);
-	UInt ui = static_cast<Pointer>(target) - FUNCTION_OFFSET;															// ui = function ordinal
+	UInt ui = target - FUNCTION_OFFSET;																					// ui = function ordinal
 	if (ui >= functionCount) return BAD_CALL;
 	ui = functionTable[ui];																								// ui = code offset
 	assert((codeBase + ui)->opcode == FUNC_CC_);
@@ -1927,7 +1927,7 @@ Status Processor::enterCall(Target target) {
 */
 Value* Processor::pushCall(Target target) {
 	assert(codeBase != 0);
-	UInt ui = static_cast<Pointer>(target) - FUNCTION_OFFSET;
+	UInt ui = target - FUNCTION_OFFSET;
 	if (ui >= functionCount) return 0;
 	const Instruction* func = codeBase + functionTable[ui];
 	assert(func->opcode == FUNC_CC_);

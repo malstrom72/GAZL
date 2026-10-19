@@ -75,9 +75,9 @@ typedef Int Status;																										// Run-time status code
 const int VERSION = 2;						// What 2 adds is docs/gazl/Specification.md section 12. A program requires it with `! GEQi #GAZL_VERSION #2 @label`.
 const int WORD_SIZE = 32;
 const Pointer MEMORY_OFFSET = 0x12345678;																				// All memory pointers in GAZL are offsetted by this amount (thus the address of the first memory word is not zero). This makes it easier to detect invalid memory operations (such as writing to a null-pointer).
-const Pointer FUNCTION_OFFSET = 0x56789ABC;																				// All function pointers in GAZL are offsetted by this amount (thus the ordinal of the first function is not zero). A function pointer is an ordinal indexing `functionTable`, not a code address.
+const Target FUNCTION_OFFSET = 0x56789ABC;																				// All function pointers in GAZL are offsetted by this amount (thus the ordinal of the first function is not zero). A function pointer is an ordinal indexing `functionTable`, not a code address.
 const Pointer NULL_POINTER = 0;
-const Target NULL_TARGET = static_cast<Target>(NULL_POINTER);
+const Target NULL_TARGET = 0;
 
 union Value {
 	Int i;
