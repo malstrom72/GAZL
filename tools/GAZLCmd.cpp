@@ -137,8 +137,10 @@ class FlushToZeroScope {
 };
 
 #if defined(__SSE2__) || defined(_M_X64) || defined(_M_IX86)
+static const unsigned int MXCSR_FLUSH_TO_ZERO = 0x8000;			// FTZ; the bits as numbers, since GCC declares the DAZ
+static const unsigned int MXCSR_DENORMALS_ARE_ZERO = 0x0040;	// mask only in the SSE3 header
 FlushToZeroScope::FlushToZeroScope() : previousMXCSR(_mm_getcsr()) {
-	_mm_setcsr(previousMXCSR | _MM_FLUSH_ZERO_MASK | _MM_DENORMALS_ZERO_MASK);
+	_mm_setcsr(previousMXCSR | MXCSR_FLUSH_TO_ZERO | MXCSR_DENORMALS_ARE_ZERO);
 }
 FlushToZeroScope::~FlushToZeroScope() { _mm_setcsr(previousMXCSR); }
 bool FlushToZeroScope::isAvailable() { return true; }
