@@ -1340,6 +1340,67 @@ int sweepPointerConstantKinds() {
 	return failures;
 }
 
+/*
+	`PEEK var &address` and `POKE &address` are checked only at assembly, so one through a `! DEFp` name must reach a
+	word in the section of the label it was defined from, here at every edge, through a name of the name too. An
+	assembly-time address names no label to check against, so no access passes through it. Returns the number of
+	failures, each one printed.
+*/
+int sweepPointerConstantReach() {
+	const char* const SECTIONS = "\tGLOB *1\nbefore:\tDATi #0\n\tGLOB *3\na:\tDATi #1\nb:\tDATi #2\n\tDATi #3\n"
+			"\tGLOB *1\nafter:\tDATi #0\n\tCNST *2\nc:\tDATi #4\n\tDATi #5\n";
+	struct Reach { const char* label; int offset; bool isInside; bool isConstant; };
+	const Reach REACHES[] = {
+		{ "b", -2000000000, false, false }, { "b", -2, false, false }, { "b", -1, true, false }, { "b", 0, true, false }
+		, { "b", 1, true, false }, { "b", 2, false, false }, { "b", 2000000000, false, false }
+		, { "c", -1, false, true }, { "c", 0, true, true }, { "c", 1, true, true }, { "c", 2, false, true }
+	};
+	const char* const ACCESSES[] = { "PEEK v &P", "PEEK v #P", "PEEK v &Q", "POKE &P v", "POKE &P #1", "POKE &Q v" };
+	int count = 0;
+	int failures = 0;
+	for (size_t i = 0; i < sizeof (REACHES) / sizeof (*REACHES); ++i) {
+		for (size_t j = 0; j < sizeof (ACCESSES) / sizeof (*ACCESSES); ++j) {
+			const Reach& reach = REACHES[i];
+			const bool isWrite = (ACCESSES[j][1] == 'O');
+			char line[64];
+			std::snprintf(line, sizeof (line), "P:\t! DEFp &%s:%d\nQ:\t! DEFp &P\n", reach.label, reach.offset);
+			const std::string source = std::string(SECTIONS) + line + "main:\tFUNC\nv:\tLOCi\n\t" + ACCESSES[j]
+					+ "\n\tRETU\n";
+			const int expected = (isWrite && reach.isConstant ? INCOMPATIBLE_TYPES								// the kind is checked before the reach
+					: (reach.isInside ? -1 : OFFSET_OUT_OF_BOUNDS));
+			const int error = assemblyError(source);
+			if (error != expected) {
+				std::printf("FAIL pointer constant reach: %s through &%s:%d gave error %d, expected %d\n", ACCESSES[j]
+						, reach.label, reach.offset, error, expected);
+				++failures;
+			}
+			++count;
+		}
+	}
+	struct Case { const char* what; const char* access; int error; };
+	const Case CASES[] = {
+		{ "a PEEK through an assembly-time address", "\tPEEK v <P>\n", OFFSET_OUT_OF_BOUNDS },
+		{ "a POKE through an assembly-time address", "\tPOKE <P> v\n", OFFSET_OUT_OF_BOUNDS },
+		{ "a POKE of a constant through an assembly-time address", "\tPOKE <P> #1\n", OFFSET_OUT_OF_BOUNDS },
+		{ "a PEEK through a name of an assembly-time address", "\tPEEK v &R\n", OFFSET_OUT_OF_BOUNDS },
+		{ "an assembly-time address as a value", "\tMOVp p <P>\n", -1 },
+		{ "a name of an assembly-time address as a value", "\tMOVp p &R\n", -1 }
+	};
+	for (size_t i = 0; i < sizeof (CASES) / sizeof (*CASES); ++i) {
+		const std::string source = std::string("g:\tGLOB *2\n\t! ADDp <P> &g #1\nR:\t! DEFp <P>\nmain:\tFUNC\n")
+				+ "v:\tLOCi\np:\tLOCp\n" + CASES[i].access + "\tRETU\n";
+		const int error = assemblyError(source);
+		if (error != CASES[i].error) {
+			std::printf("FAIL pointer constant reach: %s gave error %d, expected %d\n", CASES[i].what, error
+					, CASES[i].error);
+			++failures;
+		}
+		++count;
+	}
+	std::printf("pointer constant reach: %d checked, %d failed\n", count, failures);
+	return failures;
+}
+
 struct Totals { int probes; int failures; };
 
 int sweep(int engineCount) {
@@ -1446,6 +1507,6 @@ int main() {
 #endif
 	const int hostFailures = sweepNativeAccess() + sweepFrameAndThaw() + sweepFrozenEntries() + sweepThawRules()
 			+ sweepCanary() + sweepTextEncoding() + sweepUnnamedSections() + sweepLabelReach() + sweepFunctionOffsets()
-			+ sweepPointerConstantKinds();
+			+ sweepPointerConstantKinds() + sweepPointerConstantReach();
 	return (sweep(engineCount) != 0 || hostFailures != 0) ? 1 : 0;
 }

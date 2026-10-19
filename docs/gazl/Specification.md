@@ -167,6 +167,8 @@ The prefix does not restrict the kind of name: `#name` and `&name` both take any
 - **Accesses are checked at assembly.** Where an instruction reads or writes the word at `&label:k` (`PEEK`,
   `POKE`, `COPY`), that word must lie within the label's section, before or after the label; it may be owned by
   another label (section 6). The word at `local:k` must lie within the frame's parameters and locals (section 6).
+  Through a `! DEFp` name, the word it names must lie within the section of the label it was defined from. An
+  assembly-time address names no label, so no access goes through one, directly or through a `! DEFp` name of it.
   Anything else is `OFFSET_OUT_OF_BOUNDS`.
 - **Addresses are not.** Where `&label:k` is only a value (`MOVp`, `ADDp`, `DIFp`, pointer compares, `FORp`,
   `DATp`, `DATA`), any offset is accepted. So is any `local:k` that is the local of `ADRL` or the array of `GETL`
@@ -253,7 +255,8 @@ A statement prefixed with `!` runs while the program is assembled and generates 
 - `! DEFi`, `! DEFf` and `! DEFp` define a named constant: the statement's label. `DEFi` and `DEFf` name a number,
   written `#name`, and `DEFp` a pointer, written `&name`. A `DEFp` name is the same kind of pointer as its operand:
   data, constant data, a function or `NULL`. It is accepted only where that operand would be, so `PEEK` and `POKE`
-  refuse a name of a function or of `NULL`, and `POKE` refuses a name of constant data.
+  refuse a name of a function or of `NULL`, and `POKE` refuses a name of constant data. An access through a name of
+  data is checked like one through its operand (**Offsets**, section 5).
 - `! MOVi <A> #1`, `! ADDi <A> <A> #2` and so on compute into assembly-time variables. A variable's name is exactly
   one identifier character (section 5) between `<` and `>`, so there are 65 of them. Names are case-sensitive: `<a>`
   and `<A>` are different variables. All are cleared at the start of each unit, and reading one that the unit has not

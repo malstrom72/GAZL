@@ -980,6 +980,9 @@ void Assembler::parseConstant(const Char* b, const Char* e, int accepts, Value* 
 							throw Exception(INVALID_COMPILE_TIME_VARIABLE, b, e);
 						const CompileTimeVar& cv = compileTimeVars[(unsigned char)b[1]];
 						if ((accepts & cv.types) == 0) throw Exception(INCOMPATIBLE_COMPILE_TIME_VARIABLE_TYPE, b, e);
+						if ((accepts & UNCHECKED_ADDRESS) == 0 && (accepts & cv.types & ADDRESS) != 0) {
+							throw Exception(OFFSET_OUT_OF_BOUNDS, b, e);									// an access, checked only here, and the variable names no label to check it against
+						}
 						*v = cv.value;
 						break;
 					}
@@ -1287,19 +1290,26 @@ const Char* Assembler::feed(const Char* line) {
 		} else {
 			switch (op->opcode) {
 				case DEFI____:	parseOperand(op0Begin, op0End, op->accepts[0], &v);										// ! DEFi, ! DEFf, ! DEFp
-								types = op->declareTypes;
-								if ((types & POINTER_CONSTANT) != 0) {													// a `! DEFp` name of `NULL` or a function never passes as data
-									if (*op0Begin == '<') {
-										types = compileTimeVars[static_cast<unsigned char>(op0Begin[1])].types;
-									} else {
-										const Char* nameEnd = op0Begin + 1;
-										while (nameEnd != op0End && *nameEnd != ':') ++nameEnd;
-										Value named;
-										globals.lookup(op0Begin + 1, nameEnd, op->accepts[0], types, named);
+								if ((op->declareTypes & POINTER_CONSTANT) == 0) {
+									declare(globals, labelBegin, labelEnd, op->declareTypes, v);
+								} else if (*op0Begin == '<') {															// names no label, so no access through it passes
+									types = compileTimeVars[static_cast<unsigned char>(op0Begin[1])].types;
+									Symbols::Symbol* const symbol = declare(globals, labelBegin, labelEnd
+											, (types & op->accepts[0]) | POINTER_CONSTANT, v);
+									if (symbol != 0) symbol->maxOffset = -1;
+								} else {																				// keeps the kind it names, so `NULL` or a function never passes as data
+									const Char* nameEnd = op0Begin + 1;
+									while (nameEnd != op0End && *nameEnd != ':') ++nameEnd;
+									const std::string name(op0Begin + 1, nameEnd);
+									const Symbols::Symbol& named = globals.symbols.find(name)->second;
+									const Int offset = static_cast<Int>(static_cast<UInt>(v.i)
+											- static_cast<UInt>(named.value.i));
+									Symbols::Symbol* const symbol = declare(globals, labelBegin, labelEnd
+											, (named.types & op->accepts[0]) | POINTER_CONSTANT, v);
+									if (symbol != 0 && (offset < named.minOffset || offset > named.maxOffset)) {
+										symbol->maxOffset = -1;															// outside the section: an access is checked only here, so none passes
 									}
-									types = (types & op->accepts[0]) | POINTER_CONSTANT;
 								}
-								declare(globals, labelBegin, labelEnd, types, v);
 								break;
 				
 				case IFDF_CB_:
