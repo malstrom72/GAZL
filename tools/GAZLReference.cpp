@@ -38,7 +38,7 @@ struct Violation {
 	const char* why;
 };
 
-static Int wrap(long long value) { return static_cast<Int>(static_cast<UInt>(value)); }
+static Int wrap(int64_t value) { return static_cast<Int>(static_cast<UInt>(value)); }
 
 static Int floatToInt(Float value) {														// already scaled; truncates and saturates, NaN is 0
 	if (value != value) {
@@ -50,7 +50,7 @@ static Int floatToInt(Float value) {														// already scaled; truncates a
 	if (static_cast<double>(value) < -2147483648.0) {
 		return static_cast<Int>(0x80000000u);
 	}
-	return static_cast<Int>(static_cast<long long>(value));
+	return static_cast<Int>(static_cast<int64_t>(value));
 }
 
 // Whether an opcode takes its first or second SOURCE operand as a constant: the `C` in `_VCV`, `_VVC` or `_CVB`.
@@ -85,11 +85,11 @@ static bool isSecondSourceConstant(int opcode) {
 static Int integerResult(int opcode, Int a, Int b) {
 	const UInt shift = static_cast<UInt>(b) & 31;
 	switch (opcode) {
-		case ADDI_VVV: case ADDI_VVC: return wrap(static_cast<long long>(a) + b);
-		case SUBI_VVV: case SUBI_VVC: case SUBI_VCV: return wrap(static_cast<long long>(a) - b);
-		case MULI_VVV: case MULI_VVC: return wrap(static_cast<long long>(a) * b);
-		case DIVI_VVV: case DIVI_VVC: case DIVI_VCV: return wrap(static_cast<long long>(a) / b);
-		case MODI_VVV: case MODI_VVC: case MODI_VCV: return wrap(static_cast<long long>(a) % b);
+		case ADDI_VVV: case ADDI_VVC: return wrap(static_cast<int64_t>(a) + b);
+		case SUBI_VVV: case SUBI_VVC: case SUBI_VCV: return wrap(static_cast<int64_t>(a) - b);
+		case MULI_VVV: case MULI_VVC: return wrap(static_cast<int64_t>(a) * b);
+		case DIVI_VVV: case DIVI_VVC: case DIVI_VCV: return wrap(static_cast<int64_t>(a) / b);
+		case MODI_VVV: case MODI_VVC: case MODI_VCV: return wrap(static_cast<int64_t>(a) % b);
 		case ANDI_VVV: case ANDI_VVC: return a & b;
 		case IORI_VVV: case IORI_VVC: return a | b;
 		case XORI_VVV: case XORI_VVC: return a ^ b;
@@ -133,14 +133,13 @@ Machine::Machine(const AssembledProgram& program, UInt ipStackSize, const Native
 		, functionCount(program.functionCount), memory(program.memory), constantWords(program.constsSize - 1)
 		, readableWords(program.memorySize - 1), writableWords(program.memorySize - program.constsSize)
 		, stackBase(program.constsSize - 1 + program.globalsSize), stackEnd(program.memorySize - 1)
-		, ipStackSize(ipStackSize), natives(natives), fuel(0), ip(0), dsp(0), unspecified(false) {
+		, ipStackSize(ipStackSize), natives(natives), fuel(0), ip(0), dsp(0) {
 	assert(program.constsSize >= 1 && program.globalsSize + program.constsSize <= program.memorySize);
 }
 
-Status Machine::call(Pointer function, long long startFuel) {
+Status Machine::call(Pointer function, int64_t startFuel) {
 	fuel = startFuel;
 	violation.clear();
-	unspecified = false;
 	try {
 		return run(function);
 	}
@@ -153,15 +152,13 @@ Status Machine::call(Pointer function, long long startFuel) {
 Int Machine::fuelLeft() const { return static_cast<Int>(fuel); }
 
 Value* Machine::accessMemory(Pointer pointer, UInt count) {
-	const long long offset = writeOffset(pointer);
+	const int64_t offset = writeOffset(pointer);
 	return (offset + count <= writableWords ? &memory[constantWords + offset] : 0);
 }
 
 const std::string& Machine::getViolation() const { return violation; }
 
-bool Machine::isUnspecified() const { return unspecified; }
-
-Value& Machine::stackWord(long long index) {
+Value& Machine::stackWord(int64_t index) {
 	if (index < stackBase || index >= stackEnd) {
 		throw Violation("word outside the data stack");
 	}
@@ -171,23 +168,23 @@ Value& Machine::stackWord(long long index) {
 // A variable operand is a frame slot: `dsp` plus the operand. The assembler keeps it inside the frame.
 Value& Machine::slot(const Value& operand) { return stackWord(dsp + operand.i); }
 
-long long Machine::readWord(Pointer pointer) const {
+int64_t Machine::readWord(Pointer pointer) const {
 	return static_cast<UInt>(pointer - MEMORY_OFFSET + constantWords);
 }
 
-long long Machine::writeOffset(Pointer pointer) const { return static_cast<UInt>(pointer - MEMORY_OFFSET); }
+int64_t Machine::writeOffset(Pointer pointer) const { return static_cast<UInt>(pointer - MEMORY_OFFSET); }
 
 // A constant address (`&address` with no index) is checked at assembly; the reference checks it again.
-long long Machine::constantReadWord(Pointer pointer) const {
-	const long long word = readWord(pointer);
+int64_t Machine::constantReadWord(Pointer pointer) const {
+	const int64_t word = readWord(pointer);
 	if (word >= readableWords) {
 		throw Violation("constant address outside memory");
 	}
 	return word;
 }
 
-long long Machine::constantWriteWord(Pointer pointer) const {
-	const long long offset = writeOffset(pointer);
+int64_t Machine::constantWriteWord(Pointer pointer) const {
+	const int64_t offset = writeOffset(pointer);
 	if (offset >= writableWords) {
 		throw Violation("constant address outside writable memory");
 	}
@@ -195,8 +192,8 @@ long long Machine::constantWriteWord(Pointer pointer) const {
 }
 
 // GETL / SETL reach from the local array to the end of the data stack; a frame operand below the stack is a violation.
-long long Machine::localArrayWord(const Value& arraySlot, Int index) const {
-	const long long word = dsp + arraySlot.i + index;
+int64_t Machine::localArrayWord(const Value& arraySlot, Int index) const {
+	const int64_t word = dsp + arraySlot.i + index;
 	if (index < 0 || word >= stackEnd) {
 		return -1;
 	}
@@ -206,7 +203,7 @@ long long Machine::localArrayWord(const Value& arraySlot, Int index) const {
 	return word;
 }
 
-long long Machine::functionEntry(UInt ordinal) const {
+int64_t Machine::functionEntry(UInt ordinal) const {
 	const UInt entry = functionTable[ordinal];
 	if (entry >= codeSize || code[entry].opcode != FUNC_CC_) {
 		throw Violation("call target is not a FUNC");
@@ -239,7 +236,7 @@ Status Machine::run(Pointer function) {
 		const Value& c2 = code[ip].p2;
 		switch (opcode) {
 			case FUNC_CC_: {																// C0 = locals, C1 = the deepest call window after them
-				const long long frameWords = static_cast<long long>(static_cast<UInt>(c0.i)) + static_cast<UInt>(c1.i);
+				const int64_t frameWords = static_cast<int64_t>(static_cast<UInt>(c0.i)) + static_cast<UInt>(c1.i);
 				if (frameWords > stackEnd - dsp) {
 					return DATA_STACK_OVERFLOW;
 				}
@@ -262,8 +259,8 @@ Status Machine::run(Pointer function) {
 				continue;
 			}
 			case CALL_NVC: {																// C0 = the native's index, C1 = its window
-				const long long window = dsp + static_cast<UInt>(c1.i);
-				const long long fuelBefore = fuel;
+				const int64_t window = dsp + static_cast<UInt>(c1.i);
+				const int64_t fuelBefore = fuel;
 				const Status status = natives[c0.i](*this, &stackWord(window), static_cast<UInt>(stackEnd - window));
 				if (status != OK) {
 					fuel = fuelBefore;														// a native that fails leaves the fuel as it found it
@@ -286,8 +283,8 @@ Status Machine::run(Pointer function) {
 				if (callee >= functionCount) {
 					return BAD_CALL;
 				}
-				const long long base = dsp - static_cast<UInt>(c2.i);
-				for (long long i = 0; i < static_cast<UInt>(c1.i); ++i) {					// ascending: the window slides down
+				const int64_t base = dsp - static_cast<UInt>(c2.i);
+				for (int64_t i = 0; i < static_cast<UInt>(c1.i); ++i) {					// ascending: the window slides down
 					stackWord(base + i) = stackWord(dsp + i);
 				}
 				dsp = base;
@@ -302,7 +299,7 @@ Status Machine::run(Pointer function) {
 			case PEEK_VVV:
 			case PEEK_VCV: {																// P1 = the pointer, V2 = the index
 				const Pointer base = (opcode == PEEK_VVV ? slot(c1).p : c1.p);
-				const long long word = readWord(base + static_cast<UInt>(slot(c2).i));
+				const int64_t word = readWord(base + static_cast<UInt>(slot(c2).i));
 				if (word >= readableWords) {
 					return BAD_PEEK;
 				}
@@ -315,7 +312,7 @@ Status Machine::run(Pointer function) {
 			case POKE_CVC: {																// P0 = the pointer, V1 = the index, P2 = the value
 				const Pointer base = (opcode == POKE_VVV || opcode == POKE_VVC ? slot(c0).p : c0.p);
 				const Value value = (opcode == POKE_VVV || opcode == POKE_CVV ? slot(c2) : c2);
-				const long long offset = writeOffset(base + static_cast<UInt>(slot(c1).i));
+				const int64_t offset = writeOffset(base + static_cast<UInt>(slot(c1).i));
 				if (offset >= writableWords) {
 					return BAD_POKE;
 				}
@@ -323,7 +320,7 @@ Status Machine::run(Pointer function) {
 				break;
 			}
 			case GETL_VVV: {																// V0 = the result, C1 = the local array's slot, V2 = the index
-				const long long word = localArrayWord(c1, slot(c2).i);
+				const int64_t word = localArrayWord(c1, slot(c2).i);
 				if (word < 0) {
 					return BAD_PEEK;
 				}
@@ -333,7 +330,7 @@ Status Machine::run(Pointer function) {
 			case SETL_VVV:
 			case SETL_VVC: {																// C0 = the local array's slot, V1 = the index, P2 = the value
 				const Value value = (opcode == SETL_VVV ? slot(c2) : c2);
-				const long long word = localArrayWord(c0, slot(c1).i);
+				const int64_t word = localArrayWord(c0, slot(c1).i);
 				if (word < 0) {
 					return BAD_POKE;
 				}
@@ -341,7 +338,7 @@ Status Machine::run(Pointer function) {
 				break;
 			}
 			case ADRL_VV_: slot(c0).p = static_cast<Pointer>(dsp + c1.i - constantWords) + MEMORY_OFFSET; break;
-			case ABSI_VV_: slot(c0).i = wrap(slot(c1).i < 0 ? -static_cast<long long>(slot(c1).i) : slot(c1).i); break;
+			case ABSI_VV_: slot(c0).i = wrap(slot(c1).i < 0 ? -static_cast<int64_t>(slot(c1).i) : slot(c1).i); break;
 			case ABSF_VV_: slot(c0).f = std::fabs(slot(c1).f); break;
 			case FLOF_VV_: slot(c0).f = std::floor(slot(c1).f); break;
 			case FTOI_VVC: slot(c0).i = floatToInt(slot(c1).f * c2.f); break;				// C2 = scale
@@ -385,18 +382,14 @@ Status Machine::run(Pointer function) {
 			case COPY_CCC: {																// P0 = destination, P1 = source, C2 = words
 				const Pointer to = (opcode == COPY_VVC || opcode == COPY_VCC ? slot(c0).p : c0.p);
 				const Pointer from = (opcode == COPY_VVC || opcode == COPY_CVC ? slot(c1).p : c1.p);
-				const long long wordCount = static_cast<UInt>(c2.i);
-				const long long destinationOffset = writeOffset(to);
-				const long long source = readWord(from);
+				const int64_t wordCount = static_cast<UInt>(c2.i);
+				const int64_t destinationOffset = writeOffset(to);
+				const int64_t source = readWord(from);
 				if (destinationOffset + wordCount > writableWords || source + wordCount > readableWords) {
 					return ACCESS_VIOLATION;
 				}
-				const long long destination = constantWords + destinationOffset;
-				if (wordCount > 0 && destination != source && destination < source + wordCount
-						&& source < destination + wordCount) {
-					unspecified = true;
-				}
-				for (long long i = 0; i < wordCount; ++i) {
+				const int64_t destination = constantWords + destinationOffset;
+				for (int64_t i = 0; i < wordCount; ++i) {											// ascending, so an overlap is defined (Specification.md section 3)
 					memory[destination + i] = memory[source + i];
 				}
 				break;
@@ -405,7 +398,7 @@ Status Machine::run(Pointer function) {
 			case FORi_VCB: {																// V0 = the counter, P1 = the limit, C2 = the branch
 				Value& counter = slot(c0);
 				const Int limit = (opcode == FORi_VVB ? slot(c1).i : c1.i);
-				counter.i = wrap(static_cast<long long>(counter.i) + 1);
+				counter.i = wrap(static_cast<int64_t>(counter.i) + 1);
 				if (counter.i < limit) {
 					ip += c2.i;
 					continue;
@@ -428,7 +421,7 @@ Status Machine::run(Pointer function) {
 			case SWCH_VCC: {																// V0 = the case, C1 = the default's index, C2 = the table
 				const UInt value = static_cast<UInt>(slot(c0).i);
 				const UInt choice = (value < static_cast<UInt>(c1.i) ? value : static_cast<UInt>(c1.i));	// out of range: the default
-				const long long word = readWord(c2.p) + choice;
+				const int64_t word = readWord(c2.p) + choice;
 				if (word >= readableWords) {
 					throw Violation("switch table outside memory");
 				}

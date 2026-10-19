@@ -358,7 +358,7 @@ namespace ReferenceNatives {
 	program that breaks an assembler guarantee, is printed with the source and aborts, so a fuzzer keeps it as a crash.
 */
 static void requireReference(const char* which, const uint8_t* data, size_t size, const AssembledProgram& program
-		, Pointer mainFunction, const GAZLReference::Native* natives, const Value* snapshot, long long fuel
+		, Pointer mainFunction, const GAZLReference::Native* natives, const Value* snapshot, int64_t fuel
 		, Status interpStatus, Int interpFuelLeft, const Value* interpImage) {
 	static Value image[DATA_MEMORY_SIZE];
 	std::memcpy(image, snapshot, sizeof (image));
@@ -367,7 +367,7 @@ static void requireReference(const char* which, const uint8_t* data, size_t size
 	GAZLReference::Machine reference(copy, CALL_STACK_SIZE, natives);
 	const Status status = reference.call(mainFunction, fuel);
 	int differingWord = -1;
-	for (int i = 0; !reference.isUnspecified() && differingWord < 0 && i < DATA_MEMORY_SIZE; ++i) {
+	for (int i = 0; differingWord < 0 && i < DATA_MEMORY_SIZE; ++i) {
 		const bool bothNaN = (interpImage[i].f != interpImage[i].f && image[i].f != image[i].f);
 		if (interpImage[i].i != image[i].i && !bothNaN) {
 			differingWord = i;
