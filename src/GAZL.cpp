@@ -1296,7 +1296,7 @@ const Char* Assembler::feed(const Char* line) {
 									types = compileTimeVars[static_cast<unsigned char>(op0Begin[1])].types;
 									Symbols::Symbol* const symbol = declare(globals, labelBegin, labelEnd
 											, (types & op->accepts[0]) | POINTER_CONSTANT, v);
-									if (symbol != 0) symbol->maxOffset = -1;
+									if (symbol != 0) symbol->maxOffset = -1;												// below `minOffset`, 0: no offset is in range
 								} else {																				// keeps the kind it names, so `NULL` or a function never passes as data
 									const Char* nameEnd = op0Begin + 1;
 									while (nameEnd != op0End && *nameEnd != ':') ++nameEnd;
@@ -1307,7 +1307,7 @@ const Char* Assembler::feed(const Char* line) {
 									Symbols::Symbol* const symbol = declare(globals, labelBegin, labelEnd
 											, (named.types & op->accepts[0]) | POINTER_CONSTANT, v);
 									if (symbol != 0 && (offset < named.minOffset || offset > named.maxOffset)) {
-										symbol->maxOffset = -1;															// outside the section: an access is checked only here, so none passes
+										symbol->maxOffset = -1;															// below `minOffset`, 0: no offset is in range, so no access passes
 									}
 								}
 								break;
