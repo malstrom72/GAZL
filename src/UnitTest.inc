@@ -120,6 +120,11 @@ const char* UNITTEST =
 	"NEQi %0 #2222 @fail\n"
 	"MOVt t0 &T_NONE\n"
 	"NEQt t0 &NULL @fail\n"
+	"PEEK t0 &tNamed:0\n"
+	"EQUt t0 &T_TWO @tNamedOk\n"
+	"GOTO @fail\n"
+	"tNamedOk: PEEK t0 &tNamed:1\n"
+	"NEQt t0 &T_NONE @fail\n"
 	"PEEK f0 &consts.float\n"
 	"PEEK i0 &consts.int\n"
 	"PEEK p0 &consts.pointer\n"
@@ -1219,4 +1224,6 @@ const char* UNITTEST =
 	"DATt &tOne &tTwo\n"
 	"T_TWO: ! DEFt &tTwo\n"
 	"T_NONE: ! DEFt &NULL\n"
+	"tNamed: CNST *2\n"
+	"DATt &T_TWO &T_NONE\n"
 	"GAZL #1\n";

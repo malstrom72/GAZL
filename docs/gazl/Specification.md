@@ -119,9 +119,14 @@ float, then multiplies by its scale operand.
 `NEQf x x @L` branches exactly when `x` is NaN, and that is the supported way to test for one. When either operand
 of `LSSf`, `LEQf`, `GRTf` or `GEQf` is NaN, whether it branches is unspecified.
 
-**Pointers.** `ADDp` and `SUBp` add or subtract an int, wrapping modulo 2^32. `DIFp` is the difference in words.
-Pointer comparisons compare the two words as **signed** ints. A function pointer supports only `EQUp`, `NEQp` and
-calling; any other operation on it gives an unspecified, memory-safe result.
+**Pointers.** `ADDp` and `SUBp` add or subtract an int, wrapping modulo 2^32. `DIFp` is the difference in words,
+and pointer comparisons compare the two words as **signed** ints.
+- **Data pointers** into one section, or into one frame, differ and order by word. Between sections the layout is
+  unspecified (section 3), so their difference and order are too.
+- **Function pointers** order by ordinal, and `DIFp` of two is their ordinal distance (section 2).
+- **`NULL`** is equal only to itself; its order and difference against any pointer are unspecified.
+- **Anything else is unspecified:** arithmetic that produces a function pointer, and a difference or order between a
+  function pointer and a data pointer.
 
 ## 5. Source text
 
@@ -460,8 +465,8 @@ requires GAZL 2 or guards each use with `! GEQi #GAZL_VERSION #2 @label`; a skip
 - **Closing.** The dialect carries over from one unit to the next, and the program must end in dialect 1
   (`UNCLOSED_GAZL_REGION`). A unit that starts with `GAZL #2` and ends with `GAZL #1` can therefore be combined
   with units of either dialect, in any order.
-- **What it changes.** The dialect decides only how functions and function addresses are typed and what the `#` and
-  `&` prefixes take, below. Every other GAZL 2 mnemonic means the same in both dialects.
+- **What it changes.** The dialect decides only how functions and function addresses are typed, which positions take
+  them, and what the `#` and `&` prefixes take, below. Every other GAZL 2 mnemonic means the same in both dialects.
 
 **Prefixes.** Inside a GAZL 2 region the prefix decides the kind of name (section 5):
 - **`#`** takes only numbers: literals and `DEFi` and `DEFf` names.
@@ -474,13 +479,14 @@ same word as a function pointer, `0x56789ABC + k` (section 2), but the assembler
 position, so a target is only ever named, copied or loaded, never computed.
 - **Instructions.** `LOCt`, `INPt` and `OUTt` declare target locals and parameters, `MOVt` copies a target, and
   `DATt` writes targets into a data section. `EQUt`, `NEQt`, `LSSt`, `LEQt`, `GRTt` and `GEQt` compare two targets
-  by declaration order, and `DIFt` gives the difference of their ordinals as an int. No instruction adds to a
-  target.
+  by ordinal, and `DIFt` gives their ordinal distance as an int. Functions of both dialects are numbered together,
+  in declaration order (section 2). Against `NULL`, the order and the distance are unspecified. No instruction adds
+  to a target.
 - **Constants.** Where these instructions take a constant, it must be the address of a GAZL 2 function, `&NULL`,
   or a `DEFt` name of either.
-- **Named targets.** `! DEFt` names a target constant, as `! DEFp` names a pointer (section 7): its operand is the
-  address of a GAZL 2 function or `&NULL`, and the name, written `&name`, is accepted wherever that operand is. Like
-  a `DEFp` name it takes no offset. `CALL &T` needs `T` to name a function; a name of `NULL` is only a value.
+- **Named targets.** `! DEFt` names a target constant, as `! DEFp` names a pointer (section 7). Its operand is the
+  address of a GAZL 2 function or `&NULL`, and the name is accepted wherever that operand is: in `MOVt`, `DATt` and
+  the target compares, and in `CALL` and `TAIL` when it names a function. Like a `DEFp` name it takes no offset.
 - **Calls.** `CALL` and `TAIL` take a function of either dialect, so GAZL 1 and GAZL 2 functions call each other.
 - **Pointers.** A `p` position (`MOVp`, `DATp`, `EQUp` and the rest) refuses a GAZL 2 function's address in either
   dialect, with `INCOMPATIBLE_TYPES`. Inside a GAZL 2 region it refuses a GAZL 1 function's address too, and an
@@ -513,8 +519,9 @@ position, so a target is only ever named, copied or loaded, never computed.
 
 The frame is 6 words: `$g`, `$a` and `$b`.
 
-**Tail calls.** `TAIL target *n` ends the current function by calling `target` in its place. `target` is
-`&function` or a variable holding a function; natives cannot be tail-called.
+**Tail calls.** `TAIL target *n` ends the current function by calling `target` in its place. `target` is a
+function, a `DEFt` name of one, or a variable or transient holding one (inside a GAZL 2 region not a `p` variable);
+natives cannot be tail-called.
 - **Arguments.** They are always the transients `%0` to `%n - 1`, which count toward the frame (section 6). They
   are copied, lowest word first, to the start of the current function's frame, and the callee takes that frame
   over.
@@ -527,8 +534,8 @@ The frame is 6 words: `$g`, `$a` and `$b`.
 A chain of tail calls, however long, therefore runs in constant call-stack and data-stack space.
 
 **Data regions.** `SPAN :offset *extent` opens a region of `extent` words, `offset` words from the start of the
-current data section, and the data statements after it fill the region in order. Both operands take any
-assembly-time constant.
+current data section, and the data statements after it fill the region in order. The `:` prefix marks the offset,
+and both operands take any assembly-time constant.
 - **Extent.** Writing past the extent is `DATA_SECTION_FULL`.
 - **Bounds.** A region that reaches past its section is `OFFSET_OUT_OF_BOUNDS` at the `SPAN`. Two regions of one
   section that overlap are `OVERLAPPING_DATA_REGIONS`, so no word is written twice.
