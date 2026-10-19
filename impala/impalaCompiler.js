@@ -902,10 +902,9 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         var cls = '%';              /* default stock   */
         var t   = op1Prefix + op2Prefix;
 
-        /* a memory read never folds: GAZL has no assembly-time PEEK, and a `pointer` const is `#name` here too */
-        var readsMemory = (META_TO_GAZL[op] === 'PEEK' || META_TO_GAZL[op] === 'GETL'
-                || META_TO_GAZL[op] === 'ADRL');
-        if (t.length > 0 && span(t, '#<') === t.length && span('<', classes) === 1 && !readsMemory) {
+        /* a PEEK never folds: GAZL has no assembly-time PEEK, and a `pointer` const is `#name` here too */
+        if (t.length > 0 && span(t, '#<') === t.length && span('<', classes) === 1
+                && META_TO_GAZL[op] !== 'PEEK') {
             expr.operator = '<> ' + op;     /* compile-time op */
             cls = '<';
         }

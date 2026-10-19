@@ -1290,25 +1290,25 @@ const Char* Assembler::feed(const Char* line) {
 		} else {
 			switch (op->opcode) {
 				case DEFI____:	parseOperand(op0Begin, op0End, op->accepts[0], &v);										// ! DEFi, ! DEFf, ! DEFp
-								if ((op->declareTypes & POINTER_CONSTANT) == 0) {
-									declare(globals, labelBegin, labelEnd, op->declareTypes, v);
-								} else if (*op0Begin == '<') {															// names no label, so no access through it passes
-									types = compileTimeVars[static_cast<unsigned char>(op0Begin[1])].types;
-									Symbols::Symbol* const symbol = declare(globals, labelBegin, labelEnd
-											, (types & op->accepts[0]) | POINTER_CONSTANT, v);
-									if (symbol != 0) symbol->maxOffset = -1;												// below `minOffset`, 0: no offset is in range
-								} else {																				// keeps the kind it names, so `NULL` or a function never passes as data
-									const Char* nameEnd = op0Begin + 1;
-									while (nameEnd != op0End && *nameEnd != ':') ++nameEnd;
-									const std::string name(op0Begin + 1, nameEnd);
-									const Symbols::Symbol& named = globals.symbols.find(name)->second;
-									const Int offset = static_cast<Int>(static_cast<UInt>(v.i)
-											- static_cast<UInt>(named.value.i));
-									Symbols::Symbol* const symbol = declare(globals, labelBegin, labelEnd
-											, (named.types & op->accepts[0]) | POINTER_CONSTANT, v);
-									if (symbol != 0 && (offset < named.minOffset || offset > named.maxOffset)) {
-										symbol->maxOffset = -1;															// below `minOffset`, 0: no offset is in range, so no access passes
+								{
+									types = op->declareTypes;
+									bool isOutside = false;															// no access through the name may pass
+									if ((types & POINTER_CONSTANT) != 0 && *op0Begin == '<') {						// no label to check against
+										types |= compileTimeVars[static_cast<unsigned char>(op0Begin[1])].types
+												& op->accepts[0];
+										isOutside = true;
+									} else if ((types & POINTER_CONSTANT) != 0) {									// the kind it names: `NULL` or a function is not data
+										const Char* const colon = reinterpret_cast<const Char*>(memchr(op0Begin, ':'
+												, op0End - op0Begin));
+										const std::string name(op0Begin + 1, (colon != 0 ? colon : op0End));
+										const Symbols::Symbol& named = globals.symbols.find(name)->second;
+										const Int offset = static_cast<Int>(static_cast<UInt>(v.i)
+												- static_cast<UInt>(named.value.i));
+										types |= named.types & op->accepts[0];
+										isOutside = (offset < named.minOffset || offset > named.maxOffset);
 									}
+									Symbols::Symbol* const symbol = declare(globals, labelBegin, labelEnd, types, v);
+									if (symbol != 0 && isOutside) symbol->maxOffset = -1;							// below `minOffset`, 0: no offset is in range
 								}
 								break;
 				

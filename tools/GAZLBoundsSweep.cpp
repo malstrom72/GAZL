@@ -1299,7 +1299,8 @@ int sweepFunctionOffsets() {
 /*
 	A `! DEFp` name keeps the kind of what it names. An access through a constant address is checked only at assembly,
 	so a name of `NULL` or of a function must never pass as a data address, and a name of constant data must stay
-	read-only. Returns the number of failures, each one printed.
+	read-only. An assembly-time address names no label to check against, so no access passes through it, while it
+	still works as a value. Returns the number of failures, each one printed.
 */
 int sweepPointerConstantKinds() {
 	struct Case { const char* what; const char* source; int error; };
@@ -1324,7 +1325,23 @@ int sweepPointerConstantKinds() {
 		{ "a POKE through a name of constant data", "c:\tCNST *1\n\tDATA #1\nC:\t! DEFp &c\nmain:\tFUNC\nv:\tLOCi\n"
 				"\tPOKE &C v\n\tRETU\n", INCOMPATIBLE_TYPES },
 		{ "a name of a name of NULL", "N:\t! DEFp &NULL\nM:\t! DEFp &N\nmain:\tFUNC\nv:\tLOCi\n\tPEEK v &M\n\tRETU\n"
-				, INCOMPATIBLE_TYPES }
+				, INCOMPATIBLE_TYPES },
+		{ "a PEEK through a name defined later, outside its section", "g:\tGLOB *2\nmain:\tFUNC\nv:\tLOCi\n"
+				"\tPEEK v &P\n\tRETU\nP:\t! DEFp &g:2\n", OFFSET_OUT_OF_BOUNDS },
+		{ "a PEEK through a name defined later, inside its section", "g:\tGLOB *2\nmain:\tFUNC\nv:\tLOCi\n"
+				"\tPEEK v &P\n\tRETU\nP:\t! DEFp &g:1\n", -1 },
+		{ "a PEEK through an assembly-time address", "g:\tGLOB *2\n\t! ADDp <P> &g #1\nmain:\tFUNC\nv:\tLOCi\n"
+				"\tPEEK v <P>\n\tRETU\n", OFFSET_OUT_OF_BOUNDS },
+		{ "a POKE through an assembly-time address", "g:\tGLOB *2\n\t! ADDp <P> &g #1\nmain:\tFUNC\nv:\tLOCi\n"
+				"\tPOKE <P> v\n\tRETU\n", OFFSET_OUT_OF_BOUNDS },
+		{ "a POKE of a constant through an assembly-time address", "g:\tGLOB *2\n\t! ADDp <P> &g #1\nmain:\tFUNC\n"
+				"\tPOKE <P> #1\n\tRETU\n", OFFSET_OUT_OF_BOUNDS },
+		{ "a PEEK through a name of an assembly-time address", "g:\tGLOB *2\n\t! ADDp <P> &g #1\nR:\t! DEFp <P>\n"
+				"main:\tFUNC\nv:\tLOCi\n\tPEEK v &R\n\tRETU\n", OFFSET_OUT_OF_BOUNDS },
+		{ "an assembly-time address as a value", "g:\tGLOB *2\n\t! ADDp <P> &g #1\nmain:\tFUNC\np:\tLOCp\n"
+				"\tMOVp p <P>\n\tRETU\n", -1 },
+		{ "a name of an assembly-time address as a value", "g:\tGLOB *2\n\t! ADDp <P> &g #1\nR:\t! DEFp <P>\n"
+				"main:\tFUNC\np:\tLOCp\n\tMOVp p &R\n\tRETU\n", -1 }
 	};
 	const int count = sizeof (CASES) / sizeof (*CASES);
 	int failures = 0;
@@ -1342,31 +1359,29 @@ int sweepPointerConstantKinds() {
 
 /*
 	`PEEK var &address` and `POKE &address` are checked only at assembly, so one through a `! DEFp` name must reach a
-	word in the section of the label it was defined from, here at every edge, through a name of the name too. An
-	assembly-time address names no label to check against, so no access passes through it. Returns the number of
-	failures, each one printed.
+	word in the section of the label it was defined from: here at every edge of a `GLOB`, `TEMP` and `CNST` section,
+	through a name of the name too. Returns the number of failures, each one printed.
 */
 int sweepPointerConstantReach() {
 	const char* const SECTIONS = "\tGLOB *1\nbefore:\tDATi #0\n\tGLOB *3\na:\tDATi #1\nb:\tDATi #2\n\tDATi #3\n"
-			"\tGLOB *1\nafter:\tDATi #0\n\tCNST *2\nc:\tDATi #4\n\tDATi #5\n";
-	struct Reach { const char* label; int offset; bool isInside; bool isConstant; };
+			"\tGLOB *1\nafter:\tDATi #0\nt:\tTEMP *1\n\tCNST *2\nc:\tDATi #4\n\tDATi #5\n";
+	struct Reach { const char* label; int offset; bool isInside; };
 	const Reach REACHES[] = {
-		{ "b", -2000000000, false, false }, { "b", -2, false, false }, { "b", -1, true, false }, { "b", 0, true, false }
-		, { "b", 1, true, false }, { "b", 2, false, false }, { "b", 2000000000, false, false }
-		, { "c", -1, false, true }, { "c", 0, true, true }, { "c", 1, true, true }, { "c", 2, false, true }
+		{ "b", -2000000000, false }, { "b", -2, false }, { "b", -1, true }, { "b", 0, true }, { "b", 1, true }
+		, { "b", 2, false }, { "b", 2000000000, false }, { "t", -1, false }, { "t", 0, true }, { "t", 1, false }
+		, { "c", -1, false }, { "c", 0, true }, { "c", 1, true }, { "c", 2, false }
 	};
 	const char* const ACCESSES[] = { "PEEK v &P", "PEEK v #P", "PEEK v &Q", "POKE &P v", "POKE &P #1", "POKE &Q v" };
 	int count = 0;
 	int failures = 0;
 	for (size_t i = 0; i < sizeof (REACHES) / sizeof (*REACHES); ++i) {
+		const Reach& reach = REACHES[i];
+		const bool isConstant = (reach.label[0] == 'c');
 		for (size_t j = 0; j < sizeof (ACCESSES) / sizeof (*ACCESSES); ++j) {
-			const Reach& reach = REACHES[i];
 			const bool isWrite = (ACCESSES[j][1] == 'O');
-			char line[64];
-			std::snprintf(line, sizeof (line), "P:\t! DEFp &%s:%d\nQ:\t! DEFp &P\n", reach.label, reach.offset);
-			const std::string source = std::string(SECTIONS) + line + "main:\tFUNC\nv:\tLOCi\n\t" + ACCESSES[j]
-					+ "\n\tRETU\n";
-			const int expected = (isWrite && reach.isConstant ? INCOMPATIBLE_TYPES								// the kind is checked before the reach
+			const std::string source = std::string(SECTIONS) + "P:\t! DEFp &" + reach.label + ":" + number(reach.offset)
+					+ "\nQ:\t! DEFp &P\nmain:\tFUNC\nv:\tLOCi\n\t" + ACCESSES[j] + "\n\tRETU\n";
+			const int expected = (isWrite && isConstant ? INCOMPATIBLE_TYPES										// the kind is checked before the reach
 					: (reach.isInside ? -1 : OFFSET_OUT_OF_BOUNDS));
 			const int error = assemblyError(source);
 			if (error != expected) {
@@ -1376,26 +1391,6 @@ int sweepPointerConstantReach() {
 			}
 			++count;
 		}
-	}
-	struct Case { const char* what; const char* access; int error; };
-	const Case CASES[] = {
-		{ "a PEEK through an assembly-time address", "\tPEEK v <P>\n", OFFSET_OUT_OF_BOUNDS },
-		{ "a POKE through an assembly-time address", "\tPOKE <P> v\n", OFFSET_OUT_OF_BOUNDS },
-		{ "a POKE of a constant through an assembly-time address", "\tPOKE <P> #1\n", OFFSET_OUT_OF_BOUNDS },
-		{ "a PEEK through a name of an assembly-time address", "\tPEEK v &R\n", OFFSET_OUT_OF_BOUNDS },
-		{ "an assembly-time address as a value", "\tMOVp p <P>\n", -1 },
-		{ "a name of an assembly-time address as a value", "\tMOVp p &R\n", -1 }
-	};
-	for (size_t i = 0; i < sizeof (CASES) / sizeof (*CASES); ++i) {
-		const std::string source = std::string("g:\tGLOB *2\n\t! ADDp <P> &g #1\nR:\t! DEFp <P>\nmain:\tFUNC\n")
-				+ "v:\tLOCi\np:\tLOCp\n" + CASES[i].access + "\tRETU\n";
-		const int error = assemblyError(source);
-		if (error != CASES[i].error) {
-			std::printf("FAIL pointer constant reach: %s gave error %d, expected %d\n", CASES[i].what, error
-					, CASES[i].error);
-			++failures;
-		}
-		++count;
 	}
 	std::printf("pointer constant reach: %d checked, %d failed\n", count, failures);
 	return failures;
