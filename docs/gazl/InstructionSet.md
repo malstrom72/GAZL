@@ -95,7 +95,8 @@ operations on a function pointer. Ordering is a TOTAL, run-stable order and noth
 receives follows declaration order, so sort a table of function pointers and binary-search it, but never read meaning
 into the order itself. `DIFp` between two function pointers is likewise defined - it is their ordinal distance.
 Arithmetic that PRODUCES a function pointer (`ADDp`, `SUBp` offsetting one) yields an unspecified result: the ordinal
-it lands on is a perfectly valid one, so it names a different function rather than failing.
+it lands on is a perfectly valid one, so it names a different function rather than failing. Ordering or subtracting
+`NULL` against any pointer is unspecified too.
 
 > **GAZL 1 does not enforce that contract; GAZL 2 does, inside a `GAZL #2` region.** In GAZL 1 all of
 > those assemble, because `p` covers both data pointers and function pointers - `ADDp` is the one that

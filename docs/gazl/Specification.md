@@ -119,9 +119,14 @@ float, then multiplies by its scale operand.
 `NEQf x x @L` branches exactly when `x` is NaN, and that is the supported way to test for one. When either operand
 of `LSSf`, `LEQf`, `GRTf` or `GEQf` is NaN, whether it branches is unspecified.
 
-**Pointers.** `ADDp` and `SUBp` add or subtract an int, wrapping modulo 2^32. `DIFp` is the difference in words.
-Pointer comparisons compare the two words as **signed** ints. A function pointer supports only `EQUp`, `NEQp` and
-calling; any other operation on it gives an unspecified, memory-safe result.
+**Pointers.** `ADDp` and `SUBp` add or subtract an int, wrapping modulo 2^32. `DIFp` is the difference in words,
+and pointer comparisons compare the two words as **signed** ints.
+- **Data pointers** into one section, or into one frame, differ and order by word. Between sections the layout is
+  unspecified (section 3), so their difference and order are too.
+- **Function pointers** order by ordinal, and `DIFp` of two is their ordinal distance (section 2).
+- **`NULL`** is equal only to itself; its order and difference against any pointer are unspecified.
+- **Anything else is unspecified:** arithmetic that produces a function pointer, and a difference or order between a
+  function pointer and a data pointer.
 
 ## 5. Source text
 

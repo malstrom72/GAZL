@@ -396,9 +396,10 @@ checkZeroLoop: NOOP
 ;
 ; A function pointer (the value of &function) is an opaque handle: a stable ordinal assigned in function declaration
 ; order, not a code address. Equality (EQUp / NEQp), ordering (LSSp, GEQp etc.), difference (DIFp) and calling are
-; defined operations on a function pointer; arithmetic that PRODUCES one (ADDp, SUBp) yields an unspecified (but
-; memory-safe) result. GAZL 1 cannot enforce that contract; functions declared inside a GAZL #2 region carry the `t`
-; type, which can (see the region at the end of this file, and docs/gazl/InstructionSet.md under GAZL).
+; defined operations on a function pointer; arithmetic that PRODUCES one (ADDp, SUBp) yields an unspecified result,
+; and so does ordering or subtracting NULL against any pointer. GAZL 1 cannot enforce that contract; functions
+; declared inside a GAZL #2 region carry the `t` type, which can (see the region at the end of this file, and
+; docs/gazl/InstructionSet.md under GAZL).
 ;
 ;\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 
