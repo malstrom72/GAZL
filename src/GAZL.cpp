@@ -2143,7 +2143,7 @@ MemoryLoad thawMemory(Processor& processor, const Symbols& symbols, const void* 
 
 struct TestCallbackData {
 	Pointer globalPointer;
-	Pointer callBack;
+	Target callBack;
 };
 
 Status unitTestAssertFail(Processor*);
@@ -2172,12 +2172,12 @@ int testCallback(Processor* p) {
 	assert(params != 0);
 	if (params == 0) return DATA_STACK_OVERFLOW;
 	params[0].p = 0;
-	params[1].p = data->callBack;
+	params[1].t = data->callBack;
 	int err = p->enterCall(data->callBack);
 	assert(err == 0);
 	if (err != 0) return err;
 	err = p->run();
-	assert(memory->p == data->callBack);
+	assert(memory->t == data->callBack);
 	return 0;
 }
 
@@ -2269,14 +2269,14 @@ bool unitTest() {
 		callbackData.globalPointer = globals.findGlobal("global.pointer", size);
 		assert(callbackData.globalPointer != 0);
 		callbackData.callBack = globals.findFunction("CallBack");
-		assert(callbackData.callBack != 0);
+		assert(callbackData.callBack != NULL_TARGET);
 
 		std::vector<unsigned char> memoryBlob;
 		{
 			Processor pmachine(sizes.codeSize, cody, sizes.functionCount, functionTable, MEMORY_SIZE, memory
 					, sizes.globalsSize, sizes.constsSize, CALL_STACK_SIZE, callStack, nativeTable, &callbackData);
-			Pointer funcy = globals.findFunction("test");
-			assert(funcy != 0);
+			Target funcy = globals.findFunction("test");
+			assert(funcy != NULL_TARGET);
 			Status status = pmachine.enterCall(funcy);
 			assert(status == OK);
 			status = pmachine.run();
@@ -2291,7 +2291,7 @@ bool unitTest() {
 			// Store a function pointer into a global so the freeze must round-trip an ordinal, then freeze.
 			Value* globalPointer = pmachine.accessMemory(callbackData.globalPointer, 1);
 			assert(globalPointer != 0);
-			globalPointer->p = globals.findFunction("CallBack");
+			globalPointer->t = globals.findFunction("CallBack");
 			memoryBlob.resize(freezeMemorySize(pmachine, globals));
 			UInt written = freezeMemory(pmachine, globals, memoryBlob.empty() ? 0 : &memoryBlob[0], (UInt)memoryBlob.size());
 			assert(written == memoryBlob.size());
@@ -2337,8 +2337,8 @@ bool unitTest() {
 			const Pointer gp = globals2.findGlobal("global.pointer", gpSize);
 			const Value* restored = pmachine2.accessConstMemory(gp, 1);
 			assert(restored != 0);
-			assert(restored->p == globals2.findFunction("CallBack"));
-			assert(restored->p == globals.findFunction("CallBack"));
+			assert(restored->t == globals2.findFunction("CallBack"));
+			assert(restored->t == globals.findFunction("CallBack"));
 		}
 
 		for (int i = MEMORY_SIZE; i < MEMORY_SIZE + CATCH_ZONE_SIZE; ++i) assert(memory[i].i == static_cast<Int>(0xAACC5599));

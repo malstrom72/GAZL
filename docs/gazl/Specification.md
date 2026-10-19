@@ -478,9 +478,9 @@ position, so a target is only ever named, copied or loaded, never computed.
   target.
 - **Constants.** Where these instructions take a constant, it must be the address of a GAZL 2 function, `&NULL`,
   or a `DEFt` name of either.
-- **Named targets.** `! DEFt` names a target constant, as `! DEFp` names a pointer (section 7): its operand is the
-  address of a GAZL 2 function or `&NULL`, and the name, written `&name`, is accepted wherever that operand is. Like
-  a `DEFp` name it takes no offset. `CALL &T` needs `T` to name a function; a name of `NULL` is only a value.
+- **Named targets.** `! DEFt` names a target constant, as `! DEFp` names a pointer (section 7). Its operand is the
+  address of a GAZL 2 function or `&NULL`, and the name is accepted wherever that operand is: in `MOVt`, `DATt` and
+  the target compares, and in `CALL` and `TAIL` when it names a function. Like a `DEFp` name it takes no offset.
 - **Calls.** `CALL` and `TAIL` take a function of either dialect, so GAZL 1 and GAZL 2 functions call each other.
 - **Pointers.** A `p` position (`MOVp`, `DATp`, `EQUp` and the rest) refuses a GAZL 2 function's address in either
   dialect, with `INCOMPATIBLE_TYPES`. Inside a GAZL 2 region it refuses a GAZL 1 function's address too, and an
