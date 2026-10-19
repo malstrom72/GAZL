@@ -76,7 +76,7 @@ stack frame sizes or for bounds checking etc.
 A function pointer (the value of `&function`) is an opaque handle: a stable ordinal assigned in function declaration
 order, not a code address. Equality (`EQUp` / `NEQp`), ordering (`LSSp`, `GEQp` etc.), the difference of two
 (`DIFp`, their ordinal distance) and calling are defined on function pointers. Arithmetic that produces one (`ADDp`,
-`SUBp`) yields an unspecified (but memory-safe) result, and so does ordering or subtracting `NULL` against any pointer.
+`SUBp`) yields an unspecified result, and so does ordering or subtracting `NULL` against any pointer.
 
 ## CNST
 - `*size`

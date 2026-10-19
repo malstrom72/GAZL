@@ -125,8 +125,8 @@ and pointer comparisons compare the two words as **signed** ints.
   unspecified (section 3), so their difference and order are too.
 - **Function pointers** order by ordinal, and `DIFp` of two is their ordinal distance (section 2).
 - **`NULL`** is equal only to itself; its order and difference against any pointer are unspecified.
-- **Anything else is unspecified but memory-safe:** arithmetic that produces a function pointer, and a difference or
-  order between a function pointer and a data pointer.
+- **Anything else is unspecified:** arithmetic that produces a function pointer, and a difference or order between a
+  function pointer and a data pointer.
 
 ## 5. Source text
 
