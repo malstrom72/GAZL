@@ -4,11 +4,10 @@ Descriptions extracted from [`src/UnitTest.gazl`](../../src/UnitTest.gazl).
 
 **Floating-point environment.** Integer and `FTOi` results are identical on every target (two's-complement wrap,
 count-mod-32 shifts, saturating `FTOi`; see the individual opcodes). Float arithmetic (`ADDf`, `SUBf`, `MULf`, `DIVf`,
-`FLOf`, and so on) is IEEE-754 single precision, but its rounding mode and denormal handling (FTZ/DAZ) follow the host's
-current floating-point environment. GAZL does not set or restore it. Results that involve denormals are therefore
-host-defined and can differ between callers (for example an audio thread with flush-to-zero enabled versus a default
-thread) or between platforms. For bit-reproducible float results, run GAZL under a fixed FP environment (round-to-nearest
-plus a deliberate FTZ/DAZ choice) around `run()`.
+`FLOf`, and so on) is IEEE-754 single precision with round-to-nearest-even and denormals kept. GAZL does not set or
+restore the host's floating-point environment, so the host runs it with round-to-nearest-even and flush-to-zero off,
+or with flush-to-zero on for every thread that assembles or runs GAZL. Under flush-to-zero a denormal operand reads
+as zero and a denormal result becomes zero. See [`Specification.md`](Specification.md) sections 4 and 9.
 
 ## ABSf
 - `float(d)        #float`
