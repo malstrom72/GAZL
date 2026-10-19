@@ -28,7 +28,7 @@ main:	FUNC	; signature func main() -> void @ pointerConstants.impala:18:1
 		EQUp $p &NULL @.a0
 		MOVp %1 &.a_pnull_4d2 
 		CALL ^assertFail %0 *1
-	.a0:	MOVp $f #HELPER 	; f = HELPER
+	.a0:	MOVp $f &HELPER 	; f = HELPER
 		! EQUi #DEBUG #0 @.a1	; assert((int) f() == 42)
 		CALL $f %0 *1	; expects function() -> unknown @ pointerConstants.impala:22:19
 		EQUi %0 #42 @.a1

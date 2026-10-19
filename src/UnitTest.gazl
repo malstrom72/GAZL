@@ -201,6 +201,13 @@ noMarks:    !
  MOVi       %1              #5
  CALL       &tLoop          %0              *2
  NEQi       %0              #3333           @fail            ; tLoop TAILed itself 5 times in ONE frame - the callee's RETU came straight back here
+ MOVt       t0              &T_TWO
+ CALL       t0              %0              *1
+ NEQi       %0              #2222           @fail            ; a `! DEFt` name, used before the region defines it
+ CALL       &T_TWO          %0              *1
+ NEQi       %0              #2222           @fail
+ MOVt       t0              &T_NONE
+ NEQt       t0              &NULL           @fail
 
  PEEK       f0		       &consts.float
  PEEK       i0              &consts.int
@@ -1904,6 +1911,7 @@ swchCNext: NOOP
 ; ! DEFf    #float
 ; ! DEFi    #int
 ; ! DEFp    &address
+; ! DEFt    &function
 ; ! DIFp    <?>             &address        &address
 ; ! DIVf    <?>             #float          #float
 ; ! DIVi    <?>             #int            #int
@@ -2366,5 +2374,8 @@ tLoop:                  FUNC                            ; self tail call: TAIL s
 tTargets:               CNST *2
 ;-------------------------------------------------------------------------------
                         DATt &tOne &tTwo
+
+T_TWO:                  ! DEFt &tTwo
+T_NONE:                 ! DEFt &NULL
 
                         GAZL #1

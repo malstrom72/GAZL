@@ -335,7 +335,7 @@ Machine::Machine(const AssembledProgram& program, UInt ipStackSize, const Native
 	assert(program.constsSize >= 1 && program.globalsSize + program.constsSize <= program.memorySize);
 }
 
-Status Machine::call(Pointer function, int64_t startFuel) {
+Status Machine::call(Target function, int64_t startFuel) {
 	fuel = startFuel;
 	violation.clear();
 	try {
@@ -411,7 +411,7 @@ int64_t Machine::functionEntry(UInt ordinal) const {
 	return entry;
 }
 
-Status Machine::run(Pointer function) {
+Status Machine::run(Target function) {
 	const UInt ordinal = static_cast<UInt>(function - FUNCTION_OFFSET);
 	if (ordinal >= functionCount) {
 		return BAD_CALL;
@@ -445,7 +445,7 @@ Status Machine::run(Pointer function) {
 			}
 			case CALL_VVC:
 			case CALL_CVC: {																// P0 = the function, C1 = the callee's window
-				const UInt callee = static_cast<UInt>((opcode == CALL_VVC ? slot(c0).p : c0.p) - FUNCTION_OFFSET);
+				const UInt callee = static_cast<UInt>((opcode == CALL_VVC ? slot(c0).t : c0.t) - FUNCTION_OFFSET);
 				if (callee >= functionCount) {
 					return BAD_CALL;
 				}
@@ -479,7 +479,7 @@ Status Machine::run(Pointer function) {
 			}
 			case TAIL_CC_:
 			case TAIL_VC_: {																// P0 = the function, C1 = window words, C2 = this frame's size
-				const UInt callee = static_cast<UInt>((opcode == TAIL_VC_ ? slot(c0).p : c0.p) - FUNCTION_OFFSET);
+				const UInt callee = static_cast<UInt>((opcode == TAIL_VC_ ? slot(c0).t : c0.t) - FUNCTION_OFFSET);
 				if (callee >= functionCount) {
 					return BAD_CALL;
 				}

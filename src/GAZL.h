@@ -68,6 +68,7 @@ typedef char Char;
 typedef int Int;
 typedef unsigned int UInt;
 typedef unsigned int Pointer;																							// Pointer must be unsigned and the same size as Int
+typedef unsigned int Target;																							// A call target: `FUNCTION_OFFSET` + a function's ordinal. Unsigned and the same size as Int, like Pointer.
 typedef float Float;
 typedef Int Status;																										// Run-time status code
 
@@ -100,13 +101,15 @@ typedef Int Status;																										// Run-time status code
 const int VERSION = GAZL_2 ? 2 : 1;			// Pin an exact version with `! EQUi`; require a minimum with `! GEQi #GAZL_VERSION #2 @label`; skip a version-specific REGION by branching over it, as UnitTest.gazl does for its MARK block - a taken compile-time branch skips the lines it jumps over without parsing them, so they need not be mnemonics the engine reading them knows.
 const int WORD_SIZE = 32;
 const Pointer MEMORY_OFFSET = 0x12345678;																				// All memory pointers in GAZL are offsetted by this amount (thus the address of the first memory word is not zero). This makes it easier to detect invalid memory operations (such as writing to a null-pointer).
-const Pointer FUNCTION_OFFSET = 0x56789ABC;																				// All function pointers in GAZL are offsetted by this amount (thus the ordinal of the first function is not zero). A function pointer is an ordinal indexing `functionTable`, not a code address.
+const Target FUNCTION_OFFSET = 0x56789ABC;																				// All function pointers in GAZL are offsetted by this amount (thus the ordinal of the first function is not zero). A function pointer is an ordinal indexing `functionTable`, not a code address.
 const Pointer NULL_POINTER = 0;
+const Target NULL_TARGET = 0;
 
 union Value {
 	Int i;
 	Float f;
 	Pointer p;
+	Target t;
 };
 
 struct Instruction {
@@ -198,7 +201,8 @@ struct GlobalInfo {
 enum ConstantKind {				// what `Symbols::lookupConstant` found
 	INT_CONSTANT					// a `DEFi`, or an int from `defineConstant`
 	, FLOAT_CONSTANT				// a `DEFf`, or a float from `defineConstant`
-	, ADDRESS_CONSTANT				// a `DEFp`, or `NULL`
+	, ADDRESS_CONSTANT				// a `DEFp` of data or of `NULL`, or `NULL`
+	, TARGET_CONSTANT				// a `DEFt` or `DEFp` of a function; read `value.t`
 };
 
 // A program's global names: functions, natives, data labels and named constants.
@@ -235,7 +239,7 @@ class Symbols {
 	public:		typedef SymbolMap::const_iterator Iterator;
 				
 	public:		void registerNative(const Char* name, Int index);
-	public:		Pointer findFunction(const Char* name) const;															// Returns `NULL_POINTER` if not found.
+	public:		Target findFunction(const Char* name) const;															// Returns `NULL_TARGET` if not found.
 	public:		Pointer findGlobal(const Char* name, UInt& declaredWords) const;										// Returns `NULL_POINTER` if not found (in which case, `declaredWords` is left untouched).
 	public:		void defineConstant(const Char* name, bool asFloat, const Value& value);
 	public:		bool lookupConstant(const Char* name, ConstantKind& kind, Value& value) const;							// A named constant only, not data or a function. Returns false if `name` is none.
@@ -467,8 +471,8 @@ class Processor {
 	public:		Value* accessMemory(Pointer pointer, UInt count) const; 												// If returning null pointer you should normally return `ACCESS_VIOLATION`
 	public:		Value* accessParams(UInt count) const; 																	// If returning null pointer you should normally return `DATA_STACK_OVERFLOW`
 	public:		virtual ~Processor() { }																				// Virtual: interpreter and JIT are subclasses over one shared state (§5.1). Vtable cost is nil.
-	public:		virtual Status enterCall(Pointer functionPointer); 														// After `enterCall()`, call `run()` (and on time out, repeatedly call `run()` until it returns OK). It is ok to call `enterCall()` at any time, current instruction pointer and stack is pushed and popped as expected which makes `enterCall()` double as a mean to issue interrupts.
-	public:		virtual Value* pushCall(Pointer functionPointer);														// From inside a native callback only: when the native returns OK, the function runs as if the `^native` call had called it. Returns its argument window ([0] = result), or 0 on error. Several pushes run last-pushed first and share that one window. Supported by both engines (the JIT redirects its compiled after-native continuation; see GAZLJit.cpp).
+	public:		virtual Status enterCall(Target target);																// After `enterCall()`, call `run()` (and on time out, repeatedly call `run()` until it returns OK). It is ok to call `enterCall()` at any time, current instruction pointer and stack is pushed and popped as expected which makes `enterCall()` double as a mean to issue interrupts.
+	public:		virtual Value* pushCall(Target target);																// From inside a native callback only: when the native returns OK, the function runs as if the `^native` call had called it. Returns its argument window ([0] = result), or 0 on error. Several pushes run last-pushed first and share that one window. Supported by both engines (the JIT redirects its compiled after-native continuation; see GAZLJit.cpp).
 	public:		virtual Status run();																					// `run()` and `enterCall()` are the only virtual methods (per-block / per-call, so vtable cost is nil).
 	public:		void* getUserData() const;
 	public:		int getClockCyclesLeft() const;

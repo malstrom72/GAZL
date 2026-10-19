@@ -92,7 +92,7 @@ static Status nativeYield(Processor* p) {
 	same processor, identical on both engines. Targets are resolved per kernel by name (helperB / helperF / chA /
 	chB) after assembly.
 */
-static Pointer gReBlk = 0, gReFwd = 0, gChA = 0, gChB = 0;
+static Target gReBlk = NULL_TARGET, gReFwd = NULL_TARGET, gChA = NULL_TARGET, gChB = NULL_TARGET;
 static Status nativeReBlk(Processor* p) {				// BLOCKING: enterCall + nested run() (the documented interrupt pattern)
 	++gNativeCallCount;
 	Status s = p->enterCall(gReBlk);
@@ -154,7 +154,7 @@ static void restoreClean() { std::memcpy(gMemory, gCleanImage.data(), DATA_SIZE 
 // The word at `pointer`: `gMemory` starts with the constants, which sit below `MEMORY_OFFSET`.
 static Value& wordAt(Pointer pointer) { return gMemory[pointer - MEMORY_OFFSET + (gConstsSize - 1)]; }
 
-static std::vector<Value> runInterpreter(Pointer mainPtr, Pointer gInPtr, int n, Status& outStatus,
+static std::vector<Value> runInterpreter(Target mainPtr, Pointer gInPtr, int n, Status& outStatus,
 		int fuel = 0x7FFFFFFF, int* suspendsOut = 0) {
 	restoreClean();
 	Processor p(CODE_SIZE, gCode, gFunctionCount, gFunctionTable, DATA_SIZE, gMemory, gGlobalsSize, gConstsSize,
@@ -186,7 +186,7 @@ static void runKernel(const char* name, const char* source, const int* inputs, s
 	if (!assemble(source, globals)) { ++failures; return; }
 	gReBlk = globals.findFunction("helperB"); gReFwd = globals.findFunction("helperF");					// re-entrant native
 	gChA = globals.findFunction("chA"); gChB = globals.findFunction("chB");								// targets (if present)
-	const Pointer mainPtr = globals.findFunction("main");
+	const Target mainPtr = globals.findFunction("main");
 	UInt sz = 0;
 	const Pointer gInPtr = globals.findGlobal("gIn", sz), gOutPtr = globals.findGlobal("gOut", sz);
 	if (mainPtr == NULL_POINTER || gInPtr == NULL_POINTER || gOutPtr == NULL_POINTER) {
@@ -1022,7 +1022,7 @@ static bool runFarNative(int ordinal) {
 	if (compileThrows(globals, K_FARNATIVE, module)) { return false; }
 	std::vector<NativeFunc> table(ordinal + 1, nativeWrongSlot);
 	table[ordinal] = nativeSquare;
-	const Pointer mainPtr = globals.findFunction("main");
+	const Target mainPtr = globals.findFunction("main");
 	UInt sz = 0;
 	const Pointer gInPtr = globals.findGlobal("gIn", sz), gOutPtr = globals.findGlobal("gOut", sz);
 	const AssembledProgram program = assembledProgram();

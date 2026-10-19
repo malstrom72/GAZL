@@ -306,8 +306,9 @@ static UInt gGlobalsSize = 0, gConstsSize = 0, gFunctionCount = 0;
 	The native flavors under test. All satisfy a `^native` call site by running GAZL functions on the SAME
 	processor; the difference is who drives them to completion and how many are queued.
 */
-static Pointer gFwdTarget = 0, gBlkTarget = 0;
-static Pointer gChainA = 0, gChainB = 0, gMark1 = 0, gMark2 = 0, gMark3 = 0;
+static Target gFwdTarget = NULL_TARGET, gBlkTarget = NULL_TARGET;
+static Target gChainA = NULL_TARGET, gChainB = NULL_TARGET, gMark1 = NULL_TARGET, gMark2 = NULL_TARGET
+		, gMark3 = NULL_TARGET;
 static long gFwdCalls = 0, gBlkCalls = 0;
 
 static Status nfwd(Processor* p) {						// NON-BLOCKING: push the call and return; the caller's run() flows in
@@ -371,8 +372,8 @@ static bool assemble(const char* source, Symbols& globals) {
 static Status runToCompletion(Symbols& globals, const char* fn, Int fuel, int& suspends) {
 	Processor p(CODE_SIZE, gCode, gFunctionCount, gFunctionTable, DATA_SIZE, gMemory, gGlobalsSize, gConstsSize,
 			CALL_STACK_SIZE, gCallStack, gNatives, 0);
-	const Pointer mainPtr = globals.findFunction(fn);
-	if (mainPtr == NULL_POINTER) { std::printf("  no function '%s'\n", fn); return BAD_CALL; }
+	const Target mainPtr = globals.findFunction(fn);
+	if (mainPtr == NULL_TARGET) { std::printf("  no function '%s'\n", fn); return BAD_CALL; }
 	Status s = p.enterCall(mainPtr);
 	if (s != OK) { return s; }
 	suspends = 0;

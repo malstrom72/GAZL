@@ -4768,7 +4768,7 @@ var _sn = strideStruct(field.elem);
     writtenOperand = function (op) {
         if (op == null || op[0] !== '#') return op;
         var d = ownEntry(symbols.defines, op.substr(1));
-        return (d !== undefined && (d.type === 'p' || d.type === 'F')) ? '&' + op.substr(1) : op;
+        return (d !== undefined && (d.type === 'p' || d.type === 't')) ? '&' + op.substr(1) : op;
     };
 
     /* -----------------------------------------------------------

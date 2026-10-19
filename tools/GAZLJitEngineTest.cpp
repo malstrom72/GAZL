@@ -214,8 +214,8 @@ static bool assembleKernel(Symbols& globals, KernelLayout& layout, Pointer& gInP
 	UInt sz = 0;
 	gInPtr = globals.findGlobal("gIn", sz);
 	gOutPtr = globals.findGlobal("gOut", sz);
-	const Pointer mainPtr = globals.findFunction("main");
-	if (gInPtr == NULL_POINTER || gOutPtr == NULL_POINTER || mainPtr == NULL_POINTER) {
+	const Target mainPtr = globals.findFunction("main");
+	if (gInPtr == NULL_POINTER || gOutPtr == NULL_POINTER || mainPtr == NULL_TARGET) {
 		std::printf("  symbol lookup failed\n");
 		return false;
 	}
@@ -333,7 +333,7 @@ int main() {
 		std::printf("  setup failed - aborting\n");
 		return 1;
 	}
-	const Pointer mainPtr = globals.findFunction("main");
+	const Target mainPtr = globals.findFunction("main");
 
 	Arm64Emitter ek;
 	emitKernel(ek, layout);

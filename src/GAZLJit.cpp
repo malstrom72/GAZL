@@ -1067,12 +1067,12 @@ Offsets JitProcessor::layout() {
 	return o;
 }
 
-Status JitProcessor::enterCall(Pointer functionPointer) {
-	const Status s = Processor::enterCall(functionPointer);
+Status JitProcessor::enterCall(Target target) {
+	const Status s = Processor::enterCall(target);
 	if (s != OK) {
 		return s;
 	}
-	resume = funcEntries[functionPointer - FUNCTION_OFFSET];
+	resume = funcEntries[target - FUNCTION_OFFSET];
 	return OK;
 }
 
@@ -1085,8 +1085,8 @@ Status JitProcessor::enterCall(Pointer functionPointer) {
 	frame stores the WINDOW (this->dsp), first and chained alike, unlike the interpreter's frames. `after` also
 	zeroes ctx.nativeAfter, restoring the "only inside a native call" guard.
 */
-Value* JitProcessor::pushCall(Pointer functionPointer) {
-	UInt ui = functionPointer - FUNCTION_OFFSET;
+Value* JitProcessor::pushCall(Target target) {
+	UInt ui = target - FUNCTION_OFFSET;
 	if (ui >= functionCount) return 0;
 	if (nativeAfter == 0) return 0;										// only valid from inside a native callback
 	if (ipsp >= ipStackEnd) return 0;

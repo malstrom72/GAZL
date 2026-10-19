@@ -273,8 +273,8 @@ static bool emitFunction(std::ostringstream& out, const Instruction* code, UInt 
 			case OP_NEQF_VCB: s = fbranch(in, j, "!=", false, true); break;
 
 			case OP_CALL_CVC: {
-				const UInt callee = in.p0.p - FUNCTION_OFFSET;
-				s = "{ int st = gazl_fn_" + I(static_cast<Int>(callee)) + "(dsp + " + I(in.p1.i) + "); if (st) return st; }";
+				const UInt callee = in.p0.t - FUNCTION_OFFSET;
+				s ="{ int st = gazl_fn_" + I(static_cast<Int>(callee)) + "(dsp + " + I(in.p1.i) + "); if (st) return st; }";
 				break;
 			}
 			case OP_CALL_NVC:
@@ -310,7 +310,7 @@ std::string translateToCpp(const AssembledProgram& program, UInt mainOrdinal, bo
 		const UInt scanEnd = (ord + 1 < functionCount ? functionTable[ord + 1] : codeSize);		// ditto: to the next FUNC, not the first RETU
 		for (UInt j = functionTable[ord]; j < scanEnd; ++j) {
 			if (code[j].opcode == OP_CALL_CVC) {
-				const UInt callee = code[j].p0.p - FUNCTION_OFFSET;
+				const UInt callee = code[j].p0.t - FUNCTION_OFFSET;
 				if (callee < functionCount && code[j].p2.i > sharedWindow[callee]) { sharedWindow[callee] = code[j].p2.i; }
 			}
 		}

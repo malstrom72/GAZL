@@ -84,7 +84,7 @@ typedef Status (*Native)(Machine& machine, Value* window, UInt room);
 class Machine {
 	public:
 		Machine(const AssembledProgram& program, UInt ipStackSize, const Native* natives, DenormalMode denormalMode);
-		Status call(Pointer function, int64_t startFuel);		// runs `function` to its return, a fault, or the end of `startFuel`
+		Status call(Target function, int64_t startFuel);	// runs `function` to its return, a fault, or the end of `startFuel`
 		int64_t fuelLeft() const;
 		Value* accessMemory(Pointer pointer, UInt count);		// [pointer, pointer + count) inside writable memory, or 0
 		const std::string& getViolation() const;				// why the last run stopped with REFERENCE_VIOLATION
@@ -95,7 +95,7 @@ class Machine {
 			int64_t dsp;
 		};
 
-		Status run(Pointer function);
+		Status run(Target function);
 		Value& stackWord(int64_t index);
 		Value& slot(const Value& operand);
 		int64_t readWord(Pointer pointer) const;				// the word `pointer` reads; readable below `readableWords`

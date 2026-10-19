@@ -458,7 +458,7 @@ static bool lowerBody(X64Emitter& e, const Instruction* code, UInt funcStart, co
 				e.movImm(RAX, 0); e.jmp(epilogue);	// Status OK -> shared epilogue
 				break;
 			case OP_CALL_CVC: {						// direct GAZL call: callee runs with dsp += window, returns Status in eax
-				const UInt callee = in.p0.p - FUNCTION_OFFSET;
+				const UInt callee = in.p0.t - FUNCTION_OFFSET;
 				e.movQ(RDI, DSP);
 				if (in.p1.i != 0) { e.addImmQ(RDI, static_cast<uint32_t>(in.p1.i) * 4u); }	// rdi = dsp + window
 				e.movQ(RSI, MEM);

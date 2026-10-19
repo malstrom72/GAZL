@@ -212,9 +212,9 @@ class JitProcessor : public Processor {
 			Host loop, identical to the interpreter's: enterCall(); do { resetTimeOut(N); } while (run()==TIME_OUT).
 			Both are defined in GAZLJit.cpp.
 		*/
-		virtual Status enterCall(Pointer functionPointer);
+		virtual Status enterCall(Target target);
 		virtual Status run();
-		virtual Value* pushCall(Pointer functionPointer);	// native->GAZL forward over compiled continuations: links ctx.nativeAfter into a plain frame and retargets it at the pushed callee's entry (LIFO chains; see GAZLJit.cpp). Same contract as Processor::pushCall.
+		virtual Value* pushCall(Target target);	// native->GAZL forward over compiled continuations: links ctx.nativeAfter into a plain frame and retargets it at the pushed callee's entry (LIFO chains; see GAZLJit.cpp). Same contract as Processor::pushCall.
 
 	private:
 		/*

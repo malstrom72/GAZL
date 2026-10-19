@@ -767,7 +767,7 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const AssembledProgram& pr
 			}
 			case OP_TAIL_CC: {																							// GAZL 2 tail call, direct target (validated at assembly; the interpreter only asserts)
 				emitTailWindow(e, static_cast<UInt>(in.p1.i), static_cast<UInt>(in.p2.i));
-				e.b(entryLabels[in.p0.p - FUNCTION_OFFSET]);															// the callee's RETU returns to OUR caller
+				e.b(entryLabels[in.p0.t - FUNCTION_OFFSET]);															// the callee's RETU returns to OUR caller
 				break;
 			}
 			case OP_TAIL_VC: {																							// tail call through a target slot: BAD_CALL on a bad ordinal, exactly as the interpreter
@@ -783,7 +783,7 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const AssembledProgram& pr
 				break;
 			}
 			case OP_CALL_CVC: {
-				const UInt callee = in.p0.p - FUNCTION_OFFSET;																// ordinal known at compile time → direct tail-branch
+				const UInt callee = in.p0.t - FUNCTION_OFFSET;															// ordinal known at compile time → direct tail-branch
 				const UInt window = static_cast<UInt>(in.p1.i);
 				Label after = e.newLabel(), iok = e.newLabel();
 				e.ldrX(X9, X0, o.ipsend); e.cmpX(X4, X9); e.bcond(LO, iok);												// ipsp >= ipStackEnd → IP_STACK_OVERFLOW

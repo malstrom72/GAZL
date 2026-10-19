@@ -88,7 +88,7 @@ ProgramSizes sizes = { 0, 0, 0, 0 };
 
 Processor pmachine(sizes.codeSize, code, sizes.functionCount, functionTable, DATA_MEMORY_SIZE, memory,
         sizes.globalsSize, sizes.constsSize, CALL_STACK_SIZE, callStack, NATIVE_TABLE, 0);
-Pointer mainFunction = globals.findFunction("main");
+Target mainFunction = globals.findFunction("main");
 Status status = pmachine.enterCall(mainFunction);
 pmachine.resetTimeOut(0x7FFFFFFF);
 status = pmachine.run();

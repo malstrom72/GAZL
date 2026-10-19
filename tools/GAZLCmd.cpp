@@ -287,7 +287,7 @@ Status gazlExit(Processor*) {
 	(see tools/permut8Host.js). Interpreter only for now: pushCall is not yet supported under the JIT.
 */
 const int MAX_FORWARDS = 8;
-static Pointer forwardTargets[MAX_FORWARDS];
+static Target forwardTargets[MAX_FORWARDS];
 template<int INDEX> Status forwardNative(Processor* p) {
 	return p->pushCall(forwardTargets[INDEX]) != 0 ? OK : BAD_CALL;
 }
@@ -455,7 +455,7 @@ static void requireReferenceFloats() {
 	program that breaks an assembler guarantee, is printed with the source and aborts, so a fuzzer keeps it as a crash.
 */
 static void requireReference(const char* which, const uint8_t* data, size_t size, const AssembledProgram& program
-		, Pointer mainFunction, const GAZLReference::Native* natives, const Value* snapshot, int64_t fuel
+		, Target mainFunction, const GAZLReference::Native* natives, const Value* snapshot, int64_t fuel
 		, Status interpStatus, Int interpFuelLeft, const Value* interpImage, GAZLReference::DenormalMode denormalMode) {
 	requireReferenceFloats();
 	static Value image[DATA_MEMORY_SIZE];
@@ -508,7 +508,7 @@ static void requireReference(const char* which, const uint8_t* data, size_t size
 */
 static Status fuzzStub(Processor*) { return OK; }			// abort / assertFail / input -> deterministic no-op (natives must be pure here)
 
-static Status runEngine(Processor& engine, Pointer mainFn, Int fuel) {
+static Status runEngine(Processor& engine, Target mainFn, Int fuel) {
 	Status s = engine.enterCall(mainFn);
 	if (s == OK) { do { engine.resetTimeOut(fuel); s = engine.run(); } while (s == TIME_OUT); }
 	return s;
@@ -864,8 +864,8 @@ static void runDiff(const std::string& programText) {
 			while (!gazlStream.eof()) { getline(gazlStream, line); assem.feed(line.c_str()); }
 			assem.finalize(program);
 		}
-		const Pointer mainFunction = globals.findFunction("main");
-		if (mainFunction == 0 || !GAZL::jitAvailable()) { return; }
+		const Target mainFunction = globals.findFunction("main");
+		if (mainFunction == NULL_TARGET || !GAZL::jitAvailable()) { return; }
 
 		static Value snapshot[DATA_MEMORY_SIZE];
 		static Value interpImage[DATA_MEMORY_SIZE];
@@ -1034,8 +1034,8 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size) {
 
 		{
 			Processor pmachine(program, CALL_STACK_SIZE, callStack, NATIVE_TABLE, 0);
-			Pointer mainFunction = globals.findFunction("main");
-			if (mainFunction != 0) {
+			Target mainFunction = globals.findFunction("main");
+			if (mainFunction != NULL_TARGET) {
 				static Value snapshot[DATA_MEMORY_SIZE];
 				std::memcpy(snapshot, memory, sizeof (snapshot));
 				Status status = pmachine.enterCall(mainFunction);
@@ -1186,7 +1186,7 @@ int main(int argc, const char* argv[]) {
 			while (!gazlStream.eof()) { getline(gazlStream, line); assem.feed(line.c_str()); }
 			assem.finalize(program);
 		}
-		const Pointer mainFunction = globals.findFunction("main");
+		const Target mainFunction = globals.findFunction("main");
 #ifdef FUZZ_POISON
 		for (UInt i = program.constsSize - 1 + program.globalsSize; i + 1 < program.memorySize; ++i) { memory[i].i = 0x7F7F7F7F; }
 #endif
@@ -1326,7 +1326,7 @@ static std::string statusMessage(const char* call, Status status) {	/// "`call` 
 	can't be recovered here: the print* natives call resetTimeOut(), which clobbers the cycle budget mid-run, so
 	benchmarks compare the time of the identical workload instead.
 */
-static void runToCompletion(Processor& machine, Pointer function) {
+static void runToCompletion(Processor& machine, Target function) {
 	Status status = machine.enterCall(function);
 	if (status != OK) throw CmdException(statusMessage("enterCall", status));
 	do {
@@ -1496,8 +1496,8 @@ int main(int argc, const char* argv[]) {
 
 		if (emitCpp != 0) {
 			const char* mfn = (pos.size() > 2) ? pos[2] : "main";
-			Pointer mainPtr = globals.findFunction(mfn);
-			if (mainPtr == NULL_POINTER) throw CmdException(std::string("emit-cpp: no function '") + mfn + "'");
+			Target mainPtr = globals.findFunction(mfn);
+			if (mainPtr == NULL_TARGET) throw CmdException(std::string("emit-cpp: no function '") + mfn + "'");
 			std::string src = translateToCpp(program, static_cast<UInt>(mainPtr - FUNCTION_OFFSET), promoteLocals);
 			if (src.empty()) { std::cerr << "emit-cpp: program uses an opcode outside the Tier-0 subset" << std::endl; return -1; }
 			std::ofstream out(emitCpp, std::ofstream::binary);
@@ -1598,13 +1598,13 @@ int main(int argc, const char* argv[]) {
 
 			for (size_t i = 0; i < forwardFunctionNames.size(); ++i) {		// resolve --forward targets against the assembled program
 				forwardTargets[i] = globals.findFunction(forwardFunctionNames[i].c_str());
-				if (forwardTargets[i] == NULL_POINTER)
+				if (forwardTargets[i] == NULL_TARGET)
 					throw CmdException(std::string("--forward: no function '") + forwardFunctionNames[i] + "'");
 			}
 
 			const char* mainFunctionName = pos.size() >= 3 ? pos[2] : "main";
-			Pointer mainFunction = globals.findFunction(mainFunctionName);
-			if (mainFunction == 0) throw CmdException(std::string("Could not locate function: ") + mainFunctionName);
+			Target mainFunction = globals.findFunction(mainFunctionName);
+			if (mainFunction == NULL_TARGET) throw CmdException(std::string("Could not locate function: ") + mainFunctionName);
 
 			if (benchRepeat > 0) {
 				std::vector<double> samples;			// milliseconds, measured iterations only

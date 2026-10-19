@@ -640,7 +640,7 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const AssembledProgram& 
 
 			case OP_TAIL_CC: {																							// GAZL 2 tail call, direct target (the ordinal is validated at assembly; the interpreter only asserts)
 				emitTailWindow(emitter, static_cast<UInt>(in.p1.i), static_cast<UInt>(in.p2.i));
-				emitter.jmp(entryLabels[in.p0.p - FUNCTION_OFFSET]);
+				emitter.jmp(entryLabels[in.p0.t - FUNCTION_OFFSET]);
 				break;
 			}
 			case OP_TAIL_VC: {																							// tail call through a target slot: BAD_CALL on a bad ordinal, exactly as the interpreter
@@ -655,7 +655,7 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const AssembledProgram& 
 				break;
 			}
 			case OP_CALL_CVC: {																							// direct GAZL call: push {after, dsp}, tail-branch into the callee entry
-				const UInt callee = in.p0.p - FUNCTION_OFFSET;
+				const UInt callee = in.p0.t - FUNCTION_OFFSET;
 				const UInt window = static_cast<UInt>(in.p1.i);
 				Label after = emitter.newLabel(), ipOk = emitter.newLabel();
 				emitter.loadQ(RAX, CONTEXT, offsets.ipsend); emitter.cmpQ(IP_STACK_PTR, RAX); emitter.jcc(CC_B, ipOk);
