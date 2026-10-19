@@ -1,0 +1,56 @@
+; Compiled with Impala version 2.0
+
+; signatures version=1
+DEBUG:	! DEFi #1	; signature const DEBUG : int @ pointerConstants.impala:6:1
+.z.TABLE:	! DEFi #4
+TABLE:	GLOB *.z.TABLE	; signature array TABLE[4] : unknown @ pointerConstants.impala:8:1
+	DATA #10 #20 #30 #40
+
+;-----------------------------------------------------------------------------
+helper:	FUNC	; signature func helper() -> int @ pointerConstants.impala:10:1
+	$result:	OUTi
+;-----------------------------------------------------------------------------
+		MOVi $result #42 	; result = 42
+		RETU   	; }
+
+NOTHING:	! DEFp &NULL	; signature const NOTHING : ptr @ pointerConstants.impala:14:1
+HELPER:	! DEFp &helper	; signature const HELPER : funcptr @ pointerConstants.impala:15:1
+ELEMENT:	! DEFp &TABLE:1	; signature const ELEMENT : ptr @ pointerConstants.impala:16:1
+
+;-----------------------------------------------------------------------------
+main:	FUNC	; signature func main() -> void @ pointerConstants.impala:18:1
+		PARA *1
+	$p:	LOCp
+	$f:	LOCp
+;-----------------------------------------------------------------------------
+		MOVp $p &NOTHING 	; p = NOTHING
+		! EQUi #DEBUG #0 @.a0	; assert(p == null)
+		EQUp $p &NULL @.a0
+		MOVp %1 &.a_pnull_4d2 
+		CALL ^assertFail %0 *1
+	.a0:	MOVp $f #HELPER 	; f = HELPER
+		! EQUi #DEBUG #0 @.a1	; assert((int) f() == 42)
+		CALL $f %0 *1	; expects function() -> unknown @ pointerConstants.impala:22:19
+		EQUi %0 #42 @.a1
+		MOVp %1 &.a_intf42_4d3 
+		CALL ^assertFail %0 *1
+	.a1:	NOOP
+		! EQUi #DEBUG #0 @.a2	; assert((int) ELEMENT[2] == 40)
+		MOVi %0 #2 
+		PEEK %0 &ELEMENT %0
+		EQUi %0 #40 @.a2
+		MOVp %1 &.a_intELE_4d4 
+		CALL ^assertFail %0 *1
+	.a2:	RETU   	; }
+
+	! EQUi #DEBUG #0 @.noAssertStrings
+.a_pnull_4d2:	CNST *12
+	DATs (p == null)
+	DATi #0
+.a_intf42_4d3:	CNST *18
+	DATs ((int) f() == 42)
+	DATi #0
+.a_intELE_4d4:	CNST *25
+	DATs ((int) ELEMENT[2] == 40)
+	DATi #0
+.noAssertStrings:	!

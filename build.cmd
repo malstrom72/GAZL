@@ -50,6 +50,10 @@ IF ERRORLEVEL 1 EXIT /B 1
 output\GAZLCmd.exe output\ImpalaDemo.gazl main
 IF ERRORLEVEL 1 EXIT /B 1
 
+REM Impala keeps named constants in its output, so a golden that only matches text can still fail to assemble.
+output\GAZLCmd.exe tests\impala\golden\pointerConstants.gazl main
+IF ERRORLEVEL 1 EXIT /B 1
+
 REM The staging above only proves the compiler fits TODAY's nesting limit. This fails while there is still headroom,
 REM because the limit is NuXJS's to change: when it dropped to 48, GAZL stopped building with no prior warning.
 CALL tools\checkImpalaNesting.cmd

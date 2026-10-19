@@ -738,7 +738,7 @@ static const Operator OPERATORS[] = {
 	, { "!ANDi_ccc", ANDI_CCC,	{ COMPILE_TIME	, CONST_INT		, CONST_INT		}		, 0				, CONST_INT		}
 	, { "!DEFf_c__", DEFI____,	{ CONST_FLOAT	, 0				, 0				}		, 0				, CONST_FLOAT	}
 	, { "!DEFi_c__", DEFI____,	{ CONST_INT		, 0				, 0				}		, 0				, CONST_INT		}
-	, { "!DEFp_c__", DEFI____,	{ FREE_ADDRESS	, 0				, 0				}		, 0				, FREE_ADDRESS|POINTER_CONSTANT }
+	, { "!DEFp_c__", DEFI____,	{ ANY_FREE		, 0				, 0				}		, 0				, POINTER_CONSTANT	}
 	, { "!DIFp_ccc", SUBI_CCC,	{ COMPILE_TIME	, FREE_ADDRESS	, FREE_ADDRESS	}		, 0				, CONST_INT		}
 	, { "!DIVf_ccc", DIVF_CCC,	{ COMPILE_TIME	, CONST_FLOAT	, CONST_FLOAT	}		, 0				, CONST_FLOAT	}
 	, { "!DIVi_ccc", DIVI_CCC,	{ COMPILE_TIME	, CONST_INT		, CONST_INT		}		, CHECK_DIV_BY_0, CONST_INT		}
@@ -1043,6 +1043,9 @@ void Assembler::parseConstant(const Char* b, const Char* e, int accepts, Value* 
 							throw Exception(INVALID_COMPILE_TIME_VARIABLE, b, e);
 						const CompileTimeVar& cv = compileTimeVars[(unsigned char)b[1]];
 						if ((accepts & cv.types) == 0) throw Exception(INCOMPATIBLE_COMPILE_TIME_VARIABLE_TYPE, b, e);
+						if ((accepts & UNCHECKED_ADDRESS) == 0 && (accepts & cv.types & ADDRESS) != 0) {
+							throw Exception(OFFSET_OUT_OF_BOUNDS, b, e);									// an access, checked only here, and the variable names no label to check it against
+						}
 						*v = cv.value;
 						break;
 					}
@@ -1433,8 +1436,27 @@ const Char* Assembler::feed(const Char* line) {
 				skipUntilLabel = std::string(op2Begin + 1, op2End);
 		} else {
 			switch (op->opcode) {
-				case DEFI____:	parseOperand(op0Begin, op0End, op->accepts[0], &v);										// ! DEFi, ! DEFf
-								declare(globals, labelBegin, labelEnd, op->declareTypes, v);
+				case DEFI____:	parseOperand(op0Begin, op0End, op->accepts[0], &v);										// ! DEFi, ! DEFf, ! DEFp
+								{
+									types = op->declareTypes;
+									bool isOutside = false;															// no access through the name may pass
+									if ((types & POINTER_CONSTANT) != 0 && *op0Begin == '<') {						// no label to check against
+										types |= compileTimeVars[static_cast<unsigned char>(op0Begin[1])].types
+												& op->accepts[0];
+										isOutside = true;
+									} else if ((types & POINTER_CONSTANT) != 0) {									// the kind it names: `NULL` or a function is not data
+										const Char* const colon = reinterpret_cast<const Char*>(memchr(op0Begin, ':'
+												, op0End - op0Begin));
+										const std::string name(op0Begin + 1, (colon != 0 ? colon : op0End));
+										const Symbols::Symbol& named = globals.symbols.find(name)->second;
+										const Int offset = static_cast<Int>(static_cast<UInt>(v.i)
+												- static_cast<UInt>(named.value.i));
+										types |= named.types & op->accepts[0];
+										isOutside = (offset < named.minOffset || offset > named.maxOffset);
+									}
+									Symbols::Symbol* const symbol = declare(globals, labelBegin, labelEnd, types, v);
+									if (symbol != 0 && isOutside) symbol->maxOffset = -1;							// below `minOffset`, 0: no offset is in range
+								}
 								break;
 				
 				case IFDF_CB_:
