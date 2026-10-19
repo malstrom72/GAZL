@@ -104,9 +104,12 @@ assembly when the divisor is a constant 0.
   hardware differs: x86 produces `0xFFC00000` where ARM produces `0x7FC00000`, and the two pick differently between
   two NaN operands. A NaN that is only moved keeps its bits exactly (section 2).
 - **Signed zero.** `-0.0` equals `0.0` in `EQUf` and `NEQf`. `ABSf` of `-0.0` is `0.0`, and `fTOi` of either is 0.
-- **Denormals** follow the host thread's floating-point environment (flush-to-zero, denormals-are-zero), which GAZL
-  neither sets nor restores, so a result that involves denormals may differ between implementations and hosts. That
-  is accepted.
+- **Denormals.** Arithmetic keeps denormals, with gradual underflow, as IEEE-754 requires. The one exception is a
+  host that runs GAZL with flush-to-zero on (the FTZ and DAZ flags on x86, FZ on ARM). Every denormal operand then
+  reads as a zero of the same sign, and every result that would be a denormal is a zero of the same sign. Whether a
+  result that rounds up to the smallest normal float is kept or flushed is up to the hardware, but one host decides
+  it the same way throughout. Such a host keeps one mode for every thread that assembles or runs GAZL, so a program
+  always meets the same one.
 
 **Conversions.** `fTOi` multiplies by its scale operand, then truncates toward zero; values at or beyond 2^31 in
 magnitude, and infinities, saturate to `INT_MAX` / `INT_MIN`, and NaN converts to 0. `iTOf` converts to the nearest
@@ -293,7 +296,8 @@ of straight-line code, as long as it stops within the budget plus one block; whe
 
 **Floating-point environment.** GAZL neither sets nor restores the host thread's environment, so the host must run
 GAZL, assembly included, with floating-point exceptions masked (otherwise an ordinary `inf - inf` traps, and the
-sandbox of section 10 does not hold) and with round-to-nearest-even. Flush-to-zero may be either way (section 4).
+sandbox of section 10 does not hold) and with round-to-nearest-even. Flush-to-zero is off, as standard, or on for
+every thread that assembles or runs GAZL (section 4).
 
 **Natives** are host functions, registered by name. A native reaches its arguments through `accessParams` and memory
 through `accessConstMemory` / `accessMemory`, which grant exactly the ranges of section 3; the precision of its own
@@ -331,8 +335,8 @@ Whatever the program text, an implementation must guarantee all of the following
   signal handlers, the floating-point environment, global variables.
 - **Interruptibility.** Every program stops within its step budget, plus at most one block (section 9).
 - **Determinism.** The same program, inputs and natives give the same results and statuses on every conforming
-  implementation, except where this specification leaves a result unspecified, and except for denormals
-  (section 4).
+  implementation, except where this specification leaves a result unspecified, and except that a flush-to-zero host
+  gives zeros where the standard gives denormals (section 4).
 
 These hold as long as the host keeps the floating-point environment required in section 9.
 
