@@ -1020,21 +1020,12 @@ void Assembler::parseOperand(const Char* b, const Char* e, int accepts, Value* v
 	}
 }
 
-/*
-	Called after `parseOperand` accepted the operand, so the name exists. A `! DEFp` name of a function must not become
-	a data address: an access through a constant address is checked only here, at assembly.
-*/
-int Assembler::namedPointerTypes(const Char* b, const Char* e, int accepts) const {
-	if (*b == '<') {
-		return (compileTimeVars[static_cast<unsigned char>(b[1])].types & accepts) | POINTER_CONSTANT;
-	}
-	assert(*b == '&' || *b == '#');
-	const Char* const nameEnd = reinterpret_cast<const Char*>(memchr(b, ':', e - b));
-	int types;
+int Assembler::namedPointerTypes(const Char* b, const Char* e, int accepts) const {	// `parseOperand` already accepted it
+	const Char* const colon = reinterpret_cast<const Char*>(memchr(b, ':', e - b));
+	int types = 0;
 	Value value;
-	const bool isFound = globals.lookup(b + 1, (nameEnd != 0 ? nameEnd : e), accepts, types, value);
-	assert(isFound);
-	(void)isFound;
+	if (*b == '<') types = compileTimeVars[static_cast<unsigned char>(b[1])].types;
+	else globals.lookup(b + 1, (colon != 0 ? colon : e), accepts, types, value);
 	return (types & accepts) | POINTER_CONSTANT;
 }
 
