@@ -24,6 +24,7 @@
 	that `poke(&w)` leaves `add`'s first argument materialised into a slot BEFORE the POKE.
 
 	Expected (GAZLCmd inlineReviewArgs.gazl main): 30 60 90 120 21 20 7
+	Compile: --gazl2
 */
 const int DEBUG = 1
 

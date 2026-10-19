@@ -845,8 +845,10 @@ const inlineCases = [
 		+ "function main() { f(3); }\n", null],
 ];
 for (const [label, source, expected] of inlineCases) {
-	expectCompileOutcome("inline", label, source, expected);
+	expectCompileOutcome("inline", label, source, expected, true);
 }
+expectCompileOutcome("inline", "outside --gazl2", "inline function f(int a) returns int r { r = a * 2; }\n"
+	+ "function main() locals int q { q = f(1); }\n", "E471");
 console.log("impala.jspeg compiler enforces the inline-function rules");
 
 // By-value structs are parked, and EVERY door that can introduce one must say so. `functype` was
@@ -3945,8 +3947,10 @@ function runGazlText(gazlPath, text, cmdArgs, label) {
 			"Incompatible types", "a t function's address in a p slot");
 		rejects("f:\tFUNC\n\tRETU\nGAZL #2\ng:\tGLOB *1\n\tDATp &f\nmain:\tFUNC\n\tPARA *1\n\tRETU\nGAZL #1\n",
 			"Incompatible types", "DATp of ANY function inside a region, GAZL 1-minted included");
-		rejects("f:\tFUNC\n\tRETU\nmain:\tFUNC\nt0:\tLOCt\n\tPARA *1\n\tMOVt t0 &f\n\tRETU\n",
+		rejects("f:\tFUNC\n\tRETU\nGAZL #2\nmain:\tFUNC\nt0:\tLOCt\n\tPARA *1\n\tMOVt t0 &f\n\tRETU\nGAZL #1\n",
 			"Incompatible types", "a GAZL 1 function's address in a t slot - the gate the region provides");
+		rejects("main:\tFUNC\nt0:\tLOCt\n\tPARA *1\n\tRETU\n",
+			"Unknown mnemonic", "a t word outside a region, as on a GAZL 1 engine");
 		rejects("GAZL #2\nmain:\tFUNC\n\tPARA *1\n\tRETU\n",
 			"not closed", "a region left open at end of file");
 		rejects("GAZL #2\nf:\tFUNC\n\tRETU\nmain:\tFUNC\np0:\tLOCp\n\tPARA *1\n\tPEEK p0 &g\n\tCALL p0 %0 *1\n\tRETU\ng:\tGLOB *1\nGAZL #1\n",
@@ -4050,21 +4054,24 @@ function runGazlText(gazlPath, text, cmdArgs, label) {
 			IMPALA_ENCODING);
 		assert(runGazlCmd(gazlPath, [ "main" ]).report.includes("status -6"),
 			"tail: the same recursion through CALL must trap the frame check - the gap the feature closes");
-		// TAIL is an ADDITIVE mnemonic: plain dialect-1 text may use it on this engine (older engines
-		// reject it as an unknown mnemonic, which is the whole version story for additions).
+		// TAIL assembles only inside a GAZL #2 region; in dialect 1 it is an unknown mnemonic, as on a GAZL 1 engine.
 		const rawLoop = "loop:\tFUNC\nr0:\tOUTi\nn0:\tINPi\n"
 			+ "\tNEQi n0 #0 @more\n\tMOVi r0 #7\n\tRETU\nmore:\tSUBi %1 n0 #1\n\tTAIL &loop *2\n"
 			+ "main:\tFUNC\n\tPARA *2\n\tMOVi %1 #100000\n\tCALL &loop %0 *2\n\tRETU\n";
 		fs.writeFileSync(gazlPath, rawLoop, IMPALA_ENCODING);
+		const plain = runGazlCmd(gazlPath, [ "main" ]);
+		assert(!plain.assembled && plain.report.includes("Unknown mnemonic"),
+			`tail: dialect-1 TAIL must be an unknown mnemonic, got: ${plain.line}`);
+		fs.writeFileSync(gazlPath, "GAZL #2\n" + rawLoop + "GAZL #1\n", IMPALA_ENCODING);
 		const raw = runGazlCmd(gazlPath, [ "main" ]);
 		assert(raw.assembled && raw.report.includes("Status: 0"),
-			`tail: raw dialect-1 TAIL must assemble and run 100k deep in one frame, got: ${raw.line}`);
+			`tail: raw TAIL in a region must assemble and run 100k deep in one frame, got: ${raw.line}`);
 		// There is NO window-size rule: the slide copies downward in ascending order (memmove-safe at
 		// any size) and the window words are folded into the frame check, so a window WIDER than the
 		// function's own is fine - here a 1-window function tail-passes a 3-word window.
-		const wideLoop = "sum:\tFUNC\ns0:\tOUTi\na0:\tINPi\nb0:\tINPi\n\tADDi s0 a0 b0\n\tRETU\n"
+		const wideLoop = "GAZL #2\nsum:\tFUNC\ns0:\tOUTi\na0:\tINPi\nb0:\tINPi\n\tADDi s0 a0 b0\n\tRETU\n"
 			+ "go:\tFUNC\ng0:\tOUTi\n\tMOVi %1 #40\n\tMOVi %2 #2\n\tTAIL &sum *3\n"
-			+ "main:\tFUNC\n\tPARA *1\n\tCALL &go %0 *1\n\tEQUi %0 #42 @ok\n\tCALL ^assertFail\nok:\tRETU\n";
+			+ "main:\tFUNC\n\tPARA *1\n\tCALL &go %0 *1\n\tEQUi %0 #42 @ok\n\tCALL ^assertFail\nok:\tRETU\nGAZL #1\n";
 		assert(runGazlText(gazlPath, wideLoop, [ "main" ], "tail: wider-than-own window") === "",
 			"tail: a TAIL window wider than the function's own must assemble and run");
 	}

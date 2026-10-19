@@ -16,6 +16,7 @@
 	and that the two never overlap.
 
 	Expected (GAZLCmd inlineReviewLocals.gazl main): 60 15 7 9 11 11 3
+	Compile: --gazl2
 */
 const int DEBUG = 1
 

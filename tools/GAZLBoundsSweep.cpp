@@ -807,8 +807,8 @@ int sweepFrozenEntries() {
 		"\tGAZL #2\n"
 		"tfn:\tFUNC\n"
 		"\tRETU\n"
-		"\tGAZL #1\n"
-		"target:\t! DEFt &tfn\n";
+		"target:\t! DEFt &tfn\n"
+		"\tGAZL #1\n";
 	struct Entry { const char* name; UInt size; UInt words[8]; };
 	const Entry EXPECTED[] = {				// ascending names
 		{ "clock", 1, { 7 } },
@@ -1256,7 +1256,8 @@ int sweepLabelReach() {
 /*
 	A `SPAN` region takes its extent, never more, and must fit its section. With `SPAN`, labels come in any address
 	order, and each still owns the words up to the next label by address. Words before an unnamed section's first
-	label, by address, belong to no one. Returns the number of failures, each one printed.
+	label, by address, belong to no one. Each program is in a `GAZL #2` region, the only place `SPAN` assembles.
+	Returns the number of failures, each one printed.
 */
 int sweepSpanRegions() {
 	struct Case { const char* what; const char* source; int error; };
@@ -1273,7 +1274,7 @@ int sweepSpanRegions() {
 	const int count = sizeof (CASES) / sizeof (*CASES);
 	int failures = 0;
 	for (int i = 0; i < count; ++i) {
-		const int error = assemblyError(CASES[i].source);
+		const int error = assemblyError(std::string("\tGAZL #2\n") + CASES[i].source + "\tGAZL #1\n");
 		if (error != CASES[i].error) {
 			std::printf("FAIL span regions: %s gave error %d, expected %d\n", CASES[i].what, error, CASES[i].error);
 			++failures;
@@ -1282,15 +1283,15 @@ int sweepSpanRegions() {
 	Machine m;
 	Layout layout = Layout();
 	std::string error;
-	const bool assembled = assemble(m, "s:\tGLOB *6\n\tSPAN :4 *2\nb:\tDATi #4 #5\n\tSPAN :0 *4\n\tDATi #1\n"
-			"a:\tDATi #2 #3\nmain:\tFUNC\n\tRETU\n", layout, error);
+	const bool assembled = assemble(m, "\tGAZL #2\ns:\tGLOB *6\n\tSPAN :4 *2\nb:\tDATi #4 #5\n\tSPAN :0 *4\n"
+			"\tDATi #1\na:\tDATi #2 #3\n\tGAZL #1\nmain:\tFUNC\n\tRETU\n", layout, error);
 	if (!assembled || ownedWords(m.symbols, "s") != 1 || ownedWords(m.symbols, "a") != 3
 			|| ownedWords(m.symbols, "b") != 2 || globalWords(m, "a") != "2 3 0") {
 		std::printf("FAIL span regions: labels out of address order own the wrong words (%s)\n", error.c_str());
 		++failures;
 	}
-	const int unowned = assemblyError("\tGLOB *4\n\tSPAN :2 *2\nx:\tDATi #1\n\tSPAN :0 *2\n\tDATi #9\n"
-			"main:\tFUNC\n\tRETU\n");
+	const int unowned = assemblyError("\tGAZL #2\n\tGLOB *4\n\tSPAN :2 *2\nx:\tDATi #1\n\tSPAN :0 *2\n\tDATi #9\n"
+			"\tGAZL #1\nmain:\tFUNC\n\tRETU\n");
 	if (unowned != UNNAMED_DATA_SECTION) {
 		std::printf("FAIL span regions: words before the first label by address gave error %d\n", unowned);
 		++failures;
@@ -1305,7 +1306,7 @@ int sweepSpanRegions() {
 */
 int sweepPrefixes() {
 	const std::string HEAD = "t:\tGLOB *2\n\tDATi #1\nK:\t! DEFi #3\nF:\t! DEFf #0.5\nP:\t! DEFp &t:1\n"
-			"main:\tFUNC\ni:\tLOCi\nf:\tLOCf\np:\tLOCp\nc:\tLOCt\n";
+			"main:\tFUNC\ni:\tLOCi\nf:\tLOCf\np:\tLOCp\n";
 	const std::string END = "\tRETU\ng:\tFUNC\n\tRETU\n";
 	struct Text { const char* what; std::string body; int gazl1Error; int gazl2Error; };
 	const Text CASES[] = {
@@ -1333,6 +1334,37 @@ int sweepPrefixes() {
 		}
 	}
 	std::printf("prefixes: %d checked, %d failed\n", count * 2, failures);
+	return failures;
+}
+
+/*
+	The GAZL 2 words other than `GAZL` itself assemble only inside a `GAZL #2` region; outside one each is an unknown
+	mnemonic, as on a GAZL 1 engine (docs/gazl/Specification.md section 12). Every program here is checked both ways,
+	so a refusal cannot come from a mistake in the program. Returns the number of failures, each one printed.
+*/
+int sweepRegionOnly() {
+	const char* const WORDS[] = {
+		"main:\tFUNC\nx:\tLOCt\n\tRETU\n", "main:\tFUNC\nx:\tINPt\n\tRETU\n", "main:\tFUNC\nx:\tOUTt\n\tRETU\n"
+		, "main:\tFUNC\n\tMOVt %0 &NULL\n\tRETU\n", "\tCNST *1\n\tDATt &NULL\nmain:\tFUNC\n\tRETU\n"
+		, "main:\tFUNC\n\tEQUt %0 &NULL @l\nl:\tRETU\n", "main:\tFUNC\n\tNEQt %0 &NULL @l\nl:\tRETU\n"
+		, "main:\tFUNC\n\tLSSt %0 &NULL @l\nl:\tRETU\n", "main:\tFUNC\n\tLEQt %0 &NULL @l\nl:\tRETU\n"
+		, "main:\tFUNC\n\tGRTt %0 &NULL @l\nl:\tRETU\n", "main:\tFUNC\n\tGEQt %0 &NULL @l\nl:\tRETU\n"
+		, "main:\tFUNC\ni:\tLOCi\n\tDIFt i %0 &NULL\n\tRETU\n", "N:\t! DEFt &NULL\nmain:\tFUNC\n\tRETU\n"
+		, "main:\tFUNC\n\tMARK\n\tFREE\n\tRETU\n", "g:\tGLOB *1\n\tSPAN :0 *1\nmain:\tFUNC\n\tRETU\n"
+		, "main:\tFUNC\n\tTAIL &main *0\n", "main:\tFUNC\n\tMOVi %0 #0\n\tTAIL %0 *0\n"
+	};
+	const int count = sizeof (WORDS) / sizeof (*WORDS);
+	int failures = 0;
+	for (int i = 0; i < count; ++i) {
+		const int outside = assemblyError(WORDS[i]);
+		const int inside = assemblyError(std::string("\tGAZL #2\n") + WORDS[i] + "\tGAZL #1\n");
+		if (outside != INVALID_INSTRUCTION || inside != -1) {
+			std::printf("FAIL region only: case %d gave errors %d outside and %d inside, expected %d and -1\n", i
+					, outside, inside, INVALID_INSTRUCTION);
+			++failures;
+		}
+	}
+	std::printf("region only: %d checked, %d failed\n", count * 2, failures);
 	return failures;
 }
 
@@ -1443,36 +1475,38 @@ int sweepPointerConstantKinds() {
 				"\tGAZL #1\n", -1 },
 		{ "a CALL through a target name of NULL", "\tGAZL #2\nN:\t! DEFt &NULL\nmain:\tFUNC\n\tCALL &N %0 *0\n"
 				"\tRETU\n\tGAZL #1\n", INCOMPATIBLE_TYPES },
-		{ "a target name of a GAZL 1 function", "g:\tFUNC\n\tRETU\nT:\t! DEFt &g\nmain:\tFUNC\n\tRETU\n"
+		{ "a target name of a GAZL 1 function", "g:\tFUNC\n\tRETU\n\tGAZL #2\nT:\t! DEFt &g\n\tGAZL #1\nmain:\tFUNC\n"
+				"\tRETU\n", INCOMPATIBLE_TYPES },
+		{ "a target name of data", "d:\tGLOB *1\n\tGAZL #2\nT:\t! DEFt &d\n\tGAZL #1\nmain:\tFUNC\n\tRETU\n"
 				, INCOMPATIBLE_TYPES },
-		{ "a target name of data", "d:\tGLOB *1\nT:\t! DEFt &d\nmain:\tFUNC\n\tRETU\n", INCOMPATIBLE_TYPES },
 		{ "a pointer name of a GAZL 2 function", "\tGAZL #2\nf:\tFUNC\n\tRETU\n\tGAZL #1\nP:\t! DEFp &f\nmain:\tFUNC\n"
 				"\tRETU\n", INCOMPATIBLE_TYPES },
-		{ "a target name in a pointer position", "\tGAZL #2\nf:\tFUNC\n\tRETU\n\tGAZL #1\nT:\t! DEFt &f\n"
+		{ "a target name in a pointer position", "\tGAZL #2\nf:\tFUNC\n\tRETU\nT:\t! DEFt &f\n\tGAZL #1\n"
 				"main:\tFUNC\np:\tLOCp\n\tMOVp p &T\n\tRETU\n", INCOMPATIBLE_TYPES },
-		{ "a PEEK through a target name", "\tGAZL #2\nf:\tFUNC\n\tRETU\n\tGAZL #1\nT:\t! DEFt &f\nmain:\tFUNC\n"
+		{ "a PEEK through a target name", "\tGAZL #2\nf:\tFUNC\n\tRETU\nT:\t! DEFt &f\n\tGAZL #1\nmain:\tFUNC\n"
 				"v:\tLOCi\n\tPEEK v &T\n\tRETU\n", INCOMPATIBLE_TYPES },
 		{ "an offset on a target name", "\tGAZL #2\nf:\tFUNC\n\tRETU\nT:\t! DEFt &f\nmain:\tFUNC\nx:\tLOCt\n"
 				"\tMOVt x &T:0\n\tRETU\n\tGAZL #1\n", OFFSET_OUT_OF_BOUNDS },
 		{ "a target name written as a number in a GAZL 2 region", "\tGAZL #2\nf:\tFUNC\n\tRETU\nT:\t! DEFt &f\n"
 				"main:\tFUNC\nx:\tLOCt\n\tMOVt x #T\n\tRETU\n\tGAZL #1\n", INCOMPATIBLE_TYPES },
-		{ "a target name of data with an offset", "g:\tGLOB *2\nT:\t! DEFt &g:1\nmain:\tFUNC\n\tRETU\n"
-				, INCOMPATIBLE_TYPES },
-		{ "a target name of a pointer name of data", "g:\tGLOB *2\nP:\t! DEFp &g\nT:\t! DEFt &P\nmain:\tFUNC\n\tRETU\n"
-				, INCOMPATIBLE_TYPES },
-		{ "a target name of a pointer name of a GAZL 1 function", "f:\tFUNC\n\tRETU\nP:\t! DEFp &f\nT:\t! DEFt &P\n"
+		{ "a target name of data with an offset", "g:\tGLOB *2\n\tGAZL #2\nT:\t! DEFt &g:1\n\tGAZL #1\nmain:\tFUNC\n"
+				"\tRETU\n", INCOMPATIBLE_TYPES },
+		{ "a target name of a pointer name of data", "g:\tGLOB *2\nP:\t! DEFp &g\n\tGAZL #2\nT:\t! DEFt &P\n\tGAZL #1\n"
 				"main:\tFUNC\n\tRETU\n", INCOMPATIBLE_TYPES },
-		{ "a target name of an assembly-time address", "g:\tGLOB *2\n\t! ADDp <A> &g #1\nT:\t! DEFt <A>\n"
-				"main:\tFUNC\n\tRETU\n", INCOMPATIBLE_COMPILE_TIME_VARIABLE_TYPE },
-		{ "a target name of a number", "T:\t! DEFt #5\nmain:\tFUNC\n\tRETU\n", DID_NOT_EXPECT_CONSTANT_INT },
+		{ "a target name of a pointer name of a GAZL 1 function", "f:\tFUNC\n\tRETU\nP:\t! DEFp &f\n\tGAZL #2\n"
+				"T:\t! DEFt &P\n\tGAZL #1\nmain:\tFUNC\n\tRETU\n", INCOMPATIBLE_TYPES },
+		{ "a target name of an assembly-time address", "g:\tGLOB *2\n\t! ADDp <A> &g #1\n\tGAZL #2\nT:\t! DEFt <A>\n"
+				"\tGAZL #1\nmain:\tFUNC\n\tRETU\n", INCOMPATIBLE_COMPILE_TIME_VARIABLE_TYPE },
+		{ "a target name of a number", "\tGAZL #2\nT:\t! DEFt #5\n\tGAZL #1\nmain:\tFUNC\n\tRETU\n"
+				, DID_NOT_EXPECT_CONSTANT },
 		{ "a pointer name of a GAZL 1 function inside a GAZL 2 region", "f:\tFUNC\n\tRETU\n\tGAZL #2\nP:\t! DEFp &f\n"
 				"\tGAZL #1\nmain:\tFUNC\n\tRETU\n", INCOMPATIBLE_TYPES },
-		{ "a pointer name of a target name", "\tGAZL #2\nf:\tFUNC\n\tRETU\n\tGAZL #1\nT:\t! DEFt &f\nP:\t! DEFp &T\n"
+		{ "a pointer name of a target name", "\tGAZL #2\nf:\tFUNC\n\tRETU\nT:\t! DEFt &f\n\tGAZL #1\nP:\t! DEFp &T\n"
 				"main:\tFUNC\n\tRETU\n", INCOMPATIBLE_TYPES },
-		{ "a target name of a pointer name of NULL", "P:\t! DEFp &NULL\nT:\t! DEFt &P\nmain:\tFUNC\nx:\tLOCt\n"
-				"\tMOVt x &T\n\tRETU\n", -1 },
-		{ "a pointer name of a target name of NULL", "T:\t! DEFt &NULL\nP:\t! DEFp &T\nmain:\tFUNC\np:\tLOCp\n"
-				"\tMOVp p &P\n\tRETU\n", -1 }
+		{ "a target name of a pointer name of NULL", "P:\t! DEFp &NULL\n\tGAZL #2\nT:\t! DEFt &P\nmain:\tFUNC\n"
+				"x:\tLOCt\n\tMOVt x &T\n\tRETU\n\tGAZL #1\n", -1 },
+		{ "a pointer name of a target name of NULL", "\tGAZL #2\nT:\t! DEFt &NULL\n\tGAZL #1\nP:\t! DEFp &T\n"
+				"main:\tFUNC\np:\tLOCp\n\tMOVp p &P\n\tRETU\n", -1 }
 	};
 	const int count = sizeof (CASES) / sizeof (*CASES);
 	int failures = 0;
@@ -1633,6 +1667,7 @@ int main() {
 #endif
 	const int hostFailures = sweepNativeAccess() + sweepFrameAndThaw() + sweepFrozenEntries() + sweepThawRules()
 			+ sweepCanary() + sweepTextEncoding() + sweepUnnamedSections() + sweepLabelReach() + sweepFunctionOffsets()
-			+ sweepSpanRegions() + sweepPrefixes() + sweepPointerConstantKinds() + sweepPointerConstantReach();
+			+ sweepSpanRegions() + sweepPrefixes() + sweepRegionOnly() + sweepPointerConstantKinds()
+			+ sweepPointerConstantReach();
 	return (sweep(engineCount) != 0 || hostFailures != 0) ? 1 : 0;
 }

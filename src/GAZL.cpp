@@ -1369,7 +1369,11 @@ const Char* Assembler::feed(const Char* line) {
 								case 'i': accepts = CONST_INT; break;
 								case 'f': accepts = CONST_FLOAT; break;
 								case 'p': accepts = ANY_FWD_FREE; break;
-								case 't': accepts = TGT_FWD_FREE; break;
+								case 't':	if (dialect < 2) {
+												throw Exception(INVALID_INSTRUCTION, mnemonicBegin, mnemonicBegin + 4);
+											}
+											accepts = TGT_FWD_FREE;
+											break;
 							}
 							p = eatSpaceAndComment(e);
 							while (!isEOL(*p)) {
@@ -1417,7 +1421,11 @@ const Char* Assembler::feed(const Char* line) {
 	const Operator* op = reinterpret_cast<const Operator*>(bsearch(key, OPERATORS, OPERATOR_COUNT, sizeof (*OPERATORS)
 			, operatorCompare));
 	if (op == 0) throw Exception(INVALID_INSTRUCTION, mnemonicBegin, op2End);
-	
+	if (dialect < 2 && (op->key[4] == 't' || op->opcode == MARK____ || op->opcode == FREE____ || op->opcode == SPAN____
+			|| op->opcode == TAIL_CC_ || op->opcode == TAIL_VC_)) {
+		throw Exception(INVALID_INSTRUCTION, mnemonicBegin, op2End);												// outside a `GAZL #2` region the GAZL 2 words are unknown, as on a GAZL 1 engine
+	}
+
 	Value v;
 	UInt size;
 	int types;

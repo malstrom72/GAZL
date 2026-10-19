@@ -11,10 +11,9 @@ reversed host layout and a repack-rerun in `impala/jspegCompilerTests.js`). No V
 time.
 This is the assembler-side half of `design/ParkedFeatures.md` "Placing static data at a symbolic offset -
 REQUIRES GAZL 2"; the original wishlist form of it (`637cdc4`, `docs/ParkedFeatures.md`) was dropped in
-the docs-split merge and survives only in history - this note replaces it. `SPAN` needs no `GAZL #2`
-declaration and never will (decided 2026-08-24): an additive mnemonic is self-gating - an engine that
-lacks it rejects it as unknown - so the declaration ([`GAZL2Versioning.md`](GAZL2Versioning.md)) is
-reserved for changes that alter the meaning of existing forms.
+the docs-split merge and survives only in history - this note replaces it. `SPAN` assembles only
+inside a `GAZL #2` region (decided 2026-10-20, reversing the 2026-08-24 rule that it needed none), so
+dialect 1 stays exactly GAZL 1; see [`GAZL2Versioning.md`](GAZL2Versioning.md).
 
 
 ## The last numeric channel

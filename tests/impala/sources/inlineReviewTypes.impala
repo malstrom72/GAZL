@@ -18,6 +18,7 @@
 	  - A funcptr PARAMETER is just a value: an inline body may call through it.
 
 	Expected (GAZLCmd inlineReviewTypes.gazl main): 7.5 25 42 4 99 12 30 60
+	Compile: --gazl2
 */
 const int DEBUG = 1
 
