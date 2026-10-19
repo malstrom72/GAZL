@@ -161,6 +161,16 @@ to its own script, as the shared rules above require.
   not that either is right. A `COPY` bounds check that wrapped identically in the interpreter and in both JIT
   backends survived 600,000 generated programs across two backends, and was found by reading the check. Treat a
   clean differential run as evidence of agreement only.
+- **The reference executor is the third opinion.** `tools/GAZLReference.h` runs assembled GAZL from the documented
+  semantics and shares only the instruction encoding with `Processor::run()`. The corpus replay (`test-fuzz`), the
+  text lane and the `--gen` lane all require the interpreter to agree with it, on status, memory and (where the run
+  is bounded) fuel, so a bug that the interpreter and the JIT share can now show. It only covers what the inputs
+  exercise, and the `--gen` generator emits no shifts, `FTOi` / `ITOf`, `COPY`, `SWCH`, `TAIL` or `GOTO`.
+- **Its floats are integer-only**, so no compiler or FPU setting changes them, and every run is compared twice: with
+  denormals kept, and again with the host's flush-to-zero on, against the reference in the boundary convention the
+  host was measured to use (Specification.md section 4). Before the first comparison the driver checks the
+  reference's arithmetic against the host's in both modes. The drivers build with `GAZL_CANONICAL_NAN`, since the
+  reference's NaNs are always `0x7FC00000`.
 - **Throughput depends entirely on what fraction of inputs the assembler rejects.** A rejected program costs a parse;
   an accepted one assembles AND RUNS across a 128K-`Value` data arena and a 128K-`Instruction` code arena with a
   10M-instruction timeout. Measured on the Windows MSVC lane: **~1300 execs/s** from a 31-program seed corpus, where

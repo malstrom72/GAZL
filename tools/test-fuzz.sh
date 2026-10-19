@@ -11,7 +11,7 @@ mkdir -p output
 
 echo "test-fuzz: building the replay driver"
 ( cd tools && bash BuildCpp.sh beta native ../output/GAZLReplay \
-		-DLIBFUZZ -DLIBFUZZ_STANDALONE -I.. GAZLCmd.cpp ../src/GAZL.cpp )
+		-DLIBFUZZ -DLIBFUZZ_STANDALONE -DGAZL_CANONICAL_NAN -I.. GAZLCmd.cpp GAZLReference.cpp ../src/GAZL.cpp )
 chmod +x output/GAZLReplay 2>/dev/null || true
 
 # Unpack into an EMPTY folder, or inputs left from a previous run are replayed too (design/fuzzing.md).

@@ -58,4 +58,4 @@ LIST=output/fuzz/jitCrashInputs.txt
 find tests/fuzz/textCrashes -type f -name '*.gazl' > "$LIST"
 N=$(wc -l < "$LIST" | tr -d ' ')
 ./output/GAZLFuzzText "@$LIST" > /dev/null
-echo "test-jit: $N crash inputs replayed through the interpreter and the JIT, no crashes"
+echo "test-jit: $N crash inputs replayed through the interpreter, the reference and the JIT, no crashes"

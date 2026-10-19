@@ -118,6 +118,46 @@ private:
 #endif
 };
 
+/*
+	Turns the host's flush-to-zero on for its lifetime: FTZ and DAZ on x86, FZ on ARM (docs/gazl/Specification.md
+	section 4). Used inside a StandardFPEnvScope, so everything else about the environment stays standard.
+*/
+class FlushToZeroScope {
+	public:
+		FlushToZeroScope();
+		~FlushToZeroScope();
+		static bool isAvailable();				// this host can switch it; elsewhere the flush-to-zero runs are skipped
+
+	private:
+	#if defined(__SSE2__) || defined(_M_X64) || defined(_M_IX86)
+		unsigned int previousMXCSR;
+	#elif defined(__aarch64__)
+		unsigned long long previousFPCR;
+	#endif
+};
+
+#if defined(__SSE2__) || defined(_M_X64) || defined(_M_IX86)
+static const unsigned int MXCSR_FLUSH_TO_ZERO = 0x8000;			// FTZ; the bits as numbers, since GCC declares the DAZ
+static const unsigned int MXCSR_DENORMALS_ARE_ZERO = 0x0040;	// mask only in the SSE3 header
+FlushToZeroScope::FlushToZeroScope() : previousMXCSR(_mm_getcsr()) {
+	_mm_setcsr(previousMXCSR | MXCSR_FLUSH_TO_ZERO | MXCSR_DENORMALS_ARE_ZERO);
+}
+FlushToZeroScope::~FlushToZeroScope() { _mm_setcsr(previousMXCSR); }
+bool FlushToZeroScope::isAvailable() { return true; }
+#elif defined(__aarch64__)
+FlushToZeroScope::FlushToZeroScope() {
+	asm volatile("mrs %0, fpcr" : "=r"(previousFPCR));
+	const unsigned long long flushing = previousFPCR | (1ull << 24);
+	asm volatile("msr fpcr, %0" :: "r"(flushing));
+}
+FlushToZeroScope::~FlushToZeroScope() { asm volatile("msr fpcr, %0" :: "r"(previousFPCR)); }
+bool FlushToZeroScope::isAvailable() { return true; }
+#else
+FlushToZeroScope::FlushToZeroScope() { }
+FlushToZeroScope::~FlushToZeroScope() { }
+bool FlushToZeroScope::isAvailable() { return false; }
+#endif
+
 using namespace GAZL;
 
 class CmdException : public std::exception {
@@ -280,6 +320,8 @@ static CallStackEntry callStack[CALL_STACK_SIZE];
 #if defined(LIBFUZZ) || defined(LIBFUZZ_STANDALONE)
 
 #include <sstream>
+#include <climits>
+#include "GAZLReference.h"
 
 struct TestCallbackData {
 	Pointer globalPointer;
@@ -298,6 +340,157 @@ int testMul(Processor* p) {
 
 int testCallback(Processor* p) {
 	return 0;
+}
+
+/*
+	The reference executor (tools/GAZLReference.h) as an oracle for the interpreter. Each native below is the
+	reference's twin of the one the interpreter gets, with `room` standing in for `accessParams`.
+*/
+namespace ReferenceNatives {
+	using GAZLReference::Machine;
+	static Status abortNative(Machine&, Value*, UInt) { return ABORTED; }
+	static Status stub(Machine&, Value*, UInt) { return OK; }
+	static Status input(Machine& machine, Value* window, UInt room) {						// `fuzzInput`'s twin: it leaves the fuel alone
+		if (room < 3) {
+			return DATA_STACK_OVERFLOW;
+		}
+		Value* const buffer = machine.accessMemory(window[2].p, window[1].i + 1);
+		if (buffer == 0) {
+			return ACCESS_VIOLATION;
+		}
+		buffer[0].i = 0;
+		window[0].i = 0;
+		return OK;
+	}
+	static Status atan2Native(Machine&, Value* window, UInt room) {
+		if (room < 3) {
+			return DATA_STACK_OVERFLOW;
+		}
+		window[0].f = atan2(window[1].f, window[2].f);
+		return OK;
+	}
+	static Status sqrtNative(Machine&, Value* window, UInt room) {
+		if (room < 2) {
+			return DATA_STACK_OVERFLOW;
+		}
+		window[0].f = sqrt(window[1].f);
+		return OK;
+	}
+	static Status logNative(Machine&, Value* window, UInt room) {
+		if (room < 2) {
+			return DATA_STACK_OVERFLOW;
+		}
+		window[0].f = log(window[1].f);
+		return OK;
+	}
+	static Status testMul(Machine&, Value* window, UInt room) {
+		if (room < 3) {
+			return DATA_STACK_OVERFLOW;
+		}
+		window[0].f = window[1].f * window[2].f;
+		return OK;
+	}
+}
+
+static float floatFromBits(UInt bits) {
+	float value;
+	std::memcpy(&value, &bits, sizeof (value));
+	return value;
+}
+
+/*
+	Which way this host's flush-to-zero decides the one case where hardware may differ (Specification.md section 4):
+	2^-126 * (1 - 2^-26), which rounds up to the smallest normal float, is kept by x86 and flushed by ARM's default.
+*/
+static GAZLReference::DenormalMode measureFlushMode() {
+	FlushToZeroScope flush;
+	const volatile float x = floatFromBits(0x3F000400u);								// 0.5 * (1 + 2^-13)
+	const volatile float y = floatFromBits(0x00FFF800u);								// 2^-126 * (2 - 2^-12)
+	const float product = x * y;
+	UInt bits;
+	std::memcpy(&bits, &product, sizeof (bits));
+	if (bits != 0x00800000u && bits != 0) {
+		std::fprintf(stderr, "\n=== flush-to-zero on, but 2^-126 * (1 - 2^-26) gave %08X ===\n", bits);
+		std::fflush(stderr);
+		std::abort();
+	}
+	return (bits != 0 ? GAZLReference::FLUSH_AFTER_ROUNDING : GAZLReference::FLUSH_BEFORE_ROUNDING);
+}
+
+static GAZLReference::DenormalMode hostFlushMode() {
+	static const GAZLReference::DenormalMode mode = measureFlushMode();
+	return mode;
+}
+
+/*
+	The reference's own float arithmetic against this host's, in both modes, once per process before the first
+	comparison: an oracle whose arithmetic drifted would blame a correct interpreter.
+*/
+static void requireReferenceFloats() {
+	static bool isChecked = false;
+	if (isChecked) {
+		return;
+	}
+	isChecked = true;
+	StandardFPEnvScope fpEnv;
+	const int64_t keptMismatchCount = GAZLReference::countFloatMismatches(1000000, GAZLReference::KEEP_DENORMALS);
+	int64_t flushedMismatchCount = 0;
+	if (FlushToZeroScope::isAvailable()) {
+		const GAZLReference::DenormalMode flushMode = hostFlushMode();
+		FlushToZeroScope flush;
+		flushedMismatchCount = GAZLReference::countFloatMismatches(1000000, flushMode);
+	}
+	if (keptMismatchCount != 0 || flushedMismatchCount != 0) {
+		std::fprintf(stderr, "\n=== the reference's float arithmetic differs from this host's in %lld of 1000000 cases"
+				" with denormals kept and %lld with flush-to-zero ===\n", static_cast<long long>(keptMismatchCount)
+				, static_cast<long long>(flushedMismatchCount));
+		std::fflush(stderr);
+		std::abort();
+	}
+}
+
+/*
+	Runs `program` from `snapshot` on the reference and requires the interpreter's outcome: the same status, the same
+	fuel left (unless `interpFuelLeft` is INT_MIN) and the same memory, a NaN matching any NaN. A difference, or a
+	program that breaks an assembler guarantee, is printed with the source and aborts, so a fuzzer keeps it as a crash.
+*/
+static void requireReference(const char* which, const uint8_t* data, size_t size, const AssembledProgram& program
+		, Pointer mainFunction, const GAZLReference::Native* natives, const Value* snapshot, int64_t fuel
+		, Status interpStatus, Int interpFuelLeft, const Value* interpImage, GAZLReference::DenormalMode denormalMode) {
+	requireReferenceFloats();
+	static Value image[DATA_MEMORY_SIZE];
+	std::memcpy(image, snapshot, sizeof (image));
+	AssembledProgram copy = program;
+	copy.memory = image;
+	GAZLReference::Machine reference(copy, CALL_STACK_SIZE, natives, denormalMode);
+	const Status status = reference.call(mainFunction, fuel);
+	int differingWord = -1;
+	for (int i = 0; differingWord < 0 && i < DATA_MEMORY_SIZE; ++i) {
+		const bool bothNaN = (interpImage[i].f != interpImage[i].f && image[i].f != image[i].f);
+		if (interpImage[i].i != image[i].i && !bothNaN) {
+			differingWord = i;
+		}
+	}
+	const bool fuelDiffers = (interpFuelLeft != INT_MIN && interpFuelLeft != reference.fuelLeft());	// INT_MIN: not compared
+	if (status == interpStatus && differingWord < 0 && !fuelDiffers) {
+		return;
+	}
+	std::fprintf(stderr, "\n=== interpreter/reference divergence (%s): interpreter status=%d reference status=%d", which
+			, static_cast<int>(interpStatus), static_cast<int>(status));
+	if (status == GAZLReference::REFERENCE_VIOLATION) {
+		std::fprintf(stderr, " (%s)", reference.getViolation().c_str());
+	}
+	if (fuelDiffers) {
+		std::fprintf(stderr, "; fuel left interpreter=%d reference=%lld", static_cast<int>(interpFuelLeft)
+				, static_cast<long long>(reference.fuelLeft()));
+	}
+	if (differingWord >= 0) {
+		std::fprintf(stderr, "; word[%d] interpreter=%d reference=%d", differingWord, interpImage[differingWord].i
+				, image[differingWord].i);
+	}
+	std::fprintf(stderr, " ===\n%.*s\n", static_cast<int>(size), reinterpret_cast<const char*>(data));
+	std::fflush(stderr);
+	std::abort();
 }
 
 #if defined(JITDIFF) && defined(GAZL_JIT)
@@ -657,6 +850,9 @@ static void runDiff(const std::string& programText) {
 		static const NativeFunc NATIVE_TABLE[] = { fuzzStub, fuzzStub, fuzzStub, fuzzStub, fuzzStub, fuzzStub, fuzzStub, gazlAtan2, gazlSqrt, gazlLog };
 		static const char* const NATIVE_NAMES[] = { "abort", "assertFail", "printInt", "printFloat", "print", "printLF", "input", "atan2", "sqrt", "log" };
 		for (size_t i = 0; i < sizeof (NATIVE_TABLE) / sizeof (*NATIVE_TABLE); ++i) { globals.registerNative(NATIVE_NAMES[i], static_cast<int>(i)); }
+		using namespace ReferenceNatives;
+		static const GAZLReference::Native REFERENCE_NATIVES[] = { stub, stub, stub, stub, stub, stub, stub, atan2Native
+				, sqrtNative, logNative };
 
 		AssembledProgram program;
 		for (int i = 0; i < DATA_MEMORY_SIZE; ++i) { memory[i].i = 0; }	// clean slate before assembly: the frame-local region is otherwise stale residue from the previous program (platform- and stream-position-dependent), so an uninitialized-local read would be nondeterministic across engines/platforms
@@ -694,7 +890,28 @@ static void runDiff(const std::string& programText) {
 		// inside this budget; running to completion adds no crash coverage.
 		const Int TEXT_FUEL = 2000000;
 		std::memcpy(memory, snapshot, sizeof (memory));
-		{ Processor interp(program, CALL_STACK_SIZE, callStack, NATIVE_TABLE, 0); if (interp.enterCall(mainFunction) == OK) { interp.resetTimeOut(TEXT_FUEL); interp.run(); } }
+		{
+			// Interpreter and reference DO agree on arbitrary source (the realm contract binds only the JIT), so this
+			// lane compares those two, fuel included.
+			Processor interp(program, CALL_STACK_SIZE, callStack, NATIVE_TABLE, 0);
+			if (interp.enterCall(mainFunction) == OK) {
+				interp.resetTimeOut(TEXT_FUEL);
+				const Status status = interp.run();
+				requireReference("text lane", Data, Size, program, mainFunction, REFERENCE_NATIVES, snapshot, TEXT_FUEL
+						, status, interp.getClockCyclesLeft(), memory, GAZLReference::KEEP_DENORMALS);
+			}
+		}
+		if (FlushToZeroScope::isAvailable()) {									// the same again on a flush-to-zero host
+			FlushToZeroScope flush;
+			std::memcpy(memory, snapshot, sizeof (memory));
+			Processor interp(program, CALL_STACK_SIZE, callStack, NATIVE_TABLE, 0);
+			if (interp.enterCall(mainFunction) == OK) {
+				interp.resetTimeOut(TEXT_FUEL);
+				const Status status = interp.run();
+				requireReference("text lane, flush-to-zero", Data, Size, program, mainFunction, REFERENCE_NATIVES, snapshot
+						, TEXT_FUEL, status, interp.getClockCyclesLeft(), memory, hostFlushMode());
+			}
+		}
 		std::memcpy(memory, snapshot, sizeof (memory));
 		{ JitProcessor jit(module, program, CALL_STACK_SIZE, callStack, NATIVE_TABLE); if (jit.enterCall(mainFunction) == OK) { jit.resetTimeOut(TEXT_FUEL); jit.run(); } }
 #else
@@ -702,6 +919,23 @@ static void runDiff(const std::string& programText) {
 		Processor interp(program, CALL_STACK_SIZE, callStack, NATIVE_TABLE, 0);
 		const Status interpStatus = runEngine(interp, mainFunction, 10000000);	// the oracle
 		std::memcpy(interpImage, memory, sizeof (memory));
+		// ...itself checked against the reference executor, run to completion as runEngine does (fuel is not compared).
+		requireReference("generated", Data, Size, program, mainFunction, REFERENCE_NATIVES, snapshot, 1000000000000LL
+				, interpStatus, INT_MIN, interpImage, GAZLReference::KEEP_DENORMALS);
+		if (FlushToZeroScope::isAvailable()) {									// on a flush-to-zero host the JIT must still match
+			static Value flushedImage[DATA_MEMORY_SIZE];
+			FlushToZeroScope flush;
+			std::memcpy(memory, snapshot, sizeof (memory));
+			Processor flushedInterp(program, CALL_STACK_SIZE, callStack, NATIVE_TABLE, 0);
+			const Status flushedStatus = runEngine(flushedInterp, mainFunction, 10000000);
+			std::memcpy(flushedImage, memory, sizeof (memory));
+			requireReference("generated, flush-to-zero", Data, Size, program, mainFunction, REFERENCE_NATIVES, snapshot
+					, 1000000000000LL, flushedStatus, INT_MIN, flushedImage, hostFlushMode());
+			std::memcpy(memory, snapshot, sizeof (memory));
+			JitProcessor jit(module, program, CALL_STACK_SIZE, callStack, NATIVE_TABLE);
+			const Status jitStatus = runEngine(jit, mainFunction, 10000000);
+			requireMatch("jit full-fuel, flush-to-zero", Data, Size, flushedStatus, flushedImage, jitStatus, memory);
+		}
 
 		std::memcpy(memory, snapshot, sizeof (memory));
 		{ JitProcessor jit(module, program, CALL_STACK_SIZE, callStack, NATIVE_TABLE); const Status s = runEngine(jit, mainFunction, 10000000); requireMatch("jit full-fuel", Data, Size, interpStatus, interpImage, s, memory); }
@@ -768,6 +1002,12 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size) {
 			abort, abort, fuzzInput, gazlAtan2, gazlSqrt, gazlLog, testMul, testCallback
 		};
 
+		static const GAZLReference::Native REFERENCE_NATIVES[] = {
+			ReferenceNatives::abortNative, ReferenceNatives::abortNative, ReferenceNatives::input
+			, ReferenceNatives::atan2Native, ReferenceNatives::sqrtNative, ReferenceNatives::logNative
+			, ReferenceNatives::testMul, ReferenceNatives::stub
+		};
+
 		static const char* NATIVE_NAMES[] = {
 			"abort", "assertFail", "input", "atan2", "sqrt", "log", "testMul", "testCallback"
 		};
@@ -796,10 +1036,25 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size) {
 			Processor pmachine(program, CALL_STACK_SIZE, callStack, NATIVE_TABLE, 0);
 			Pointer mainFunction = globals.findFunction("main");
 			if (mainFunction != 0) {
+				static Value snapshot[DATA_MEMORY_SIZE];
+				std::memcpy(snapshot, memory, sizeof (snapshot));
 				Status status = pmachine.enterCall(mainFunction);
 				assert(status == OK);
 				pmachine.resetTimeOut(10000000);
 				status = pmachine.run();
+				requireReference("text", Data, Size, program, mainFunction, REFERENCE_NATIVES, snapshot, 10000000
+						, status, pmachine.getClockCyclesLeft(), memory, GAZLReference::KEEP_DENORMALS);
+				if (FlushToZeroScope::isAvailable()) {								// the same again on a flush-to-zero host
+					FlushToZeroScope flush;
+					std::memcpy(memory, snapshot, sizeof (memory));
+					Processor flushed(program, CALL_STACK_SIZE, callStack, NATIVE_TABLE, 0);
+					status = flushed.enterCall(mainFunction);
+					assert(status == OK);
+					flushed.resetTimeOut(10000000);
+					status = flushed.run();
+					requireReference("text, flush-to-zero", Data, Size, program, mainFunction, REFERENCE_NATIVES, snapshot
+							, 10000000, status, flushed.getClockCyclesLeft(), memory, hostFlushMode());
+				}
 			}
 		}
 	}

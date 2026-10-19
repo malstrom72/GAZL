@@ -15,7 +15,7 @@ echo "test-ubsan: building with $CPP_COMPILER"
 ( cd tools && CPP_COMPILER="$CPP_COMPILER" CPP_OPTIONS="$UBSAN" \
 		bash BuildCpp.sh beta native ../output/GAZLCmdUBSan -I.. GAZLCmd.cpp ../src/GAZL.cpp ../src/GAZLCpp.cpp )
 ( cd tools && CPP_COMPILER="$CPP_COMPILER" CPP_OPTIONS="$UBSAN" \
-		bash BuildCpp.sh beta native ../output/GAZLReplayUBSan -DLIBFUZZ -DLIBFUZZ_STANDALONE -I.. GAZLCmd.cpp ../src/GAZL.cpp )
+		bash BuildCpp.sh beta native ../output/GAZLReplayUBSan -DLIBFUZZ -DLIBFUZZ_STANDALONE -DGAZL_CANONICAL_NAN -I.. GAZLCmd.cpp GAZLReference.cpp ../src/GAZL.cpp )
 
 echo "test-ubsan: unit tests"
 ./output/GAZLCmdUBSan > /dev/null
