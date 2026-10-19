@@ -259,7 +259,6 @@ class Assembler {
 	protected:	void linkWithOffset(Symbols& defs, const char* b, const char* e, int accepts, Value* v);
 	protected:	void parseConstant(const Char* b, const Char* e, int accepts, Value* v);
 	protected:	void parseOperand(const Char* b, const Char* e, int accepts, Value* v);
-	protected:	int namedPointerTypes(const Char* b, const Char* e, int accepts) const;	// The types of a `! DEFp` name: those of the pointer it names, so `NULL` and a function stay what they are.
 	protected:	bool doConstantBranch(const Operator* op, const Char* op0Begin, const Char* op0End
 						, const Char* op1Begin, const Char* op1End);
 	protected:	Value calcConstant(const Operator* op, const Char* op1Begin, const Char* op1End, const Char* op2Begin

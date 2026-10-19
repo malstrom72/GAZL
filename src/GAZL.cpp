@@ -1020,15 +1020,6 @@ void Assembler::parseOperand(const Char* b, const Char* e, int accepts, Value* v
 	}
 }
 
-int Assembler::namedPointerTypes(const Char* b, const Char* e, int accepts) const {	// `parseOperand` already accepted it
-	const Char* const colon = reinterpret_cast<const Char*>(memchr(b, ':', e - b));
-	int types = 0;
-	Value value;
-	if (*b == '<') types = compileTimeVars[static_cast<unsigned char>(b[1])].types;
-	else globals.lookup(b + 1, (colon != 0 ? colon : e), accepts, types, value);
-	return (types & accepts) | POINTER_CONSTANT;
-}
-
 void Assembler::declareData(const Char* labelBegin, const Char* labelEnd, const Value* first, UInt declaredWords) {
 	if (labelBegin == labelEnd) {
 		if (unownedRefused()) throw Exception(UNNAMED_DATA_SECTION);
@@ -1296,8 +1287,19 @@ const Char* Assembler::feed(const Char* line) {
 		} else {
 			switch (op->opcode) {
 				case DEFI____:	parseOperand(op0Begin, op0End, op->accepts[0], &v);										// ! DEFi, ! DEFf, ! DEFp
-								declare(globals, labelBegin, labelEnd, ((op->declareTypes & POINTER_CONSTANT) != 0
-										? namedPointerTypes(op0Begin, op0End, op->accepts[0]) : op->declareTypes), v);
+								types = op->declareTypes;
+								if ((types & POINTER_CONSTANT) != 0) {													// a `! DEFp` name of `NULL` or a function never passes as data
+									if (*op0Begin == '<') {
+										types = compileTimeVars[static_cast<unsigned char>(op0Begin[1])].types;
+									} else {
+										const Char* nameEnd = op0Begin + 1;
+										while (nameEnd != op0End && *nameEnd != ':') ++nameEnd;
+										Value named;
+										globals.lookup(op0Begin + 1, nameEnd, op->accepts[0], types, named);
+									}
+									types = (types & op->accepts[0]) | POINTER_CONSTANT;
+								}
+								declare(globals, labelBegin, labelEnd, types, v);
 								break;
 				
 				case IFDF_CB_:
