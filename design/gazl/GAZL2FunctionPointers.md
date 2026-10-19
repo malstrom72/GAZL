@@ -158,6 +158,7 @@ Needed:
 | `LOCt` | a local holding a call target |
 | `MOVt` (2 forms) | assignment |
 | `DATt` | initializer rows for funcptr arrays and struct fields |
+| `! DEFt` | a named target constant: Impala's `const funcptr` |
 | `EQUt` / `NEQt` (8 forms) | equality is meaningful - "is this the same function?" |
 | `LSSt` / `GRTt` / `LEQt` / `GEQt` | a TOTAL, run-stable order - sort a target table, binary-search it |
 | `DIFt` | `t - t -> int`: consumes two targets, names none |

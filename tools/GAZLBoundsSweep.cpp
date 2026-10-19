@@ -1383,7 +1383,8 @@ int sweepFunctionOffsets() {
 	A `! DEFp` name keeps the kind of what it names. An access through a constant address is checked only at assembly,
 	so a name of `NULL` or of a function must never pass as a data address, and a name of constant data must stay
 	read-only. An assembly-time address names no label to check against, so no access passes through it, while it
-	still works as a value. Returns the number of failures, each one printed.
+	still works as a value. A `! DEFt` name keeps a target a target: never data, and never a GAZL 1 function.
+	Returns the number of failures, each one printed.
 */
 int sweepPointerConstantKinds() {
 	struct Case { const char* what; const char* source; int error; };
@@ -1424,7 +1425,43 @@ int sweepPointerConstantKinds() {
 		{ "an assembly-time address as a value", "g:\tGLOB *2\n\t! ADDp <P> &g #1\nmain:\tFUNC\np:\tLOCp\n"
 				"\tMOVp p <P>\n\tRETU\n", -1 },
 		{ "a name of an assembly-time address as a value", "g:\tGLOB *2\n\t! ADDp <P> &g #1\nR:\t! DEFp <P>\n"
-				"main:\tFUNC\np:\tLOCp\n\tMOVp p &R\n\tRETU\n", -1 }
+				"main:\tFUNC\np:\tLOCp\n\tMOVp p &R\n\tRETU\n", -1 },
+		{ "a target name of a GAZL 2 function", "\tGAZL #2\nf:\tFUNC\n\tRETU\nT:\t! DEFt &f\nmain:\tFUNC\nx:\tLOCt\n"
+				"\tMOVt x &T\n\tCALL &T %0 *0\n\tRETU\n\tGAZL #1\n", -1 },
+		{ "a target name of NULL", "\tGAZL #2\nN:\t! DEFt &NULL\nmain:\tFUNC\nx:\tLOCt\n\tMOVt x &N\n\tRETU\n"
+				"\tGAZL #1\n", -1 },
+		{ "a CALL through a target name of NULL", "\tGAZL #2\nN:\t! DEFt &NULL\nmain:\tFUNC\n\tCALL &N %0 *0\n"
+				"\tRETU\n\tGAZL #1\n", INCOMPATIBLE_TYPES },
+		{ "a target name of a GAZL 1 function", "g:\tFUNC\n\tRETU\nT:\t! DEFt &g\nmain:\tFUNC\n\tRETU\n"
+				, INCOMPATIBLE_TYPES },
+		{ "a target name of data", "d:\tGLOB *1\nT:\t! DEFt &d\nmain:\tFUNC\n\tRETU\n", INCOMPATIBLE_TYPES },
+		{ "a pointer name of a GAZL 2 function", "\tGAZL #2\nf:\tFUNC\n\tRETU\n\tGAZL #1\nP:\t! DEFp &f\nmain:\tFUNC\n"
+				"\tRETU\n", INCOMPATIBLE_TYPES },
+		{ "a target name in a pointer position", "\tGAZL #2\nf:\tFUNC\n\tRETU\n\tGAZL #1\nT:\t! DEFt &f\n"
+				"main:\tFUNC\np:\tLOCp\n\tMOVp p &T\n\tRETU\n", INCOMPATIBLE_TYPES },
+		{ "a PEEK through a target name", "\tGAZL #2\nf:\tFUNC\n\tRETU\n\tGAZL #1\nT:\t! DEFt &f\nmain:\tFUNC\n"
+				"v:\tLOCi\n\tPEEK v &T\n\tRETU\n", INCOMPATIBLE_TYPES },
+		{ "an offset on a target name", "\tGAZL #2\nf:\tFUNC\n\tRETU\nT:\t! DEFt &f\nmain:\tFUNC\nx:\tLOCt\n"
+				"\tMOVt x &T:0\n\tRETU\n\tGAZL #1\n", OFFSET_OUT_OF_BOUNDS },
+		{ "a target name written as a number in a GAZL 2 region", "\tGAZL #2\nf:\tFUNC\n\tRETU\nT:\t! DEFt &f\n"
+				"main:\tFUNC\nx:\tLOCt\n\tMOVt x #T\n\tRETU\n\tGAZL #1\n", INCOMPATIBLE_TYPES },
+		{ "a target name of data with an offset", "g:\tGLOB *2\nT:\t! DEFt &g:1\nmain:\tFUNC\n\tRETU\n"
+				, INCOMPATIBLE_TYPES },
+		{ "a target name of a pointer name of data", "g:\tGLOB *2\nP:\t! DEFp &g\nT:\t! DEFt &P\nmain:\tFUNC\n\tRETU\n"
+				, INCOMPATIBLE_TYPES },
+		{ "a target name of a pointer name of a GAZL 1 function", "f:\tFUNC\n\tRETU\nP:\t! DEFp &f\nT:\t! DEFt &P\n"
+				"main:\tFUNC\n\tRETU\n", INCOMPATIBLE_TYPES },
+		{ "a target name of an assembly-time address", "g:\tGLOB *2\n\t! ADDp <A> &g #1\nT:\t! DEFt <A>\n"
+				"main:\tFUNC\n\tRETU\n", INCOMPATIBLE_COMPILE_TIME_VARIABLE_TYPE },
+		{ "a target name of a number", "T:\t! DEFt #5\nmain:\tFUNC\n\tRETU\n", DID_NOT_EXPECT_CONSTANT_INT },
+		{ "a pointer name of a GAZL 1 function inside a GAZL 2 region", "f:\tFUNC\n\tRETU\n\tGAZL #2\nP:\t! DEFp &f\n"
+				"\tGAZL #1\nmain:\tFUNC\n\tRETU\n", INCOMPATIBLE_TYPES },
+		{ "a pointer name of a target name", "\tGAZL #2\nf:\tFUNC\n\tRETU\n\tGAZL #1\nT:\t! DEFt &f\nP:\t! DEFp &T\n"
+				"main:\tFUNC\n\tRETU\n", INCOMPATIBLE_TYPES },
+		{ "a target name of a pointer name of NULL", "P:\t! DEFp &NULL\nT:\t! DEFt &P\nmain:\tFUNC\nx:\tLOCt\n"
+				"\tMOVt x &T\n\tRETU\n", -1 },
+		{ "a pointer name of a target name of NULL", "T:\t! DEFt &NULL\nP:\t! DEFp &T\nmain:\tFUNC\np:\tLOCp\n"
+				"\tMOVp p &P\n\tRETU\n", -1 }
 	};
 	const int count = sizeof (CASES) / sizeof (*CASES);
 	int failures = 0;
