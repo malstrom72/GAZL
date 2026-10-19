@@ -251,7 +251,9 @@ Without the `DATi #5954` row, `tail` would own all 40 words and `buffer` none. O
 
 A statement prefixed with `!` runs while the program is assembled and generates no code:
 - `! DEFi`, `! DEFf` and `! DEFp` define a named constant: the statement's label. `DEFi` and `DEFf` name a number,
-  written `#name`, and `DEFp` a pointer, written `&name`.
+  written `#name`, and `DEFp` a pointer, written `&name`. A `DEFp` name is the same kind of pointer as its operand:
+  data, constant data, a function or `NULL`. It is accepted only where that operand would be, so `PEEK` and `POKE`
+  refuse a name of a function or of `NULL`, and `POKE` refuses a name of constant data.
 - `! MOVi <A> #1`, `! ADDi <A> <A> #2` and so on compute into assembly-time variables. A variable's name is exactly
   one identifier character (section 5) between `<` and `>`, so there are 65 of them. Names are case-sensitive: `<a>`
   and `<A>` are different variables. All are cleared at the start of each unit, and reading one that the unit has not

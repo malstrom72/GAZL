@@ -902,7 +902,10 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         var cls = '%';              /* default stock   */
         var t   = op1Prefix + op2Prefix;
 
-        if (t.length > 0 && span(t, '#<') === t.length && span('<', classes) === 1) {
+        /* a memory read never folds: GAZL has no assembly-time PEEK, and a `pointer` const is `#name` here too */
+        var readsMemory = (META_TO_GAZL[op] === 'PEEK' || META_TO_GAZL[op] === 'GETL'
+                || META_TO_GAZL[op] === 'ADRL');
+        if (t.length > 0 && span(t, '#<') === t.length && span('<', classes) === 1 && !readsMemory) {
             expr.operator = '<> ' + op;     /* compile-time op */
             cls = '<';
         }
@@ -1026,10 +1029,11 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
                 }
 
             } else {
-                /* general indexed read */
-                makeMeta(leftx, operator, tp, null,
-                                  makeRValue(leftx),
-                                  makeRValue(rightx));
+                /* general indexed read; GAZL has no `PEEK var &address #int`, so a constant index on a constant
+                   base goes into a transient */
+                var base = makeRValue(leftx);
+                var index = makeRValue(rightx, (span(base[0], '#<') === 1 ? '&^$%' : undefined));
+                makeMeta(leftx, operator, tp, null, base, index);
             }
 
         } else {

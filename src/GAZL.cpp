@@ -677,7 +677,7 @@ static const Operator OPERATORS[] = {
 	, { "!ANDi_ccc", ANDI_CCC,	{ COMPILE_TIME	, CONST_INT		, CONST_INT		}		, 0				, CONST_INT		}
 	, { "!DEFf_c__", DEFI____,	{ CONST_FLOAT	, 0				, 0				}		, 0				, CONST_FLOAT	}
 	, { "!DEFi_c__", DEFI____,	{ CONST_INT		, 0				, 0				}		, 0				, CONST_INT		}
-	, { "!DEFp_c__", DEFI____,	{ FREE_ADDRESS	, 0				, 0				}		, 0				, FREE_ADDRESS|POINTER_CONSTANT }
+	, { "!DEFp_c__", DEFI____,	{ ANY_FREE		, 0				, 0				}		, 0				, POINTER_CONSTANT	}
 	, { "!DIFp_ccc", SUBI_CCC,	{ COMPILE_TIME	, FREE_ADDRESS	, FREE_ADDRESS	}		, 0				, CONST_INT		}
 	, { "!DIVf_ccc", DIVF_CCC,	{ COMPILE_TIME	, CONST_FLOAT	, CONST_FLOAT	}		, 0				, CONST_FLOAT	}
 	, { "!DIVi_ccc", DIVI_CCC,	{ COMPILE_TIME	, CONST_INT		, CONST_INT		}		, CHECK_DIV_BY_0, CONST_INT		}
@@ -1020,6 +1020,24 @@ void Assembler::parseOperand(const Char* b, const Char* e, int accepts, Value* v
 	}
 }
 
+/*
+	Called after `parseOperand` accepted the operand, so the name exists. A `! DEFp` name of a function must not become
+	a data address: an access through a constant address is checked only here, at assembly.
+*/
+int Assembler::namedPointerTypes(const Char* b, const Char* e, int accepts) const {
+	if (*b == '<') {
+		return (compileTimeVars[static_cast<unsigned char>(b[1])].types & accepts) | POINTER_CONSTANT;
+	}
+	assert(*b == '&' || *b == '#');
+	const Char* const nameEnd = reinterpret_cast<const Char*>(memchr(b, ':', e - b));
+	int types;
+	Value value;
+	const bool isFound = globals.lookup(b + 1, (nameEnd != 0 ? nameEnd : e), accepts, types, value);
+	assert(isFound);
+	(void)isFound;
+	return (types & accepts) | POINTER_CONSTANT;
+}
+
 void Assembler::declareData(const Char* labelBegin, const Char* labelEnd, const Value* first, UInt declaredWords) {
 	if (labelBegin == labelEnd) {
 		if (unownedRefused()) throw Exception(UNNAMED_DATA_SECTION);
@@ -1286,8 +1304,9 @@ const Char* Assembler::feed(const Char* line) {
 				skipUntilLabel = std::string(op2Begin + 1, op2End);
 		} else {
 			switch (op->opcode) {
-				case DEFI____:	parseOperand(op0Begin, op0End, op->accepts[0], &v);										// ! DEFi, ! DEFf
-								declare(globals, labelBegin, labelEnd, op->declareTypes, v);
+				case DEFI____:	parseOperand(op0Begin, op0End, op->accepts[0], &v);										// ! DEFi, ! DEFf, ! DEFp
+								declare(globals, labelBegin, labelEnd, ((op->declareTypes & POINTER_CONSTANT) != 0
+										? namedPointerTypes(op0Begin, op0End, op->accepts[0]) : op->declareTypes), v);
 								break;
 				
 				case IFDF_CB_:

@@ -124,7 +124,8 @@ Define a compile‑time constant integer
 ## DEFp
 - `&address`
 
-Define a compile‑time constant pointer
+Define a compile‑time constant pointer. The name is the same kind of pointer as the operand: data, constant data, a
+function or `NULL`.
 ## COPY
 - `&address(w)     &address(r)     *size`
 - `&address(w)     ptr             *size`
