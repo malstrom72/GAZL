@@ -30,7 +30,9 @@
 
 	  - integer results wrap at 32 bits, shift counts are taken mod 32, `INT_MIN / -1` is `INT_MIN` and
 	    `INT_MIN % -1` is 0; `FTOi` truncates and saturates, and NaN gives 0
-	  - `DIVf` is IEEE division, so a zero divisor gives an infinity or a NaN rather than an error
+	  - floats are IEEE-754 binary32 computed with integer operations only, so no compiler or FPU setting can change
+	    them: rounding to nearest even, gradual underflow, and every arithmetic NaN is 0x7FC00000. `DIVf` by zero gives
+	    an infinity or a NaN rather than an error
 	  - an address is `base + index` mod 2^32. The constants sit just below `MEMORY_OFFSET`, the globals and the
 	    data stack from it up, so a read reaches the constants too and a write only from `MEMORY_OFFSET` up; the
 	    zero guard after the data stack is out of reach of both. GETL / SETL index a local array and reach as far

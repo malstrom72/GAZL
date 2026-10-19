@@ -22,7 +22,6 @@
 */
 
 #include "assert.h"
-#include <cmath>
 #include <vector>
 #include "GAZLReference.h"
 #include "../src/GAZLOpcodes.h"
@@ -40,17 +39,197 @@ struct Violation {
 
 static Int wrap(int64_t value) { return static_cast<Int>(static_cast<UInt>(value)); }
 
-static Int floatToInt(Float value) {														// already scaled; truncates and saturates, NaN is 0
-	if (value != value) {
+/*
+	IEEE-754 binary32 on the bits, with integer operations only, so no compiler flag or FPU mode (fused multiply-add,
+	excess precision, fast math, flush to zero) can change a result. Rounding is to nearest, ties to even, underflow is
+	gradual, and every NaN an arithmetic instruction makes is QUIET_NAN.
+*/
+static const UInt SIGN_BIT = 0x80000000u;
+static const UInt MAGNITUDE_BITS = 0x7FFFFFFFu;
+static const UInt INFINITY_BITS = 0x7F800000u;
+static const UInt QUIET_NAN = 0x7FC00000u;
+static const UInt FRACTION_BITS = 0x007FFFFFu;
+
+static UInt bitsOf(const Value& value) { return static_cast<UInt>(value.i); }
+static bool isNaN(UInt bits) { return (bits & MAGNITUDE_BITS) > INFINITY_BITS; }
+static bool isInfinite(UInt bits) { return (bits & MAGNITUDE_BITS) == INFINITY_BITS; }
+static bool isZero(UInt bits) { return (bits & MAGNITUDE_BITS) == 0; }
+
+static int leadingZeros(uint64_t value) {													// `value` is not 0
+	int count = 0;
+	while (((value << count) >> 63) == 0) {
+		++count;
+	}
+	return count;
+}
+
+// A finite float as `significand` times 2 to the `exponent`.
+struct Unpacked {
+	uint64_t significand;
+	int exponent;
+};
+
+static Unpacked unpack(UInt bits) {
+	const UInt field = (bits >> 23) & 0xFF;
+	assert(field != 0xFF);
+	const Unpacked unpacked = { (field == 0 ? bits & FRACTION_BITS : (bits & FRACTION_BITS) | 0x800000)
+			, (field == 0 ? -149 : static_cast<int>(field) - 150) };
+	return unpacked;
+}
+
+/*
+	The float nearest to `significand` times 2 to the `exponent`, with `sign`. Bit 0 of `significand` may be a sticky
+	bit standing for nonzero bits below it: every caller leaves it at least two bits below the rounding position.
+*/
+static UInt roundToFloat(UInt sign, uint64_t significand, int exponent) {
+	if (significand == 0) {
+		return sign;
+	}
+	const int normalization = leadingZeros(significand);
+	const uint64_t normalized = significand << normalization;
+	const int field = exponent - normalization + 63 + 127;									// the exponent field of the leading one
+	if (field >= 255) {
+		return sign | INFINITY_BITS;
+	}
+	const int droppedBits = (field >= 1 ? 40 : 41 - field);								// a denormal keeps fewer bits
+	if (droppedBits > 64) {
+		return sign;																		// below half the smallest denormal
+	}
+	const uint64_t kept = (droppedBits == 64 ? 0 : normalized >> droppedBits);
+	const uint64_t droppedMask = (droppedBits == 64 ? ~static_cast<uint64_t>(0)
+			: (static_cast<uint64_t>(1) << droppedBits) - 1);
+	const uint64_t dropped = normalized & droppedMask;
+	const uint64_t half = static_cast<uint64_t>(1) << (droppedBits - 1);
+	const uint64_t rounded = kept + ((dropped > half || (dropped == half && (kept & 1) != 0)) ? 1 : 0);
+	if (field < 1) {
+		return sign | static_cast<UInt>(rounded);											// rounding up into bit 23 gives the smallest normal
+	}
+	const bool carried = (rounded >> 24) != 0;
+	const UInt finalField = static_cast<UInt>(field) + (carried ? 1 : 0);
+	if (finalField >= 255) {
+		return sign | INFINITY_BITS;
+	}
+	return sign | (finalField << 23) | (carried ? 0 : static_cast<UInt>(rounded) & FRACTION_BITS);
+}
+
+static uint64_t shiftRightSticky(uint64_t value, int distance) {
+	if (distance == 0) {
+		return value;
+	}
+	if (distance >= 64) {
+		return (value != 0 ? 1 : 0);
+	}
+	const bool lost = (value & ((static_cast<uint64_t>(1) << distance) - 1)) != 0;
+	return (value >> distance) | (lost ? 1 : 0);
+}
+
+static UInt floatAdd(UInt a, UInt b) {
+	if (isNaN(a) || isNaN(b) || (isInfinite(a) && isInfinite(b) && ((a ^ b) & SIGN_BIT) != 0)) {
+		return QUIET_NAN;
+	}
+	if (isInfinite(a) || isInfinite(b)) {
+		return (isInfinite(a) ? a : b);
+	}
+	if (isZero(a) && isZero(b)) {
+		return a & b;																		// -0 only when both are -0
+	}
+	const Unpacked aParts = unpack(a);
+	const Unpacked bParts = unpack(b);
+	const bool isAHigh = (aParts.exponent >= bParts.exponent);
+	const Unpacked high = (isAHigh ? aParts : bParts);
+	const Unpacked low = (isAHigh ? bParts : aParts);
+	const UInt highSign = (isAHigh ? a : b) & SIGN_BIT;
+	const UInt lowSign = (isAHigh ? b : a) & SIGN_BIT;
+	const int distance = high.exponent - low.exponent;
+	const int headroom = (distance < 38 ? distance : 38);									// a significand below 2^24 shifted by 38 leaves room for a carry
+	const uint64_t highSignificand = high.significand << headroom;
+	const uint64_t lowSignificand = shiftRightSticky(low.significand, distance - headroom);
+	const int exponent = high.exponent - headroom;
+	if (highSign == lowSign) {
+		return roundToFloat(highSign, highSignificand + lowSignificand, exponent);
+	}
+	if (highSignificand == lowSignificand) {
+		return 0;																			// an exact cancellation is +0
+	}
+	return (highSignificand > lowSignificand ? roundToFloat(highSign, highSignificand - lowSignificand, exponent)
+			: roundToFloat(lowSign, lowSignificand - highSignificand, exponent));
+}
+
+static UInt floatMultiply(UInt a, UInt b) {
+	const UInt sign = (a ^ b) & SIGN_BIT;
+	if (isNaN(a) || isNaN(b) || (isInfinite(a) && isZero(b)) || (isZero(a) && isInfinite(b))) {
+		return QUIET_NAN;
+	}
+	if (isInfinite(a) || isInfinite(b)) {
+		return sign | INFINITY_BITS;
+	}
+	const Unpacked aParts = unpack(a);
+	const Unpacked bParts = unpack(b);
+	return roundToFloat(sign, aParts.significand * bParts.significand, aParts.exponent + bParts.exponent);
+}
+
+static UInt floatDivide(UInt a, UInt b) {
+	const UInt sign = (a ^ b) & SIGN_BIT;
+	if (isNaN(a) || isNaN(b) || (isInfinite(a) && isInfinite(b)) || (isZero(a) && isZero(b))) {
+		return QUIET_NAN;
+	}
+	if (isInfinite(a) || isZero(b)) {
+		return sign | INFINITY_BITS;
+	}
+	if (isZero(a) || isInfinite(b)) {
+		return sign;
+	}
+	const Unpacked aParts = unpack(a);
+	const Unpacked bParts = unpack(b);
+	const int shift = leadingZeros(aParts.significand);									// the dividend up to bit 63 leaves a quotient of 40 bits or more
+	const uint64_t dividend = aParts.significand << shift;
+	const uint64_t quotient = dividend / bParts.significand;
+	const uint64_t sticky = (dividend % bParts.significand != 0 ? 1 : 0);
+	return roundToFloat(sign, quotient | sticky, aParts.exponent - shift - bParts.exponent);
+}
+
+static UInt floatFloor(UInt bits) {
+	if (isNaN(bits)) {
+		return QUIET_NAN;
+	}
+	const UInt field = (bits >> 23) & 0xFF;
+	if (field >= 150 || isZero(bits)) {
+		return bits;																		// already whole: large, infinite or zero
+	}
+	const bool isNegative = (bits & SIGN_BIT) != 0;
+	if (field < 127) {
+		return (isNegative ? 0xBF800000u : 0);												// between -1 and 1: -1 or +0
+	}
+	const UInt fractionMask = (1u << (150 - field)) - 1;
+	if ((bits & fractionMask) == 0) {
+		return bits;
+	}
+	return (bits & ~fractionMask) + (isNegative ? fractionMask + 1 : 0);					// a negative value steps away from zero
+}
+
+static Int floatToInt(UInt bits) {															// truncates and saturates; NaN is 0
+	const UInt field = (bits >> 23) & 0xFF;
+	if (isNaN(bits) || field < 127) {
 		return 0;
 	}
-	if (static_cast<double>(value) >= 2147483648.0) {
-		return 0x7FFFFFFF;
+	const bool isNegative = (bits & SIGN_BIT) != 0;
+	if (field >= 158) {
+		return (isNegative ? static_cast<Int>(0x80000000u) : 0x7FFFFFFF);					// 2^31 or more, infinities included
 	}
-	if (static_cast<double>(value) < -2147483648.0) {
-		return static_cast<Int>(0x80000000u);
-	}
-	return static_cast<Int>(static_cast<int64_t>(value));
+	const UInt significand = (bits & FRACTION_BITS) | 0x800000;
+	const UInt magnitude = (field >= 150 ? significand << (field - 150) : significand >> (150 - field));
+	return (isNegative ? -static_cast<Int>(magnitude) : static_cast<Int>(magnitude));
+}
+
+static UInt intToFloat(Int value) {
+	const int64_t wide = value;
+	return roundToFloat((value < 0 ? SIGN_BIT : 0), static_cast<uint64_t>(wide < 0 ? -wide : wide), 0);
+}
+
+// Orders floats as numbers, -0 and +0 alike. Not for NaN.
+static int64_t orderKey(UInt bits) {
+	const int64_t magnitude = bits & MAGNITUDE_BITS;
+	return ((bits & SIGN_BIT) != 0 ? -magnitude : magnitude);
 }
 
 // Whether an opcode takes its first or second SOURCE operand as a constant: the `C` in `_VCV`, `_VVC` or `_CVB`.
@@ -102,29 +281,32 @@ static Int integerResult(int opcode, Int a, Int b) {
 	}
 }
 
-static Float floatResult(int opcode, Float a, Float b) {
+static UInt floatResult(int opcode, UInt a, UInt b) {
 	switch (opcode) {
-		case ADDF_VVV: case ADDF_VVC: return a + b;
-		case SUBF_VVV: case SUBF_VVC: case SUBF_VCV: return a - b;
-		case MULF_VVV: case MULF_VVC: return a * b;
+		case ADDF_VVV: case ADDF_VVC: return floatAdd(a, b);
+		case SUBF_VVV: case SUBF_VVC: case SUBF_VCV: return floatAdd(a, b ^ SIGN_BIT);
+		case MULF_VVV: case MULF_VVC: return floatMultiply(a, b);
 		default:
 			assert(opcode == DIVF_VVV || opcode == DIVF_VVC || opcode == DIVF_VCV);
-			return a / b;																	// IEEE: a zero divisor gives an infinity or a NaN
+			return floatDivide(a, b);
 	}
 }
 
 static bool isBranchTaken(int opcode, const Value& a, const Value& b) {
+	const UInt x = bitsOf(a);
+	const UInt y = bitsOf(b);
+	const bool isOrdered = (!isNaN(x) && !isNaN(y));
 	switch (opcode) {
 		case LSSI_VVB: case LSSI_VCB: case LSSI_CVB: return a.i < b.i;
 		case EQUI_VVB: case EQUI_VCB: return a.i == b.i;
 		case NLSI_VVB: case NLSI_VCB: case NLSI_CVB: return !(a.i < b.i);
 		case NEQI_VVB: case NEQI_VCB: return a.i != b.i;
-		case LSSF_VVB: case LSSF_VCB: case LSSF_CVB: return a.f < b.f;
-		case EQUF_VVB: case EQUF_VCB: return a.f == b.f;
-		case NLSF_VVB: case NLSF_VCB: case NLSF_CVB: return !(a.f < b.f);					// true when either is NaN
+		case LSSF_VVB: case LSSF_VCB: case LSSF_CVB: return isOrdered && orderKey(x) < orderKey(y);
+		case EQUF_VVB: case EQUF_VCB: return isOrdered && orderKey(x) == orderKey(y);
+		case NLSF_VVB: case NLSF_VCB: case NLSF_CVB: return !(isOrdered && orderKey(x) < orderKey(y));	// true when either is NaN
 		default:
 			assert(opcode == NEQF_VVB || opcode == NEQF_VCB);
-			return a.f != b.f;
+			return !(isOrdered && orderKey(x) == orderKey(y));
 	}
 }
 
@@ -339,10 +521,10 @@ Status Machine::run(Pointer function) {
 			}
 			case ADRL_VV_: slot(c0).p = static_cast<Pointer>(dsp + c1.i - constantWords) + MEMORY_OFFSET; break;
 			case ABSI_VV_: slot(c0).i = wrap(slot(c1).i < 0 ? -static_cast<int64_t>(slot(c1).i) : slot(c1).i); break;
-			case ABSF_VV_: slot(c0).f = std::fabs(slot(c1).f); break;
-			case FLOF_VV_: slot(c0).f = std::floor(slot(c1).f); break;
-			case FTOI_VVC: slot(c0).i = floatToInt(slot(c1).f * c2.f); break;				// C2 = scale
-			case ITOF_VVC: slot(c0).f = static_cast<Float>(slot(c1).i) * c2.f; break;		// C2 = scale
+			case ABSF_VV_: slot(c0).i = static_cast<Int>(bitsOf(slot(c1)) & MAGNITUDE_BITS); break;
+			case FLOF_VV_: slot(c0).i = static_cast<Int>(floatFloor(bitsOf(slot(c1)))); break;
+			case FTOI_VVC: slot(c0).i = floatToInt(floatMultiply(bitsOf(slot(c1)), bitsOf(c2))); break;	// C2 = scale
+			case ITOF_VVC: slot(c0).i = static_cast<Int>(floatMultiply(intToFloat(slot(c1).i), bitsOf(c2))); break;	// C2 = scale
 			case ADDI_VVV: case ADDI_VVC: case SUBI_VVV: case SUBI_VVC: case SUBI_VCV:
 			case MULI_VVV: case MULI_VVC: case DIVI_VVV: case DIVI_VVC: case DIVI_VCV:
 			case MODI_VVV: case MODI_VVC: case MODI_VCV: case ANDI_VVV: case ANDI_VVC:
@@ -364,16 +546,9 @@ Status Machine::run(Pointer function) {
 			}
 			case ADDF_VVV: case ADDF_VVC: case SUBF_VVV: case SUBF_VVC: case SUBF_VCV:
 			case MULF_VVV: case MULF_VVC: case DIVF_VVV: case DIVF_VVC: case DIVF_VCV: {	// V0 = P1 op P2
-				const Float a = (isFirstSourceConstant(opcode) ? c1.f : slot(c1).f);
-				const Float b = (isSecondSourceConstant(opcode) ? c2.f : slot(c2).f);
-				const Float result = floatResult(opcode, a, b);
-				Value& target = slot(c0);
-				target.f = result;
-			#ifdef GAZL_CANONICAL_NAN
-				if (result != result) {
-					target.i = 0x7FC00000;													// the strict-FP build gives every arithmetic NaN one bit pattern
-				}
-			#endif
+				const UInt a = bitsOf(isFirstSourceConstant(opcode) ? c1 : slot(c1));
+				const UInt b = bitsOf(isSecondSourceConstant(opcode) ? c2 : slot(c2));
+				slot(c0).i = static_cast<Int>(floatResult(opcode, a, b));
 				break;
 			}
 			case COPY_VVC:
