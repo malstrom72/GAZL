@@ -49,6 +49,10 @@ REM memory image + Status, at full fuel AND at tiny fuel (which forces every lea
 CALL tools\buildAndRunGAZLJitLowerTest.cmd
 IF ERRORLEVEL 1 EXIT /B 1
 
+REM Every memory instruction form at every edge of the memory arena, through the JIT too, against the sweep's oracle.
+CALL tools\buildAndRunGAZLBoundsSweepJit.cmd
+IF ERRORLEVEL 1 EXIT /B 1
+
 REM The 28 shipped Permut8 firmwares against interpreter-produced goldens: a differential over real products.
 CALL tools\checkPermut8Firmwares.cmd --jit
 IF ERRORLEVEL 1 EXIT /B 1
