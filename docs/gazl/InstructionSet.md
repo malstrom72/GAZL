@@ -175,6 +175,13 @@ Define a compile-time constant integer
 
 Define a compile-time constant pointer. The name is the same kind of pointer as the operand: data, constant data, a
 function or `NULL`.
+
+## DEFt
+- `&function`
+
+Define a compile-time call-target constant (GAZL 2 and later). The operand must be the address of a function
+declared inside a `GAZL #2` region, or `&NULL`, and the name is accepted wherever that operand is.
+
 ## COPY
 - `&address(w)     &address(r)     *size`
 - `&address(w)     ptr             *size`

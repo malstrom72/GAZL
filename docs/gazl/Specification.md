@@ -465,7 +465,7 @@ requires GAZL 2 or guards each use with `! GEQi #GAZL_VERSION #2 @label`; a skip
 
 **Prefixes.** Inside a GAZL 2 region the prefix decides the kind of name (section 5):
 - **`#`** takes only numbers: literals and `DEFi` and `DEFf` names.
-- **`&`** takes only pointers: data labels, functions, `DEFp` names and `NULL`.
+- **`&`** takes only pointers: data labels, functions, `DEFp` and `DEFt` names and `NULL`.
 - **Refusals.** A name of the other kind is `INCOMPATIBLE_TYPES`, so `#table`, `#NULL` and `DATA &GAZL_VERSION`
   do not assemble there.
 
@@ -476,7 +476,11 @@ position, so a target is only ever named, copied or loaded, never computed.
   `DATt` writes targets into a data section. `EQUt`, `NEQt`, `LSSt`, `LEQt`, `GRTt` and `GEQt` compare two targets
   by declaration order, and `DIFt` gives the difference of their ordinals as an int. No instruction adds to a
   target.
-- **Constants.** Where these instructions take a constant, it must be the address of a GAZL 2 function, or `&NULL`.
+- **Constants.** Where these instructions take a constant, it must be the address of a GAZL 2 function, `&NULL`,
+  or a `DEFt` name of either.
+- **Named targets.** `! DEFt` names a target constant, as `! DEFp` names a pointer (section 7): its operand is the
+  address of a GAZL 2 function or `&NULL`, and the name, written `&name`, is accepted wherever that operand is. Like
+  a `DEFp` name it takes no offset. `CALL &T` needs `T` to name a function; a name of `NULL` is only a value.
 - **Calls.** `CALL` and `TAIL` take a function of either dialect, so GAZL 1 and GAZL 2 functions call each other.
 - **Pointers.** A `p` position (`MOVp`, `DATp`, `EQUp` and the rest) refuses a GAZL 2 function's address in either
   dialect, with `INCOMPATIBLE_TYPES`. Inside a GAZL 2 region it refuses a GAZL 1 function's address too, and an

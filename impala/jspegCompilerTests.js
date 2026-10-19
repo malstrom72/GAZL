@@ -3739,6 +3739,27 @@ function runGazlText(gazlPath, text, cmdArgs, label) {
 	return canonicalizeNewlines(run.stdout);
 }
 
+// --- --gazl2: a `const funcptr` is a `! DEFt` target constant, written `&name` ----------------------
+// A GAZL 2 region takes `#` only for numbers, so the name must be written `&NAME` wherever it is used. Run through
+// GAZLCmd when it is built, so the output is shown to assemble and call, not only to read right.
+{
+	const constSrc = "const int DEBUG = 1\nextern native printInt\n"
+		+ "function helper() returns int r { r = 42; }\n"
+		+ "const funcptr HELPER = helper\nconst funcptr NOTHING = nullfunc\n"
+		+ "function main() locals funcptr f {\n\tf = NOTHING;\n\tassert(f == nullfunc);\n"
+		+ "\tf = HELPER;\n\tprintInt((int) f());\n}\n";
+	const constOut = compileWithJsImpala(constSrc, { randomId: 42, gazl2: true });
+	assert(constOut.includes("! DEFt &helper") && constOut.includes("! DEFt &NULL"),
+		"--gazl2: a const funcptr must be a ! DEFt target constant");
+	assert(constOut.includes("MOVt $f &HELPER") && !constOut.includes("#HELPER"),
+		"--gazl2: a const funcptr must be written &name, since a GAZL 2 region takes # only for numbers");
+	if (haveGazlCmd()) {
+		const gazlPath = path.join(dir, "..", "tests", "impala", "erroneous", "gazl2Deft.gazl");
+		assert(runGazlText(gazlPath, constOut, [ "main" ], "gazl2 DEFt").startsWith("42"),
+			"gazl2: a call through a const funcptr must reach the function");
+	}
+}
+
 // --- --gazl2: struct initializers are PLACED with SPAN regions ---------------------------------------
 // The flag's contract: (1) default output is untouched - the golden corpus is that gate, so here only
 // "no SPAN without the flag" is pinned; (2) struct data comes out as one SPAN region per leaf field
