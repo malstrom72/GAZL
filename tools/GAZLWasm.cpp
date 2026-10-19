@@ -181,8 +181,8 @@ int gazlRun(const char* source, const char* entry) {
 
 		Processor vm(sizes.codeSize, code, sizes.functionCount, functionTable, DATA_MEMORY_SIZE, memory
 				, sizes.globalsSize, sizes.constsSize, CALL_STACK_SIZE, callStack, NATIVE_TABLE, 0);
-		Pointer entryFunction = globals.findFunction(entry);
-		if (entryFunction == 0) {
+		Target entryFunction = globals.findFunction(entry);
+		if (entryFunction == NULL_TARGET) {
 			errText = std::string("could not locate function: ") + entry;
 			return 1;
 		}

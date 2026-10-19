@@ -217,7 +217,7 @@ static void cooperative() {
 
 struct ThreadJob {
 	Processor* processor;
-	Pointer entry;
+	Target entry;
 	Status status;
 };
 

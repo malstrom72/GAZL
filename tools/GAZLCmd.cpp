@@ -165,7 +165,7 @@ Status gazlExit(Processor*) {
 	(see tools/permut8Host.js).
 */
 const int MAX_FORWARDS = 8;
-static Pointer forwardTargets[MAX_FORWARDS];
+static Target forwardTargets[MAX_FORWARDS];
 template<int INDEX> Status forwardNative(Processor* p) {
 	return p->pushCall(forwardTargets[INDEX]) != 0 ? OK : BAD_CALL;
 }
@@ -272,8 +272,8 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size) {
 		{
 			Processor pmachine(sizes.codeSize, code, sizes.functionCount, functionTable, DATA_MEMORY_SIZE, memory
 					, sizes.globalsSize, sizes.constsSize, CALL_STACK_SIZE, callStack, NATIVE_TABLE, 0);
-			Pointer mainFunction = globals.findFunction("main");
-			if (mainFunction != 0) {
+			Target mainFunction = globals.findFunction("main");
+			if (mainFunction != NULL_TARGET) {
 				Status status = pmachine.enterCall(mainFunction);
 				assert(status == OK);
 				pmachine.resetTimeOut(10000000);
@@ -465,7 +465,7 @@ static std::string statusMessage(const char* call, Status status) {	/// "`call` 
 	can't be recovered here: the print* natives call resetTimeOut(), which clobbers the cycle budget mid-run, so
 	benchmarks compare the time of the identical workload instead.
 */
-static void runToCompletion(Processor& machine, Pointer function) {
+static void runToCompletion(Processor& machine, Target function) {
 	Status status = machine.enterCall(function);
 	if (status != OK) throw CmdException(statusMessage("enterCall", status));
 	do {
@@ -617,13 +617,13 @@ int main(int argc, const char* argv[]) {
 
 			for (size_t i = 0; i < forwardFunctionNames.size(); ++i) {		// resolve --forward targets against the assembled program
 				forwardTargets[i] = globals.findFunction(forwardFunctionNames[i].c_str());
-				if (forwardTargets[i] == NULL_POINTER)
+				if (forwardTargets[i] == NULL_TARGET)
 					throw CmdException(std::string("--forward: no function '") + forwardFunctionNames[i] + "'");
 			}
 
 			const char* mainFunctionName = pos.size() >= 3 ? pos[2] : "main";
-			Pointer mainFunction = globals.findFunction(mainFunctionName);
-			if (mainFunction == 0) throw CmdException(std::string("Could not locate function: ") + mainFunctionName);
+			Target mainFunction = globals.findFunction(mainFunctionName);
+			if (mainFunction == NULL_TARGET) throw CmdException(std::string("Could not locate function: ") + mainFunctionName);
 
 			if (benchRepeat > 0) {
 				std::vector<double> samples;			// milliseconds, measured iterations only
