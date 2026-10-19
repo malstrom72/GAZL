@@ -199,6 +199,11 @@ test:                   FUNC
  NEQi       %0              #2222           @fail
  MOVt       t0              &T_NONE
  NEQt       t0              &NULL           @fail
+ PEEK       t0              &tNamed:0
+ EQUt       t0              &T_TWO          @tNamedOk        ; DATt and the target compares take `! DEFt` names
+ GOTO       @fail
+    tNamedOk: PEEK t0       &tNamed:1
+ NEQt       t0              &T_NONE         @fail
 
  PEEK       f0		       &consts.float
  PEEK       i0              &consts.int
@@ -2368,5 +2373,7 @@ tTargets:               CNST *2
 
 T_TWO:                  ! DEFt &tTwo
 T_NONE:                 ! DEFt &NULL
+tNamed:                 CNST *2
+                        DATt &T_TWO &T_NONE
 
                         GAZL #1
