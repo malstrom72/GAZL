@@ -119,7 +119,7 @@ namespace {
 	Value gMemory[DATA_SIZE];
 	UInt gFunctionTable[FUNCTION_TABLE_SIZE];
 	CallStackEntry gCallStack[CALL_STACK_SIZE];
-	UInt gGlobalsSize = 0, gConstsSize = 0, gFunctionCount = 0, gCodeSize = 0;
+	AssembledProgram gProgram;
 	std::vector<Value> gCleanImage;
 }
 
@@ -127,7 +127,6 @@ static bool assemble(const char* source, Symbols& globals) {
 	for (int i = 0; i < static_cast<int>(sizeof(gNativeTable) / sizeof(*gNativeTable)); ++i) {
 		globals.registerNative(gNativeNames[i], i);
 	}
-	UInt codeSize = 0, gs = 0, cs = 0, fc = 0;
 	try {
 		Assembler assem(CODE_SIZE, gCode, FUNCTION_TABLE_SIZE, gFunctionTable, DATA_SIZE, gMemory, globals);
 		assem.newUnit("kernel");
@@ -138,13 +137,10 @@ static bool assemble(const char* source, Symbols& globals) {
 			if (nl == std::string::npos) { break; }
 			pos = nl + 1;
 		}
-		ProgramSizes sizes;
-		assem.finalize(sizes);
-		codeSize = sizes.codeSize; fc = sizes.functionCount; gs = sizes.globalsSize; cs = sizes.constsSize;
+		assem.finalize(gProgram);
 	} catch (const Exception& e) {
 		std::printf("  ASSEMBLE FAILED: %s (%s)\n", ASSEMBLER_ERROR_TEXTS[e.error], e.detail.c_str()); return false;
 	}
-	gGlobalsSize = gs; gConstsSize = cs; gFunctionCount = fc; gCodeSize = codeSize;
 	gCleanImage.assign(gMemory, gMemory + DATA_SIZE);
 	return true;
 }
@@ -152,13 +148,12 @@ static bool assemble(const char* source, Symbols& globals) {
 static void restoreClean() { std::memcpy(gMemory, gCleanImage.data(), DATA_SIZE * sizeof(Value)); }
 
 // The word at `pointer`: `gMemory` starts with the constants, which sit below `MEMORY_OFFSET`.
-static Value& wordAt(Pointer pointer) { return gMemory[pointer - MEMORY_OFFSET + (gConstsSize - 1)]; }
+static Value& wordAt(Pointer pointer) { return gMemory[pointer - MEMORY_OFFSET + (gProgram.sizes.constsSize - 1)]; }
 
 static std::vector<Value> runInterpreter(Target mainPtr, Pointer gInPtr, int n, Status& outStatus,
 		int fuel = 0x7FFFFFFF, int* suspendsOut = 0) {
 	restoreClean();
-	Processor p(CODE_SIZE, gCode, gFunctionCount, gFunctionTable, DATA_SIZE, gMemory, gGlobalsSize, gConstsSize,
-			CALL_STACK_SIZE, gCallStack, gNativeTable, nullptr);
+	Processor p(gProgram, CALL_STACK_SIZE, gCallStack, gNativeTable, nullptr);
 	p.accessMemory(gInPtr, 1)->i = n;
 	Status s = p.enterCall(mainPtr);
 	int suspends = 0;
@@ -195,10 +190,10 @@ static void runKernel(const char* name, const char* source, const int* inputs, s
 	// Compile the whole program once through the facade; the returned module owns the page (freed at scope exit) and
 	// backs every JitProcessor constructed below.
 	JitModule module;
-	const AssembledProgram program = { gCode, gCodeSize, gFunctionTable, gFunctionCount, gMemory, DATA_SIZE, gGlobalsSize, gConstsSize };	// USED size: the last function's extent ends here
+	const AssembledProgram& program = gProgram;
 	NativeJitCompiler compiler;
 	compiler.compile(program, module);							// always yields a compiled module (throws on host denial / a backend bug)
-	std::printf("  compiled %zu native words for %u function(s)\n", module.codeWords(), gFunctionCount);
+	std::printf("  compiled %zu native words for %u function(s)\n", module.codeWords(), program.sizes.functionCount);
 
 	for (size_t k = 0; k < nInputs; ++k) {
 		const int n = inputs[k];
@@ -996,18 +991,11 @@ static Status nativeWrongSlot(Processor*) { return ABORTED; }
 	static const bool LIMITED_REACH = false;		// x64: rel32 everywhere and no offset field on the native load, so the
 #endif												// same programs must compile AND match the interpreter instead
 
-static AssembledProgram assembledProgram() {
-	const AssembledProgram program = { gCode, gCodeSize, gFunctionTable, gFunctionCount, gMemory, DATA_SIZE
-			, gGlobalsSize, gConstsSize };
-	return program;
-}
-
 static bool compileThrows(Symbols& globals, const std::string& source, JitModule& module) {
 	if (!assemble(source.c_str(), globals)) { ++failures; return false; }
-	const AssembledProgram program = assembledProgram();
 	try {
 		NativeJitCompiler compiler;
-		compiler.compile(program, module);
+		compiler.compile(gProgram, module);
 	} catch (const JitException& x) {
 		std::printf("  JitException: %s\n", x.what());
 		return true;
@@ -1025,15 +1013,13 @@ static bool runFarNative(int ordinal) {
 	const Target mainPtr = globals.findFunction("main");
 	UInt sz = 0;
 	const Pointer gInPtr = globals.findGlobal("gIn", sz), gOutPtr = globals.findGlobal("gOut", sz);
-	const AssembledProgram program = assembledProgram();
 	Status statuses[2];
 	Int outs[2];
 	for (int engine = 0; engine < 2; ++engine) {								// 0 interpreter, 1 JIT - same table, same clean image
 		restoreClean();
 		Processor* proc = (engine == 0)
-				? new Processor(CODE_SIZE, gCode, gFunctionCount, gFunctionTable, DATA_SIZE, gMemory, gGlobalsSize
-						, gConstsSize, CALL_STACK_SIZE, gCallStack, table.data(), nullptr)
-				: new JitProcessor(module, program, CALL_STACK_SIZE, gCallStack, table.data());
+				? new Processor(gProgram, CALL_STACK_SIZE, gCallStack, table.data(), nullptr)
+				: new JitProcessor(module, gProgram, CALL_STACK_SIZE, gCallStack, table.data());
 		proc->accessMemory(gInPtr, 1)->i = 12;
 		Status s = proc->enterCall(mainPtr);
 		do { proc->resetTimeOut(0x7FFFFFFF); s = proc->run(); } while (s == TIME_OUT);

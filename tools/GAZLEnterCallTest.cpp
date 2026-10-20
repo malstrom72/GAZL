@@ -300,7 +300,7 @@ static Instruction gCode[CODE_SIZE];
 static UInt gFunctionTable[FUNCTION_TABLE_SIZE];
 static Value gMemory[DATA_SIZE];
 static CallStackEntry gCallStack[CALL_STACK_SIZE];
-static UInt gGlobalsSize = 0, gConstsSize = 0, gFunctionCount = 0;
+static AssembledProgram gProgram;
 
 /*
 	The native flavors under test. All satisfy a `^native` call site by running GAZL functions on the SAME
@@ -341,7 +341,6 @@ static bool assemble(const char* source, Symbols& globals) {
 	for (int i = 0; i < static_cast<int>(sizeof (gNatives) / sizeof (*gNatives)); ++i) {
 		globals.registerNative(gNativeNames[i], i);
 	}
-	UInt codeSize = 0, gs = 0, cs = 0, fc = 0;
 	try {
 		Assembler assem(CODE_SIZE, gCode, FUNCTION_TABLE_SIZE, gFunctionTable, DATA_SIZE, gMemory, globals);
 		assem.newUnit("kernel");
@@ -353,14 +352,11 @@ static bool assemble(const char* source, Symbols& globals) {
 			if (nl == std::string::npos) { break; }
 			pos = nl + 1;
 		}
-		ProgramSizes sizes;
-		assem.finalize(sizes);
-		codeSize = sizes.codeSize; fc = sizes.functionCount; gs = sizes.globalsSize; cs = sizes.constsSize;
+		assem.finalize(gProgram);
 	} catch (const Exception& e) {
 		std::printf("  ASSEMBLE FAILED: %s (%s)\n", ASSEMBLER_ERROR_TEXTS[e.error], e.detail.c_str());
 		return false;
 	}
-	gGlobalsSize = gs; gConstsSize = cs; gFunctionCount = fc;
 	return true;
 }
 
@@ -370,8 +366,7 @@ static bool assemble(const char* source, Symbols& globals) {
 	including inside forwarded calls).
 */
 static Status runToCompletion(Symbols& globals, const char* fn, Int fuel, int& suspends) {
-	Processor p(CODE_SIZE, gCode, gFunctionCount, gFunctionTable, DATA_SIZE, gMemory, gGlobalsSize, gConstsSize,
-			CALL_STACK_SIZE, gCallStack, gNatives, 0);
+	Processor p(gProgram, CALL_STACK_SIZE, gCallStack, gNatives, 0);
 	const Target mainPtr = globals.findFunction(fn);
 	if (mainPtr == NULL_TARGET) { std::printf("  no function '%s'\n", fn); return BAD_CALL; }
 	Status s = p.enterCall(mainPtr);
@@ -390,7 +385,7 @@ static void check(const char* label, Symbols& globals, const char* fn, Int fuel,
 	const Status s = runToCompletion(globals, fn, fuel, suspends);
 	UInt sz = 0;
 	const Pointer outPtr = globals.findGlobal("gOut", sz);
-	const Int out = (outPtr != NULL_POINTER) ? gMemory[outPtr - MEMORY_OFFSET + (gConstsSize - 1)].i : -999999;	// constants come first
+	const Int out = (outPtr != NULL_POINTER) ? gMemory[outPtr - MEMORY_OFFSET + (gProgram.sizes.constsSize - 1)].i : -999999;	// constants come first
 	const bool good = (s == OK) && (out == wantOut) && (!wantSuspends || suspends > 0);
 	std::printf("  %-36s status=%-3d gOut=%-8d want=%-8d suspends=%-5d %s\n",
 			label, s, out, wantOut, suspends, good ? "OK" : "FAILED");

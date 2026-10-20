@@ -138,14 +138,11 @@ namespace {
 	UInt gFunctionTable[FUNCTION_TABLE_SIZE];
 	CallStackEntry gCallStack[CALL_STACK_SIZE];
 
-	UInt gGlobalsSize = 0;			// filled by assembleKernel; the data stack must sit AFTER the globals
-	UInt gConstsSize = 0;
-	UInt gFunctionCount = 0;
+	AssembledProgram gProgram;		// filled by assembleKernel; the data stack must sit AFTER the globals
 }
 
 // Assemble KERNEL_SOURCE once; leaves the machine ready in `pmachine`, and reports the `gIn`/`gOut` global pointers.
 static bool assembleKernel(Symbols& globals, Pointer& gInPtr, Pointer& gOutPtr) {
-	UInt codeSize = 0, globalsSize = 0, constsSize = 0, functionCount = 0;
 	try {
 		Assembler assem(CODE_SIZE, gCode, FUNCTION_TABLE_SIZE, gFunctionTable, DATA_SIZE, gMemory, globals);
 		assem.newUnit("sliceKernel");
@@ -160,17 +157,11 @@ static bool assembleKernel(Symbols& globals, Pointer& gInPtr, Pointer& gOutPtr) 
 			}
 			pos = nl + 1;
 		}
-		ProgramSizes sizes;
-		assem.finalize(sizes);
-		codeSize = sizes.codeSize; functionCount = sizes.functionCount;
-		globalsSize = sizes.globalsSize; constsSize = sizes.constsSize;
+		assem.finalize(gProgram);
 	} catch (const Exception& e) {
 		std::printf("  ASSEMBLE FAILED: %s (%s)\n", ASSEMBLER_ERROR_TEXTS[e.error], e.detail.c_str());
 		return false;
 	}
-	gGlobalsSize = globalsSize;
-	gConstsSize = constsSize;
-	gFunctionCount = functionCount;
 	UInt sz = 0;
 	gInPtr = globals.findGlobal("gIn", sz);
 	gOutPtr = globals.findGlobal("gOut", sz);
@@ -179,8 +170,7 @@ static bool assembleKernel(Symbols& globals, Pointer& gInPtr, Pointer& gOutPtr) 
 
 // Run the interpreter for one input and return sumTo(n) as the interpreter computes it.
 static int interpreterSumTo(Symbols& globals, Pointer gInPtr, Pointer gOutPtr, int n) {
-	Processor pmachine(CODE_SIZE, gCode, gFunctionCount, gFunctionTable, DATA_SIZE, gMemory, gGlobalsSize,
-			gConstsSize, CALL_STACK_SIZE, gCallStack, /*natives*/ nullptr, /*userData*/ nullptr);
+	Processor pmachine(gProgram, CALL_STACK_SIZE, gCallStack, /*natives*/ nullptr, /*userData*/ nullptr);
 	pmachine.accessMemory(gInPtr, 1)->i = n;					// set input global
 	Status status = pmachine.enterCall(globals.findFunction("main"));	// enterCall only sets up; run() executes
 	do {

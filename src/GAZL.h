@@ -246,21 +246,6 @@ class Symbols {
 struct Operator;
 
 /*
-	A finalized program: the buffers the `Assembler` filled and the sizes it computed. It does not own the buffers, and
-	only `memory`, which holds the globals and the data stack, is written after assembly.
-*/
-struct AssembledProgram {
-	const Instruction* code;
-	UInt codeSize;
-	const UInt* functionTable;
-	UInt functionCount;
-	Value* memory;
-	UInt memorySize;
-	UInt globalsSize;
-	UInt constsSize;
-};
-
-/*
 	The four sizes an assembly computes: what a program actually used (from `finalize`) or will need (from
 	`preAssemble`). `constsSize` counts the constants plus the one-word zero guard at the end of memory, so
 	`globalsSize + constsSize` is the least memory a program needs before its data stack.
@@ -272,6 +257,18 @@ struct ProgramSizes {
 	UInt constsSize;
 };
 
+/*
+	A finalized program: the buffers the `Assembler` filled and the sizes it computed. It does not own the buffers, and
+	only `memory`, which holds the globals and the data stack, is written after assembly.
+*/
+struct AssembledProgram {
+	const Instruction* code;
+	const UInt* functionTable;
+	Value* memory;
+	UInt memorySize;
+	ProgramSizes sizes;
+};
+
 // Assembles GAZL source, line by line, into the code, function-table and memory buffers the caller provides.
 class Assembler {
 	friend class Symbols;
@@ -279,9 +276,7 @@ class Assembler {
 						, UInt maxMemorySize, Value* memoryBase, Symbols& globals); 						// Create an assembler for the provided buffers. `functionTable` maps each function's ordinal to its code offset (see `finalize`).
 	public:		void newUnit(const Char* unitName); 														// Begin assembling a new source unit.
 	public:		const Char* feed(const Char* line); 														// Assemble a single line and return pointer to the next.
-	public:		void finalize(ProgramSizes& sizes); 														// Finish assembly and report memory usage. `sizes.functionCount` is the number of entries filled in `functionTable`.
-	public:		void finalize(UInt& codeSize, UInt& globalsSize, UInt& constsSize, UInt& functionCount); 	// Positional form of `finalize`; prefer the `ProgramSizes` overload.
-	public:		void finalize(AssembledProgram& program); 													// Finish assembly and describe the result in `program`.
+	public:		void finalize(AssembledProgram& program); 													// Finish assembly and report memory usage. `program.sizes.functionCount` is the number of entries filled in `functionTable`.
 	public:		static ProgramSizes preAssemble(const Char* source, Symbols& symbols, const ProgramSizes* seed = 0); 					// The sizes a real assembly of `source` needs, from a throwaway one. On success `symbols`, seeded as for a real assembly, becomes the full table; on a throw it is untouched. `seed` sizes the first attempt.
 
 	protected:	struct CompileTimeVar {
@@ -429,17 +424,10 @@ enum {
 // Processor is copyable.
 class Processor {
 	public:		Processor(); 																							// Default-initialized processor. It's illegal to call any methods on a default constructed processor.
-	public:		Processor(UInt codeSize, const Instruction* code, UInt functionCount, const UInt* functionTable
-						, UInt memorySize, Value* memory, UInt globalsSize, UInt constsSize, UInt ipStackSize
-						, CallStackEntry* ipStack, NativeFunc const* natives, void* userData = 0);						// higher level routine, data stack is all the space between the globals and the zero guard
-	public:		Processor(UInt codeSize, const Instruction* code, UInt functionCount, const UInt* functionTable
-						, UInt memorySize, Value* memory, UInt constsSize, UInt rwMemorySize, UInt dataStackOffset
-						, UInt dataStackSize, UInt ipStackSize, CallStackEntry* ipStack, NativeFunc const* natives
-						, void* userData = 0);																			// lower level routine, useful for running multiple processors on the same code (i.e. threads) where each processor needs its own stack; `rwMemorySize` and `dataStackOffset` count from the base
 	public:		Processor(const AssembledProgram& program, UInt ipStackSize, CallStackEntry* ipStack
-						, NativeFunc const* natives, void* userData = 0);											// higher level, from an `AssembledProgram`
+						, NativeFunc const* natives, void* userData = 0);												// higher level routine, data stack is all the space between the globals and the zero guard
 	public:		Processor(const AssembledProgram& program, UInt rwMemorySize, UInt dataStackOffset, UInt dataStackSize
-						, UInt ipStackSize, CallStackEntry* ipStack, NativeFunc const* natives, void* userData = 0);	// lower level, from an `AssembledProgram`
+						, UInt ipStackSize, CallStackEntry* ipStack, NativeFunc const* natives, void* userData = 0);	// lower level routine, useful for running multiple processors on the same code (i.e. threads) where each processor needs its own stack; `rwMemorySize` and `dataStackOffset` count from the base
 	public:		void resetTimeOut(Int clockCycles); 																	// It is allowed to use `resetTimeOut(0)` from a native call to make the processor return immediately before executing its next instruction. Alternatively if you want to suspend the processor from a native call, but retry the call when resumed (e.g. simulating a blocking call), return non-zero from the native call and the instruction pointer will not be incremented.
 	public:		const Value* accessConstMemory(Pointer pointer, UInt count) const; 										// If returning null pointer you should normally return `ACCESS_VIOLATION`
 	public:		Value* accessMemory(Pointer pointer, UInt count) const; 												// If returning null pointer you should normally return `ACCESS_VIOLATION`

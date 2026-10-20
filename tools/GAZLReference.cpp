@@ -327,12 +327,12 @@ static bool isBranchTaken(int opcode, const Value& a, const Value& b, DenormalMo
 }
 
 Machine::Machine(const AssembledProgram& program, UInt ipStackSize, const Native* natives, DenormalMode denormalMode)
-		: code(program.code), codeSize(program.codeSize), functionTable(program.functionTable)
-		, functionCount(program.functionCount), memory(program.memory), constantWords(program.constsSize - 1)
-		, readableWords(program.memorySize - 1), writableWords(program.memorySize - program.constsSize)
-		, stackBase(program.constsSize - 1 + program.globalsSize), stackEnd(program.memorySize - 1)
+		: code(program.code), codeSize(program.sizes.codeSize), functionTable(program.functionTable)
+		, functionCount(program.sizes.functionCount), memory(program.memory), constantWords(program.sizes.constsSize - 1)
+		, readableWords(program.memorySize - 1), writableWords(program.memorySize - program.sizes.constsSize)
+		, stackBase(program.sizes.constsSize - 1 + program.sizes.globalsSize), stackEnd(program.memorySize - 1)
 		, ipStackSize(ipStackSize), natives(natives), denormalMode(denormalMode), fuel(0), ip(0), dsp(0) {
-	assert(program.constsSize >= 1 && program.globalsSize + program.constsSize <= program.memorySize);
+	assert(program.sizes.constsSize >= 1 && program.sizes.globalsSize + program.sizes.constsSize <= program.memorySize);
 }
 
 Status Machine::call(Target function, int64_t startFuel) {
