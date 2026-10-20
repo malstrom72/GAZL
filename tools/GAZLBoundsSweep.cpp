@@ -452,7 +452,7 @@ struct Machine {
 	std::vector<Instruction> code;
 	std::vector<UInt> functionTable;
 	std::vector<CallStackEntry> callStack;
-	ProgramSizes sizes;
+	AssembledProgram program;
 	Symbols symbols;
 	Machine() : buffer(CANARY_SIZE + MEMORY_SIZE + CANARY_SIZE), code(CODE_SIZE), functionTable(FUNCTION_COUNT)
 			, callStack(CALL_STACK_SIZE) { }
@@ -465,8 +465,7 @@ UInt canary(size_t i) { return 0xC0DE0000u + (UInt)i; }
 	A processor over the program in `m`, without natives, for the host-side sweeps; they never run it.
 */
 Processor machineProcessor(Machine& m) {
-	return Processor(m.sizes.codeSize, &m.code[0], m.sizes.functionCount, &m.functionTable[0], MEMORY_SIZE, m.memory()
-			, m.sizes.globalsSize, m.sizes.constsSize, CALL_STACK_SIZE, &m.callStack[0], 0);
+	return Processor(m.program, CALL_STACK_SIZE, &m.callStack[0], 0);
 }
 
 /*
@@ -476,22 +475,20 @@ Processor machineProcessor(Machine& m) {
 bool assemble(Machine& m, const std::string& source, Layout& layout, std::string& error) {
 	for (size_t i = 0; i < m.buffer.size(); ++i) m.buffer[i].i = (Int)canary(i);
 	m.symbols = Symbols();
-	ProgramSizes sizes = { 0, 0, 0, 0 };
 	try {
 		Assembler assem(CODE_SIZE, &m.code[0], FUNCTION_COUNT, &m.functionTable[0], MEMORY_SIZE, m.memory(), m.symbols);
 		assem.newUnit("sweep");
 		const Char* cp = source.c_str();
 		while (*cp != 0) cp = assem.feed(cp);
-		assem.finalize(sizes);
+		assem.finalize(m.program);
 	}
 	catch (const Exception& e) {
 		error = e.what();
 		return false;
 	}
-	m.sizes = sizes;
 	UInt size = 0;
-	layout.globalsSize = sizes.globalsSize;
-	layout.constsSize = sizes.constsSize;
+	layout.globalsSize = m.program.sizes.globalsSize;
+	layout.constsSize = m.program.sizes.constsSize;
 	layout.inAddress = m.symbols.findGlobal("in", size);
 	layout.outAddress = m.symbols.findGlobal("out", size);
 	layout.gAddress = m.symbols.findGlobal("g", size);
@@ -511,12 +508,10 @@ Status run(Machine& m, Engine engine) {
 	const Target mainFunction = m.symbols.findFunction("main");
 #ifdef GAZL_JIT
 	if (engine == JIT) {
-		const AssembledProgram program = { &m.code[0], m.sizes.codeSize, &m.functionTable[0], m.sizes.functionCount
-				, m.memory(), MEMORY_SIZE, m.sizes.globalsSize, m.sizes.constsSize };
 		JitModule module;
 		NativeJitCompiler compiler;
-		compiler.compile(program, module);
-		JitProcessor processor(module, program, CALL_STACK_SIZE, &m.callStack[0], 0);
+		compiler.compile(m.program, module);
+		JitProcessor processor(module, m.program, CALL_STACK_SIZE, &m.callStack[0], 0);
 		Status status = processor.enterCall(mainFunction);
 		if (status != OK) return status;
 		do {
@@ -527,8 +522,7 @@ Status run(Machine& m, Engine engine) {
 	}
 #endif
 	(void)engine;
-	Processor processor(m.sizes.codeSize, &m.code[0], m.sizes.functionCount, &m.functionTable[0], MEMORY_SIZE
-			, m.memory(), m.sizes.globalsSize, m.sizes.constsSize, CALL_STACK_SIZE, &m.callStack[0], 0);
+	Processor processor(m.program, CALL_STACK_SIZE, &m.callStack[0], 0);
 	Status status = processor.enterCall(mainFunction);
 	if (status != OK) return status;
 	processor.resetTimeOut(1000000);
@@ -1113,8 +1107,8 @@ int assemblyError(const std::string& source) {
 		assem.newUnit("text");
 		const Char* cp = source.c_str();
 		while (*cp != 0) cp = assem.feed(cp);
-		ProgramSizes sizes = { 0, 0, 0, 0 };
-		assem.finalize(sizes);
+		AssembledProgram program;
+		assem.finalize(program);
 	}
 	catch (const Exception& e) {
 		return e.error;

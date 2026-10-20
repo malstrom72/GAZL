@@ -253,7 +253,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size) {
 			globals.registerNative(NATIVE_NAMES[i], i);
 		}
 		
-		ProgramSizes sizes = { 0, 0, 0, 0 };
+		AssembledProgram program = { 0, 0, 0, 0, { 0, 0, 0, 0 } };
 
 		{
 			std::istringstream gazlStream(std::string(reinterpret_cast<const char*>(Data), reinterpret_cast<const char*>(Data) + Size));
@@ -265,13 +265,12 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size) {
 					getline(gazlStream, line);
 					assem.feed(line.c_str());
 				}
-				assem.finalize(sizes);
+				assem.finalize(program);
 			}
 		}
 
 		{
-			Processor pmachine(sizes.codeSize, code, sizes.functionCount, functionTable, DATA_MEMORY_SIZE, memory
-					, sizes.globalsSize, sizes.constsSize, CALL_STACK_SIZE, callStack, NATIVE_TABLE, 0);
+			Processor pmachine(program, CALL_STACK_SIZE, callStack, NATIVE_TABLE, 0);
 			Target mainFunction = globals.findFunction("main");
 			if (mainFunction != NULL_TARGET) {
 				Status status = pmachine.enterCall(mainFunction);
@@ -573,7 +572,7 @@ int main(int argc, const char* argv[]) {
 			}
 		}
 
-		ProgramSizes sizes = { 0, 0, 0, 0 };
+		AssembledProgram program = { 0, 0, 0, 0, { 0, 0, 0, 0 } };
 
 		{
 			std::ifstream gazlStream(pos[1], std::ifstream::binary);
@@ -600,8 +599,9 @@ int main(int argc, const char* argv[]) {
 				}
 				if (gazlStream.bad()) throw CmdException("Problem with input stream");
 
-				assem.finalize(sizes);
+				assem.finalize(program);
 
+				const ProgramSizes& sizes = program.sizes;
 				std::cerr << "Code size: " << sizes.codeSize << ", globals size: " << sizes.globalsSize << ", consts size: "
 						<< sizes.constsSize << ", functions: " << sizes.functionCount << std::endl;
 				std::cerr << "--------------------------------------------------------------------------------"
@@ -612,8 +612,7 @@ int main(int argc, const char* argv[]) {
 		}
 		
 		{
-			Processor pmachine(sizes.codeSize, code, sizes.functionCount, functionTable, DATA_MEMORY_SIZE, memory
-					, sizes.globalsSize, sizes.constsSize, CALL_STACK_SIZE, callStack, NATIVE_TABLE, 0);
+			Processor pmachine(program, CALL_STACK_SIZE, callStack, NATIVE_TABLE, 0);
 
 			for (size_t i = 0; i < forwardFunctionNames.size(); ++i) {		// resolve --forward targets against the assembled program
 				forwardTargets[i] = globals.findFunction(forwardFunctionNames[i].c_str());
