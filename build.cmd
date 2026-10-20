@@ -18,6 +18,10 @@ CALL buildGAZLCmd.cmd release
 IF ERRORLEVEL 1 EXIT /B 1
 POPD
 
+REM The same built-in unit test on a GAZL 1.0-compatible engine (GAZL_2=0), shared with build.sh.
+CALL tools\test-gazl1-engine.cmd
+IF ERRORLEVEL 1 EXIT /B 1
+
 REM Every JIT gate, shared with build.sh. Runs here, straight after the binary that carries the JIT, so a miscompile
 REM surfaces before the slower node suite rather than after it.
 CALL tools\test-jit.cmd

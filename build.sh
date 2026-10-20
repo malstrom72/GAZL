@@ -11,6 +11,9 @@ mkdir -p output
 # Build GAZLCmd release
 (cd tools && bash buildGAZLCmd.sh release)
 
+# The same built-in unit test on a GAZL 1.0-compatible engine (GAZL_2=0), shared with build.cmd.
+bash tools/test-gazl1-engine.sh
+
 # Every JIT gate, shared with build.cmd. Runs here, straight after the binary that carries the JIT, so a miscompile
 # surfaces before the slower node suite rather than after it.
 bash tools/test-jit.sh
