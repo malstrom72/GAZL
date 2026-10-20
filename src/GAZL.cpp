@@ -997,6 +997,15 @@ int Assembler::operatorCompare(const void* a, const void* b) {
 	return strcmp(reinterpret_cast<const Char*>(a), reinterpret_cast<const Operator*>(b)->key);
 }
 
+const Operator* Assembler::findOperator(const Char* key, const Char* b, const Char* e) const {
+	const Operator* const op = reinterpret_cast<const Operator*>(bsearch(key, OPERATORS, OPERATOR_COUNT
+			, sizeof (*OPERATORS), operatorCompare));
+	if (op == 0 || (dialect < 2 && (op->otherFlags & GAZL_2_ONLY) != 0)) {
+		throw Exception(INVALID_INSTRUCTION, b, e);
+	}
+	return op;
+}
+
 Char Assembler::parseOperandType(const Char* b, const Char* e) {
 	switch (b < e ? *b : 0) {
 		case '#': case '<': case '&':
@@ -1366,24 +1375,11 @@ const Char* Assembler::feed(const Char* line) {
 							return eatEOL(eatSpace(e));
 						}
 
-			case 'i':
-			case 'f':
-			case 'p':
-			case 't':
-			case 'A':	{																								// DATi, DATf, DATp, DATt and DATA
+			default:	{																								// DATi, DATf, DATp, DATt and DATA
+							const Char key[10] = { ' ', 'D', 'A', 'T', mnemonicBegin[3], '_', 'c', '_', '_', 0 };
+							const int accepts = findOperator(key, mnemonicBegin, mnemonicBegin + 4)->accepts[0];
 							if (dataPointer == 0) throw Exception(DATA_SECTION_MISSING);
 							Value* const first = dataPointer;
-							int accepts = KONST;
-							switch (mnemonicBegin[3]) {
-								case 'i': accepts = CONST_INT; break;
-								case 'f': accepts = CONST_FLOAT; break;
-								case 'p': accepts = ANY_FWD_FREE; break;
-								case 't':	if (dialect < 2) {
-												throw Exception(INVALID_INSTRUCTION, mnemonicBegin, mnemonicBegin + 4);
-											}
-											accepts = TGT_FWD_FREE;
-											break;
-							}
 							p = eatSpaceAndComment(e);
 							while (!isEOL(*p)) {
 								const Char* b = p;
@@ -1397,8 +1393,6 @@ const Char* Assembler::feed(const Char* line) {
 							declareData(labelBegin, labelEnd, first, static_cast<UInt>(dataPointer - first));
 							return eatEOL(p);
 						}
-			
-			default:	throw Exception(INVALID_INSTRUCTION, mnemonicBegin, mnemonicBegin + 4);
 		}
 	}
 	
@@ -1427,12 +1421,7 @@ const Char* Assembler::feed(const Char* line) {
 	key[8] = parseOperandType(op2Begin, op2End);
 	key[9] = 0;
 
-	const Operator* op = reinterpret_cast<const Operator*>(bsearch(key, OPERATORS, OPERATOR_COUNT, sizeof (*OPERATORS)
-			, operatorCompare));
-	if (op == 0) throw Exception(INVALID_INSTRUCTION, mnemonicBegin, op2End);
-	if (dialect < 2 && (op->otherFlags & GAZL_2_ONLY) != 0) {
-		throw Exception(INVALID_INSTRUCTION, mnemonicBegin, op2End);
-	}
+	const Operator* op = findOperator(key, mnemonicBegin, op2End);
 
 	Value v;
 	UInt size;
