@@ -70,24 +70,23 @@ The virtual machine and assembler are implemented in standard C++ in a single he
 
 ## Using from C++
 
-Use the `Assembler` class to parse assembly source and the `Processor` class to execute code. `Symbols` holds the native-function registrations and the symbol table both classes share; `functionTable` is filled in by `finalize` and handed straight to `Processor`. This is the sequence `tools/GAZLCmd.cpp` uses, condensed:
+Use the `Assembler` class to parse assembly source and the `Processor` class to execute code. `Symbols` holds the native-function registrations and the symbol table both classes share; `finalize` fills in `functionTable` and describes the assembled program in an `AssembledProgram`, which is what `Processor` is constructed from. This is the sequence `tools/GAZLCmd.cpp` uses, condensed:
 
 ```cpp
 Symbols globals;
 for (int i = 0; i < nativeCount; ++i) globals.registerNative(NATIVE_NAMES[i], i);
 
-ProgramSizes sizes = { 0, 0, 0, 0 };
+AssembledProgram program = { 0, 0, 0, 0, 0, 0, 0, 0 };
 {
     Assembler assem(CODE_MEMORY_SIZE, code, FUNCTION_TABLE_SIZE, functionTable,
             DATA_MEMORY_SIZE, memory, globals);
     assem.newUnit("file.gazl");
     std::string line;
     while (getline(gazlStream, line)) assem.feed(line.c_str());
-    assem.finalize(sizes);
+    assem.finalize(program);
 }
 
-Processor pmachine(sizes.codeSize, code, sizes.functionCount, functionTable, DATA_MEMORY_SIZE, memory,
-        sizes.globalsSize, sizes.constsSize, CALL_STACK_SIZE, callStack, NATIVE_TABLE, 0);
+Processor pmachine(program, CALL_STACK_SIZE, callStack, NATIVE_TABLE, 0);
 Target mainFunction = globals.findFunction("main");
 Status status = pmachine.enterCall(mainFunction);
 pmachine.resetTimeOut(0x7FFFFFFF);
