@@ -252,6 +252,11 @@ class Assembler {
 					Value value;
 				};
 
+	protected:	struct Operand {																			// What `parseOperand` read, besides its value.
+					const Symbols::Symbol* symbol;															// The global symbol it names, or 0: an assembly-time variable, a literal, a local or a forward reference.
+					int variableTypes;																		// The types of the assembly-time variable it read, or 0.
+				};
+
 	protected:	Symbols::Symbol* declare(Symbols& where, const Char* labelBegin, const Char* labelEnd, int types, Value value
 						, UInt words = 1);
 	protected:	static int operatorCompare(const void* a, const void* b);
@@ -259,10 +264,8 @@ class Assembler {
 	protected:	static Char parseOperandType(const Char* b, const Char* e);
 	protected:	const Symbols::Symbol* linkWithOffset(Symbols& defs, const char* b, const char* e, int accepts
 						, Value* v);
-	protected:	const Symbols::Symbol* parseConstant(const Char* b, const Char* e, int accepts, Value* v
-						, int* variableTypes = 0);
-	protected:	const Symbols::Symbol* parseOperand(const Char* b, const Char* e, int accepts, Value* v
-						, int* variableTypes = 0);																// The global symbol the operand names, or 0: an assembly-time variable (its types go to `variableTypes`), a literal, a local or a forward reference.
+	protected:	Operand parseConstant(const Char* b, const Char* e, int accepts, Value* v);
+	protected:	Operand parseOperand(const Char* b, const Char* e, int accepts, Value* v);
 	protected:	bool doConstantBranch(const Operator* op, const Char* op0Begin, const Char* op0End
 						, const Char* op1Begin, const Char* op1End);
 	protected:	Value calcConstant(const Operator* op, const Char* op1Begin, const Char* op1End, const Char* op2Begin

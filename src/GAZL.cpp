@@ -958,8 +958,8 @@ const Symbols::Symbol* Assembler::linkWithOffset(Symbols& defs, const char* b, c
 	return defs.link(b, p, v, accepts, o.i);
 }
 
-const Symbols::Symbol* Assembler::parseConstant(const Char* b, const Char* e, int accepts, Value* v
-		, int* variableTypes) {
+Assembler::Operand Assembler::parseConstant(const Char* b, const Char* e, int accepts, Value* v) {
+	Operand read = { 0, 0 };
 	if ((accepts & KONST) == 0) throw Exception(DID_NOT_EXPECT_CONSTANT, b, e);
 	switch (b < e ? *b : 0) {
 		case '\'': case '+': case '-': case '0': case '1': case '2': case '3':
@@ -988,22 +988,22 @@ const Symbols::Symbol* Assembler::parseConstant(const Char* b, const Char* e, in
 							throw Exception(OFFSET_OUT_OF_BOUNDS, b, e);									// an access, checked only here, and the variable names no label to check it against
 						}
 						*v = cv.value;
-						if (variableTypes != 0) *variableTypes = cv.types;
+						read.variableTypes = cv.types;
 						break;
 					}
-				
-		default:	return globals.link(b, e, v, accepts);
+
+		default:	read.symbol = globals.link(b, e, v, accepts); break;
 	}
-	return 0;
+	return read;
 }
 
-const Symbols::Symbol* Assembler::parseOperand(const Char* b, const Char* e, int accepts, Value* v
-		, int* variableTypes) {
+Assembler::Operand Assembler::parseOperand(const Char* b, const Char* e, int accepts, Value* v) {
+	Operand read = { 0, 0 };
 	switch (b < e ? *b : 0) {
 		case 0:		if (accepts != 0) throw Exception(MISSING_OPERAND); break;
 		case '*':
 		case '#':	++b; /* continue */
-		case '<':	return parseConstant(b, e, accepts, v, variableTypes);
+		case '<':	read = parseConstant(b, e, accepts, v); break;
 		case '@':	locals.link(b + 1, e, v, accepts, -(Int)(ip - codeBase)); break;		
 
 		case '%':	assert((accepts & TRANSIENT) != 0);
@@ -1013,10 +1013,12 @@ const Symbols::Symbol* Assembler::parseOperand(const Char* b, const Char* e, int
 					break;		
 
 		case '^':	if ((accepts & NATIVE) == 0) throw Exception(DID_NOT_EXPECT_ADDRESS, b, e);
-					return linkWithOffset(globals, b + 1, e, accepts, v);
+					read.symbol = linkWithOffset(globals, b + 1, e, accepts, v);
+					break;
 
 		case '&':	if ((accepts & (ADDRESS | FUNC)) == 0) throw Exception(DID_NOT_EXPECT_ADDRESS, b, e);
-					return linkWithOffset(globals, b + 1, e, accepts, v);
+					read.symbol = linkWithOffset(globals, b + 1, e, accepts, v);
+					break;
 
 		default:	assert((accepts & ANY_VAR) != 0);
 					linkWithOffset(locals, b, e, accepts, v);
@@ -1026,7 +1028,7 @@ const Symbols::Symbol* Assembler::parseOperand(const Char* b, const Char* e, int
 					v->i -= localsSize;
 					break;
 	}
-	return 0;
+	return read;
 }
 
 void Assembler::declareData(const Char* labelBegin, const Char* labelEnd, const Value* first, UInt declaredWords) {
@@ -1296,14 +1298,13 @@ const Char* Assembler::feed(const Char* line) {
 		} else {
 			switch (op->opcode) {
 				case DEFI____:	{																						// ! DEFi, ! DEFf, ! DEFp
-									int variableTypes = 0;
-									const Symbols::Symbol* const named = parseOperand(op0Begin, op0End, op->accepts[0]
-											, &v, &variableTypes);
+									const Operand read = parseOperand(op0Begin, op0End, op->accepts[0], &v);
+									const Symbols::Symbol* const named = read.symbol;
 									types = op->declareTypes;
 									bool isOutside = false;															// no access through the name may pass
 									if ((types & POINTER_CONSTANT) != 0 && named == 0) {								// an assembly-time address: no label to check against
-										assert(variableTypes != 0);													// DEFp takes no literal, local or forward reference
-										types |= variableTypes & op->accepts[0];
+										assert(read.variableTypes != 0);											// DEFp takes no literal, local or forward reference
+										types |= read.variableTypes & op->accepts[0];
 										isOutside = true;
 									} else if ((types & POINTER_CONSTANT) != 0) {									// the kind it names: `NULL` or a function is not data
 										const Int offset = static_cast<Int>(static_cast<UInt>(v.i)
