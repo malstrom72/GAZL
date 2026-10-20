@@ -439,7 +439,6 @@ class Processor {
 	public:		void* getUserData() const;
 	public:		int getClockCyclesLeft() const;
 	
-	protected:	UInt codeSize;
 	protected:	const Instruction* codeBase;
 	protected:	UInt functionCount;
 	protected:	const UInt* functionTable;																				// Maps function ordinal -> code offset; a function pointer is `FUNCTION_OFFSET + ordinal`.
