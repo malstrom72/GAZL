@@ -245,10 +245,6 @@ class Symbols {
 
 struct Operator;
 
-enum OperandRole { OPERAND_OTHER = 0, OPERAND_SLOT_READ = 1, OPERAND_SLOT_WRITE = 2, OPERAND_SLOT_READ_WRITE = 3 };
-
-void operandRoles(Int opcode, OperandRole roles[3]);		// The frame-slot role of each operand of a finalized `opcode`, in `p0`, `p1`, `p2` order. Roles are bit flags.
-
 /*
 	A finalized program: the buffers the `Assembler` filled and the sizes it computed. It does not own the buffers, and
 	only `memory`, which holds the globals and the data stack, is written after assembly.
