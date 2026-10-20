@@ -22,9 +22,8 @@
 */
 
 /*
-	Generic POSIX executable-memory backend (Linux, *BSD, ...). No MAP_JIT / write-protect toggle is needed off Apple:
-	map the page read/write, copy the code in, flip it to read/execute with mprotect, then flush the i-cache via
-	__builtin___clear_cache. (On strict W^X kernels a page can be RW or RX but not both - hence the two-step protect.)
+	Generic POSIX backend: map read/write, copy, mprotect to read/execute (strict W^X kernels refuse both at once), then
+	flush the i-cache.
 */
 
 #include "GAZLJitMem.h"

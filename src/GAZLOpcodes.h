@@ -22,28 +22,14 @@
 */
 
 /*
-	The GAZL opcode enum - the ONE definition, shared by the assembler/interpreter (GAZL.cpp) and the JIT
-	(GAZLJit.*). Internal to the implementation: a client includes GAZL.h or GAZLJit.h and never this file.
+	The single GAZL opcode enum, shared by the assembler, interpreter and JIT; internal, clients include GAZL.h or
+	GAZLJit.h. Every consumer derives its ordinals from here and never spells them out itself.
 
-	It exists because the JIT used to keep a hand-copied MIRROR of this enum with literal ordinals
-	(`OP_MOVE_VV = 0x2345 + 5`). That mirror is only correct for one numbering, and an opcode inserted
-	mid-enum renumbers every opcode above it - so the JIT would lower each one as its neighbour, with no
-	compile error and no exception. Deriving both sides from this file makes that class of bug impossible.
+	Never gate an opcode out with #if: that renumbers every opcode after it, so the instruction encoding would depend
+	on a build flag. Gate mnemonic acceptance (the table in GAZL.cpp) and the version instead.
 
-	TWO RULES, both load-bearing:
-
-	1. NEVER gate an opcode out of this enum with #if. A configuration that omits one renumbers everything
-	   after it, and the instruction encoding then depends on a build flag. Gate mnemonic ACCEPTANCE (the
-	   table in GAZL.cpp) and VERSION instead - that is where engine generations actually differ: an
-	   engine that does not know a word rejects it as unknown, rather than knowing it and refusing.
-
-	2. A new opcode may go ANYWHERE in the finalized block, mid-enum included - GAZL ships as assembly
-	   TEXT and is assembled on the end user's machine, so this numbering is internal to one build and
-	   never an on-disk format. `TAIL_CC_`/`TAIL_VC_` were inserted at ordinals 5 and 6 by GAZL 2, which
-	   renumbered 86 of the 91 opcodes above them and is harmless precisely because every consumer now
-	   derives from here. What is NOT safe is a consumer that spells the ordinals out for itself.
-	   FINALIZED_OPCODE_COUNT below is asserted by the JIT, so gaining an opcode breaks the build rather
-	   than the output - fix it by giving both backends a case for the new opcode.
+	A new opcode may go anywhere: the numbering is internal to one build, never an on-disk format. The JIT asserts
+	`FINALIZED_OPCODE_COUNT`, so a new finalized opcode needs a case in every backend.
 */
 
 #ifndef GAZLOpcodes_h
@@ -92,11 +78,7 @@ enum Opcode {
 };
 const int FIRST_COMPILE_TIME_OPCODE = MOVE_CC_;
 
-/*
-	The finalized (runtime) opcodes are FUNC_CC_ .. SWCH_VCC - the ones that reach the code stream and so
-	must all be lowered by every JIT backend. The compile-time opcodes above continue the same numbering
-	but never survive assembly.
-*/
+// The finalized opcodes (`FUNC_CC_` to `SWCH_VCC`) reach the code stream; compile-time opcodes never survive assembly.
 const int FINALIZED_OPCODE_COUNT = SWCH_VCC - FUNC_CC_ + 1;
 
 enum OperandRole { OPERAND_OTHER = 0, OPERAND_SLOT_READ = 1, OPERAND_SLOT_WRITE = 2, OPERAND_SLOT_READ_WRITE = 3 };

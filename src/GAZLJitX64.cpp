@@ -22,18 +22,16 @@
 */
 
 #include "GAZLJitX64.h"
-#include "GAZLJit.h"																									// arch-neutral opcode enum + Offsets / JitModule / JitProcessor / JitCompiler (+ GAZL.h)
-#include "GAZLJitMem.h"																									// makeExecutable() - platform-specific backend, architecture-neutral
+#include "GAZLJit.h"
+#include "GAZLJitMem.h"
 
 #include <cstddef>
-#include <cstring>																										// std::memcpy - pack the emitted byte stream into 32-bit words
+#include <cstring>
 #include <map>
 #include <vector>
-#include "assert.h"																										// finalize()'s bound-label contract (local-overridable, see GAZL.h)
+#include "assert.h"																										// local-overridable, see GAZL.h
 
 namespace GAZL {
-
-// --- low-level encoding primitives ---
 
 void X64Emitter::d32(uint32_t v) {
 	b(static_cast<uint8_t>(v)); b(static_cast<uint8_t>(v >> 8));
@@ -43,11 +41,7 @@ void X64Emitter::d64(uint64_t v) {
 	d32(static_cast<uint32_t>(v)); d32(static_cast<uint32_t>(v >> 32));
 }
 
-/*
-	Emit a REX prefix only when it changes anything: REX.W for 64-bit operand size, REX.R when the ModRM.reg field
-	names r8..r15, REX.B when the rm / base / opcode-embedded register does. `reg` is the ModRM.reg field (or 0 for
-	opcode-embedded forms), `base` is the rm / SIB-base / opcode register. No index register is used here (REX.X = 0).
-*/
+// `reg` is the ModRM.reg field (0 for opcode-embedded forms); `base` is the rm, SIB base or opcode-embedded register.
 void X64Emitter::rex(bool w, int reg, int base) {
 	const uint8_t r = static_cast<uint8_t>(0x40 | (w ? 8 : 0) | ((reg >= 8) ? 4 : 0) | ((base >= 8) ? 1 : 0));
 	if (r != 0x40) { b(r); }
@@ -58,9 +52,8 @@ void X64Emitter::modrmReg(int reg, int rm) {
 }
 
 /*
-	Encode a `[base + disp]` memory operand into ModRM (+ SIB + displacement). `reg` is the ModRM.reg field. RSP/R12 as
-	base require a SIB byte (rm == 4 escapes to SIB); RBP/R13 (rm == 5) cannot use the mod=00 form (that means
-	RIP-relative), so a zero displacement is forced to the disp8 form. Otherwise mod picks the smallest displacement.
+	RSP/R12 as base need a SIB byte (rm 4 escapes to SIB). RBP/R13 (rm 5) cannot use mod 00, which means RIP-relative,
+	so a zero displacement takes the disp8 form.
 */
 void X64Emitter::memOperand(int reg, Reg base, int32_t disp) {
 	const int rm = base & 7;
@@ -80,7 +73,6 @@ void X64Emitter::rex3(bool w, int reg, int index, int base) {
 	if (r != 0x40) { b(r); }
 }
 
-// [base + index*4 + disp]: ModRM.rm = 4 (SIB escape), SIB = scale(2 => *4) | index | base.
 void X64Emitter::memOperandIdx(int reg, Reg base, Reg index, int32_t disp) {
 	const int bb = base & 7;
 	int mod;
@@ -93,7 +85,6 @@ void X64Emitter::memOperandIdx(int reg, Reg base, Reg index, int32_t disp) {
 	else if (mod == 2) { d32(static_cast<uint32_t>(disp)); }
 }
 
-// 81 /ext id  - immediate ALU op (ext = 0 add, 5 sub, 7 cmp, ...).
 void X64Emitter::aluImm(int ext, Reg rd, uint32_t imm) {
 	rex(false, 0, rd);
 	b(0x81);
@@ -101,14 +92,10 @@ void X64Emitter::aluImm(int ext, Reg rd, uint32_t imm) {
 	d32(imm);
 }
 
-// --- moves / constants ---
-
 void X64Emitter::movImm(Reg rd, uint32_t imm) { rex(false, 0, rd); b(static_cast<uint8_t>(0xB8 | (rd & 7))); d32(imm); }
 void X64Emitter::movImm64(Reg rd, uint64_t imm) { rex(true, 0, rd); b(static_cast<uint8_t>(0xB8 | (rd & 7))); d64(imm); }
 void X64Emitter::mov(Reg rd, Reg rs) { rex(false, rs, rd); b(0x89); modrmReg(rs, rd); }
 void X64Emitter::movQ(Reg rd, Reg rs) { rex(true, rs, rd); b(0x89); modrmReg(rs, rd); }
-
-// --- integer arithmetic / logic ---
 
 void X64Emitter::add(Reg rd, Reg rs) { rex(false, rs, rd); b(0x01); modrmReg(rs, rd); }
 void X64Emitter::sub(Reg rd, Reg rs) { rex(false, rs, rd); b(0x29); modrmReg(rs, rd); }
@@ -124,7 +111,6 @@ void X64Emitter::cmpImm(Reg ra, uint32_t imm) { aluImm(7, ra, imm); }
 void X64Emitter::addQ(Reg rd, Reg rs) { rex(true, rs, rd); b(0x01); modrmReg(rs, rd); }
 void X64Emitter::addImmQ(Reg rd, uint32_t imm) { rex(true, 0, rd); b(0x81); b(static_cast<uint8_t>(0xC0 | (rd & 7))); d32(imm); }
 
-// F7 /ext and shift group: `ext` is the ModRM.reg extension (neg=3, idiv=7; shl=4, shr=5, sar=7).
 void X64Emitter::neg(Reg rd) { rex(false, 0, rd); b(0xF7); b(static_cast<uint8_t>(0xC0 | (3 << 3) | (rd & 7))); }
 void X64Emitter::cdq() { b(0x99); }
 void X64Emitter::idiv(Reg rs) { rex(false, 0, rs); b(0xF7); b(static_cast<uint8_t>(0xC0 | (7 << 3) | (rs & 7))); }
@@ -135,8 +121,6 @@ void X64Emitter::shlImm(Reg rd, uint8_t n) { rex(false, 0, rd); b(0xC1); b(stati
 void X64Emitter::shrImm(Reg rd, uint8_t n) { rex(false, 0, rd); b(0xC1); b(static_cast<uint8_t>(0xC0 | (5 << 3) | (rd & 7))); b(n); }
 void X64Emitter::sarImm(Reg rd, uint8_t n) { rex(false, 0, rd); b(0xC1); b(static_cast<uint8_t>(0xC0 | (7 << 3) | (rd & 7))); b(n); }
 
-// --- loads / stores ---
-
 void X64Emitter::load(Reg rd, Reg base, int32_t disp) { rex(false, rd, base); b(0x8B); memOperand(rd, base, disp); }
 void X64Emitter::store(Reg base, int32_t disp, Reg rs) { rex(false, rs, base); b(0x89); memOperand(rs, base, disp); }
 void X64Emitter::loadQ(Reg rd, Reg base, int32_t disp) { rex(true, rd, base); b(0x8B); memOperand(rd, base, disp); }
@@ -145,9 +129,7 @@ void X64Emitter::loadIdx(Reg rd, Reg base, Reg index, int32_t disp) { rex3(false
 void X64Emitter::storeIdx(Reg base, Reg index, int32_t disp, Reg rs) { rex3(false, rs, index, base); b(0x89); memOperandIdx(rs, base, index, disp); }
 void X64Emitter::subQ(Reg rd, Reg rs) { rex(true, rs, rd); b(0x29); modrmReg(rs, rd); }
 
-// --- SSE scalar single-precision floats ---
-
-// A register-direct SSE form: mandatory prefix (F3/66/none), optional REX, 0F, opcode, ModRM(mod=11).
+// The mandatory prefix (F3 or 66, 0 for none) must precede REX.
 void X64Emitter::sseRR(uint8_t prefix, uint8_t opcode, int reg, int rm) {
 	if (prefix != 0) { b(prefix); }
 	rex(false, reg, rm);
@@ -156,22 +138,20 @@ void X64Emitter::sseRR(uint8_t prefix, uint8_t opcode, int reg, int rm) {
 }
 void X64Emitter::movssLoad(Reg xd, Reg base, int32_t disp) { b(0xF3); rex(false, xd, base); b(0x0F); b(0x10); memOperand(xd, base, disp); }
 void X64Emitter::movssStore(Reg base, int32_t disp, Reg xs) { b(0xF3); rex(false, xs, base); b(0x0F); b(0x11); memOperand(xs, base, disp); }
-void X64Emitter::movssReg(Reg xd, Reg xs) { sseRR(0x00, 0x28, xd, xs); }												// movaps xd, xs (xmm register copy; 0F 28 /r - full-register write: no merge false-dep, move-eliminated)
+void X64Emitter::movssReg(Reg xd, Reg xs) { sseRR(0x00, 0x28, xd, xs); }												// movaps: a full-register write, free of the merge false dependency of movss
 void X64Emitter::addss(Reg xd, Reg xs) { sseRR(0xF3, 0x58, xd, xs); }
 void X64Emitter::subss(Reg xd, Reg xs) { sseRR(0xF3, 0x5C, xd, xs); }
 void X64Emitter::mulss(Reg xd, Reg xs) { sseRR(0xF3, 0x59, xd, xs); }
 void X64Emitter::divss(Reg xd, Reg xs) { sseRR(0xF3, 0x5E, xd, xs); }
 void X64Emitter::ucomiss(Reg xa, Reg xb) { sseRR(0x00, 0x2E, xa, xb); }
 void X64Emitter::cvttss2si(Reg rd, Reg xs) { sseRR(0xF3, 0x2C, rd, xs); }
-void X64Emitter::xorps(Reg xd, Reg xs) { sseRR(0x00, 0x57, xd, xs); }													// xorps xd, xs (0F 57 /r); xd == xs is the recognized zero idiom, breaking dependencies on xd
-void X64Emitter::andps(Reg xd, Reg xs) { sseRR(0x00, 0x54, xd, xs); }													// andps xd, xs (0F 54 /r)
+void X64Emitter::xorps(Reg xd, Reg xs) { sseRR(0x00, 0x57, xd, xs); }
+void X64Emitter::andps(Reg xd, Reg xs) { sseRR(0x00, 0x54, xd, xs); }
 void X64Emitter::cvtsi2ss(Reg xd, Reg rs) { sseRR(0xF3, 0x2A, xd, rs); }
 void X64Emitter::movdToXmm(Reg xd, Reg rs) { sseRR(0x66, 0x6E, xd, rs); }
-void X64Emitter::movdFromXmm(Reg rd, Reg xs) { sseRR(0x66, 0x7E, xs, rd); }												// 66 0F 7E /r: ModRM.reg = xmm source
+void X64Emitter::movdFromXmm(Reg rd, Reg xs) { sseRR(0x66, 0x7E, xs, rd); }												// ModRM.reg is the xmm source
 void X64Emitter::roundss(Reg xd, Reg xs, uint8_t mode) { b(0x66); rex(false, xd, xs); b(0x0F); b(0x3A); b(0x0A); modrmReg(xd, xs); b(mode); }
 void X64Emitter::movssRip(Reg xd, Label literal) { b(0xF3); rex(false, xd, 0); b(0x0F); b(0x10); b(static_cast<uint8_t>(((xd & 7) << 3) | 5)); relBranch(literal.id); }
-
-// --- stack / control ---
 
 void X64Emitter::push(Reg r) { rex(false, 0, r); b(static_cast<uint8_t>(0x50 | (r & 7))); }
 void X64Emitter::pop(Reg r) { rex(false, 0, r); b(static_cast<uint8_t>(0x58 | (r & 7))); }
@@ -185,8 +165,6 @@ void X64Emitter::callRel(Label target) { b(0xE8); relBranch(target.id); }
 void X64Emitter::callReg(Reg r) { rex(false, 0, r); b(0xFF); b(static_cast<uint8_t>(0xD0 | (r & 7))); }
 void X64Emitter::leaRip(Reg rd, Label target) { rex(true, rd, 0); b(0x8D); b(static_cast<uint8_t>(((rd & 7) << 3) | 5)); relBranch(target.id); }
 void X64Emitter::jmpReg(Reg r) { rex(false, 0, r); b(0xFF); b(static_cast<uint8_t>(0xE0 | (r & 7))); }
-
-// --- labels / fixups ---
 
 void X64Emitter::relBranch(int labelId) {
 	Fixup f;
@@ -205,11 +183,7 @@ Label X64Emitter::newLabel() {
 
 void X64Emitter::bind(Label label) { labelTargets[label.id] = static_cast<ptrdiff_t>(bytes.size()); }
 
-/*
-	Pooled float constants for movssRip: floatLiteral hands out one label per distinct bit pattern; emitLiteralPool
-	appends the pool (4-aligned) at the current emit point and binds those labels. The pool goes after ALL code (compile()
-	calls it right before finalize()), so it never sits in an execution path and every rel32 reaches (+-2 GB).
-*/
+// The pool goes after all code, so it never sits in an execution path.
 Label X64Emitter::floatLiteral(uint32_t bits) {
 	const std::map<uint32_t, int>::const_iterator it = literalIndex.find(bits);
 	if (it != literalIndex.end()) { return literals[it->second].second; }
@@ -221,7 +195,7 @@ Label X64Emitter::floatLiteral(uint32_t bits) {
 
 void X64Emitter::emitLiteralPool() {
 	if (literals.empty()) { return; }
-	while ((bytes.size() & 3) != 0) { b(0x90); }																		// 4-align the pool (data, never executed; nop keeps disassembly sane)
+	while ((bytes.size() & 3) != 0) { b(0x90); }
 	for (size_t i = 0; i < literals.size(); ++i) {
 		bind(literals[i].second);
 		d32(literals[i].first);
@@ -230,7 +204,7 @@ void X64Emitter::emitLiteralPool() {
 
 void X64Emitter::alignTo(size_t boundary) {
 	assert(boundary != 0 && (boundary & (boundary - 1)) == 0);
-	while ((bytes.size() & (boundary - 1)) != 0) { b(0x90); }															// padding is unreachable (every function ends in a terminal jmp/ret)
+	while ((bytes.size() & (boundary - 1)) != 0) { b(0x90); }															// unreachable: every function ends in a jmp
 }
 
 void X64Emitter::finalize() {
@@ -248,58 +222,30 @@ void X64Emitter::finalize() {
 }
 
 
-// ============================================================================================================
-// JIT lowering, native dispatcher, and the JitCompiler driver (declarations in GAZLJit.h). Depends on GAZL.h and the
-// X64Emitter above. The emit helpers are file-local (`static`); lowerFunction / emitDispatcher / JitCompiler::compile
-// are the external surface. JitCompiler::compile calls makeExecutable(), so anything linking this file also links a
-// per-platform GAZLJitMem*.cpp backend. This is the x86-64 counterpart of GAZLJitArm64.cpp's lowering; it reuses the
-// verified per-instruction lowering from tools/GAZLJitX64SliceTest.cpp, re-hosted onto the JitProcessor field ABI.
-//
-// Execution model: §5.4 dispatcher, identical to GAZLJitArm64.cpp (and interoperating with the shared
-// JitProcessor / ipStack). Each GAZL function is a `Status segment(JitProcessor* ctx)` - ctx in ARG_0, no frame of its
-// own. It reloads the pins from ctx (rbx=dsp, r14=memoryBase, r13=fuel, r15=ipsp; dataStackEnd on demand; r12=ctx),
-// runs, and returns only a TERMINAL Status (OK / TIME_OUT / BLOCK_RETRY / a trap): GAZL calls and returns tail-branch
-// within the segment and push/pop the ipStack, never a host frame, and a `^native` is called inline from the segment.
-// Because the C stack is only the dispatcher's frame plus that native call, a fuel timeout can suspend and
-// resume from ANY point, including inside nested GAZL calls. Scratch is rax + rcx/rdx + xmm0/xmm1. The pins are
-// callee-saved and the scratch caller-saved on both SysV AMD64 and Win64, so the file is ABI-neutral except the
-// dispatcher's frame, which flows through the ARG_0 / CALL_FRAME constants below.
-// ============================================================================================================
-
-// --- pinned registers + scratch roles ---
-
 /*
-	§5.4 dispatcher model - the per-segment pins mirror arm64's (x1=dsp, x2=membase, w3=fuel, x4=ipsp, x0=ctx).
-	dataStackEnd is NOT pinned (only bounds checks want it) - it is loaded from ctx on demand. Every segment reloads these
-	from ctx at entry and writes them back before returning, so the C stack stays the dispatcher's frame and a
-	timeout/suspend can return to the host and resume from any point - including inside nested GAZL calls.
+	Lowering and the native dispatcher. The dispatcher's frame is the only host frame: GAZL calls and returns branch
+	directly and keep their return addresses on the ipStack, and a `^native` is called inline, so a fuel timeout can
+	suspend and resume anywhere, even inside nested GAZL calls. See design/jit/JitCompilerResearch.md section 5.4.
 */
+
+// Pins are callee-saved and scratch caller-saved on both SysV and Win64. `dataStackEnd` is loaded from ctx on demand.
 static const Reg DSP = RBX, MEMORY_BASE = R14, FUEL = R13, IP_STACK_PTR = R15, CONTEXT = R12;
-static const Reg SCRATCH_A = RCX, SCRATCH_B = RDX;																		// general scratch (A also serves as the shift-count CL)
-static const Reg FLOAT_0 = static_cast<Reg>(0), FLOAT_1 = static_cast<Reg>(1);											// xmm0 / xmm1 (a separate register file from GP)
+static const Reg SCRATCH_A = RCX, SCRATCH_B = RDX;																		// A doubles as the shift count CL
+static const Reg FLOAT_0 = static_cast<Reg>(0), FLOAT_1 = static_cast<Reg>(1);											// xmm0 / xmm1
 
 /*
-	Calling convention. The dispatcher makes the host-ABI call into each segment; a segment is entered as
-	`Status segment(JitProcessor* ctx)` with ctx in ARG_0 and calls out only to a `^native`, on the frame the dispatcher
-	reserved for it. ARG_0 is the one arg register that differs by ABI. CALL_FRAME is the stack the
-	*dispatcher* reserves for its calls: SysV needs only the 16-align pad; Win64 also reserves the 32-byte shadow space a
-	callee may spill its register args into. The pins (rbx/r12/r13/r14/r15) are callee-saved on both ABIs and the dispatcher
-	saves them once; ctx lives in r12, and rbp is pushed only to keep the push count even. Win64's callee-saved rsi/rdi
-	bite only in the rep-movsd COPY (guarded there); xmm6-15 are untouched (segments use xmm0/1).
+	`ARG_0` is the one argument register that differs by ABI. `CALL_FRAME` is what the dispatcher reserves for a
+	segment's inline native call. Win64 also makes rsi/rdi callee-saved, which matters only around `rep movsd`.
 */
 #if defined(_WIN32)
 static const Reg ARG_0 = RCX;
 static const uint32_t CALL_FRAME = 40u;																					// 32-byte shadow space + 8-byte align pad
 #else
 static const Reg ARG_0 = RDI;
-static const uint32_t CALL_FRAME = 8u;																					// just the 16-align pad; SysV has no shadow space
+static const uint32_t CALL_FRAME = 8u;																					// 16-byte align pad only
 #endif
 
-/*
-	Segment state lives in ctx between transfers. reloadState loads the pins from ctx (ctx must already be in CONTEXT);
-	enterSegment is a fresh dispatcher entry (ctx arrives in ARG_0); writebackState flushes before returning. Mirrors
-	arm64 reloadState/writebackState. dataStackEnd is loaded on demand, not pinned.
-*/
+// `reloadState` needs ctx already in `CONTEXT`; `enterSegment` takes it from `ARG_0`.
 static void reloadState(X64Emitter& e, const Offsets& o) {
 	e.loadQ(DSP, CONTEXT, o.dsp); e.loadQ(MEMORY_BASE, CONTEXT, o.mb);
 	e.load(FUEL, CONTEXT, o.fuel); e.loadQ(IP_STACK_PTR, CONTEXT, o.ipsp);
@@ -312,12 +258,11 @@ static void writebackState(X64Emitter& e, const Offsets& o) {
 typedef void (X64Emitter::*BinaryOp)(Reg, Reg);
 
 /*
-	x64 register pool + fill/spill backend (§5.7). Registers caller-saved on BOTH SysV and Win64 (no prologue save),
-	outside the §5.3 pins and the RAX/RCX/RDX scratch idiv/shift/rep use - so the cache never collides with those and
-	evict() is never needed here. slot -> [DSP + slot*4] (32-bit disp, no near/far split).
+	Register cache pools: caller-saved on both SysV and Win64, and disjoint from the pins and from the rax/rcx/rdx that
+	idiv, shifts and `rep movsd` use, so the cache never needs `evict()`.
 */
 static const int X64_GENERAL_POOL[] = { R8, R9, R10, R11 };
-static const int X64_FLOAT_POOL[] = { 2, 3, 4, 5 };																		// xmm2-xmm5 (caller-saved on both ABIs; xmm0/xmm1 stay fixed scratch)
+static const int X64_FLOAT_POOL[] = { 2, 3, 4, 5 };																		// xmm2-xmm5
 
 class X64SlotBackend : public RegisterCacheBackend {
 	public:		X64SlotBackend(X64Emitter& emitter) : e(emitter) { }
@@ -331,10 +276,10 @@ class X64SlotBackend : public RegisterCacheBackend {
 					if (registerClass == GENERAL_REGISTER) { e.store(DSP, static_cast<int32_t>(slot) * 4, r); }
 					else { e.movssStore(DSP, static_cast<int32_t>(slot) * 4, r); }
 				}
-	public:		virtual bool bridgeWritesHome() const { return true; }							// measured: eager wins here, see RegisterCacheBackend
+	public:		virtual bool bridgeWritesHome() const { return true; }							// see RegisterCacheBackend
 	public:		virtual void emitCrossMove(int dstRegister, RegisterClass dstClass, int srcRegister) {
 					const Reg d = static_cast<Reg>(dstRegister), s = static_cast<Reg>(srcRegister);
-					if (dstClass == FLOAT_REGISTER) { e.movdToXmm(d, s); } else { e.movdFromXmm(d, s); }				// bit copy either way; a Value is one word
+					if (dstClass == FLOAT_REGISTER) { e.movdToXmm(d, s); } else { e.movdFromXmm(d, s); }
 				}
 	private:	X64Emitter& e;
 };
@@ -342,7 +287,6 @@ class X64SlotBackend : public RegisterCacheBackend {
 typedef BasicColdTrap<Label> ColdTrap;
 typedef BasicColdEdge<Label> ColdEdge;
 
-// Resolve a conditional branch's destination through the shared edge policy (planConditionalEdge).
 static Label resolveConditionalEdge(X64Emitter& emitter, RegisterCache& cache, std::map<UInt, ResidencyMap>& entryMaps
 		, std::map<UInt, Label>& labels, UInt target, bool resident, std::vector<ColdEdge>& coldEdges) {
 	ColdEdge edge;
@@ -353,22 +297,19 @@ static Label resolveConditionalEdge(X64Emitter& emitter, RegisterCache& cache, s
 }
 
 /*
-	TAIL's window slide (GAZL 2): the %0..%window-1 window moves DOWN onto this frame's base, dsp rewinds to it, and the
-	callee's FUNC re-stacks from OUR base. No return is pushed - the callee's RETU returns to our caller - which is what
-	makes self-recursion run in constant stack. The destination is always below the source (dp = dsp - frame), so an
-	ascending copy is overlap-safe at any size, exactly like the interpreter's loop. Small windows unroll through RAX;
-	a large one goes through rep movsd. Never touches SCRATCH_B, which carries the resolved target in the indirect form.
+	Slides the TAIL argument window down onto this frame's base and rewinds dsp to it. The destination is below the
+	source, so an ascending copy is overlap-safe. Must not touch `SCRATCH_B`, which holds the indirect target.
 */
 static void emitTailWindow(X64Emitter& emitter, UInt window, UInt frame) {
 	const int32_t down = 0 - static_cast<int32_t>(frame * 4u);
-	if (window <= 8) {																									// the realistic case: a handful of parameter slots
+	if (window <= 8) {
 		for (UInt k = 0; k < window; ++k) {
 			emitter.load(RAX, DSP, static_cast<int32_t>(k * 4u));
 			emitter.store(DSP, static_cast<int32_t>(k * 4u) + down, RAX);
 		}
 	} else {
 	#if defined(_WIN32)
-		emitter.push(RSI); emitter.push(RDI);																			// Win64: both are callee-saved and rep movsd clobbers them
+		emitter.push(RSI); emitter.push(RDI);																			// callee-saved on Win64
 	#endif
 		emitter.movQ(RDI, DSP); emitter.addImmQ(RDI, static_cast<uint32_t>(down));
 		emitter.movQ(RSI, DSP);
@@ -378,10 +319,10 @@ static void emitTailWindow(X64Emitter& emitter, UInt window, UInt frame) {
 		emitter.pop(RDI); emitter.pop(RSI);
 	#endif
 	}
-	if (frame != 0) { emitter.addImmQ(DSP, static_cast<uint32_t>(down)); }												// dsp = dp
+	if (frame != 0) { emitter.addImmQ(DSP, static_cast<uint32_t>(down)); }
 }
 
-// `d = a <op> b` on the two-operand ISA: seed `d` with `a`, then `op d, b`; when `d` aliases `b`, go through a scratch.
+// `d = a <op> b` on the two-operand ISA; goes through a scratch when `d` aliases `b`.
 static void emitTwoOperand(X64Emitter& emitter, RegisterCache& cache, BinaryOp copy, BinaryOp op
 		, RegisterClass registerClass, int d, int a, int b) {
 	if (d != b) {
@@ -397,7 +338,6 @@ static void emitTwoOperand(X64Emitter& emitter, RegisterCache& cache, BinaryOp c
 	}
 }
 
-// Load an integer operand into a cache register: a slot (read), or a constant materialized into a scratch.
 static int loadIntOperand(X64Emitter& emitter, RegisterCache& cache, const Value& p, bool isConst) {
 	if (!isConst) { return cache.read(p.i, GENERAL_REGISTER); }
 	const int r = cache.scratch(GENERAL_REGISTER);
@@ -405,7 +345,6 @@ static int loadIntOperand(X64Emitter& emitter, RegisterCache& cache, const Value
 	return r;
 }
 
-// destination = source1 <op> source2 through the cache. Two-operand ISA: seed dst with s1, then `op dst, s2` in place.
 static void emitBinary(X64Emitter& emitter, RegisterCache& cache, BinaryOp op, const Instruction& instruction, bool source1Const, bool source2Const) {
 	const int a = loadIntOperand(emitter, cache, instruction.p1, source1Const);
 	const int b = loadIntOperand(emitter, cache, instruction.p2, source2Const);
@@ -415,25 +354,22 @@ static void emitBinary(X64Emitter& emitter, RegisterCache& cache, BinaryOp op, c
 }
 
 /*
-	Signed division (rem=false) / modulo (rem=true). Dividend p1 -> eax, divisor p2 -> ecx. Guards match the interpreter:
-	a runtime zero divisor traps DIVISION_BY_ZERO (trap arm in the cold section, dirty snapshot stored there - no
-	main-path spill); divisor == -1 is special-cased (div -> -a, mod -> 0) to dodge the x86 #DE on INT_MIN / -1. Result
-	is left in eax before the store. (A const-zero divisor is an assemble-time error, so the zero guard is only for a
-	variable divisor, matching arm64.)
+	Divisor -1 is special-cased (quotient -a, remainder 0) because x86 idiv faults on INT_MIN / -1. A constant zero
+	divisor is rejected at assembly, so only a variable divisor gets the zero check.
 */
 static void emitDivMod(X64Emitter& emitter, RegisterCache& cache, const Instruction& instruction, bool rem, bool source1Const, bool source2Const, std::vector<ColdTrap>& coldTraps) {
 	if (source1Const) { emitter.movImm(RAX, static_cast<uint32_t>(instruction.p1.i)); }
-	else { const int a = cache.read(instruction.p1.i, GENERAL_REGISTER); emitter.mov(RAX, static_cast<Reg>(a)); }		// dividend -> eax
+	else { const int a = cache.read(instruction.p1.i, GENERAL_REGISTER); emitter.mov(RAX, static_cast<Reg>(a)); }
 	if (source2Const) { emitter.movImm(RCX, static_cast<uint32_t>(instruction.p2.i)); }
-	else { const int bb = cache.read(instruction.p2.i, GENERAL_REGISTER); emitter.mov(RCX, static_cast<Reg>(bb)); }		// divisor -> ecx
+	else { const int bb = cache.read(instruction.p2.i, GENERAL_REGISTER); emitter.mov(RCX, static_cast<Reg>(bb)); }
 	if (!source2Const) {
 		ColdTrap trap; trap.label = emitter.newLabel(); trap.status = DIVISION_BY_ZERO;
 		emitter.cmpImm(RCX, 0);
 		cache.captureDirtyLines(trap.dirty);																			// the trap exit must leave memory interpreter-identical
-		emitter.jcc(CC_E, trap.label);																					// trap arm is cold, after the mainline
+		emitter.jcc(CC_E, trap.label);
 		coldTraps.push_back(trap);
 	}
-	emitter.cmpImm(RCX, 0xFFFFFFFFu);																					// divisor == -1 ?
+	emitter.cmpImm(RCX, 0xFFFFFFFFu);
 	Label notMinusOne = emitter.newLabel(), done = emitter.newLabel();
 	emitter.jcc(CC_NE, notMinusOne);
 	if (rem) { emitter.movImm(RAX, 0); } else { emitter.neg(RAX); }
@@ -447,7 +383,7 @@ static void emitDivMod(X64Emitter& emitter, RegisterCache& cache, const Instruct
 	cache.endInstruction();
 }
 
-// Shift through the cache: value p1 -> dst (a pool reg), count p2 (const -> imm8, else a slot -> CL). kind: 0=shl, 1=shr, 2=sar.
+// `kind`: 0 = shl, 1 = shr, 2 = sar.
 static void emitShift(X64Emitter& emitter, RegisterCache& cache, const Instruction& instruction, int kind, bool source1Const, bool source2Const) {
 	int v;
 	if (source1Const) { v = cache.scratch(GENERAL_REGISTER); emitter.movImm(static_cast<Reg>(v), static_cast<uint32_t>(instruction.p1.i)); }
@@ -455,7 +391,7 @@ static void emitShift(X64Emitter& emitter, RegisterCache& cache, const Instructi
 	int count = -1;
 	if (!source2Const) {
 		count = cache.read(instruction.p2.i, GENERAL_REGISTER);
-		emitter.mov(RCX, static_cast<Reg>(count));																		// capture the count into CL BEFORE seeding dst (dst may alias the count slot)
+		emitter.mov(RCX, static_cast<Reg>(count));																		// before seeding dst, which may alias the count
 	}
 	const int d = cache.define(instruction.p0.i, GENERAL_REGISTER);
 	if (d != v) { emitter.mov(static_cast<Reg>(d), static_cast<Reg>(v)); }
@@ -468,7 +404,6 @@ static void emitShift(X64Emitter& emitter, RegisterCache& cache, const Instructi
 	cache.endInstruction();
 }
 
-// if (a <condition> b) goto target - a = p0, b = p1, in the const modes named by the opcode; target = this index + p2.
 static void emitBranch(X64Emitter& emitter, RegisterCache& cache, Cond condition, const Instruction& instruction, UInt instructionIndex,
 		bool operand0Const, bool operand1Const, std::map<UInt, Label>& labels, std::map<UInt, ResidencyMap>& entryMaps,
 		bool resident, std::vector<ColdEdge>& coldEdges) {
@@ -480,8 +415,6 @@ static void emitBranch(X64Emitter& emitter, RegisterCache& cache, Cond condition
 	emitter.jcc(condition, resolveConditionalEdge(emitter, cache, entryMaps, labels, target, resident, coldEdges));
 }
 
-// Load a float operand into a cache register: a float slot (read), or a constant loaded RIP-relative from the literal
-// pool (one instruction, no GP scratch pressure; movss from memory writes the full register - no merge false-dep).
 static int loadFloatOperandCached(X64Emitter& emitter, RegisterCache& cache, const Value& operand, bool isConst) {
 	if (!isConst) { return cache.read(operand.i, FLOAT_REGISTER); }
 	const int x = cache.scratch(FLOAT_REGISTER);
@@ -489,11 +422,10 @@ static int loadFloatOperandCached(X64Emitter& emitter, RegisterCache& cache, con
 	return x;
 }
 #ifdef GAZL_CANONICAL_NAN
-// strict FP: force any NaN in xmm d to the canonical 0x7FC00000, matching the interpreter's canonicalNaN(), so a
-// NaN's sign/payload (unspecified by IEEE) is identical across interp and JIT. Off by default; only the fuzz build defines it.
+// Forces any NaN in `d` to 0x7FC00000, matching the interpreter's `canonicalNaN()`.
 static void emitCanonicalizeNaN(X64Emitter& emitter, int d) {
 	Label notNaN = emitter.newLabel();
-	emitter.ucomiss(static_cast<Reg>(d), static_cast<Reg>(d));		// PF=1 iff d is unordered (NaN)
+	emitter.ucomiss(static_cast<Reg>(d), static_cast<Reg>(d));		// PF set iff d is NaN
 	emitter.jcc(CC_NP, notNaN);
 	emitter.movssRip(static_cast<Reg>(d), emitter.floatLiteral(0x7FC00000u));
 	emitter.bind(notNaN);
@@ -503,7 +435,6 @@ static void emitCanonicalizeNaN(X64Emitter& emitter, int d) {
 #define EMIT_CANON_NAN(emitter, d) ((void)0)
 #endif
 
-// destination = source1 <fop> source2 through the cache (two-operand: seed dst with s1, then fop dst, s2).
 static void emitBinaryFloat(X64Emitter& emitter, RegisterCache& cache, BinaryOp fop, const Instruction& instruction, bool source1Const, bool source2Const) {
 	const int a = loadFloatOperandCached(emitter, cache, instruction.p1, source1Const);
 	const int b = loadFloatOperandCached(emitter, cache, instruction.p2, source2Const);
@@ -513,7 +444,7 @@ static void emitBinaryFloat(X64Emitter& emitter, RegisterCache& cache, BinaryOp 
 	cache.endInstruction();
 }
 
-// Float compare-branch, NaN-correct versus C++: kind 0 = <, 1 = >=, 2 = ==, 3 = !=. a = p0, b = p1, target = index + p2.
+// `kind`: 0 = <, 1 = !(<), 2 = ==, 3 = !=, each with C++ NaN semantics.
 static void emitBranchFloat(X64Emitter& emitter, RegisterCache& cache, int kind, const Instruction& instruction, UInt instructionIndex,
 		bool operand0Const, bool operand1Const, std::map<UInt, Label>& labels, std::map<UInt, ResidencyMap>& entryMaps,
 		bool resident, std::vector<ColdEdge>& coldEdges) {
@@ -521,22 +452,19 @@ static void emitBranchFloat(X64Emitter& emitter, RegisterCache& cache, int kind,
 	const int b = loadFloatOperandCached(emitter, cache, instruction.p1, operand1Const);
 	const Reg xa = static_cast<Reg>(a), xb = static_cast<Reg>(b);
 	const UInt targetIndex = static_cast<UInt>(static_cast<Int>(instructionIndex) + instruction.p2.i);
-	if (kind == 0) { emitter.ucomiss(xb, xa); }																			// b > a ordered == (a < b)
+	if (kind == 0) { emitter.ucomiss(xb, xa); }																			// a < b as b > a, which is false when unordered
 	else { emitter.ucomiss(xa, xb); }
 	cache.endInstruction();
-	Label target = resolveConditionalEdge(emitter, cache, entryMaps, labels, targetIndex, resident, coldEdges);			// block ends here (mov loads/stores leave EFLAGS)
+	Label target = resolveConditionalEdge(emitter, cache, entryMaps, labels, targetIndex, resident, coldEdges);			// may emit only movs, which leave EFLAGS intact
 	if (kind == 0) { emitter.jcc(CC_A, target); }
-	else if (kind == 1) { emitter.jcc(CC_P, target); emitter.jcc(CC_AE, target); }					// !(a < b) - TRUE when unordered. ucomiss sets CF on NaN so CC_AE alone misses it; matches the interpreter and arm64 (PL)
+	else if (kind == 1) { emitter.jcc(CC_P, target); emitter.jcc(CC_AE, target); }					// ucomiss sets CF on NaN, so CC_AE alone would miss unordered
 	else if (kind == 2) { Label unordered = emitter.newLabel(); emitter.jcc(CC_P, unordered); emitter.jcc(CC_E, target); emitter.bind(unordered); }
-	else { emitter.jcc(CC_P, target); emitter.jcc(CC_NE, target); }														// unordered or not-equal
+	else { emitter.jcc(CC_P, target); emitter.jcc(CC_NE, target); }
 }
 
 /*
-	Lower one GAZL function (starting at `funcStart`, an OP_FUNC) into `emitter` (appended) as §5.4 segments (encoding b).
-	The dispatcher supplies live pins, so the entry just advances dsp by the frame and runs the FUNC stack-overflow check;
-	then one x86-64 sequence per instruction to the terminating RETU. Every block leader gets a fuel-check safepoint
-	(suspend → cold stub). GAZL calls/RETU tail-branch directly (the ipStack holds the return address, §5.7.5); native
-	calls run inline; every terminal path sets eax and jumps to the shared `epilogue`. Returns false on an unlowerable opcode.
+	Appends the function at `funcStart` to `emitter`. Pins arrive live from the dispatcher, and every terminal path
+	jumps to `epilogue` with its Status in eax. Throws on an opcode the backend does not cover.
 */
 void JitCompilerX64::lowerFunction(X64Emitter& emitter, const AssembledProgram& program, UInt funcStart, UInt funcEnd
 		, const Offsets& offsets, const std::vector<Label>& entryLabels, Label epilogue) {
@@ -553,13 +481,9 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const AssembledProgram& 
 	const UInt readOffset = constantsSize - MEMORY_OFFSET;
 	const int32_t rwDisplacement = static_cast<int32_t>(constantsSize * 4);
 	const Pointer lowestAddress = MEMORY_OFFSET - constantsSize;
-	const UInt endIndex = funcEnd;																						// a function extends to the next FUNC (functionTable order), NOT to its first RETU: multi-RETU and GOTO-ending functions are legal
+	const UInt endIndex = funcEnd;																						// the next FUNC, not the first RETU: a function may have several RETUs or end in a GOTO
 
-	/*
-		Pass 1 - fuel safepoints: every basic-block leader (arch-neutral, §5.5), each charged its block weight and each a
-		resumable point. `labels` is the mainline label per leader (hot entry + branch + resume target); suspendL its
-		suspend stub. Charging per block (not just loop heads) keeps fuel spend ≈ the interpreter's.
-	*/
+	// Every block leader is a fuel safepoint and a resume point, with a mainline label and a suspend stub.
 	std::map<UInt, UInt> loopWeight;
 	jitFuelSafepoints(code, funcStart, endIndex, memory, loopWeight);
 	std::map<UInt, Label> labels, suspendL;
@@ -567,21 +491,17 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const AssembledProgram& 
 		labels[it->first] = emitter.newLabel(); suspendL[it->first] = emitter.newLabel();
 	}
 
-	/*
-		Function entry: the dispatcher supplies live pins (encoding b - no per-segment reload), so just advance dsp by the
-		frame (FUNC p0) and run the FUNC stack-overflow check.
-	*/
 	const UInt localsSize = static_cast<UInt>(code[funcStart].p0.i);
 	if (localsSize >= MAX_JIT_FRAME_WORDS || static_cast<UInt>(code[funcStart].p1.i) >= MAX_JIT_FRAME_WORDS) {
 		throw JitException("JIT: frame too large for a 32-bit byte offset");								// the host runs it interpreted
 	}
-	if (localsSize != 0) { emitter.addImmQ(DSP, localsSize * 4u); }														// dsp += frame
+	if (localsSize != 0) { emitter.addImmQ(DSP, localsSize * 4u); }
 	{
 		const UInt paramsSize = static_cast<UInt>(code[funcStart].p1.i);
 		Label stackOk = emitter.newLabel();
 		emitter.movQ(RAX, DSP); if (paramsSize != 0) { emitter.addImmQ(RAX, paramsSize * 4u); }
 		emitter.loadQ(SCRATCH_A, CONTEXT, offsets.dsend); emitter.cmpQ(RAX, SCRATCH_A); emitter.jcc(CC_BE, stackOk);
-		emitter.movImm(RAX, static_cast<uint32_t>(DATA_STACK_OVERFLOW)); emitter.jmp(epilogue);							// dsp + params > dsend
+		emitter.movImm(RAX, static_cast<uint32_t>(DATA_STACK_OVERFLOW)); emitter.jmp(epilogue);
 		emitter.bind(stackOk);
 	}
 
@@ -590,24 +510,23 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const AssembledProgram& 
 			, X64_FLOAT_POOL, sizeof(X64_FLOAT_POOL) / sizeof(X64_FLOAT_POOL[0]) };
 	RegisterCache cache(registerPool, slotBackend);
 	UseSchedule useSchedule;
-	buildUseSchedule(code, funcStart, endIndex, useSchedule);															// Belady next-read lists (§5.7 v2.0.5)
+	buildUseSchedule(code, funcStart, endIndex, useSchedule);
 	cache.setUseSchedule(&useSchedule);
 	std::map<Int, int> pointerRealm;
-	buildPointerRealms(program, funcStart, endIndex, pointerRealm);															// §1.1 realm stamp (v2.3a): skip flushes for non-frame pointer ops
+	buildPointerRealms(program, funcStart, endIndex, pointerRealm);
 	const std::map<Int, int>::const_iterator realmEnd = pointerRealm.end();
 	std::map<UInt, UInt> loopExtent;
-	jitResidencyLeaders(code, funcStart, endIndex, memory, loopExtent);													// v2.2: loop headers whose entry state stays register-resident
+	jitResidencyLeaders(code, funcStart, endIndex, memory, loopExtent);
 	LiveSets liveIn;
-	if (!loopExtent.empty()) {																							// only the resident-header path reads it
-		liveIn.build(code, funcStart, endIndex, memory);																// v2.2 varying maps: leader maps sized by liveness
+	if (!loopExtent.empty()) {																							// only resident loop headers read it
+		liveIn.build(code, funcStart, endIndex, memory);
 	}
 	std::map<UInt, ResidencyMap> entryMaps;
-	std::vector<ColdTrap> coldTraps;																					// checked-op trap arms, emitted after the mainline
-	std::vector<ColdEdge> coldEdges;																					// loop-exit edge stubs (v2.2-full), same section
+	std::vector<ColdTrap> coldTraps;																					// these two are emitted after the mainline
+	std::vector<ColdEdge> coldEdges;
 	UInt residentEnd = 0;
-	bool resident = false;																								// inside a register-resident loop body [header, residentEnd]
+	bool resident = false;																								// inside a register-resident loop body
 
-	// Pass 2 - emit.
 	for (UInt j = funcStart; j <= endIndex; ++j) {
 		cache.setInstructionIndex(j);
 		if (resident && j > residentEnd) { resident = false; }
@@ -616,142 +535,136 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const AssembledProgram& 
 			establishLeader(cache, code, j, loopExtent, loopWeight, liveIn, entryMaps, resident, residentEnd);
 			emitter.bind(labelIt->second);
 		}
-		std::map<UInt, UInt>::iterator weightIt = loopWeight.find(j);													// loop head: charge the block, suspend on timeout (§5.5)
+		std::map<UInt, UInt>::iterator weightIt = loopWeight.find(j);													// charge the block; suspend once fuel goes negative
 		if (weightIt != loopWeight.end()) { emitter.subImm(FUEL, weightIt->second); emitter.jcc(CC_S, suspendL[j]); }
 		const Instruction& in = code[j];
 		const Int op = in.opcode;
-		if (!isCacheLowered(op)) { cache.barrier(); }																		// uncached opcode: lower it as v1 over an empty cache
+		if (!isCacheLowered(op)) { cache.barrier(); }
 		switch (op) {
 			case OP_FUNC: break;
-			case OP_RETU: {																								// pop the ipStack; tail-branch back to the caller, or OK at the native/top marker
+			case OP_RETU: {																								// pops {continuation, dsp}; dsp 0 marks a native or top-level caller
 				Label notNative = emitter.newLabel();
-				emitter.addImmQ(IP_STACK_PTR, 0u - 16u);																// ipsp -= 16 : pop {cont, dsp}
-				emitter.loadQ(RAX, IP_STACK_PTR, 0);																	// cont (caller continuation address)
-				emitter.loadQ(DSP, IP_STACK_PTR, 8);																	// caller dsp (0 = native/top marker)
+				emitter.addImmQ(IP_STACK_PTR, 0u - 16u);
+				emitter.loadQ(RAX, IP_STACK_PTR, 0);
+				emitter.loadQ(DSP, IP_STACK_PTR, 8);
 				emitter.movImm(SCRATCH_A, 0); emitter.cmpQ(DSP, SCRATCH_A); emitter.jcc(CC_NE, notNative);
-				emitter.addImmQ(IP_STACK_PTR, 0u - 16u); emitter.loadQ(DSP, IP_STACK_PTR, 8);							// native return: pop again for the true dsp
-				emitter.storeQ(CONTEXT, offsets.dsp, DSP); emitter.storeQ(CONTEXT, offsets.ipsp, IP_STACK_PTR);			// publish (the interpreter's ret: write-back): a BLOCKING
-				emitter.store(CONTEXT, offsets.fuel, FUEL);																// native's caller re-reads these after its nested run()
-				emitter.movImm(RAX, 0); emitter.jmp(epilogue);															// OK - terminal (return to host); pins stay live in regs
+				emitter.addImmQ(IP_STACK_PTR, 0u - 16u); emitter.loadQ(DSP, IP_STACK_PTR, 8);							// pop again for the true dsp
+				emitter.storeQ(CONTEXT, offsets.dsp, DSP); emitter.storeQ(CONTEXT, offsets.ipsp, IP_STACK_PTR);			// published: a blocking native's caller
+				emitter.store(CONTEXT, offsets.fuel, FUEL);																// re-reads these after its nested run()
+				emitter.movImm(RAX, 0); emitter.jmp(epilogue);
 				emitter.bind(notNative);
-				emitter.jmpReg(RAX);																					// GAZL return: jump straight into the caller's continuation
+				emitter.jmpReg(RAX);
 				break;
 			}
 
-			case OP_TAIL_CC: {																							// GAZL 2 tail call, direct target (the ordinal is validated at assembly; the interpreter only asserts)
+			case OP_TAIL_CC: {																							// the ordinal is validated at assembly
 				emitTailWindow(emitter, static_cast<UInt>(in.p1.i), static_cast<UInt>(in.p2.i));
 				emitter.jmp(entryLabels[in.p0.t - FUNCTION_OFFSET]);
 				break;
 			}
-			case OP_TAIL_VC: {																							// tail call through a target slot: BAD_CALL on a bad ordinal, exactly as the interpreter
+			case OP_TAIL_VC: {
 				Label trap = emitter.newLabel();
-				emitter.load(SCRATCH_A, DSP, in.p0.i * 4); emitter.subImm(SCRATCH_A, FUNCTION_OFFSET);					// ordinal, read BEFORE the slide overwrites the window
+				emitter.load(SCRATCH_A, DSP, in.p0.i * 4); emitter.subImm(SCRATCH_A, FUNCTION_OFFSET);					// read before the slide overwrites the window
 				emitter.cmpImm(SCRATCH_A, functionCount); emitter.jcc(CC_AE, trap);
 				emitter.loadQ(RAX, CONTEXT, offsets.funcentries); emitter.shlImm(SCRATCH_A, 3); emitter.addQ(RAX, SCRATCH_A);
-				emitter.loadQ(SCRATCH_B, RAX, 0);																		// funcEntries[ordinal] - survives the slide
+				emitter.loadQ(SCRATCH_B, RAX, 0);																		// survives the slide
 				emitTailWindow(emitter, static_cast<UInt>(in.p1.i), static_cast<UInt>(in.p2.i));
 				emitter.jmpReg(SCRATCH_B);
 				emitter.bind(trap); emitter.movImm(RAX, static_cast<uint32_t>(BAD_CALL)); emitter.jmp(epilogue);
 				break;
 			}
-			case OP_CALL_CVC: {																							// direct GAZL call: push {after, dsp}, tail-branch into the callee entry
+			case OP_CALL_CVC: {																							// pushes {after, dsp} and branches into the callee
 				const UInt callee = in.p0.t - FUNCTION_OFFSET;
 				const UInt window = static_cast<UInt>(in.p1.i);
 				Label after = emitter.newLabel(), ipOk = emitter.newLabel();
 				emitter.loadQ(RAX, CONTEXT, offsets.ipsend); emitter.cmpQ(IP_STACK_PTR, RAX); emitter.jcc(CC_B, ipOk);
 				emitter.movImm(RAX, static_cast<uint32_t>(IP_STACK_OVERFLOW)); emitter.jmp(epilogue); emitter.bind(ipOk);
 				emitter.leaRip(RAX, after); emitter.storeQ(IP_STACK_PTR, 0, RAX); emitter.storeQ(IP_STACK_PTR, 8, DSP); emitter.addImmQ(IP_STACK_PTR, 16);
-				if (window != 0) { emitter.addImmQ(DSP, window * 4u); }													// dsp += arg window
-				emitter.jmp(entryLabels[callee]);																		// direct tail-branch into the callee (state stays live)
-				emitter.bind(after);																					// callee's RETU lands here; pins already live
+				if (window != 0) { emitter.addImmQ(DSP, window * 4u); }
+				emitter.jmp(entryLabels[callee]);
+				emitter.bind(after);																					// the callee's RETU lands here with pins live
 				break;
 			}
-			case OP_CALL_VVC: {																							// indirect: slot -> ordinal -> ctx.funcEntries[ordinal], tail-branch
+			case OP_CALL_VVC: {
 				const UInt window = static_cast<UInt>(in.p1.i);
 				Label after = emitter.newLabel(), ipOk = emitter.newLabel(), trap = emitter.newLabel();
 				emitter.loadQ(RAX, CONTEXT, offsets.ipsend); emitter.cmpQ(IP_STACK_PTR, RAX); emitter.jcc(CC_B, ipOk);
 				emitter.movImm(RAX, static_cast<uint32_t>(IP_STACK_OVERFLOW)); emitter.jmp(epilogue); emitter.bind(ipOk);
-				emitter.load(RCX, DSP, in.p0.i * 4); emitter.subImm(RCX, FUNCTION_OFFSET);									// ordinal
-				emitter.cmpImm(RCX, functionCount); emitter.jcc(CC_AE, trap);											// >= functionCount -> BAD_CALL
+				emitter.load(RCX, DSP, in.p0.i * 4); emitter.subImm(RCX, FUNCTION_OFFSET);
+				emitter.cmpImm(RCX, functionCount); emitter.jcc(CC_AE, trap);
 				emitter.loadQ(RAX, CONTEXT, offsets.funcentries); emitter.shlImm(RCX, 3); emitter.addQ(RAX, RCX); emitter.loadQ(RDX, RAX, 0); // rdx = funcEntries[ordinal]
 				emitter.leaRip(RAX, after); emitter.storeQ(IP_STACK_PTR, 0, RAX); emitter.storeQ(IP_STACK_PTR, 8, DSP); emitter.addImmQ(IP_STACK_PTR, 16);
 				if (window != 0) { emitter.addImmQ(DSP, window * 4u); }
-				emitter.jmpReg(RDX);																					// indirect tail-branch into the callee segment
+				emitter.jmpReg(RDX);
 				emitter.bind(trap); emitter.movImm(RAX, static_cast<uint32_t>(BAD_CALL)); emitter.jmp(epilogue);
 				emitter.bind(after);
 				break;
 			}
-			case OP_CALL_NVC: {																							// native: publish window/fuel/ipsp, call the native inline (no dispatcher round-trip)
+			case OP_CALL_NVC: {																							// calls the native inline, without a dispatcher round trip
 				/*
-					Re-entrancy-safe shape (see TODO(jit-native-reentrancy) resolution): every post-call value comes
-					from ctx fields that a nested enterCall()+run() episode inside the native leaves stable - ctx.dsp
-					is the published window and the sentinel discipline restores exactly it; ctx.ipsp reflects any
-					frames a pushCall() added (a no-op reload otherwise). The OK path continues INDIRECTLY through
-					ctx.nativeafter, preset to `after`: JitProcessor::pushCall retargets it at the pushed callee's
-					entry, whose RETU chains back to `after` through the pushed frames - so `^native` behaves exactly
-					like `&function`. `after` re-arms the not-in-a-native guard and normalizes dsp to the caller
-					frame, which is why pushed frames store the WINDOW uniformly. RESUME = hot is set on the nonzero
-					path only (same retry semantics, but nested episodes can no longer clobber it pre-call).
+					Everything reloaded after the call comes from ctx fields that a nested run() inside the native
+					leaves stable. The OK path continues through `ctx.nativeafter`, preset to `after`;
+					`JitProcessor::pushCall` retargets it at a pushed callee, whose RETU chains back to `after`. `after`
+					rewinds dsp from the window to the caller frame, so pushed frames must store the window. RESUME is
+					set only on a nonzero status, so a nested run() cannot clobber it.
 				*/
 				const UInt ordinal = static_cast<UInt>(in.p0.i);
 				const UInt window = static_cast<UInt>(in.p1.i);
 				Label hot = emitter.newLabel(), retry = emitter.newLabel(), after = emitter.newLabel();
-				emitter.bind(hot);																						// hot re-entry (blocking-retry / suspend re-issue target)
+				emitter.bind(hot);																						// re-entry on a blocking retry or resume
 				if (window != 0) { emitter.addImmQ(DSP, window * 4u); }
 				emitter.storeQ(CONTEXT, offsets.dsp, DSP); emitter.store(CONTEXT, offsets.fuel, FUEL); emitter.storeQ(CONTEXT, offsets.ipsp, IP_STACK_PTR);
-				emitter.leaRip(RAX, after); emitter.storeQ(CONTEXT, offsets.nativeafter, RAX);							// redirectable OK continuation (pushCall retargets)
-				emitter.loadQ(RAX, CONTEXT, offsets.natives); emitter.loadQ(RAX, RAX, static_cast<int32_t>(ordinal * 8)); // rax = natives[ordinal]
-				emitter.movQ(ARG_0, CONTEXT); emitter.callReg(RAX);														// native(ctx); eax = status (pins are callee-saved -> preserved)
-				emitter.load(FUEL, CONTEXT, offsets.fuel);																// native may resetTimeOut(0): refresh the fuel pin from ctx
-				emitter.loadQ(IP_STACK_PTR, CONTEXT, offsets.ipsp);														// adopt frames pushed by pushCall (no-op otherwise)
-				emitter.loadQ(DSP, CONTEXT, offsets.dsp);																// the window - stable across nested episodes (sentinel discipline)
+				emitter.leaRip(RAX, after); emitter.storeQ(CONTEXT, offsets.nativeafter, RAX);
+				emitter.loadQ(RAX, CONTEXT, offsets.natives); emitter.loadQ(RAX, RAX, static_cast<int32_t>(ordinal * 8));
+				emitter.movQ(ARG_0, CONTEXT); emitter.callReg(RAX);														// pins are callee-saved, so they survive
+				emitter.load(FUEL, CONTEXT, offsets.fuel);																// the native may have reset the fuel
+				emitter.loadQ(IP_STACK_PTR, CONTEXT, offsets.ipsp);														// adopts frames pushed by pushCall
+				emitter.loadQ(DSP, CONTEXT, offsets.dsp);
 				emitter.cmpImm(RAX, 0); emitter.jcc(CC_NE, retry);
-				emitter.loadQ(RAX, CONTEXT, offsets.nativeafter); emitter.jmpReg(RAX);									// OK: `after`, or the last-pushed callee's entry
+				emitter.loadQ(RAX, CONTEXT, offsets.nativeafter); emitter.jmpReg(RAX);
 				emitter.bind(retry);
-				if (window != 0) {																						// publish the CALLER dsp (register AND ctx): the hot
-					emitter.addImmQ(DSP, 0u - window * 4u);																// re-issue reloads ctx.dsp and advances it again
+				if (window != 0) {																						// publish the caller dsp in both register and ctx:
+					emitter.addImmQ(DSP, 0u - window * 4u);																// re-entry at `hot` advances it again
 					emitter.storeQ(CONTEXT, offsets.dsp, DSP);
 				}
-				emitter.leaRip(SCRATCH_A, hot); emitter.storeQ(CONTEXT, offsets.resume, SCRATCH_A);						// RESUME = call site (rax still holds the status!)
-				emitter.jmp(epilogue);																					// nonzero (retry / suspend / trap): return to host, eax = status
+				emitter.leaRip(SCRATCH_A, hot); emitter.storeQ(CONTEXT, offsets.resume, SCRATCH_A);						// not rax, which holds the status
+				emitter.jmp(epilogue);
 				emitter.bind(after);
-				emitter.movImm(RAX, 0); emitter.storeQ(CONTEXT, offsets.nativeafter, RAX);								// re-arm the "only inside a native call" guard
-				if (window != 0) { emitter.addImmQ(DSP, 0u - window * 4u); }											// normalize to the caller frame base
+				emitter.movImm(RAX, 0); emitter.storeQ(CONTEXT, offsets.nativeafter, RAX);								// re-arms the "only inside a native call" guard
+				if (window != 0) { emitter.addImmQ(DSP, 0u - window * 4u); }
 				break;
 			}
 
 			case OP_MOVE_VV: { const int s = cache.read(in.p1.i, GENERAL_REGISTER); const int d = cache.define(in.p0.i, GENERAL_REGISTER); if (d != s) { emitter.mov(static_cast<Reg>(d), static_cast<Reg>(s)); } cache.endInstruction(); break; }
 			case OP_MOVE_VC: { const int d = cache.define(in.p0.i, GENERAL_REGISTER); emitter.movImm(static_cast<Reg>(d), static_cast<uint32_t>(in.p1.i)); cache.endInstruction(); break; }
 
-			// constant-address global access: assembler-validated, cannot touch the frame, so no cache coherence is needed.
+			// Constant addresses are validated at assembly and cannot reach the frame, so the cache needs no flush.
 			case OP_PEEK_VC: { const int d = cache.define(in.p0.i, GENERAL_REGISTER); emitter.load(static_cast<Reg>(d), MEMORY_BASE, static_cast<int32_t>((in.p1.p + readOffset) * 4)); cache.endInstruction(); break; }
 			case OP_POKE_CV: { const int r = cache.read(in.p1.i, GENERAL_REGISTER); emitter.store(MEMORY_BASE, static_cast<int32_t>((in.p0.p + readOffset) * 4), static_cast<Reg>(r)); cache.endInstruction(); break; }
 			case OP_POKE_CC: { const int r = cache.scratch(GENERAL_REGISTER); emitter.movImm(static_cast<Reg>(r), static_cast<uint32_t>(in.p1.i)); emitter.store(MEMORY_BASE, static_cast<int32_t>((in.p0.p + readOffset) * 4), static_cast<Reg>(r)); cache.endInstruction(); break; }
 
 			/*
-				var-indexed memory. The no-flush optimization is sound ONLY when the CONST operand is a genuine
-				globals/constants-realm address (`isDataAddress`): then the access provably can't reach the frame (§1.1).
-				The scalar/offset pointer-deref idiom `PEEK $x $p` / `POKE $p $x` also finalizes to VCV/CVV (SWAP), but
-				with the const being a small OFFSET and the pointer riding the VARIABLE operand - unknown realm, so it
-				must flush like POKE_VVV. constAddrBase distinguishes the two by the const's range.
+				Skipping the flush is sound only when the constant is a real globals or constants address. The
+				pointer-deref idiom `PEEK $x $p` also finalizes to this form, with a small offset as the constant and
+				the pointer in the variable, so it must flush like `POKE_VVV`.
 			*/
-			case OP_PEEK_VCV: {																							// dst = memory[C1 + index]
+			case OP_PEEK_VCV: {
 				const int32_t base = static_cast<int32_t>(in.p1.p + readOffset);
 				const bool constAddrBase = isDataAddress(program, in.p1.p);
 				ColdTrap trap; trap.label = emitter.newLabel(); trap.status = BAD_PEEK;
 				const int idx = cache.read(in.p2.i, GENERAL_REGISTER);
-				if (!constAddrBase) { cache.spillDirtyResident(); }														// pointer-in-variable form: flush so the read sees dirty frame lines
-				emitter.mov(RAX, static_cast<Reg>(idx)); emitter.addImm(RAX, static_cast<uint32_t>(base));				// word index = base + index
+				if (!constAddrBase) { cache.spillDirtyResident(); }
+				emitter.mov(RAX, static_cast<Reg>(idx)); emitter.addImm(RAX, static_cast<uint32_t>(base));
 				emitter.load(SCRATCH_B, CONTEXT, offsets.memsize); emitter.cmp(RAX, SCRATCH_B);
-				cache.captureDirtyLines(trap.dirty);																	// the trap exit must leave memory interpreter-identical
-				emitter.jcc(CC_AE, trap.label);																			// trap arm is cold, after the mainline
+				cache.captureDirtyLines(trap.dirty);
+				emitter.jcc(CC_AE, trap.label);
 				const int d = cache.define(in.p0.i, GENERAL_REGISTER);
-				emitter.loadIdx(static_cast<Reg>(d), MEMORY_BASE, RAX, 0);								// index by the CHECKED sum in RAX: `idx` alone is zero-extended to 64 bits, so a 32-bit wrap that passes the bound would address ~16 GiB away
+				emitter.loadIdx(static_cast<Reg>(d), MEMORY_BASE, RAX, 0);								// index by the checked sum: `idx` alone zero-extends, so a 32-bit wrap would escape the bound
 				cache.endInstruction();
 				coldTraps.push_back(trap);
 				break;
 			}
-			case OP_POKE_CVV: case OP_POKE_CVC: {																		// memory[C0 + index] = value
+			case OP_POKE_CVV: case OP_POKE_CVC: {
 				const int32_t base = static_cast<int32_t>(in.p0.p - MEMORY_OFFSET);
 				const bool constAddrBase = isDataAddress(program, in.p0.p);
 				ColdTrap trap; trap.label = emitter.newLabel(); trap.status = BAD_POKE;
@@ -759,25 +672,20 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const AssembledProgram& 
 				int val;
 				if (op == OP_POKE_CVC) { val = cache.scratch(GENERAL_REGISTER); emitter.movImm(static_cast<Reg>(val), static_cast<uint32_t>(in.p2.i)); }
 				else { val = cache.read(in.p2.i, GENERAL_REGISTER); }
-				if (!constAddrBase) { cache.spillDirtyResident(); }														// pointer-in-variable form: flush before + invalidate after (may hit the frame)
-				emitter.mov(RAX, static_cast<Reg>(idx)); emitter.addImm(RAX, static_cast<uint32_t>(base));				// word index = base + index
+				if (!constAddrBase) { cache.spillDirtyResident(); }
+				emitter.mov(RAX, static_cast<Reg>(idx)); emitter.addImm(RAX, static_cast<uint32_t>(base));
 				emitter.load(SCRATCH_B, CONTEXT, offsets.rwmemsize); emitter.cmp(RAX, SCRATCH_B);
-				cache.captureDirtyLines(trap.dirty);																	// the trap exit must leave memory interpreter-identical
-				emitter.jcc(CC_AE, trap.label);																			// trap arm is cold, after the mainline
-				emitter.storeIdx(MEMORY_BASE, RAX, rwDisplacement, static_cast<Reg>(val));				// index by the CHECKED sum (see OP_PEEK_VCV): a wrapped index must not escape the bound
+				cache.captureDirtyLines(trap.dirty);
+				emitter.jcc(CC_AE, trap.label);
+				emitter.storeIdx(MEMORY_BASE, RAX, rwDisplacement, static_cast<Reg>(val));				// index by the checked sum, as in OP_PEEK_VCV
 				cache.endInstruction();
 				if (!constAddrBase) { cache.invalidateAll(); }
 				coldTraps.push_back(trap);
 				break;
 			}
 
-			/*
-				Runtime-pointer memory. When the base's realm is NONFRAME (§1.1: a received parameter pointer or a
-				globals/constants address), the access provably can't alias a cached local, so the hot-path flush is
-				skipped; the terminal trap still needs interpreter-current memory, so its dirty snapshot rides the cold
-				trap arm (captureDirtyLines). A MYFRAME / UNKNOWN base keeps the conservative v2.0 flush.
-			*/
-			case OP_PEEK_VVV: {																							// dst = memory[base + index]
+			// A `REALM_NONFRAME` base cannot alias a cached local, so the flush is skipped; the trap arm still spills.
+			case OP_PEEK_VVV: {
 				const std::map<Int, int>::const_iterator baseRealm = pointerRealm.find(in.p1.i);
 				const bool nonFrame = (baseRealm != realmEnd && baseRealm->second == REALM_NONFRAME);
 				ColdTrap trap; trap.label = emitter.newLabel(); trap.status = BAD_PEEK;
@@ -786,7 +694,7 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const AssembledProgram& 
 				if (!nonFrame) { cache.spillDirtyResident(); }
 				emitter.mov(RAX, static_cast<Reg>(bp)); emitter.add(RAX, static_cast<Reg>(ip)); emitter.addImm(RAX, readOffset);
 				emitter.load(SCRATCH_B, CONTEXT, offsets.memsize); emitter.cmp(RAX, SCRATCH_B);
-				cache.captureDirtyLines(trap.dirty);																	// the trap exit must leave memory interpreter-identical
+				cache.captureDirtyLines(trap.dirty);
 				emitter.jcc(CC_AE, trap.label);
 				const int d = cache.define(in.p0.i, GENERAL_REGISTER);
 				emitter.loadIdx(static_cast<Reg>(d), MEMORY_BASE, RAX, 0);
@@ -794,7 +702,7 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const AssembledProgram& 
 				coldTraps.push_back(trap);
 				break;
 			}
-			case OP_POKE_VVV: case OP_POKE_VVC: {																		// memory[base + index] = value
+			case OP_POKE_VVV: case OP_POKE_VVC: {
 				const std::map<Int, int>::const_iterator baseRealm = pointerRealm.find(in.p0.i);
 				const bool nonFrame = (baseRealm != realmEnd && baseRealm->second == REALM_NONFRAME);
 				ColdTrap trap; trap.label = emitter.newLabel(); trap.status = BAD_POKE;
@@ -806,7 +714,7 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const AssembledProgram& 
 				if (!nonFrame) { cache.spillDirtyResident(); }
 				emitter.mov(RAX, static_cast<Reg>(bp)); emitter.add(RAX, static_cast<Reg>(ip)); emitter.subImm(RAX, MEMORY_OFFSET);
 				emitter.load(SCRATCH_B, CONTEXT, offsets.rwmemsize); emitter.cmp(RAX, SCRATCH_B);
-				cache.captureDirtyLines(trap.dirty);																	// the trap exit must leave memory interpreter-identical
+				cache.captureDirtyLines(trap.dirty);
 				emitter.jcc(CC_AE, trap.label);
 				emitter.storeIdx(MEMORY_BASE, RAX, rwDisplacement, static_cast<Reg>(val));
 				cache.endInstruction();
@@ -815,17 +723,17 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const AssembledProgram& 
 				break;
 			}
 
-			// local array (frame): bound is the free frame span (dataStackEnd - dsp)/4 - C. Frame access -> pointer coherence.
+			// The bound is the free span from dsp to `dataStackEnd`, less the constant base.
 			case OP_GETL_VVV: {
 				const int32_t frameBase = static_cast<int32_t>(in.p1.i);
 				Label trap = emitter.newLabel(), cont = emitter.newLabel();
 				const int idx = cache.read(in.p2.i, GENERAL_REGISTER);
 				cache.spillDirtyResident();
-				emitter.loadQ(RAX, CONTEXT, offsets.dsend); emitter.subQ(RAX, DSP); emitter.shrImm(RAX, 2);				// (dataStackEnd - dsp) in words
-				emitter.subImm(RAX, static_cast<uint32_t>(frameBase)); emitter.jcc(CC_S, trap);							// limit = words - C, never negative
+				emitter.loadQ(RAX, CONTEXT, offsets.dsend); emitter.subQ(RAX, DSP); emitter.shrImm(RAX, 2);
+				emitter.subImm(RAX, static_cast<uint32_t>(frameBase)); emitter.jcc(CC_S, trap);
 				emitter.cmp(static_cast<Reg>(idx), RAX); emitter.jcc(CC_AE, trap);
 				const int d = cache.define(in.p0.i, GENERAL_REGISTER);
-				emitter.loadIdx(static_cast<Reg>(d), DSP, static_cast<Reg>(idx), frameBase * 4);						// [dsp + index*4 + C*4]
+				emitter.loadIdx(static_cast<Reg>(d), DSP, static_cast<Reg>(idx), frameBase * 4);
 				cache.endInstruction();
 				emitter.jmp(cont);
 				emitter.bind(trap); emitter.movImm(RAX, static_cast<uint32_t>(BAD_PEEK)); emitter.jmp(epilogue);
@@ -841,9 +749,9 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const AssembledProgram& 
 				else { val = cache.read(in.p2.i, GENERAL_REGISTER); }
 				cache.spillDirtyResident();
 				emitter.loadQ(RAX, CONTEXT, offsets.dsend); emitter.subQ(RAX, DSP); emitter.shrImm(RAX, 2);
-				emitter.subImm(RAX, static_cast<uint32_t>(frameBase)); emitter.jcc(CC_S, trap);							// limit = words - C, never negative
+				emitter.subImm(RAX, static_cast<uint32_t>(frameBase)); emitter.jcc(CC_S, trap);
 				emitter.cmp(static_cast<Reg>(idx), RAX); emitter.jcc(CC_AE, trap);
-				emitter.storeIdx(DSP, static_cast<Reg>(idx), frameBase * 4, static_cast<Reg>(val));						// [dsp + index*4 + C*4] = value
+				emitter.storeIdx(DSP, static_cast<Reg>(idx), frameBase * 4, static_cast<Reg>(val));
 				cache.endInstruction();
 				cache.invalidateAll();
 				emitter.jmp(cont);
@@ -853,24 +761,23 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const AssembledProgram& 
 			}
 
 			/*
-				bulk copy p2 words from src (p1) to dst (p0) via rep movsd. Each pointer is a const memory address or a slot
-				holding a GAZL pointer; resolve to a byte address (memoryBase + wordIndex*4). Range-checked to ACCESS_VIOLATION like the interpreter and the arm64 backend - an
-				unchecked skip here would be a JIT-only divergence, the worst bug class (SliceBoundsDesign.md section 3).
+				Both ranges are checked like the interpreter, before the Win64 push so a trap needs no unwind. Each
+				check compares the index against size minus count, since index plus count could wrap.
 			*/
 			case OP_COPY_VVC: case OP_COPY_VCC: case OP_COPY_CVC: case OP_COPY_CCC: {
 				const bool destConst = (op == OP_COPY_CVC || op == OP_COPY_CCC);
 				const bool srcConst = (op == OP_COPY_VCC || op == OP_COPY_CCC);
-				Label copyTrap = emitter.newLabel(), copyCont = emitter.newLabel();										// range check BEFORE the win64 push, so a trap needs no stack unwind
+				Label copyTrap = emitter.newLabel(), copyCont = emitter.newLabel();
 				if (destConst) { emitter.movImm(RAX, static_cast<uint32_t>(in.p0.p - MEMORY_OFFSET)); }
 				else { emitter.load(RAX, DSP, in.p0.i * 4); emitter.subImm(RAX, MEMORY_OFFSET); }
-				emitter.load(SCRATCH_B, CONTEXT, offsets.rwmemsize); emitter.cmpImm(SCRATCH_B, static_cast<uint32_t>(in.p2.i)); emitter.jcc(CC_B, copyTrap);	// count alone past the arena
-					emitter.subImm(SCRATCH_B, static_cast<uint32_t>(in.p2.i)); emitter.cmp(RAX, SCRATCH_B); emitter.jcc(CC_A, copyTrap);	// destIdx > rwMemorySize - count. SUBTRACT, never add: destIdx+count wrapped, letting a count of MEMORY_OFFSET past the check
+				emitter.load(SCRATCH_B, CONTEXT, offsets.rwmemsize); emitter.cmpImm(SCRATCH_B, static_cast<uint32_t>(in.p2.i)); emitter.jcc(CC_B, copyTrap);
+					emitter.subImm(SCRATCH_B, static_cast<uint32_t>(in.p2.i)); emitter.cmp(RAX, SCRATCH_B); emitter.jcc(CC_A, copyTrap);
 				if (srcConst) { emitter.movImm(RAX, static_cast<uint32_t>(in.p1.p + readOffset)); }
 				else { emitter.load(RAX, DSP, in.p1.i * 4); emitter.addImm(RAX, readOffset); }
-				emitter.load(SCRATCH_B, CONTEXT, offsets.memsize); emitter.cmpImm(SCRATCH_B, static_cast<uint32_t>(in.p2.i)); emitter.jcc(CC_B, copyTrap);		// count alone past the arena
-					emitter.subImm(SCRATCH_B, static_cast<uint32_t>(in.p2.i)); emitter.cmp(RAX, SCRATCH_B); emitter.jcc(CC_A, copyTrap);		// srcIdx > memorySize - count, same reason
+				emitter.load(SCRATCH_B, CONTEXT, offsets.memsize); emitter.cmpImm(SCRATCH_B, static_cast<uint32_t>(in.p2.i)); emitter.jcc(CC_B, copyTrap);
+					emitter.subImm(SCRATCH_B, static_cast<uint32_t>(in.p2.i)); emitter.cmp(RAX, SCRATCH_B); emitter.jcc(CC_A, copyTrap);
 			#if defined(_WIN32)
-				emitter.push(RSI); emitter.push(RDI);																	// Win64: rsi/rdi are callee-saved; rep movsd clobbers them
+				emitter.push(RSI); emitter.push(RDI);																	// callee-saved on Win64
 			#endif
 				if (destConst) { emitter.movQ(RDI, MEMORY_BASE); emitter.addImmQ(RDI, static_cast<uint32_t>((in.p0.p + readOffset) * 4)); }
 				else { emitter.load(RAX, DSP, in.p0.i * 4); emitter.addImm(RAX, readOffset); emitter.shlImm(RAX, 2); emitter.movQ(RDI, MEMORY_BASE); emitter.addQ(RDI, RAX); }
@@ -887,10 +794,9 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const AssembledProgram& 
 				break;
 			}
 
-			// address of a local p1 -> dest p0. pointer = lowestAddress + wordIndex(dsp) + slot.
-			case OP_ADRL: {
-				emitter.movQ(RAX, DSP); emitter.subQ(RAX, MEMORY_BASE); emitter.shrImm(RAX, 2);							// (dsp - memoryBase) / 4 = dsp word offset
-				emitter.addImm(RAX, static_cast<uint32_t>(in.p1.i));													// + slot
+			case OP_ADRL: {																								// pointer = lowestAddress + dsp word index + slot
+				emitter.movQ(RAX, DSP); emitter.subQ(RAX, MEMORY_BASE); emitter.shrImm(RAX, 2);
+				emitter.addImm(RAX, static_cast<uint32_t>(in.p1.i));
 				emitter.addImm(RAX, lowestAddress);
 				const int d = cache.define(in.p0.i, GENERAL_REGISTER);
 				emitter.mov(static_cast<Reg>(d), RAX);
@@ -938,10 +844,10 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const AssembledProgram& 
 				break;
 			}
 
-			case OP_FORi_VVB: case OP_FORi_VCB: {																		// ++counter; if (counter < limit) branch
+			case OP_FORi_VVB: case OP_FORi_VCB: {
 				const int r = cache.read(in.p0.i, GENERAL_REGISTER);
 				emitter.addImm(static_cast<Reg>(r), 1);
-				cache.define(in.p0.i, GENERAL_REGISTER);																// counter now dirty (barrier will spill the increment)
+				cache.define(in.p0.i, GENERAL_REGISTER);																// marks the incremented counter dirty
 				int lim;
 				if (op == OP_FORi_VCB) { lim = cache.scratch(GENERAL_REGISTER); emitter.movImm(static_cast<Reg>(lim), static_cast<uint32_t>(in.p1.i)); }
 				else { lim = cache.read(in.p1.i, GENERAL_REGISTER); }
@@ -961,41 +867,37 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const AssembledProgram& 
 			case OP_DIVF_VVV: emitBinaryFloat(emitter, cache, &X64Emitter::divss, in, false, false); break;
 			case OP_DIVF_VVC: emitBinaryFloat(emitter, cache, &X64Emitter::divss, in, false, true); break;
 			case OP_DIVF_VCV: emitBinaryFloat(emitter, cache, &X64Emitter::divss, in, true, false); break;
-			/*
-				FTOI / ITOF carry a scale constant (p2): FTOI = (int)(src * scale) with the interpreter's saturation;
-				ITOF = (float)src * scale.
-			*/
-			case OP_FTOI_VVC: {
-				{ const int sx = cache.read(in.p1.i, FLOAT_REGISTER); emitter.movssReg(FLOAT_0, static_cast<Reg>(sx)); } // operand via cache
-				emitter.movssRip(FLOAT_1, emitter.floatLiteral(static_cast<uint32_t>(in.p2.i))); emitter.mulss(FLOAT_0, FLOAT_1); // * scale (pooled constant)
-				emitter.cvttss2si(SCRATCH_A, FLOAT_0);																	// x86 yields 0x80000000 for overflow / inf / NaN
+			case OP_FTOI_VVC: {																							// (int)(src * scale), saturating like the interpreter's ftoi()
+				{ const int sx = cache.read(in.p1.i, FLOAT_REGISTER); emitter.movssReg(FLOAT_0, static_cast<Reg>(sx)); }
+				emitter.movssRip(FLOAT_1, emitter.floatLiteral(static_cast<uint32_t>(in.p2.i))); emitter.mulss(FLOAT_0, FLOAT_1);
+				emitter.cvttss2si(SCRATCH_A, FLOAT_0);																	// 0x80000000 on overflow, inf or NaN
 				emitter.cmpImm(SCRATCH_A, 0x80000000u);
 				Label ftoiDone = emitter.newLabel();
-				emitter.jcc(CC_NE, ftoiDone);																			// in range -> done; else saturate like the interpreter's ftoi()
-				emitter.ucomiss(FLOAT_0, FLOAT_0);																		// NaN sets PF
+				emitter.jcc(CC_NE, ftoiDone);
+				emitter.ucomiss(FLOAT_0, FLOAT_0);
 				Label ftoiNotNan = emitter.newLabel();
 				emitter.jcc(CC_NP, ftoiNotNan);
 				emitter.movImm(SCRATCH_A, 0); emitter.jmp(ftoiDone);													// NaN -> 0
 				emitter.bind(ftoiNotNan);
-				emitter.movdFromXmm(SCRATCH_B, FLOAT_0); emitter.cmpImm(SCRATCH_B, 0);									// sign bit: signed >= 0 means positive / +inf
+				emitter.movdFromXmm(SCRATCH_B, FLOAT_0); emitter.cmpImm(SCRATCH_B, 0);
 				Label ftoiNegative = emitter.newLabel();
-				emitter.jcc(CC_L, ftoiNegative);																		// negative / -inf -> keep INT_MIN
-				emitter.movImm(SCRATCH_A, 0x7FFFFFFFu);																	// positive / +inf -> INT_MAX
+				emitter.jcc(CC_L, ftoiNegative);																		// negative keeps INT_MIN
+				emitter.movImm(SCRATCH_A, 0x7FFFFFFFu);
 				emitter.bind(ftoiNegative); emitter.bind(ftoiDone);
-				{ const int d = cache.define(in.p0.i, GENERAL_REGISTER); emitter.mov(static_cast<Reg>(d), SCRATCH_A); }	// result via cache
+				{ const int d = cache.define(in.p0.i, GENERAL_REGISTER); emitter.mov(static_cast<Reg>(d), SCRATCH_A); }
 				cache.endInstruction();
 				break;
 			}
-			case OP_ITOF_VVC: {
-				const int src = cache.read(in.p1.i, GENERAL_REGISTER);													// read before define: p0 may alias p1 (in-place itof)
+			case OP_ITOF_VVC: {																							// (float)src * scale
+				const int src = cache.read(in.p1.i, GENERAL_REGISTER);													// before define: p0 may alias p1
 				const int d = cache.define(in.p0.i, FLOAT_REGISTER);
-				emitter.xorps(static_cast<Reg>(d), static_cast<Reg>(d));												// cvtsi2ss merges into d: zero it first or the conversion false-depends on d's last writer
-				emitter.cvtsi2ss(static_cast<Reg>(d), static_cast<Reg>(src));											// convert straight into d (no FLOAT_0 round trip / copy)
-				emitter.movssRip(FLOAT_1, emitter.floatLiteral(static_cast<uint32_t>(in.p2.i))); emitter.mulss(static_cast<Reg>(d), FLOAT_1); // * scale (pooled constant)
+				emitter.xorps(static_cast<Reg>(d), static_cast<Reg>(d));												// cvtsi2ss merges into d: zero it to break the false dependency
+				emitter.cvtsi2ss(static_cast<Reg>(d), static_cast<Reg>(src));
+				emitter.movssRip(FLOAT_1, emitter.floatLiteral(static_cast<uint32_t>(in.p2.i))); emitter.mulss(static_cast<Reg>(d), FLOAT_1);
 				cache.endInstruction();
 				break;
 			}
-			case OP_ABSF: {																								// clear the sign bit in the float file (same bits as fabsf, NaN payload kept)
+			case OP_ABSF: {																								// same bits as fabsf: NaN payload kept
 				const int s = cache.read(in.p1.i, FLOAT_REGISTER);
 				const int d = cache.define(in.p0.i, FLOAT_REGISTER);
 				if (d != s) { emitter.movssReg(static_cast<Reg>(d), static_cast<Reg>(s)); }
@@ -1006,7 +908,7 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const AssembledProgram& 
 			}
 			case OP_FLOF: {
 				const int s = cache.read(in.p1.i, FLOAT_REGISTER); const int d = cache.define(in.p0.i, FLOAT_REGISTER);
-				if (d != s) { emitter.xorps(static_cast<Reg>(d), static_cast<Reg>(d)); }								// roundss merges into d: zero a distinct d first or it false-depends on d's stale value
+				if (d != s) { emitter.xorps(static_cast<Reg>(d), static_cast<Reg>(d)); }								// roundss merges into d: zero it to break the false dependency
 				emitter.roundss(static_cast<Reg>(d), static_cast<Reg>(s), 1); cache.endInstruction(); break;
 			}
 
@@ -1028,15 +930,15 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const AssembledProgram& 
 				break;
 			}
 
-			case OP_SWCH: {																								// index = min(unsigned(V0), C1); jump into a table of `jmp case`
+			case OP_SWCH: {																								// index = min(unsigned V0, C1) into a table of rel32 jmps
 				const std::vector<UInt> targets = switchTargets(code, j, memory);
 				emitter.load(SCRATCH_A, DSP, in.p0.i * 4);
 				emitter.cmpImm(SCRATCH_A, static_cast<uint32_t>(in.p1.i));
 				Label keep = emitter.newLabel();
-				emitter.jcc(CC_BE, keep);																				// (unsigned) val <= C1 -> keep; else clamp
+				emitter.jcc(CC_BE, keep);
 				emitter.movImm(SCRATCH_A, static_cast<uint32_t>(in.p1.i));
 				emitter.bind(keep);
-				emitter.mov(SCRATCH_B, SCRATCH_A); emitter.shlImm(SCRATCH_B, 2); emitter.add(SCRATCH_B, SCRATCH_A);		// index * 5 (each table jmp is 5 bytes)
+				emitter.mov(SCRATCH_B, SCRATCH_A); emitter.shlImm(SCRATCH_B, 2); emitter.add(SCRATCH_B, SCRATCH_A);		// index * 5: each table jmp is 5 bytes
 				Label tableBase = emitter.newLabel();
 				emitter.leaRip(RAX, tableBase); emitter.addQ(RAX, SCRATCH_B); emitter.jmpReg(RAX);
 				emitter.bind(tableBase);
@@ -1055,17 +957,16 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const AssembledProgram& 
 			case OP_NEQI_VVB: emitBranch(emitter, cache, CC_NE, in, j, false, false, labels, entryMaps, resident, coldEdges); break;
 			case OP_NEQI_VCB: emitBranch(emitter, cache, CC_NE, in, j, false, true, labels, entryMaps, resident, coldEdges); break;
 
-			default: throwUnlowerableOpcode(op);																		// a finalized opcode the backend must cover (a bug, never routine)
+			default: throwUnlowerableOpcode(op);																		// a backend bug, never routine
 		}
 	}
-	// Cold section: checked-op trap arms (see ColdTrap) - store the dirty snapshot, set the status, exit.
+	// Cold section: trap arms and loop-exit edge stubs spill their dirty snapshot first.
 	for (size_t k = 0; k < coldTraps.size(); ++k) {
 		emitter.bind(coldTraps[k].label);
 		spillResidencyMap(slotBackend, coldTraps[k].dirty);
 		emitter.movImm(RAX, static_cast<uint32_t>(coldTraps[k].status)); emitter.jmp(epilogue);
 	}
 
-	// Cold section: loop-exit edge stubs (v2.2-full, see ColdEdge) - store the dirty snapshot, enter the exit leader.
 	for (size_t k = 0; k < coldEdges.size(); ++k) {
 		emitter.bind(coldEdges[k].label);
 		spillResidencyMap(slotBackend, coldEdges[k].dirty);
@@ -1073,11 +974,9 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const AssembledProgram& 
 	}
 
 	/*
-		Cold section: one suspend stub per block leader - writeback the pins to ctx and return TIME_OUT to the host. A
-		leader with register-resident entry state (v2.2) first spills its ResidencyMap - memory must be interpreter-
-		identical at a suspend - and parks RESUME at a reload stub that refills the map before re-entering the mainline;
-		an empty map points RESUME straight at the mainline head as before (the dispatcher reloads only the pins).
-		Unreachable by fall-through - each preceding block ends in jmp. Mirrors the arm64 cold section.
+		Suspend stubs, one per block leader. Memory must be interpreter-identical at a suspend, so a leader with
+		register-resident entry state spills it and resumes through a stub that refills it, since the dispatcher
+		reloads only the pins.
 	*/
 	for (std::map<UInt, UInt>::const_iterator it = loopWeight.begin(); it != loopWeight.end(); ++it) {
 		const UInt head = it->first;
@@ -1088,72 +987,56 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const AssembledProgram& 
 		writebackState(emitter, offsets);
 		if (resident) {
 			Label reload = emitter.newLabel();
-			emitter.leaRip(RAX, reload); emitter.storeQ(CONTEXT, offsets.resume, RAX);									// RESUME = reload stub (below)
+			emitter.leaRip(RAX, reload); emitter.storeQ(CONTEXT, offsets.resume, RAX);
 			emitter.movImm(RAX, static_cast<uint32_t>(TIME_OUT)); emitter.jmp(epilogue);
 			emitter.bind(reload);
 			fillResidencyMap(slotBackend, m->second);
 			emitter.jmp(labels[head]);
 		} else {
-			emitter.leaRip(RAX, labels[head]); emitter.storeQ(CONTEXT, offsets.resume, RAX);							// RESUME = this block's mainline head
+			emitter.leaRip(RAX, labels[head]); emitter.storeQ(CONTEXT, offsets.resume, RAX);
 			emitter.movImm(RAX, static_cast<uint32_t>(TIME_OUT)); emitter.jmp(epilogue);
 		}
 	}
 }
 
 /*
-	Emit the native dispatcher (§5.4, encoding b): `int dispatch(JitProcessor* ctx)`. It owns the single native frame:
-	save the callee-saved pins once, reserve CALL_FRAME (so a segment's inline native call is aligned + has Win64 shadow),
-	pin ctx, reload the pins from ctx, then tail-jump into RESUME. Segments thread among themselves by direct jmp with no
-	host round-trip; a segment returns here (to `epilogue`, in eax) only to suspend (TIME_OUT), finish (OK), or trap.
-	Mirrors the arm64 dispatcher.
+	Emits `int dispatch(JitProcessor* ctx)`, which owns the only native frame: it saves the pins, reserves
+	`CALL_FRAME`, loads the pins from ctx and jumps to RESUME. Segments come back to `epilogue` only to suspend, finish
+	or trap.
 */
 static size_t emitDispatcher(X64Emitter& emitter, const Offsets& offsets, Label epilogue) {
 	const size_t entry = emitter.size();
-	emitter.push(DSP); emitter.push(RBP); emitter.push(CONTEXT); emitter.push(FUEL); emitter.push(MEMORY_BASE); emitter.push(IP_STACK_PTR); // 6 pushes (even -> keeps rsp alignment)
-	emitter.addImmQ(RSP, 0u - CALL_FRAME);																				// dispatcher's call frame (16-align pad + Win64 shadow)
-	enterSegment(emitter, offsets);																						// ctx = arg0; reload the pins from ctx
-	emitter.loadQ(RAX, CONTEXT, offsets.resume); emitter.jmpReg(RAX);													// tail-jump into RESUME (the hot entry / resume point)
-	emitter.bind(epilogue);																								// a segment jumps here with its Status in eax
+	emitter.push(DSP); emitter.push(RBP); emitter.push(CONTEXT); emitter.push(FUEL); emitter.push(MEMORY_BASE); emitter.push(IP_STACK_PTR); // rbp only keeps the push count even for alignment
+	emitter.addImmQ(RSP, 0u - CALL_FRAME);
+	enterSegment(emitter, offsets);
+	emitter.loadQ(RAX, CONTEXT, offsets.resume); emitter.jmpReg(RAX);
+	emitter.bind(epilogue);																								// Status in eax
 	emitter.addImmQ(RSP, CALL_FRAME);
 	emitter.pop(IP_STACK_PTR); emitter.pop(MEMORY_BASE); emitter.pop(FUEL); emitter.pop(CONTEXT); emitter.pop(RBP); emitter.pop(DSP);
-	emitter.ret();																										// eax = Status
+	emitter.ret();
 	return entry;
 }
 
-/*
-	JitCompilerX64::compile (declared in GAZLJitX64.h) - lowers a whole finalized program to x86-64 machine code into an
-	EmittedModule, then makes it executable by handing it to JitModule and swaps that into `out` (the last three lines are
-	the same in the arm64 backend). Lower every function into one buffer, append one shared epilogue, append the
-	dispatcher, then record the byte stream + ordinal->entry byte offsets. Throws (via lowerFunction) on any finalized
-	opcode the backend fails to cover.
-*/
 void JitCompilerX64::compile(const AssembledProgram& program, JitModule& out) {
 	EmittedModule emitted;
-	const Offsets offsets = JitProcessor::layout();																		// the run-state ABI, obtained without an engine
+	const Offsets offsets = JitProcessor::layout();
 	X64Emitter emitter;
 	std::vector<Label> entryLabels(program.sizes.functionCount);
 	for (UInt k = 0; k < program.sizes.functionCount; ++k) { entryLabels[k] = emitter.newLabel(); }
 	Label epilogue = emitter.newLabel();
 
 	for (UInt ordinal = 0; ordinal < program.sizes.functionCount; ++ordinal) {
-		emitter.alignTo(16);																							// 16-align entries: code-layout shifts stay within one function
+		emitter.alignTo(16);																							// so a code-layout shift stays within one function
 		emitter.bind(entryLabels[ordinal]);
 		const UInt funcEnd = ((ordinal + 1 < program.sizes.functionCount) ? program.functionTable[ordinal + 1]
 				: program.sizes.codeSize) - 1;
 		lowerFunction(emitter, program, program.functionTable[ordinal], funcEnd, offsets, entryLabels, epilogue);
 	}
-	/*
-		Shared exit `epilogue` (bound inside emitDispatcher): every terminal path - suspend, OK return, or trap - jumps
-		there with its Status in eax; the dispatcher restores the frame and returns to the host.
-	*/
 	const size_t dispatcherOffset = emitDispatcher(emitter, offsets, epilogue);
-	emitter.emitLiteralPool();																							// pooled float constants (movssRip), after all code
+	emitter.emitLiteralPool();
 	emitter.finalize();
 
-	/*
-		x86-64 is a byte stream; the module holds 32-bit words, so round up and zero-pad the last partial word. Entry and
-		dispatch offsets are already byte offsets.
-	*/
+	// The module holds 32-bit words, so the last partial word is zero-padded.
 	const size_t byteCount = emitter.size();
 	emitted.code.assign((byteCount + 3) / 4, 0);
 	if (byteCount != 0) { std::memcpy(&emitted.code[0], emitter.code(), byteCount); }
@@ -1162,15 +1045,11 @@ void JitCompilerX64::compile(const AssembledProgram& program, JitModule& out) {
 		emitted.entryByteOffsets[ordinal] = static_cast<size_t>(emitter.labelOffset(entryLabels[ordinal]));
 	}
 	emitted.dispatchByteOffset = dispatcherOffset;
-	JitModule built(emitted);																							// makes the code executable (throws JitException on host denial)
+	JitModule built(emitted);																							// throws JitException if the host denies executable memory
 	out.swap(built);
 }
 
-/*
-	NativeJitCompiler compiles with this backend when x86-64 is the host arch; on other hosts it compiles out (the arm64 TU
-	provides it there), so both backends may link together without a duplicate. A client that wants the x86-64 backend
-	regardless of host names JitCompilerX64 directly instead.
-*/
+// Only on an x86-64 host, so both backends can link together without a duplicate definition.
 #if defined(__x86_64__) || defined(_M_X64) || defined(__amd64__)
 void NativeJitCompiler::compile(const AssembledProgram& program, JitModule& out) {
 	JitCompilerX64().compile(program, out);

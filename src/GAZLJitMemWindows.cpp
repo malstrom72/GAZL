@@ -22,15 +22,8 @@
 */
 
 /*
-	Windows executable-memory backend. The W^X story mirrors the POSIX one: reserve+commit the page read/write with
-	VirtualAlloc, copy the code in, flip it to read/execute with VirtualProtect, then flush the i-cache with
-	FlushInstructionCache (mandatory on Windows-on-ARM64; a harmless no-op-cost call on x64). freeExecutable hands the
-	page back with VirtualFree(MEM_RELEASE), whose second argument must be 0 for a release - so wordCount is ignored
-	here (it is part of the interface only because the POSIX munmap needs the length).
-
-	This needs no extra entitlement: unlike macOS' hardened runtime, a normal Windows process may VirtualAlloc executable
-	memory. The only environments that refuse are those with an explicit policy (e.g. Arbitrary Code Guard); there
-	makeExecutable returns 0 and the caller falls back to the interpreter.
+	Windows backend: allocate read/write, copy, VirtualProtect to read/execute, then FlushInstructionCache (required on
+	ARM64). No entitlement is needed; under a policy such as Arbitrary Code Guard makeExecutable returns 0.
 */
 
 #include "GAZLJitMem.h"

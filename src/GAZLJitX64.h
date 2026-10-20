@@ -29,169 +29,150 @@
 #include <map>
 #include <utility>
 #include <cstddef>
-#include "GAZLJit.h"			// JitCompiler base + AssembledProgram / EmittedModule, for JitCompilerX64 below
+#include "GAZLJit.h"
 
 namespace GAZL {
 
 /*
-	x86-64 general-purpose register, by 4-bit hardware encoding. The 32-bit view (`eax`..`r15d`) and the 64-bit view
-	(`rax`..`r15`) share the encoding; the emitter method (or a REX.W bit) picks the width. Numbers 8..15 (`r8`..`r15`)
-	need a REX prefix. `RSP`/`R12` as a memory base force a SIB byte; `RBP`/`R13` force a displacement - the memory
-	operand encoder handles both. SysV AMD64 (Darwin/Linux): int args RDI,RSI,RDX,RCX,R8,R9; return RAX; callee-saved
-	RBX,RBP,R12-R15.
+	x86-64 general-purpose register by 4-bit hardware encoding; the emitter method picks the 32- or 64-bit view.
+	`R8`..`R15` need a REX prefix. As a memory base, `RSP`/`R12` force a SIB byte and `RBP`/`R13` a displacement.
 */
 enum Reg {
 	RAX = 0, RCX = 1, RDX = 2, RBX = 3, RSP = 4, RBP = 5, RSI = 6, RDI = 7,
 	R8 = 8, R9 = 9, R10 = 10, R11 = 11, R12 = 12, R13 = 13, R14 = 14, R15 = 15
 };
 
-/*
-	x86 condition code (the low nibble of the Jcc / SETcc opcode). Signed compares use L/GE/LE/G; equality E/NE; unsigned
-	B/AE/BE/A. Chosen to mirror the interpreter's signed integer branches.
-*/
+// x86 condition code: the low nibble of the Jcc opcode.
 enum Cond {
 	CC_E = 0x4, CC_NE = 0x5, CC_L = 0xC, CC_GE = 0xD, CC_LE = 0xE, CC_G = 0xF,
-	CC_B = 0x2, CC_AE = 0x3, CC_BE = 0x6, CC_A = 0x7, CC_P = 0xA, CC_NP = 0xB,	// P/NP = parity (unordered) for float compares
-	CC_S = 0x8																	// sign (SF=1, result negative) - the fuel-timeout check
+	CC_B = 0x2, CC_AE = 0x3, CC_BE = 0x6, CC_A = 0x7, CC_P = 0xA, CC_NP = 0xB,	// P/NP: parity, set when a float compare is unordered
+	CC_S = 0x8																	// sign: the fuel-timeout check
 };
 
-// A branch target; `id` indexes the emitter's label table (-1 = invalid).
+// A branch target; `id` is -1 until `X64Emitter::newLabel()` allocates it.
 struct Label {
 	int id;
 	Label() : id(-1) {}
 };
 
 /*
-	Appends x86-64 machine code into a byte buffer. Unlike the fixed-width AArch64 emitter, x64 instructions are
-	variable length (REX? + opcode + ModRM + SIB? + disp? + imm?), so this works in bytes. Register-register forms use
-	the two-operand ISA (`dst OP= src`). Branches to `Label`s emit a rel32 placeholder and are patched by `finalize()`
-	after every `bind()`. 32-bit ops (default) match the interpreter's Int slots; `*Q` variants add REX.W for the
-	pointer-sized pinned registers (dsp, memory base). See GAZLJitArm64.h for the sibling backend.
+	Appends x86-64 machine code into a byte buffer. Register-register forms are two-operand (`dst OP= src`). Branches
+	emit a rel32 placeholder that `finalize()` patches once every label is bound. Ops are 32-bit unless named `*Q`
+	(64-bit, for pointers).
 */
 class X64Emitter {
 	public:
 		X64Emitter() {}
 
-		// --- moves / constants ---
-		void movImm(Reg rd, uint32_t imm);						// `mov rd(32), imm32` (zero-extends to 64)
-		void movImm64(Reg rd, uint64_t imm);					// `mov rd(64), imm64` (REX.W B8+rd io)
-		void mov(Reg rd, Reg rs);								// `mov rd, rs` (32-bit)
-		void movQ(Reg rd, Reg rs);								// `mov rd, rs` (64-bit)
+		void movImm(Reg rd, uint32_t imm);						// zero-extends to 64 bits
+		void movImm64(Reg rd, uint64_t imm);
+		void mov(Reg rd, Reg rs);
+		void movQ(Reg rd, Reg rs);
 
-		// --- integer arithmetic / logic (32-bit unless noted) ---
-		void add(Reg rd, Reg rs);								// `add rd, rs`
-		void sub(Reg rd, Reg rs);								// `sub rd, rs`
-		void imul(Reg rd, Reg rs);								// `imul rd, rs` (0F AF /r)
-		void and_(Reg rd, Reg rs);								// `and rd, rs`
-		void or_(Reg rd, Reg rs);								// `or rd, rs`
-		void xor_(Reg rd, Reg rs);								// `xor rd, rs`
-		void cmp(Reg ra, Reg rb);								// `cmp ra, rb` (sets flags)
-		void cmpQ(Reg ra, Reg rb);								// `cmp ra, rb` (64-bit; pointer compares - ipsp/dsend)
-		void addImm(Reg rd, uint32_t imm);						// `add rd, imm32` (81 /0)
-		void subImm(Reg rd, uint32_t imm);						// `sub rd, imm32` (81 /5)
-		void cmpImm(Reg ra, uint32_t imm);						// `cmp ra, imm32` (81 /7)
-		void addQ(Reg rd, Reg rs);								// `add rd, rs` (64-bit; pointer arithmetic)
-		void addImmQ(Reg rd, uint32_t imm);						// `add rd, imm32` (64-bit; advances the dsp pointer)
-		void neg(Reg rd);										// `neg rd` (F7 /3)
-		void cdq();												// `cdq` (99): sign-extend eax into edx before idiv
-		void idiv(Reg rs);										// `idiv rs` (F7 /7): edx:eax / rs -> eax quot, edx rem
-		void shlCl(Reg rd);										// `shl rd, cl`
-		void shrCl(Reg rd);										// `shr rd, cl` (logical)
-		void sarCl(Reg rd);										// `sar rd, cl` (arithmetic)
-		void shlImm(Reg rd, uint8_t n);							// `shl rd, imm8`
-		void shrImm(Reg rd, uint8_t n);							// `shr rd, imm8`
-		void sarImm(Reg rd, uint8_t n);							// `sar rd, imm8`
+		void add(Reg rd, Reg rs);
+		void sub(Reg rd, Reg rs);
+		void imul(Reg rd, Reg rs);
+		void and_(Reg rd, Reg rs);
+		void or_(Reg rd, Reg rs);
+		void xor_(Reg rd, Reg rs);
+		void cmp(Reg ra, Reg rb);
+		void cmpQ(Reg ra, Reg rb);
+		void addImm(Reg rd, uint32_t imm);
+		void subImm(Reg rd, uint32_t imm);
+		void cmpImm(Reg ra, uint32_t imm);
+		void addQ(Reg rd, Reg rs);
+		void addImmQ(Reg rd, uint32_t imm);
+		void neg(Reg rd);
+		void cdq();												// sign-extends eax into edx before `idiv`
+		void idiv(Reg rs);										// edx:eax / rs: quotient in eax, remainder in edx
+		void shlCl(Reg rd);
+		void shrCl(Reg rd);										// logical
+		void sarCl(Reg rd);										// arithmetic
+		void shlImm(Reg rd, uint8_t n);
+		void shrImm(Reg rd, uint8_t n);
+		void sarImm(Reg rd, uint8_t n);
 
-		// --- loads / stores off a base register + displacement ---
 		void load(Reg rd, Reg base, int32_t disp);				// `mov rd(32), [base + disp]`
 		void store(Reg base, int32_t disp, Reg rs);				// `mov [base + disp], rs(32)`
 		void loadQ(Reg rd, Reg base, int32_t disp);				// `mov rd(64), [base + disp]`
 		void storeQ(Reg base, int32_t disp, Reg rs);			// `mov [base + disp], rs(64)`
-		void loadIdx(Reg rd, Reg base, Reg index, int32_t disp);	// `mov rd(32), [base + index*4 + disp]` (SIB, scale 4)
+		void loadIdx(Reg rd, Reg base, Reg index, int32_t disp);	// `mov rd(32), [base + index*4 + disp]`
 		void storeIdx(Reg base, Reg index, int32_t disp, Reg rs);	// `mov [base + index*4 + disp], rs(32)`
-		void subQ(Reg rd, Reg rs);								// `sub rd, rs` (64-bit; pointer difference for ADRL)
+		void subQ(Reg rd, Reg rs);
 
-		// --- SSE scalar single-precision floats (XMM operands reuse the Reg 0..15 encodings, a separate file from GP) ---
-		void movssLoad(Reg xd, Reg base, int32_t disp);			// `movss xd, [base + disp]` (F3 0F 10)
-		void movssStore(Reg base, int32_t disp, Reg xs);		// `movss [base + disp], xs` (F3 0F 11)
-		void movssReg(Reg xd, Reg xs);							// `movss xd, xs` (xmm register-to-register copy)
-		void addss(Reg xd, Reg xs);								// `addss xd, xs`
-		void subss(Reg xd, Reg xs);								// `subss xd, xs`
-		void mulss(Reg xd, Reg xs);								// `mulss xd, xs`
-		void divss(Reg xd, Reg xs);								// `divss xd, xs`
-		void ucomiss(Reg xa, Reg xb);							// `ucomiss xa, xb` (sets EFLAGS for a float compare)
-		void cvttss2si(Reg rd, Reg xs);							// `cvttss2si rd, xs` (float -> int, truncate; FTOI)
-		void xorps(Reg xd, Reg xs);								// `xorps xd, xs` (xd == xs zeroes xd, breaking merge false-deps)
-		void andps(Reg xd, Reg xs);								// `andps xd, xs` (ABSF: clears the sign bit against a pooled 0x7FFFFFFF mask)
-		void cvtsi2ss(Reg xd, Reg rs);							// `cvtsi2ss xd, rs` (int -> float; ITOF)
-		void movdToXmm(Reg xd, Reg rs);							// `movd xd, rs` (bit-copy int -> xmm; float const load)
-		void movdFromXmm(Reg rd, Reg xs);						// `movd rd, xs` (bit-copy xmm -> int; FTOI saturation)
-		void roundss(Reg xd, Reg xs, uint8_t mode);				// `roundss xd, xs, imm8` (SSE4.1; mode 1 = floor; FLOF)
-		void movssRip(Reg xd, Label literal);					// `movss xd, [rip + literal]` (F3 0F 10, mod=00 rm=101) - pooled float constant load
+		// SSE scalar floats: XMM operands reuse the `Reg` encodings 0..15 (a separate register file).
+		void movssLoad(Reg xd, Reg base, int32_t disp);
+		void movssStore(Reg base, int32_t disp, Reg xs);
+		void movssReg(Reg xd, Reg xs);							// register copy, encoded as `movaps`
+		void addss(Reg xd, Reg xs);
+		void subss(Reg xd, Reg xs);
+		void mulss(Reg xd, Reg xs);
+		void divss(Reg xd, Reg xs);
+		void ucomiss(Reg xa, Reg xb);
+		void cvttss2si(Reg rd, Reg xs);							// float to int, truncating
+		void xorps(Reg xd, Reg xs);								// with xd == xs, zeroes xd and breaks merge false dependencies
+		void andps(Reg xd, Reg xs);
+		void cvtsi2ss(Reg xd, Reg rs);
+		void movdToXmm(Reg xd, Reg rs);							// bit copy
+		void movdFromXmm(Reg rd, Reg xs);						// bit copy
+		void roundss(Reg xd, Reg xs, uint8_t mode);				// SSE4.1; mode 1 = floor
+		void movssRip(Reg xd, Label literal);					// `movss xd, [rip + literal]`: pooled constant load
 
-		// --- stack / control ---
-		void push(Reg r);										// `push r` (50+rd, REX.B for r8-15)
-		void pop(Reg r);										// `pop r`  (58+rd)
-		void nop();												// `nop` (0x90)
-		void cld();												// `cld` (FC): clear direction flag (forward string ops)
-		void repMovsd();										// `rep movsd` (F3 A5): copy ecx dwords [rsi]->[rdi] (COPY)
-		void ret();												// `ret` (C3)
-		void jmp(Label target);									// `jmp rel32` (E9)
-		void jcc(Cond cc, Label target);						// `j<cc> rel32` (0F 8x)
-		void callRel(Label target);								// `call rel32` (E8) - GAZL->GAZL direct call
-		void callReg(Reg r);									// `call r` (FF /2) - indirect / native via a materialized pointer
-		void leaRip(Reg rd, Label target);						// `lea rd, [rip + target]` (48 8D /r rel32) - jump-table base
-		void jmpReg(Reg r);										// `jmp r` (FF /4) - computed jump into the SWCH table
+		void push(Reg r);
+		void pop(Reg r);
+		void nop();
+		void cld();
+		void repMovsd();										// copies ecx dwords from [rsi] to [rdi]; clobbers rcx, rsi, rdi
+		void ret();
+		void jmp(Label target);
+		void jcc(Cond cc, Label target);
+		void callRel(Label target);
+		void callReg(Reg r);
+		void leaRip(Reg rd, Label target);						// `lea rd, [rip + target]` (64-bit)
+		void jmpReg(Reg r);
 
-		// --- labels / fixups ---
-		Label newLabel();										// allocate an unbound label
-		void bind(Label label);									// position `label` at the current emit point
-		void finalize();										// patch all rel32 branch displacements to bound labels
-		void alignTo(size_t boundary);							// nop-pad to a power-of-2 boundary (function entries; never executed)
+		Label newLabel();										// unbound until `bind()`
+		void bind(Label label);									// binds `label` to the current emit point
+		void finalize();										// patches every rel32; all labels must be bound
+		void alignTo(size_t boundary);							// nop-pads to a power-of-2 boundary
 
-		// --- float literal pool ---
-		Label floatLiteral(uint32_t bits);						// label for a pooled float constant (bit pattern; deduplicated)
-		void emitLiteralPool();									// append the pool 4-aligned at the current emit point; once, before finalize()
+		Label floatLiteral(uint32_t bits);						// pooled and deduplicated by bit pattern
+		void emitLiteralPool();									// once, after all code and before `finalize()`
 
-		// --- buffer access ---
 		const uint8_t* code() const { return bytes.empty() ? 0 : &bytes[0]; }
-		size_t size() const { return bytes.size(); }			// emitted byte count
-		ptrdiff_t labelOffset(Label l) const { return labelTargets[l.id]; }	// bound byte offset (after bind); for entry tables
+		size_t size() const { return bytes.size(); }
+		ptrdiff_t labelOffset(Label l) const { return labelTargets[l.id]; }	// byte offset; `l` must be bound
 
 	private:
 		struct Fixup {
-			size_t site;										// byte offset of the rel32 field to patch
+			size_t site;										// byte offset of the rel32 field
 			int labelId;
 		};
 
 		void b(uint8_t v) { bytes.push_back(v); }
-		void d32(uint32_t v);									// little-endian 32-bit
+		void d32(uint32_t v);									// little-endian
 		void d64(uint64_t v);
-		void rex(bool w, int reg, int base);					// emit REX iff needed (W, or reg/base extended)
-		void modrmReg(int reg, int rm);							// mod=11 register-direct
-		void memOperand(int reg, Reg base, int32_t disp);		// ModRM (+SIB +disp) for [base + disp]
-		void memOperandIdx(int reg, Reg base, Reg index, int32_t disp);	// ModRM+SIB for [base + index*4 + disp]
-		void rex3(bool w, int reg, int index, int base);		// REX with an index field (REX.X) too
-		void sseRR(uint8_t prefix, uint8_t opcode, int reg, int rm);	// [prefix] REX? 0F opcode  register-direct SSE form
-		void aluImm(int ext, Reg rd, uint32_t imm);				// 81 /ext id  (ext selects add/sub/cmp/...)
-		void relBranch(int labelId);							// emit a rel32 placeholder + record a fixup
+		void rex(bool w, int reg, int base);					// emitted only when needed
+		void modrmReg(int reg, int rm);
+		void memOperand(int reg, Reg base, int32_t disp);
+		void memOperandIdx(int reg, Reg base, Reg index, int32_t disp);
+		void rex3(bool w, int reg, int index, int base);		// `rex()` plus REX.X for an index register
+		void sseRR(uint8_t prefix, uint8_t opcode, int reg, int rm);
+		void aluImm(int ext, Reg rd, uint32_t imm);				// 81 /ext id
+		void relBranch(int labelId);
 
 		std::vector<uint8_t> bytes;
-		std::vector<ptrdiff_t> labelTargets;					// per-label bound byte offset, or -1 while unbound
+		std::vector<ptrdiff_t> labelTargets;					// -1 while unbound
 		std::vector<Fixup> fixups;
-		std::vector< std::pair<uint32_t, Label> > literals;		// pooled float constants, in first-use order
-		std::map<uint32_t, int> literalIndex;					// bits -> index into `literals` (deduplication)
+		std::vector< std::pair<uint32_t, Label> > literals;		// in first-use order
+		std::map<uint32_t, int> literalIndex;					// bits -> index into `literals`
 };
 
-/*
-	The x86-64 JIT backend. JitCompilerX64 drives the X64Emitter above through the lowering pass in GAZLJitX64.cpp,
-	implementing JitCompiler::compile(). Declared here so it is nameable (e.g. a codegen test that emits and inspects a backend's
-	bytes). NativeJitCompiler (in GAZLJit.h) creates this backend on an x86-64 host; its constructor lives in GAZLJitX64.cpp.
-*/
+// The x86-64 JIT backend, nameable on any host; `NativeJitCompiler` uses it on an x86-64 host.
 class JitCompilerX64 : public JitCompiler {
 	public:		virtual void compile(const AssembledProgram& program, JitModule& out);
 	private:	static void lowerFunction(X64Emitter& emitter, const AssembledProgram& program, UInt funcStart
-						, UInt funcEnd, const Offsets& offsets, const std::vector<Label>& entryLabels, Label epilogue);	// calls the inherited fuel/opcode helpers
+						, UInt funcEnd, const Offsets& offsets, const std::vector<Label>& entryLabels, Label epilogue);
 };
 
 } // namespace GAZL

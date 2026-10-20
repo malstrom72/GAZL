@@ -22,12 +22,9 @@
 */
 
 /*
-	GAZLJitArm64 is the arm64 backend for the GAZL VM JIT: the AArch64 machine-code assembler (`Arm64Emitter`). It is a
-	tiny one-method-per-instruction encoder with one canonical encoding form per operation: it only produces bytes and does
-	not touch the interpreter. Verified against a clang-assembled oracle. The arch-neutral JIT API (JitModule /
-	JitProcessor / JitCompiler) lives in GAZLJit.h; the arm64 lowering pass + native dispatcher that drive this emitter,
-	plus JitCompilerArm64 (declared below), live in GAZLJitArm64.cpp. The diff test still links GAZL.cpp - the backend TU's
-	lowering throws GAZL::JitException, whose base vtable is anchored there. See design/jit/JitEmitterHandoff.md.
+	The arm64 JIT backend: an AArch64 encoder (`Arm64Emitter`, one method per instruction, one encoding form per
+	operation) and `JitCompilerArm64`, whose lowering pass lives in GAZLJitArm64.cpp. The arch-neutral JIT API is in
+	GAZLJit.h. See design/jit/JitEmitterHandoff.md.
 */
 
 #ifndef GAZLJitArm64_h
@@ -37,15 +34,13 @@
 #include <cstddef>
 #include <vector>
 #include "GAZL.h"
-#include "GAZLJit.h"			// JitCompiler base + AssembledProgram / EmittedModule, for JitCompilerArm64 below
+#include "GAZLJit.h"
 
 namespace GAZL {
 
 /*
-	AArch64 register operand. The integer file (`Wn`/`Xn`) and the FP/SIMD scalar file (`Sn`) share the same 5-bit
-	encoding slot, so `X<n>` and `S<n>` are just readable aliases for the same number as `W<n>`; the emitter method
-	picks the width. Number 31 means `WZR`/`XZR` in data-processing slots and `SP` in a base-register slot (never used
-	here). See design/jit/JitEmitterHandoff.md.
+	AArch64 register number; `X<n>` and `S<n>` alias `W<n>` and the emitter method picks the width. Number 31 is
+	`WZR`/`XZR` in data-processing slots but `SP` in a base-register slot.
 */
 enum Reg {
 	W0 = 0, W1, W2, W3, W4, W5, W6, W7, W8, W9, W10, W11, W12, W13, W14, W15,
@@ -59,37 +54,27 @@ const Reg X19 = static_cast<Reg>(19), X20 = static_cast<Reg>(20), X21 = static_c
 const Reg X30 = static_cast<Reg>(30), XZR = static_cast<Reg>(31), SP = static_cast<Reg>(31);
 
 const Reg S0 = static_cast<Reg>(0), S1 = static_cast<Reg>(1), S2 = static_cast<Reg>(2), S3 = static_cast<Reg>(3);
-const Reg S22 = static_cast<Reg>(22);															// in ARM64_FLOAT_POOL (V16-V23); the emitter oracle uses it so both register fields exceed 15
+const Reg S22 = static_cast<Reg>(22);															// lets the emitter oracle test register fields above 15
 
-/*
-	AArch64 condition codes (the 4-bit field of `B.cond`). Only the ones the first kernel and its bounds/fuel checks use
-	are named here.
-*/
-enum Cond {
+enum Cond {																						// AArch64 condition codes (the 4-bit field of `b.cond`)
 	EQ = 0, NE = 1, HS = 2, LO = 3, MI = 4, PL = 5, VS = 6, VC = 7,
 	HI = 8, LS = 9, GE = 10, LT = 11, GT = 12, LE = 13, AL = 14
 };
 
-/*
-	A branch target. Created with `Arm64Emitter::newLabel()`, positioned with `Arm64Emitter::bind()`, and referenced by
-	branch methods. Forward references are recorded as fixups while emitting and patched by `Arm64Emitter::finalize()`.
-*/
-struct Label {
+struct Label {																					// branch target from `Arm64Emitter::newLabel()`
 	int id;
 };
 
 /*
-	Appends AArch64 machine code, one instruction word per method call, into a `uint32_t` buffer. Register + condition
-	operands select fields that are OR-ed into a per-op base opcode. Labels and a forward-reference fixup pass provide
-	PC-relative branches; call `finalize()` once (after every `bind()`) to patch branch displacements before reading the
-	`code()` bytes.
+	Appends one AArch64 instruction word per method call. Call `finalize()` once, after every `bind()`, to patch branch
+	displacements before reading `code()`.
 */
 class Arm64Emitter {
 	public:
 		Arm64Emitter() {}
 
 		// --- moves / constant materialization ---
-		void movz(Reg wd, uint16_t imm16, unsigned shift = 0);	// `movz wd, #imm16 [, lsl #shift]` (shift ∈ {0,16})
+		void movz(Reg wd, uint16_t imm16, unsigned shift = 0);	// `movz wd, #imm16 [, lsl #shift]` (shift 0 or 16)
 		void movk(Reg wd, uint16_t imm16, unsigned shift = 0);	// `movk wd, #imm16 [, lsl #shift]`
 		void movn(Reg wd, uint16_t imm16, unsigned shift = 0);	// `movn wd, #imm16 [, lsl #shift]`
 		void mov(Reg wd, Reg wm);								// `mov wd, wm` (register move; `orr wd, wzr, wm`)
@@ -105,7 +90,7 @@ class Arm64Emitter {
 		void cmp(Reg wn, Reg wm);								// `cmp wn, wm` (`subs wzr, wn, wm`)
 		void cmpImm(Reg wn, uint32_t imm12);					// `cmp wn, #imm12` (`subs wzr, wn, #imm12`)
 		void mul(Reg wd, Reg wn, Reg wm);						// `mul wd, wn, wm` (`madd wd, wn, wm, wzr`)
-		void sdiv(Reg wd, Reg wn, Reg wm);						// `sdiv wd, wn, wm` (signed; INT_MIN/-1 → INT_MIN, no trap)
+		void sdiv(Reg wd, Reg wn, Reg wm);						// `sdiv wd, wn, wm` (INT_MIN / -1 gives INT_MIN, no trap)
 		void msub(Reg wd, Reg wn, Reg wm, Reg wa);				// `msub wd, wn, wm, wa` = wa - wn*wm (for modulo)
 		void lslv(Reg wd, Reg wn, Reg wm);						// `lsl wd, wn, wm` (register count, masked mod 32)
 		void lsrv(Reg wd, Reg wn, Reg wm);						// `lsr wd, wn, wm`
@@ -131,7 +116,7 @@ class Arm64Emitter {
 		void ldrX(Reg xt, Reg xn, uint32_t byteOffset);			// `ldr xt, [xn, #byteOffset]` (offset scaled by 8)
 		void strX(Reg xt, Reg xn, uint32_t byteOffset);			// `str xt, [xn, #byteOffset]`
 		void ldrXr(Reg xt, Reg xn, Reg wm);						// `ldr xt, [xn, wm, uxtw #3]` (8-byte-scaled table index)
-		void adr(Reg xd, Label target);							// `adr xd, target` (PC-relative address, ±1 MiB)
+		void adr(Reg xd, Label target);							// `adr xd, target` (PC-relative, within 1 MiB)
 
 		// --- 64-bit address arithmetic / test (for the pinned dsp / ipsp pointers) ---
 		void addImmX(Reg xd, Reg xn, uint32_t imm12);			// `add xd, xn, #imm12` (64-bit)
@@ -147,12 +132,12 @@ class Arm64Emitter {
 		void fsubS(Reg sd, Reg sn, Reg sm);						// `fsub sd, sn, sm`
 		void fdivS(Reg sd, Reg sn, Reg sm);						// `fdiv sd, sn, sm`
 		void fcmpS(Reg sn, Reg sm);								// `fcmp sn, sm` (sets NZCV for a float compare)
-		void fabsS(Reg sd, Reg sn);								// `fabs sd, sn` (single-precision absolute value; ABSf)
-		void frintmS(Reg sd, Reg sn);							// `frintm sd, sn` (round toward -inf = floorf; FLOf)
-		void fcvtzs(Reg wd, Reg sn);							// `fcvtzs wd, sn` (FTOI, round toward zero, saturating)
-		void scvtf(Reg sd, Reg wn);								// `scvtf sd, wn` (ITOF)
-		void fmovSW(Reg sd, Reg wn);							// `fmov sd, wn` (bit-copy int→float reg; float const load)
-		void fmovWS(Reg wd, Reg sn);							// `fmov wd, sn` (bit-copy float reg -> int; the cross-file bridge's other direction)
+		void fabsS(Reg sd, Reg sn);								// `fabs sd, sn`
+		void frintmS(Reg sd, Reg sn);							// `frintm sd, sn` (round toward -inf, i.e. floorf)
+		void fcvtzs(Reg wd, Reg sn);							// `fcvtzs wd, sn` (round toward zero, saturating)
+		void scvtf(Reg sd, Reg wn);								// `scvtf sd, wn`
+		void fmovSW(Reg sd, Reg wn);							// `fmov sd, wn` (bit copy)
+		void fmovWS(Reg wd, Reg sn);							// `fmov wd, sn` (bit copy)
 		void ldrS(Reg st, Reg xn, uint32_t byteOffset);			// `ldr st, [xn, #byteOffset]`
 		void strS(Reg st, Reg xn, uint32_t byteOffset);			// `str st, [xn, #byteOffset]`
 		void ldurS(Reg st, Reg xn, int simm9);					// `ldur st, [xn, #simm9]` (signed offset; float frame slot)
@@ -180,7 +165,7 @@ class Arm64Emitter {
 		ptrdiff_t labelOffset(Label l) const { return labelTargets[l.id]; }	// bound word index (after bind); for entry tables
 
 	private:
-		enum FixupKind { FIXUP_IMM26, FIXUP_IMM19, FIXUP_ADR };	// `b`→imm26; `b.cond`/`cbz`/`cbnz`→imm19; `adr`→imm21
+		enum FixupKind { FIXUP_IMM26, FIXUP_IMM19, FIXUP_ADR };	// imm26 for `b`; imm19 for `b.cond`, `cbz`, `cbnz`; imm21 for `adr`
 		struct Fixup {
 			size_t site;										// index (in words) of the branch instruction to patch
 			int labelId;										// which label it targets
@@ -196,14 +181,12 @@ class Arm64Emitter {
 };
 
 /*
-	The arm64 JIT backend. JitCompilerArm64 drives the Arm64Emitter above through the lowering pass in GAZLJitArm64.cpp,
-	implementing JitCompiler::compile(). Declared here so it is nameable (e.g. a codegen test that emits and inspects a backend's
-	bytes). NativeJitCompiler (in GAZLJit.h) creates this backend on an arm64 host; its constructor lives in GAZLJitArm64.cpp.
+	The arm64 JIT backend, created by `NativeJitCompiler` on an arm64 host. Declared here so codegen tests can name it.
 */
 class JitCompilerArm64 : public JitCompiler {
 	public:		virtual void compile(const AssembledProgram& program, JitModule& out);
 	private:	static void lowerFunction(Arm64Emitter& e, const AssembledProgram& program, UInt funcIndex, UInt funcEnd
-						, const Offsets& o, std::vector<Label>& entryLabels, UInt selfOrdinal, Label exitLabel);	// calls the inherited fuel/opcode helpers
+						, const Offsets& o, std::vector<Label>& entryLabels, UInt selfOrdinal, Label exitLabel);
 };
 
 } // namespace GAZL
