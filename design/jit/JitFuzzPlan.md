@@ -115,7 +115,7 @@ assert all four (status, image) are identical          // interp-full is the ora
 The four-way cross (interp/jit x full/tiny) also proves suspend/resume transparency on both engines for free. On a
 mismatch: print the generated source + inputs + the first diverging word, then `abort()`.
 
-Engine construction (current API): interpreter `Processor p = interpreter(program, NATIVE_TABLE)` in GAZLCmd;
+Engine construction (current API): interpreter `Processor p(program, CALL_STACK_SIZE, callStack, NATIVE_TABLE, 0)`;
 JIT `NativeJitCompiler().compile(program, module)` then `JitProcessor jp(module, program, ...)`. Both drive the same
 host loop and the same native table.
 

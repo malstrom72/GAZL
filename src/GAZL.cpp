@@ -1782,6 +1782,38 @@ Processor::Processor(UInt codeSize, const Instruction* code, UInt functionCount,
 	assert(ipStack != 0);
 }
 
+// These two repeat the memory layout of the two constructors above; change them together.
+Processor::Processor(const AssembledProgram& program, UInt ipStackSize, CallStackEntry* ipStack
+		, NativeFunc const* natives, void* userData)
+		: codeSize(program.codeSize), codeBase(program.code), functionCount(program.functionCount)
+		, functionTable(program.functionTable), memorySize(program.memorySize - 1), memoryBase(program.memory)
+		, constantsSize(program.constsSize - 1), readOffset(constantsSize - MEMORY_OFFSET)
+		, rwMemorySize(program.memorySize - program.constsSize)
+		, dataStackBase(program.memory + constantsSize + program.globalsSize)
+		, dataStackEnd(program.memory + program.memorySize - 1), ipStackBase(ipStack), ipStackEnd(ipStack + ipStackSize)
+		, natives(natives), clockCyclesLeft(0x7FFFFFFFU), ip(program.code), dsp(dataStackBase), ipsp(ipStackBase)
+		, userData(userData), resume(0) {
+	assert(program.constsSize >= 1 && program.globalsSize + program.constsSize <= program.memorySize);
+	assert(program.code != 0);
+	assert(program.memory != 0);
+	assert(ipStack != 0);
+}
+
+Processor::Processor(const AssembledProgram& program, UInt rwMemorySize, UInt dataStackOffset, UInt dataStackSize
+		, UInt ipStackSize, CallStackEntry* ipStack, NativeFunc const* natives, void* userData)
+		: codeSize(program.codeSize), codeBase(program.code), functionCount(program.functionCount)
+		, functionTable(program.functionTable), memorySize(program.memorySize - 1), memoryBase(program.memory)
+		, constantsSize(program.constsSize - 1), readOffset(constantsSize - MEMORY_OFFSET), rwMemorySize(rwMemorySize)
+		, dataStackBase(program.memory + constantsSize + dataStackOffset)
+		, dataStackEnd(program.memory + constantsSize + dataStackOffset + dataStackSize), ipStackBase(ipStack)
+		, ipStackEnd(ipStack + ipStackSize), natives(natives), clockCyclesLeft(0x7FFFFFFFU), ip(program.code)
+		, dsp(dataStackBase), ipsp(ipStackBase), userData(userData), resume(0) {
+	assert(program.constsSize >= 1 && program.constsSize - 1 + rwMemorySize <= program.memorySize - 1);
+	assert(dataStackOffset + dataStackSize <= rwMemorySize);
+	assert(program.code != 0);
+	assert(program.memory != 0);
+	assert(ipStack != 0);
+}
 
 #define V0 (dsp[ip->p0.i])
 #define V1 (dsp[ip->p1.i])
