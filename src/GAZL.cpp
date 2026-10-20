@@ -378,7 +378,7 @@ const int VAR_PTR_R			= 0x00020 | TRANSIENT;		// Readable pointer variable.
 const int VAR_PTR_W			= 0x00040 | TRANSIENT;		// Writable pointer variable.
 const int VAR_TGT_R			= 0x100000 | TRANSIENT;		// Readable call-target variable (GAZL 2 `t`).
 const int VAR_TGT_W			= 0x200000 | TRANSIENT;		// Writable call-target variable.
-const int ANY_VAR_R			= VAR_INT_R | VAR_FLOAT_R | VAR_PTR_R | VAR_TGT_R;		// VAR_TGT joins so PEEK/POKE/GETL/SETL carry targets with zero new rows - memory stays typeless, exactly as for i/f/p.
+const int ANY_VAR_R			= VAR_INT_R | VAR_FLOAT_R | VAR_PTR_R | VAR_TGT_R;		// so PEEK/POKE/GETL/SETL carry targets too: memory is typeless
 const int ANY_VAR_W			= VAR_INT_W | VAR_FLOAT_W | VAR_PTR_W | VAR_TGT_W;
 const int ANY_VAR			= ANY_VAR_R | ANY_VAR_W;
 const int CONST_INT_P		= 0x00080;					// Constant positive (or zero) integer.
@@ -406,12 +406,8 @@ const int FREE_ADDRESS		= ADDRESS | UNCHECKED_ADDRESS;
 const int FWD_FREE			= FREE_ADDRESS | FORWARD;
 const int FWD_FREE_W		= ADDRESS_W | UNCHECKED_ADDRESS | FORWARD;
 const int FWD_FREE_R		= ADDRESS_R | UNCHECKED_ADDRESS | FORWARD;
-// THE GAZL 2 SPLIT (design/gazl/GAZL2FunctionPointers.md). `ANY_FREE` keeps `FUNC` unchanged: the split
-// happens because inside a `GAZL #2` region a FUNC declaration mints `TARGET` instead of `FUNC`, so its
-// `&function` never matches a `p` position - and `parseOperand` additionally strips `FUNC` from every
-// ADDRESS-carrying position there, so no `p` position takes ANY function constant inside a region. The
-// `t` rows accept only `TGT_*` and, like every GAZL 2 word, are `GAZL_2_ONLY`. `CALL` accepts
-// FUNC | TARGET, so cross-dialect calls always work.
+// A function declared in a `GAZL #2` region is a `TARGET`, never `FUNC`, so it cannot enter a `p` position
+// (design/gazl/GAZL2FunctionPointers.md). `CALL` takes both, so calls work across dialects.
 const int ANY_FREE			= NULL_PTR | FREE_ADDRESS | FUNC;
 const int ANY_FWD_FREE		= ANY_FREE | FORWARD;
 const int TGT_FREE			= NULL_PTR | TARGET;
@@ -464,8 +460,6 @@ static const Operator OPERATORS[] = {
 	, { " CALL_cvs", CALL_CVC,	{ FUNC|TARGET|FORWARD, TRANSIENT, CONST_INT_P	}		, LOCAL_BOUNDS	, 0				}
 	, { " CALL_n__", CALL_NVC,	{ NATIVE|FORWARD, 0			, 0				}		, 0				, 0				}
 	, { " CALL_nvs", CALL_NVC,	{ NATIVE|FORWARD, TRANSIENT	, CONST_INT_P	}		, LOCAL_BOUNDS	, 0				}
-	// GAZL 2: these take the generic VAR_PTR_R, so an INDIRECT call cannot demand a function pointer - only
-	// CALL_c__ above (FUNC | FORWARD) discriminates. Retype to `t`. See design/gazl/GAZL2FunctionPointers.md.
 	, { " CALL_v__", CALL_VVC,	{ VAR_PTR_R|VAR_TGT_R, 0		, 0				}		, 0				, 0				}
 	, { " CALL_vvs", CALL_VVC,	{ VAR_PTR_R|VAR_TGT_R, TRANSIENT, CONST_INT_P	}		, LOCAL_BOUNDS	, 0				}
 	, { " CNST_s__", CNST____,	{ CONST_INT_P	, 0				, 0				}		, 0				, ADDRESS_R		}
@@ -476,8 +470,6 @@ static const Operator OPERATORS[] = {
 	, { " DATA_c__", DATA____,	{ KONST			, 0				, 0				}		, 0				, 0				}
 	, { " DATf_c__", DATA____,	{ CONST_FLOAT	, 0				, 0				}		, 0				, 0				}
 	, { " DATi_c__", DATA____,	{ CONST_INT		, 0				, 0				}		, 0				, 0				}
-	// GAZL 2: ANY_FWD_FREE lets one DATp row mix function and data addresses indistinguishably
-	// (`DATp &func &data` assembles). Needs a sibling DATt. See design/gazl/GAZL2FunctionPointers.md.
 	, { " DATp_c__", DATA____,	{ ANY_FWD_FREE	, 0				, 0				}		, 0				, 0				}
 	, { " DATs____", DATA____,	{ 0				, 0				, 0				}		, 0				, 0				}
 	, { " DATt_c__", DATA____,	{ TGT_FWD_FREE	, 0				, 0				}		, GAZL_2_ONLY	, 0				}
@@ -919,7 +911,7 @@ Target Symbols::findFunction(const Char* name) const {
 	const Char* nameBegin = name;
 	const Char* nameEnd = name + strlen(name);
 	if (!isValidIdentifier(nameBegin, nameEnd)) return NULL_TARGET;
-	if (!lookup(nameBegin, nameEnd, FUNC | TARGET, types, value)) return NULL_TARGET;	// the host-boundary CALL: like the CALL rows, it takes either dialect's functions
+	if (!lookup(nameBegin, nameEnd, FUNC | TARGET, types, value)) return NULL_TARGET;	// a function of either dialect, as `CALL` takes
 	return value.t;
 }
 
@@ -1119,7 +1111,7 @@ Assembler::Operand Assembler::parseOperand(const Char* b, const Char* e, int acc
 		case '&':	if (dialect >= 2) {
 						accepts &= ~(CONST_INT | CONST_FLOAT);	// inside a GAZL 2 region `&` names only pointers
 						if ((accepts & ADDRESS) != 0) {
-							accepts &= ~FUNC;			// nor does a data-pointer position take a function constant, not even a GAZL 1 one (CALL takes no ADDRESS, so calls across dialects stay legal)
+							accepts &= ~FUNC;			// and a data pointer never names a function, not even a GAZL 1 one
 						}
 					}
 					if ((accepts & (ADDRESS | FUNC | TARGET)) == 0) throw Exception(DID_NOT_EXPECT_ADDRESS, b, e);
@@ -1203,22 +1195,13 @@ void Assembler::finalizeFunction() {
 	locals.clear();
 }
 
-/* Branch threading and return duplication (design/gazl/GAZLAssemblerOptimizations.md items 4 and 5), run once
-   every symbol is resolved. Both are IN-PLACE rewrites of an opcode or a displacement, so nothing moves,
-   no address shifts and nothing needs re-patching - which is what makes them cheap, and what makes the
-   removal variants (dropping the dead GOTO, dropping a now-unreferenced label) expensive enough to skip.
-   Impala collapses the chains its own walk can see, but that walk resolves aliases in one direction, so
-   a chain written the other way survives; hand-written GAZL gets no such pass at all. Every surviving
-   hop is paid on every execution - measured 1.97x for a 3-hop chain against an instruction ratio of
-   exactly 2, so nothing short-circuits it at run time. */
+/*
+	Branch threading and return duplication (design/gazl/GAZLAssemblerOptimizations.md items 4 and 5). Both rewrite an
+	opcode or a displacement in place, so no address moves and nothing needs patching.
+*/
 void Assembler::threadBranches() {
-	/* Which operand of an opcode is a RELATIVE branch displacement, or -1 for none. Derived from the same
-	   OPERATORS table the assembler parses with, so a future branching opcode is covered by declaring its
-	   operand `BRANCH` and doing nothing else; `BRANCH_IS_TABLE` (SWCH: a jump-table BASE in memory, not a
-	   displacement) is the one exception, and it rides the table too. The assemble-time directives
-	   (`! GOTO`, `! IFDF`, `! IFND`) need no exclusion - they never reach the code array. */
 	const int OPCODE_SPAN = DEFI____ - FIRST_OPCODE_VALUE + 1;
-	int slots[OPCODE_SPAN];
+	int slots[OPCODE_SPAN];																		// which operand is a relative branch, from the table, or -1
 	for (int i = 0; i < OPCODE_SPAN; ++i) slots[i] = -1;
 	for (int i = 0; i < OPERATOR_COUNT; ++i) {
 		if ((OPERATORS[i].otherFlags & BRANCH_IS_TABLE) != 0) continue;
@@ -1255,7 +1238,7 @@ void Assembler::closeDataRegion() {
 	const Int b = regionStart;
 	const Int e = (regionExtent < 0 ? (Int)(dataPointer - sectionBegin) : regionStart + regionExtent);
 	if (e == b) return;
-	const std::pair<Int, Int> claim(b, e);				// kept sorted by start, so overlap is a neighbour test, not a scan (--gazl2 mints a region per leaf field)
+	const std::pair<Int, Int> claim(b, e);				// kept sorted by start, so overlap is a neighbour test
 	const std::vector< std::pair<Int, Int> >::iterator it
 			= std::lower_bound(dataRegions.begin(), dataRegions.end(), claim);
 	if ((it != dataRegions.end() && it->first < e) || (it != dataRegions.begin() && (it - 1)->second > b))
@@ -1265,7 +1248,7 @@ void Assembler::closeDataRegion() {
 
 void Assembler::finalize(ProgramSizes& sizes) {
 	newUnit(0);
-	if (dialect != 1) throw Exception(UNCLOSED_GAZL_REGION);	// so a truncated GAZL 2 unit cannot pass, and a following concatenated unit always starts in the default
+	if (dialect != 1) throw Exception(UNCLOSED_GAZL_REGION);	// so a unit concatenated after this one starts in GAZL 1
 	threadBranches();
 	closeDataRegion();
 	closeDataSection();
@@ -1579,7 +1562,7 @@ const Char* Assembler::feed(const Char* line) {
 			case CNST____:	v.i = 1;
 							parseOperand(op0Begin, op0End, op->accepts[0], &v);
 							size = v.i;
-							closeDataRegion();									// The previous section's last region gets its overlap check while `dataLabel` still names it.
+							closeDataRegion();									// while `dataLabel` still names the previous section
 							closeDataSection();
 							dataLabel = std::string(labelBegin, labelEnd);
 							dataLabelType = op->declareTypes;
@@ -1595,17 +1578,17 @@ const Char* Assembler::feed(const Char* line) {
 							dataEnd = dataPointer + size;
 							sectionBegin = dataPointer;
 							sectionEnd = dataEnd;
-							memset(dataPointer, 0, size * sizeof (*dataPointer));	// The whole section up front (not the tail at close): a SPAN can leave the cursor below words already written.
+							memset(dataPointer, 0, size * sizeof (*dataPointer));	// up front: a SPAN can move the cursor below words already written
 							dataRegions.clear();
 							regionStart = 0;
-							regionExtent = -1;									// The implicit region: offset 0, claims what it writes, fenced by the section end - GAZL 1 verbatim.
+							regionExtent = -1;									// the implicit region: from offset 0, claiming what it writes
 							dataIsConstant = (op->opcode != GLOB____);
 							if (labelBegin != labelEnd) declareData(labelBegin, labelEnd, dataPointer, size);
 							break;
 
 			case GAZL____:	parseOperand(op0Begin, op0End, op->accepts[0], &v);											// GAZL
 							if (v.i < 1 || v.i > VERSION) throw Exception(UNSUPPORTED_GAZL_VERSION);
-							dialect = (int)(v.i);								// A mode, not a bracket: `GAZL #2` opens a region, `GAZL #1` restores the default - which is how concatenated units compose in any order. finalize() insists the file ends restored.
+							dialect = (int)(v.i);								// a mode, not a bracket, so concatenated units compose in any order
 							break;
 
 			case SPAN____:	{																							// SPAN
@@ -1619,7 +1602,7 @@ const Char* Assembler::feed(const Char* line) {
 									throw Exception(OFFSET_OUT_OF_BOUNDS, dataLabel);
 								dataPointer = sectionBegin + regionStart;
 								dataEnd = dataPointer + regionExtent;
-								declareData(labelBegin, labelEnd, dataPointer, static_cast<UInt>(dataEnd - dataPointer));	// an ordinary data label at the region's first word, declaring the region
+								declareData(labelBegin, labelEnd, dataPointer, static_cast<UInt>(dataEnd - dataPointer));	// an ordinary data label on the region's first word
 								break;
 							}
 					
@@ -1628,7 +1611,7 @@ const Char* Assembler::feed(const Char* line) {
 							functionTable[functionCount] = (UInt)(ip - codeBase);
 							++functionCount;
 							declare(globals, labelBegin, labelEnd,
-									(dialect >= 2 ? TARGET : FUNC), v);			// THE dialect switch: a GAZL 2 function's address is a `t`, so it can never enter a `p` position - here or in any other unit.
+									(dialect >= 2 ? TARGET : FUNC), v);			// a GAZL 2 function is a `t`, so it never enters a `p` position
 							if (functionStart != 0) finalizeFunction();
 							if (ip >= codeEnd) throw Exception(NOT_ENOUGH_CODE_SPACE);
 							ip->opcode = op->opcode;
@@ -1716,13 +1699,13 @@ const Char* Assembler::feed(const Char* line) {
 								if (op->opcode == RETU_C__) p0->i = localsSize;											// RETU
 								types = op->accepts[0];
 								if (dialect >= 2 && (op->opcode == CALL_VVC || op->opcode == TAIL_VC_)) {
-									types &= ~(VAR_PTR_R & ~TRANSIENT);			// inside a GAZL 2 region an indirect call goes through a `t` local (or an untyped %N window slot) - a `p` local is not a callee. The TRANSIENT bit stays: VAR_TGT_R carries it for the %N form.
+									types &= ~(VAR_PTR_R & ~TRANSIENT);			// in a GAZL 2 region the callee is a `t` local or a `%N` slot, never a `p` local
 								}
 								parseOperand(op0Begin, op0End, types, p0);
 								parseOperand(op1Begin, op1End, op->accepts[1], p1);
 								if (op->opcode == TAIL_CC_ || op->opcode == TAIL_VC_) {									// TAIL
-									p2->i = maxLocalsSize;	// the runtime rewinds dsp to the frame base before the window copy; like RETU, the size rides the instruction
-									paramsSize = maximum(paramsSize, (UInt)(p1->i));	// the copy READS %0..m-1, so the frame check must reserve them even if nothing else references those slots
+									p2->i = maxLocalsSize;	// the frame size, which the run time rewinds before the window copy
+									paramsSize = maximum(paramsSize, (UInt)(p1->i));	// the copy reads `%0` to `%m-1`, so the frame must hold them
 								}
 								if (op->opcode == SWCH_VCC) {															// SWCH
 									assert(*op2Begin == '@');
@@ -1901,12 +1884,12 @@ Int Processor::run() {
 							goto tail;
 			case TAIL_VC_:	ui = V0.t - FUNCTION_OFFSET;
 							if (ui >= functionCount) { err = BAD_CALL; goto ret; }
-			tail:			{																// slide the %0 window onto the frame base, no return push: the callee's RETU returns to OUR caller
+			tail:			{																// slide the `%0` window onto the frame base; the callee returns to our caller
 								const Value* sp = dsp;
 								const Value* ep = sp + C1.i;
 								Value* dp = dsp - (UInt)(C2.i);								// C2 = this function's own frame size, baked at assembly
 								dsp = dp;
-								while (sp < ep) *dp++ = *sp++;								// dst <= src, ascending: memmove-direction safe at ANY size, and the frame check reserved both ends (paramsSize covers %0..C1-1)
+								while (sp < ep) *dp++ = *sp++;								// ascending is safe: the destination is below the source
 							}
 							ui = functionTable[ui];
 							assert((codeBase + ui)->opcode == FUNC_CC_);
