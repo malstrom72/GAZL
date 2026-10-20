@@ -142,13 +142,7 @@ inline void swap(JitModule& a, JitModule& b) { a.swap(b); }				// ADL swap
 // The JIT engine: a `Processor` subclass bound to a JitModule, driven by the same host loop as the interpreter.
 class JitProcessor : public Processor {
 	public:
-		/*
-			Two constructors, mirroring the base Processor's two: the higher-level one (data stack = the whole span
-			from the end of the globals to the zero guard) and the lower-level one (explicit rwMemorySize / dataStackOffset /
-			dataStackSize, for running several engines over one shared code image - e.g. a JitProcessor per thread, each
-			with its own data + ip stack; the compiled code is immutable after publish, so it is safe to share). Both add
-			the JitModule up front and delegate to the matching Processor constructor.
-		*/
+		// The two `AssembledProgram` constructors of `Processor`, plus the compiled `module`, which threads may share.
 		JitProcessor(const JitModule& module, const AssembledProgram& program, UInt ipStackSize
 					, CallStackEntry* ipStack, NativeFunc const* natives, void* userData = 0)
 			: Processor(program, ipStackSize, ipStack, natives, userData) { bindModule(module); }
