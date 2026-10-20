@@ -18,6 +18,7 @@
 	Nested inlining works because the inner body is already expanded into the outer's captured body.
 
 	Expected (GAZLCmd inlineFunctions.gazl main): 46 1 99 31 7
+	Compile: --gazl2
 */
 
 const int DEBUG = 1

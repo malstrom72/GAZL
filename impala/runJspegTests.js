@@ -24,6 +24,12 @@ const erroneousDir = path.join(testsDir, 'erroneous');
 const conformanceDir = path.join(testsDir, 'conformance');
 const referencePath = path.join(repoRoot, 'docs', 'impala', 'Impala.md');
 
+/* A fixture that needs `--gazl2` declares it in its header comment, as `Compile: --gazl2`. */
+function compileOptions(source) {
+        const match = source.match(/Compile:[ \t]*(.*)/);
+        return { gazl2: match !== null && match[1].split(/\s+/).indexOf('--gazl2') >= 0 };
+}
+
 /* A heading's anchor as GitHub renders it: lower case, punctuation other than `-` dropped, spaces to `-`. */
 function headingAnchor(text) {
         return text.toLowerCase().replace(/[^a-z0-9 _-]/g, '').replace(/ /g, '-');
@@ -171,8 +177,8 @@ function main() {
                         /* `sourceName` so a golden shows what a user actually gets - the CLI passes the
                            basename too. Without it the goldens were the one place rows carried no file
                            name, which is part of how the option stayed provably dead unnoticed. */
-                        output = compileWithJsImpala(source, { randomId: RANDOM_ID, retabulate: false,
-                                        sourceName: file });
+                        output = compileWithJsImpala(source, Object.assign({ randomId: RANDOM_ID, retabulate: false,
+                                        sourceName: file }, compileOptions(source)));
                 } catch (err) {
                         console.error('<<< Error compiling >>>');
                         console.error(formatError(err));
