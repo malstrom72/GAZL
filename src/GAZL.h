@@ -257,9 +257,12 @@ class Assembler {
 	protected:	static int operatorCompare(const void* a, const void* b);
 	protected:	static int nativeDefinitionCompare(const void* a, const void* b);
 	protected:	static Char parseOperandType(const Char* b, const Char* e);
-	protected:	const Symbols::Symbol* linkWithOffset(Symbols& defs, const char* b, const char* e, int accepts, Value* v);
-	protected:	const Symbols::Symbol* parseConstant(const Char* b, const Char* e, int accepts, Value* v);
-	protected:	const Symbols::Symbol* parseOperand(const Char* b, const Char* e, int accepts, Value* v);	// The global symbol the operand names, or 0: an assembly-time variable, a literal, a local or a forward reference.
+	protected:	const Symbols::Symbol* linkWithOffset(Symbols& defs, const char* b, const char* e, int accepts
+						, Value* v);
+	protected:	const Symbols::Symbol* parseConstant(const Char* b, const Char* e, int accepts, Value* v
+						, int* variableTypes = 0);
+	protected:	const Symbols::Symbol* parseOperand(const Char* b, const Char* e, int accepts, Value* v
+						, int* variableTypes = 0);																// The global symbol the operand names, or 0: an assembly-time variable (its types go to `variableTypes`), a literal, a local or a forward reference.
 	protected:	bool doConstantBranch(const Operator* op, const Char* op0Begin, const Char* op0End
 						, const Char* op1Begin, const Char* op1End);
 	protected:	Value calcConstant(const Operator* op, const Char* op1Begin, const Char* op1End, const Char* op2Begin

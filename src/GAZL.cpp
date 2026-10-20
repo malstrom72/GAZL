@@ -958,7 +958,8 @@ const Symbols::Symbol* Assembler::linkWithOffset(Symbols& defs, const char* b, c
 	return defs.link(b, p, v, accepts, o.i);
 }
 
-const Symbols::Symbol* Assembler::parseConstant(const Char* b, const Char* e, int accepts, Value* v) {
+const Symbols::Symbol* Assembler::parseConstant(const Char* b, const Char* e, int accepts, Value* v
+		, int* variableTypes) {
 	if ((accepts & KONST) == 0) throw Exception(DID_NOT_EXPECT_CONSTANT, b, e);
 	switch (b < e ? *b : 0) {
 		case '\'': case '+': case '-': case '0': case '1': case '2': case '3':
@@ -987,6 +988,7 @@ const Symbols::Symbol* Assembler::parseConstant(const Char* b, const Char* e, in
 							throw Exception(OFFSET_OUT_OF_BOUNDS, b, e);									// an access, checked only here, and the variable names no label to check it against
 						}
 						*v = cv.value;
+						if (variableTypes != 0) *variableTypes = cv.types;
 						break;
 					}
 				
@@ -995,12 +997,13 @@ const Symbols::Symbol* Assembler::parseConstant(const Char* b, const Char* e, in
 	return 0;
 }
 
-const Symbols::Symbol* Assembler::parseOperand(const Char* b, const Char* e, int accepts, Value* v) {
+const Symbols::Symbol* Assembler::parseOperand(const Char* b, const Char* e, int accepts, Value* v
+		, int* variableTypes) {
 	switch (b < e ? *b : 0) {
 		case 0:		if (accepts != 0) throw Exception(MISSING_OPERAND); break;
 		case '*':
 		case '#':	++b; /* continue */
-		case '<':	return parseConstant(b, e, accepts, v);
+		case '<':	return parseConstant(b, e, accepts, v, variableTypes);
 		case '@':	locals.link(b + 1, e, v, accepts, -(Int)(ip - codeBase)); break;		
 
 		case '%':	assert((accepts & TRANSIENT) != 0);
@@ -1293,12 +1296,14 @@ const Char* Assembler::feed(const Char* line) {
 		} else {
 			switch (op->opcode) {
 				case DEFI____:	{																						// ! DEFi, ! DEFf, ! DEFp
+									int variableTypes = 0;
 									const Symbols::Symbol* const named = parseOperand(op0Begin, op0End, op->accepts[0]
-											, &v);
+											, &v, &variableTypes);
 									types = op->declareTypes;
 									bool isOutside = false;															// no access through the name may pass
 									if ((types & POINTER_CONSTANT) != 0 && named == 0) {								// an assembly-time address: no label to check against
-										types |= FREE_ADDRESS & op->accepts[0];										// what `! ADDp`, `! SUBp` and `! MOVp` make
+										assert(variableTypes != 0);													// DEFp takes no literal, local or forward reference
+										types |= variableTypes & op->accepts[0];
 										isOutside = true;
 									} else if ((types & POINTER_CONSTANT) != 0) {									// the kind it names: `NULL` or a function is not data
 										const Int offset = static_cast<Int>(static_cast<UInt>(v.i)
