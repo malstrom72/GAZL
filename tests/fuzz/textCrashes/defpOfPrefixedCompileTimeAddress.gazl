@@ -1,0 +1,7 @@
+g:	GLOB *22
+	! ADDp <P> &g #20000
+Q:	!DEFp <P>
+:	! DEFp <P>
+mQ:	! DEFp <P>
+:	! DEFp #<P>
+) DEFm

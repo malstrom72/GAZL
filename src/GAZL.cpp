@@ -1293,15 +1293,20 @@ const Char* Assembler::feed(const Char* line) {
 								{
 									types = op->declareTypes;
 									bool isOutside = false;															// no access through the name may pass
-									if ((types & POINTER_CONSTANT) != 0 && *op0Begin == '<') {						// no label to check against
-										types |= compileTimeVars[static_cast<unsigned char>(op0Begin[1])].types
+									const Char* const nameBegin = op0Begin + (*op0Begin == '<' ? 0 : 1);			// past `&` or `#`, so `#<P>` is `<P>`, as parseOperand reads it
+									if ((types & POINTER_CONSTANT) != 0 && *nameBegin == '<') {						// no label to check against
+										types |= compileTimeVars[static_cast<unsigned char>(nameBegin[1])].types
 												& op->accepts[0];
 										isOutside = true;
 									} else if ((types & POINTER_CONSTANT) != 0) {									// the kind it names: `NULL` or a function is not data
 										const Char* const colon = reinterpret_cast<const Char*>(memchr(op0Begin, ':'
 												, op0End - op0Begin));
-										const std::string name(op0Begin + 1, (colon != 0 ? colon : op0End));
-										const Symbols::Symbol& named = globals.symbols.find(name)->second;
+										const std::string name(nameBegin, (colon != 0 ? colon : op0End));
+										Symbols::SymbolMap::const_iterator namedIt = globals.symbols.find(name);
+										if (namedIt == globals.symbols.end()) {
+											throw Exception(NON_FORWARD_SYMBOL_NOT_FOUND, name);
+										}
+										const Symbols::Symbol& named = namedIt->second;
 										const Int offset = static_cast<Int>(static_cast<UInt>(v.i)
 												- static_cast<UInt>(named.value.i));
 										types |= named.types & op->accepts[0];

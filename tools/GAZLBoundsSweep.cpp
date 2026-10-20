@@ -1341,7 +1341,11 @@ int sweepPointerConstantKinds() {
 		{ "an assembly-time address as a value", "g:\tGLOB *2\n\t! ADDp <P> &g #1\nmain:\tFUNC\np:\tLOCp\n"
 				"\tMOVp p <P>\n\tRETU\n", -1 },
 		{ "a name of an assembly-time address as a value", "g:\tGLOB *2\n\t! ADDp <P> &g #1\nR:\t! DEFp <P>\n"
-				"main:\tFUNC\np:\tLOCp\n\tMOVp p &R\n\tRETU\n", -1 }
+				"main:\tFUNC\np:\tLOCp\n\tMOVp p &R\n\tRETU\n", -1 },
+		{ "a PEEK through a name of an assembly-time address written #<P>", "g:\tGLOB *2\n\t! ADDp <P> &g #1\n"
+				"R:\t! DEFp #<P>\nmain:\tFUNC\nv:\tLOCi\n\tPEEK v &R\n\tRETU\n", OFFSET_OUT_OF_BOUNDS },
+		{ "a name of an assembly-time address written #<P> as a value", "g:\tGLOB *2\n\t! ADDp <P> &g #1\n"
+				"R:\t! DEFp #<P>\nmain:\tFUNC\np:\tLOCp\n\tMOVp p &R\n\tRETU\n", -1 }
 	};
 	const int count = sizeof (CASES) / sizeof (*CASES);
 	int failures = 0;
