@@ -22,14 +22,14 @@
 */
 
 #include "GAZLJit.h"
-#include "GAZLJitMem.h"																									// makeExecutable / freeExecutable - the JitModule owns the executable page
+#include "GAZLJitMem.h"
 
 #include <cstddef>
-#include <cstring>																										// memset / memcpy - the jitAvailable() probe
-#include <cstdio>																										// std::snprintf - the unlowerable-opcode diagnostic
-#include "assert.h"																										// assert - RegisterCache contracts + the unlowerable-opcode check (local-overridable, see GAZL.h)
-#include <set>																											// jitFuelSafepoints - block-leader set
-#include <algorithm>																									// std::upper_bound - Belady next-read lookup
+#include <cstring>
+#include <cstdio>
+#include "assert.h"																										// local-overridable, see GAZL.h
+#include <set>
+#include <algorithm>
 #if defined(_M_X64) || defined(__x86_64__)															// the x64 backend lowers FLOF with SSE4.1 `roundss`
 	#if defined(_MSC_VER)
 		#include <intrin.h>
@@ -45,16 +45,13 @@
 #include <windows.h>																									// __try/__except fault guard for the probe
 #undef RegisterClass																									// winuser.h macro (RegisterClassW) collides with GAZL::RegisterClass
 #else
-#include <csignal>																										// sigaction - POSIX fault guard for the probe
-#include <csetjmp>																										// sigsetjmp / siglongjmp
+#include <csignal>																										// sigaction: POSIX fault guard for the probe
+#include <csetjmp>
 #endif
 
 namespace GAZL {
 
-/*
-	Is instruction `instructionIndex` a branch, and if so, to which instruction? GOTO targets via p0; the conditional forms
-	(FORi + the integer/float compare-branches) target via p2. SWCH's jump-table targets come from switchTargets.
-*/
+// The target of a GOTO or conditional branch; SWCH targets come from switchTargets.
 static bool jitBranchTarget(const Instruction* code, UInt instructionIndex, UInt& target) {
 	const Int op = code[instructionIndex].opcode;
 	const Int j = static_cast<Int>(instructionIndex);
@@ -84,13 +81,12 @@ std::vector<UInt> switchTargets(const Instruction* code, UInt instructionIndex, 
 	return targets;
 }
 
-// Fuel-check granularity: the host must grant at least this per resume, and no basic block is charged more (§5.5).
+// The host must grant at least this much fuel per resume; no basic block is charged more.
 static const UInt MAX_BLOCK_WEIGHT = 64;
 
 /*
-	Fuel safepoints - see GAZLJit.h. Leaders partition the function into basic blocks; charging each block's static
-	weight once, at its leader, makes the JIT's total fuel spend equal the interpreter's per-instruction spend. The
-	MAX_BLOCK_WEIGHT cap splits any long straight run so a block always fits one fuel grant (§5.5).
+	Fuel safepoints (see GAZLJit.h and design/jit/JitCompilerResearch.md section 5.5): each block's static weight is
+	charged once at its leader, so the JIT spends exactly the interpreter's fuel.
 */
 void JitCompiler::jitFuelSafepoints(const Instruction* code, UInt funcStart, UInt endIndex, const Value* memory
 		, std::map<UInt, UInt>& weight) {
@@ -100,41 +96,29 @@ void JitCompiler::jitFuelSafepoints(const Instruction* code, UInt funcStart, UIn
 		const Int op = code[j].opcode;
 		UInt target;
 		if (jitBranchTarget(code, j, target)) {
-			// A well-formed branch targets an in-function label. A corrupt target (outside [funcStart, endIndex]) is never
-			// a bound mainline leader -> it would finalize to a branch-to-unbound-label. The JIT can't lower an out-of-
-			// function branch; decline the function (degrade to the interpreter). Malformed input, not a backend bug - throw, don't assert.
+			// A target outside the function is malformed input (not a backend bug): decline the function.
 			if (target < funcStart || target > endIndex) { throw JitException("JIT: branch target outside the function"); }
-			leaders.insert(target);																						// branch/GOTO/FORi target begins a block
-			// ...and so does the fall-through after a CONDITIONAL branch. An unconditional GOTO has none: a leader there
-			// is either unreachable, or already inserted as some other branch's target, so inserting it only mints a
-			// bound label, a fuel check and a cold suspend stub for code that cannot be entered by falling into it.
+			leaders.insert(target);
+			// A conditional branch's fall-through also starts a block; a GOTO has none.
 			if (op != OP_GOTO && j + 1 <= endIndex) { leaders.insert(j + 1); }
 		} else if (op == OP_SWCH) {
 			const std::vector<UInt> targets = switchTargets(code, j, memory);
 			for (size_t k = 0; k < targets.size(); ++k) {
 				const UInt t = targets[k];
-				// A well-formed SWCH targets only in-function labels. A corrupt/garbage jump-table entry can point outside
-				// [funcStart, endIndex]; that target is never a bound mainline leader (the emit pass only binds in-range
-				// leaders), so it would finalize to a branch-to-unbound-label. The JIT cannot lower an out-of-function
-				// branch - decline the whole function (degrade to the interpreter). NOT an assert: malformed input, not a
-				// backend bug.
+				// As for a branch: a corrupt jump-table entry is malformed input, so decline the function.
 				if (t < funcStart || t > endIndex) { throw JitException("JIT: SWCH jump-table target outside the function"); }
 				leaders.insert(t);
-			}																												// SWCH always jumps (`ip += table[..]`), so no fall-through leader either
+			}																												// SWCH always jumps: no fall-through leader
 		} else if (op == OP_CALL_CVC || op == OP_CALL_VVC || op == OP_CALL_NVC) {
 			/*
-				A call ends a block, so the instruction right after it is a leader with its own fuel check. For CALL_NVC
-				this leader is REQUIRED, not just tidy block structure: a native may yield by resetTimeOut(0) + return OK
-				(the standard cooperative-yield convention - Permut8/Prawn sleep() and launch() do exactly this). Each
-				backend reloads the fuel pin from ctx immediately after the native returns, so THIS safepoint is what makes
-				a zeroed fuel budget suspend on the very next instruction - zero slack, matching the interpreter's
-				per-instruction suspend point. Remove it and a yielding native would keep running until the next natural
-				block leader (e.g. a loop head), silently breaking real-time cooperative scheduling. Do not drop it.
+				A call ends a block. For CALL_NVC this leader is required: a native yields with resetTimeOut(0) and OK,
+				and the backends reload fuel after it returns, so this fuel check suspends on the very next instruction,
+				as the interpreter does.
 			*/
 			if (j + 1 <= endIndex) { leaders.insert(j + 1); }
 		}
 	}
-	// Cap: split any [leader, nextLeader) run longer than MAX_BLOCK_WEIGHT so no single block exceeds one fuel grant.
+	// Split any run longer than MAX_BLOCK_WEIGHT, so a block always fits one fuel grant.
 	{
 		std::vector<UInt> sorted(leaders.begin(), leaders.end());
 		for (size_t i = 0; i < sorted.size(); ++i) {
@@ -143,11 +127,8 @@ void JitCompiler::jitFuelSafepoints(const Instruction* code, UInt funcStart, UIn
 		}
 	}
 	/*
-		weight[leader] = what ENTERING this block actually executes: the span to the next leader, but stopping at the
-		block's terminator. Anything after an unconditional terminator and before the next leader cannot be reached by
-		falling into it, so charging it would make the JIT spend fuel the interpreter never spends. That filler used to
-		be impossible for a GOTO/SWCH (a leader was forced right after one) but was always possible after a mid-function
-		RETU or TAIL that nothing branches past.
+		A block's weight stops at its terminator: code between an unconditional terminator and the next leader is never
+		executed by entering the block, and the interpreter never charges it.
 	*/
 	std::vector<UInt> all(leaders.begin(), leaders.end());
 	for (size_t i = 0; i < all.size(); ++i) {
@@ -165,13 +146,8 @@ void JitCompiler::jitFuelSafepoints(const Instruction* code, UInt funcStart, UIn
 }
 
 /*
-	Residency-compatible opcodes: a resident loop pays off when its body never drops the map. A frame-touching memory op
-	(pointer/GETL/SETL), call, or COPY inside the body flushes or drops the map every iteration, and the header's dirty
-	modeling then adds stores that the plain v2.0 fill-on-use block never paid - measured as a net LOSS on such loops -
-	so they stay v2.0 until the general per-block reconciliation lands. Const-address SCALAR PEEK/POKE are globals-realm
-	(§1.1) and flush-free: residency-safe. The INDEXED const forms are flush-free too but burn several scratch registers
-	per op, and inside a resident loop that eviction churn measured 2x SLOWER (spectralnorm) - they stay excluded.
-	DIVI/MODI flush dirty lines on their main-path trap spill but keep the map resident (a net win); allowed.
+	Opcodes a resident loop body may contain. ADRL, GETL/SETL and the pointer and indexed PEEK/POKE forms are excluded:
+	they flush the map or churn scratch registers every iteration, which loses to fill-on-use.
 */
 static bool jitResidencySafe(Int op) {
 	switch (op) {
@@ -184,7 +160,7 @@ static bool jitResidencySafe(Int op) {
 	}
 }
 
-// Opcodes whose operands route through the cache; everything else barriers the cache and lowers as v1 (§5.7).
+// Opcodes whose operands route through the cache; any other opcode barriers it (JitCompilerResearch.md section 5.7).
 bool isCacheLowered(Int op) {
 	switch (op) {
 		case OP_MOVE_VV: case OP_MOVE_VC:
@@ -226,12 +202,9 @@ bool isCacheLowered(Int op) {
 }
 
 /*
-	v2.2 residency qualification - see GAZLJit.h. A loop header = a back-edge target no forward branch or SWCH reaches.
-	v2.2-full: a body may contain internal FORWARD branches (early exits / if-joins) - interior leaders share the
-	header's entry map and every in-edge reconciles to it. Still disqualified: any non-residency-safe op; an internal
-	BACKWARD branch to anything but the header (a nested loop - the inner loop may qualify on its own); and a SIDE
-	ENTRY (any branch or SWCH arm from outside [header, end] into the interior) - such an edge would arrive without
-	the map's registers loaded, so reconcileTo's model would lie.
+	Residency loop headers (see GAZLJit.h): back-edge targets that no forward branch or SWCH reaches. A body may branch
+	forward internally, but a non-residency-safe op, a backward branch to anything but the header, or a side entry from
+	outside disqualifies it; a side entry would arrive without the map's registers loaded.
 */
 void JitCompiler::jitResidencyLeaders(const Instruction* code, UInt funcStart, UInt endIndex
 		, const Value* memory, std::map<UInt, UInt>& loopExtent) {
@@ -250,12 +223,12 @@ void JitCompiler::jitResidencyLeaders(const Instruction* code, UInt funcStart, U
 	for (std::map<UInt, UInt>::iterator it = loopExtent.begin(); it != loopExtent.end(); ) {
 		const UInt header = it->first, end = it->second;
 		bool safe = true;
-		for (UInt j = header; j <= end && safe; ++j) {																	// body: register-only ops; backward branches only to the header
+		for (UInt j = header; j <= end && safe; ++j) {
 			if (!jitResidencySafe(code[j].opcode)) { safe = false; }
 			UInt target;
-			if (jitBranchTarget(code, j, target) && target < j && target != header) { safe = false; }					// nested loop: the inner entry may qualify separately
+			if (jitBranchTarget(code, j, target) && target < j && target != header) { safe = false; }
 		}
-		for (UInt j = funcStart; j <= endIndex && safe; ++j) {															// side entries: nothing outside may branch into the interior
+		for (UInt j = funcStart; j <= endIndex && safe; ++j) {
 			if (j >= header && j <= end) { continue; }
 			UInt target;
 			if (jitBranchTarget(code, j, target)) {
@@ -271,20 +244,14 @@ void JitCompiler::jitResidencyLeaders(const Instruction* code, UInt funcStart, U
 	}
 }
 
-/*
-	JitModule - the RAII owner of the executable page: the constructor makes the emitted code executable and takes
-	ownership (acquisition == initialization), then materializes the ordinal->entry table + dispatcher entry. makeExecutable
-	is the last thing that acquires, and everything after it is plain pointer arithmetic that cannot throw, so a partially
-	built module never leaks a page. Throws JitException if the host refuses. The destructor frees the page (a no-op when
-	empty); swap() exchanges ownership in O(1).
-*/
+// Takes ownership of the executable page; nothing after makeExecutable can throw, so a page is never leaked.
 JitModule::JitModule(const EmittedModule& emitted)
 		: ownedPage(0)
 		, ownedWords(emitted.code.size())
 		, entries(emitted.entryByteOffsets.size())																		// may throw (bad_alloc) before any page is acquired
 		, dispatch(0) {
 	ownedPage = makeExecutable(emitted.code.empty() ? 0 : &emitted.code[0], emitted.code.size());
-	if (ownedPage == 0) {																								// host refused executable memory (should not happen after jitAvailable())
+	if (ownedPage == 0) {																								// should not happen after jitAvailable()
 		throw JitException("JIT: host refused to make the code page executable");
 	}
 	for (size_t ordinal = 0; ordinal < entries.size(); ++ordinal) {														// noexcept from here: the page is owned, dtor will free it
@@ -304,11 +271,7 @@ void JitModule::swap(JitModule& other) {
 	std::swap(dispatch, other.dispatch);
 }
 
-/*
-	A backend met a finalized opcode it does not cover. That is a programmer error - the backend must lower every
-	finalized opcodes - so assert first (loud during development). Asserts vanish in release, so also throw: a shipped
-	build then degrades to the interpreter instead of running past a gap in the switch. Never returns.
-*/
+// A backend bug: asserts, and also throws so a release build degrades to the interpreter. Never returns.
 void JitCompiler::throwUnlowerableOpcode(Int opcode) {
 	assert(0 && "JIT backend does not cover a finalized opcode (backend bug)");
 	char message[64];
@@ -316,10 +279,6 @@ void JitCompiler::throwUnlowerableOpcode(Int opcode) {
 	throw JitException(message);
 }
 
-/*
-	RegisterCache (GAZLJit.h, §5.7.1): arch-neutral bookkeeping, reaching machine code only via emitFill/emitSpill.
-	Invariant: Line index i holds physical register registersOf(class)[i].
-*/
 void buildUseSchedule(const Instruction* code, UInt from, UInt to, UseSchedule& schedule) {
 	for (UInt j = from; j <= to; ++j) {
 		OperandRole roles[3];
@@ -345,11 +304,7 @@ bool isDataAddress(const AssembledProgram& program, Pointer pointer) {
 
 void buildPointerRealms(const AssembledProgram& program, UInt from, UInt to, std::map<Int, int>& realm) {
 	const Instruction* const code = program.code;
-	/*
-		Pass 1: live-in slots (first textual role is a READ, before any WRITE) are received parameters -> NONFRAME. A
-		slot first WRITTEN in the function is not a parameter, so a value later used as a pointer base traces to a
-		definition we classify below (BOTTOM until then = must-flush).
-	*/
+	// Pass 1: a slot read before it is written is a received parameter, so NONFRAME.
 	std::set<Int> written;
 	for (UInt j = from; j <= to; ++j) {
 		OperandRole roles[3];
@@ -357,7 +312,7 @@ void buildPointerRealms(const AssembledProgram& program, UInt from, UInt to, std
 		const Value* operands[3] = { &code[j].p0, &code[j].p1, &code[j].p2 };
 		for (int k = 0; k < 3; ++k) {
 			if ((roles[k] & OPERAND_SLOT_READ) != 0 && written.find(operands[k]->i) == written.end()) {
-				realm.insert(std::make_pair(operands[k]->i, static_cast<int>(REALM_NONFRAME)));				// live-in => parameter
+				realm.insert(std::make_pair(operands[k]->i, static_cast<int>(REALM_NONFRAME)));
 			}
 		}
 		for (int k = 0; k < 3; ++k) {
@@ -365,11 +320,7 @@ void buildPointerRealms(const AssembledProgram& program, UInt from, UInt to, std
 		}
 	}
 
-	/*
-		Pass 2: forward transfer joined to a fixed point (flow-insensitive: a slot's realm is the join over ALL its
-		definitions, so a back-edge that redefines a pointer is already accounted for). Height-2 lattice -> converges in
-		a few sweeps; loops with a pointer-carried induction (`ADDi $p $p $k`) settle at their operand's realm.
-	*/
+	// Pass 2: flow-insensitive fixed point, where a slot's realm is the join over all its definitions.
 	bool changed = true;
 	while (changed) {
 		changed = false;
@@ -377,10 +328,10 @@ void buildPointerRealms(const AssembledProgram& program, UInt from, UInt to, std
 			const Int op = code[j].opcode;
 			OperandRole roles[3];
 			operandRoles(op, roles);
-			if ((roles[0] & OPERAND_SLOT_WRITE) == 0) { continue; }										// writes no slot -> nothing to stamp
+			if ((roles[0] & OPERAND_SLOT_WRITE) == 0) { continue; }
 			int produced;
 			switch (op) {
-				case OP_ADRL: produced = REALM_MYFRAME; break;												// address of a local
+				case OP_ADRL: produced = REALM_MYFRAME; break;
 				case OP_MOVE_VC: produced = isDataAddress(program, code[j].p1.p) ? REALM_NONFRAME : REALM_UNKNOWN; break;	// global/const symbol vs bare int
 				case OP_MOVE_VV: {
 					const std::map<Int, int>::const_iterator it = realm.find(code[j].p1.i);
@@ -407,19 +358,18 @@ void buildPointerRealms(const AssembledProgram& program, UInt from, UInt to, std
 	}
 }
 
-// Successors of instruction j in [from,to]: fall-through (j+1) unless j is an unconditional GOTO/RETU; plus branch and
-// SWCH-table targets. Conservative (extra successors only widen liveness). Appends to `succ`.
+// Appends the successors of `j`, conservatively: an extra successor only widens liveness.
 static void jitSuccessors(const Instruction* code, UInt from, UInt to, const Value* memory, UInt j, std::vector<UInt>& succ) {
 	const Int op = code[j].opcode;
-	if (op == OP_RETU) { return; }																						// terminal
-	if (op == OP_GOTO) { succ.push_back(static_cast<UInt>(static_cast<Int>(j) + code[j].p0.i)); return; }				// unconditional: no fall-through
+	if (op == OP_RETU) { return; }
+	if (op == OP_GOTO) { succ.push_back(static_cast<UInt>(static_cast<Int>(j) + code[j].p0.i)); return; }
 	UInt target;
-	if (jitBranchTarget(code, j, target)) { succ.push_back(target); }													// conditional branch target
+	if (jitBranchTarget(code, j, target)) { succ.push_back(target); }
 	else if (op == OP_SWCH) {
 		const std::vector<UInt> targets = switchTargets(code, j, memory);
 		succ.insert(succ.end(), targets.begin(), targets.end());
 	}
-	if (j + 1 <= to) { succ.push_back(j + 1); }																			// fall-through (also after a conditional branch / SWCH)
+	if (j + 1 <= to) { succ.push_back(j + 1); }
 }
 
 int LiveSets::slotIndex(Int slot) const {
@@ -475,10 +425,8 @@ void LiveSets::build(const Instruction* code, UInt from, UInt to, const Value* m
 		}
 	}
 	/*
-		Backward fixed point: liveIn[j] = gen[j] U (liveOut[j] - kill[j]); liveOut[j] = U liveIn[succ]. Accumulated IN
-		PLACE - the transfer only ever adds, so a reverse Gauss-Seidel sweep reaches the same least fixed point without
-		building a live-out set per instruction per sweep. A self-looping GOTO/FORi makes j its own successor, so the
-		inner loop can read the row it is writing: safe, because every such bit is already set in it.
+		Backward fixed point, accumulated in place: the transfer only adds bits, so a reverse sweep reaches the same
+		least fixed point. A self-looping GOTO/FORi reads the row it is writing, which is safe as those bits are set.
 	*/
 	bits.assign(rowCount * words, 0);
 	std::vector<UInt> succ;
@@ -506,10 +454,8 @@ void LiveSets::build(const Instruction* code, UInt from, UInt to, const Value* m
 }
 
 /*
-	Loop-body working sets (see GAZLJit.h): the slots read / written, and the same slots by register class.
-	Class-by-opcode mirrors the shared lowering, which BOTH backends follow: float ops (ABSF included) keep their VALUE
-	operands in FLOAT_REGISTER; FTOI reads float / writes general, ITOF the reverse; MOVE and all integer/pointer ops
-	use GENERAL. A slot used both ways lands in both class sets.
+	Loop-body working sets (see GAZLJit.h). The class per operand must match the lowering both backends share; a slot
+	used both ways lands in both class sets.
 */
 void buildLoopSets(const Instruction* code, UInt from, UInt to, std::set<Int>& readSlots, std::set<Int>& writtenSlots
 		, std::set<Int>& generalSlots, std::set<Int>& floatSlots) {
@@ -543,6 +489,7 @@ void buildLoopSets(const Instruction* code, UInt from, UInt to, std::set<Int>& r
 	}
 }
 
+// Arch-neutral bookkeeping that reaches machine code only through the backend. Line `i` holds `registersOf(class)[i]`.
 RegisterCache::RegisterCache(const RegisterPool& pool, RegisterCacheBackend& backend)
 		: registerPool(pool)
 		, cacheBackend(backend)
@@ -588,9 +535,8 @@ uint32_t RegisterCache::nextReadAfter(Int slot) const {
 }
 
 /*
-	A pool index ready to be (re)assigned: a free entry if one exists, else an UNPINNED line (spilled). Belady picks the
-	line whose next read is furthest (dead lines, nextUse = MAX, go first) when a schedule is set; otherwise the LRU line.
-	Either choice is correct - a dirty victim is always spilled first - so an imprecise schedule only costs optimality.
+	A free pool index, else a spilled unpinned victim: the furthest next read (Belady) with a schedule, otherwise LRU.
+	Either is correct, so an imprecise schedule only costs speed.
 */
 int RegisterCache::acquire(RegisterClass registerClass) {
 	size_t count;
@@ -603,7 +549,7 @@ int RegisterCache::acquire(RegisterClass registerClass) {
 	for (size_t i = 0; i < count; ++i) {
 		if (lines[i].pinned) { continue; }
 		const uint32_t key = (useSchedule != 0) ? lines[i].nextUse : lines[i].lastUse;
-		const bool better = (useSchedule != 0) ? (key > best) : (key < best);						// Belady: furthest; LRU: oldest
+		const bool better = (useSchedule != 0) ? (key > best) : (key < best);
 		if (victim < 0 || better) { victim = static_cast<int>(i); best = key; }
 	}
 	assert(victim >= 0 && "register pool exhausted by one instruction's pinned operands");
@@ -612,10 +558,7 @@ int RegisterCache::acquire(RegisterClass registerClass) {
 	return victim;
 }
 
-/*
-	A slot lives in one file at a time (transients are typeless). Resolve a copy in the OTHER file before use: a read
-	spills it to the home first (the fill then reads it back); a define overwrites the slot whole, so just drop it.
-*/
+// A slot lives in one file at a time: drop its copy in the other file, spilling it first if `spillFirst`.
 void RegisterCache::evictOtherClass(Int slot, RegisterClass wantedClass, bool spillFirst) {
 	const RegisterClass other = (wantedClass == GENERAL_REGISTER) ? FLOAT_REGISTER : GENERAL_REGISTER;
 	size_t count;
@@ -639,15 +582,12 @@ int RegisterCache::read(Int slot, RegisterClass registerClass) {
 			lines[i].pinned = true;
 			lines[i].lastUse = ++useClock;
 			lines[i].nextUse = nextReadAfter(slot);
-			return registers[i];																						// hit: no load
+			return registers[i];
 		}
 	}
 	/*
-		Miss here, but the value may be sitting in the OTHER file - the usual way for a float, since PEEK is an untyped
-		word move and lands in the general file. Bridge it register to register instead of storing it and loading it
-		back: one move, and no store-to-load latency inside the dependency chain. The value MOVES rather than copying,
-		because a slot lives in one file at a time, and the dirty flag travels with it - if the home was already stale
-		it still is. The two pools are disjoint register sets, so acquire() below cannot take the source.
+		Miss, but the value may sit in the other file (PEEK lands a float in the general file): move it register to
+		register, carrying its dirty flag. The pools are disjoint, so acquire() cannot take the source.
 	*/
 	{
 		const RegisterClass other = (registerClass == GENERAL_REGISTER) ? FLOAT_REGISTER : GENERAL_REGISTER;
@@ -657,23 +597,15 @@ int RegisterCache::read(Int slot, RegisterClass registerClass) {
 		for (size_t k = 0; k < otherCount; ++k) {
 			if (otherLines[k].occupied && !otherLines[k].scratchTemp && otherLines[k].slot == slot) {
 				/*
-					Only worth it when the other copy is DIRTY. A CLEAN copy costs only the load - spillLine writes
-					nothing - so bridging it would trade one memory read for one cross-file move, which is not
-					obviously better and on a throughput-bound kernel measured slightly worse (spectralnorm): the
-					int/float transfer port is narrower than the load units, and a clean line's home is already in
-					cache.
-
-					For a dirty copy the bridge always replaces the RELOAD. Whether it also keeps the SPILL - writing
-					the home here from the source so the line arrives clean, rather than leaving it dirty for the block
-					end - is the backend's call, because the two measured OPPOSITE signs on the same kernels. See
-					RegisterCacheBackend::bridgeWritesHome for the numbers and isolation test H, which covers both.
+					Only a dirty copy is bridged; a clean one just refills from the home. Whether the bridge also
+					writes the home is the backend's call (RegisterCacheBackend::bridgeWritesHome).
 				*/
-				if (!otherLines[k].dirty) { otherLines[k].occupied = false; break; }	// drop it (clean: nothing to write) and fill from the home, as before
+				if (!otherLines[k].dirty) { otherLines[k].occupied = false; break; }	// clean: drop it and fill from the home
 				const int sourceRegister = otherRegisters[k];
 				const bool writeHome = cacheBackend.bridgeWritesHome();
 				if (writeHome) { cacheBackend.emitSpill(slot, sourceRegister, other); }				// clean the line here, or leave it dirty and let the block end do it
-				otherLines[k].occupied = false;																			// it moves out of that file
-				otherLines[k].dirty = false;													// ditto: the value is carried by the bridged line now
+				otherLines[k].occupied = false;
+				otherLines[k].dirty = false;
 				const int b = acquire(registerClass);
 				Line& bridged = lines[b];
 				bridged.occupied = true;
@@ -695,7 +627,7 @@ int RegisterCache::read(Int slot, RegisterClass registerClass) {
 	line.scratchTemp = false;
 	line.slot = slot;
 	line.registerClass = registerClass;
-	line.dirty = false;																									// filled from the home, so still matches it
+	line.dirty = false;
 	line.pinned = true;
 	line.lastUse = ++useClock;
 	line.nextUse = nextReadAfter(slot);
@@ -710,7 +642,7 @@ int RegisterCache::define(Int slot, RegisterClass registerClass) {
 	const int* registers = registersOf(registerClass);
 	for (size_t i = 0; i < count; ++i) {
 		if (lines[i].occupied && !lines[i].scratchTemp && lines[i].slot == slot) {
-			lines[i].dirty = true;																						// overwriting the resident value
+			lines[i].dirty = true;
 			lines[i].pinned = true;
 			lines[i].lastUse = ++useClock;
 			lines[i].nextUse = nextReadAfter(slot);
@@ -761,12 +693,9 @@ void RegisterCache::spillDirtyResident() {
 }
 
 /*
-	Snapshot the dirty lines for a terminal trap ARM (no model change, no emission). Captured at the trap BRANCH's
-	emission point - where the compile-time model equals the trap path's runtime register state - the backend then emits
-	plain stores from the snapshot on the cold arm, making the exit image interpreter-identical. The arm never rejoins
-	the mainline, so the model must not observe those stores (marking lines clean was the historical mid-op trap bug);
-	and capturing anywhere later is wrong too - the op's own define holds garbage on the trap path, and a later eviction
-	may reuse a captured register.
+	Snapshot the dirty lines for a trap arm's stores, without changing the model (the arm never rejoins). Call it at
+	the trap branch, where the model matches the trap path's registers; later, the op's own define holds garbage there
+	and an eviction may reuse a captured register.
 */
 void RegisterCache::captureDirtyLines(ResidencyMap& map) const {
 	assert(map.entries.empty());
@@ -794,19 +723,8 @@ void RegisterCache::flushAndClear() {
 void RegisterCache::barrier() { flushAndClear(); }
 
 /*
-	Snapshot the resident lines as a loop header's fixed entry state (see ResidencyMap). Pruned: a slot the loop never
-	reads is spilled-and-dropped here (keeping it would only make every back-edge refill it). A kept slot the loop
-	WRITES is modeled dirty from iteration one (the redefined value really is dirty when the header is reached again; a
-	clean model would let an eviction skip the store and lose it). A kept read-only slot is canonicalized to
-	register==home (one store, emitted before the header label so it runs once), so hazard flushes inside the loop never
-	re-store it.
-*/
-/*
-	How many entries capture() keeps at most, PER CLASS (after headroom). The MULTI-BLOCK pressure gate: a body whose
-	per-class slot working set exceeds its class keepMax has values permanently outside the map, so evictions keep taking
-	map lines and every interior leader's reconciliation refills them - measured mandelbrot +28% x64 / +32% arm64 (6
-	float slots vs keepMax 2 / 5). The overflow is per-CLASS: a total-capacity gate missed the arm64 case. Such loops
-	stay v2.0 fill-on-use.
+	The per-class cap on the entries capture() keeps, leaving headroom. A multi-block loop whose working set in either
+	class exceeds it stays fill-on-use, since its interior leaders would keep refilling evicted map lines.
 */
 void RegisterCache::residencyCapacity(size_t& generalMax, size_t& floatMax) const {
 	const size_t RESIDENCY_HEADROOM = 3;
@@ -815,13 +733,18 @@ void RegisterCache::residencyCapacity(size_t& generalMax, size_t& floatMax) cons
 	floatMax = fc - ((RESIDENCY_HEADROOM < fc / 2) ? RESIDENCY_HEADROOM : fc / 2);
 }
 
+/*
+	Snapshot the resident lines as a loop header's entry state (see ResidencyMap). Unwanted slots are spilled and
+	dropped. A slot the loop writes is modeled dirty from the first iteration, or an eviction could skip its store; a
+	read-only slot is spilled once here, before the header, so register==home throughout the loop.
+*/
 void RegisterCache::capture(ResidencyMap& map, const std::set<Int>& wantedGeneral, const std::set<Int>& wantedFloat, const std::set<Int>& writtenInLoop) {
 	assert(map.entries.empty() && "a header's entry map is captured once");
 	size_t classMax[2];
-	residencyCapacity(classMax[0], classMax[1]);																		// per-class keep limit (leaves headroom for the body's temps and constants)
+	residencyCapacity(classMax[0], classMax[1]);
 	size_t kept[2] = { 0, 0 };
 	std::set<Int> mapped[2];
-	for (int c = 0; c < 2; ++c) {																						// pass 1, BOTH classes: keep resident wanted lines, spill the rest
+	for (int c = 0; c < 2; ++c) {																						// pass 1: keep resident wanted lines, spill the rest
 		const RegisterClass registerClass = (c == 0) ? GENERAL_REGISTER : FLOAT_REGISTER;
 		const std::set<Int>& wanted = (c == 0) ? wantedGeneral : wantedFloat;
 		size_t count;
@@ -837,7 +760,7 @@ void RegisterCache::capture(ResidencyMap& map, const std::set<Int>& wantedGenera
 				continue;
 			}
 			const bool expectDirty = (writtenInLoop.count(lines[i].slot) != 0);
-			if (!expectDirty) { spillLine(registerClass, static_cast<int>(i)); }										// canonical clean: register==home for the whole loop
+			if (!expectDirty) { spillLine(registerClass, static_cast<int>(i)); }
 			ResidencyMap::Entry entry = { lines[i].slot, registerClass, static_cast<int>(i), registers[i], expectDirty };
 			map.entries.push_back(entry);
 			lines[i].dirty = expectDirty;
@@ -846,10 +769,8 @@ void RegisterCache::capture(ResidencyMap& map, const std::set<Int>& wantedGenera
 		}
 	}
 	/*
-		Pass 2, only after EVERY class has spilled: preload the absent wanted slots (deterministic by need, not arrival
-		luck). The phase split matters: a wanted-general slot can sit DIRTY in a FLOAT line (float-written before the
-		loop, general-read inside it) - preloading it before the float pass spilled that line would fill from a stale
-		home (fuzzer-caught, seed 780001).
+		Pass 2, only after every class has spilled: preload the absent wanted slots. A wanted-general slot may sit dirty
+		in a float line, and preloading it before the float pass spilled that line would read a stale home.
 	*/
 	for (int c = 0; c < 2; ++c) {
 		const RegisterClass registerClass = (c == 0) ? GENERAL_REGISTER : FLOAT_REGISTER;
@@ -891,9 +812,7 @@ void establishLeader(RegisterCache& cache, const Instruction* code, UInt j, cons
 		, std::map<UInt, ResidencyMap>& entryMaps, bool& resident, UInt& residentEnd) {
 	std::map<UInt, UInt>::const_iterator loopIt = loopExtent.find(j);
 	bool gated = false;
-	// A loop header can also be an interior leader of an ENCLOSING resident loop, which already pre-populated its
-	// entry map via filterResidencyMap. Re-capturing it would assert (capture-once) and double-establish the
-	// residency; instead inherit that map like any interior leader (reconcile). Only a FRESH header captures.
+	// A header that is an interior leader of an enclosing resident loop already has a map: reconcile, do not capture.
 	const bool freshHeader = (loopIt != loopExtent.end() && entryMaps.count(j) == 0);
 	if (freshHeader) {
 		std::map<UInt, UInt>::const_iterator w0 = loopWeight.upper_bound(j);
@@ -901,10 +820,8 @@ void establishLeader(RegisterCache& cache, const Instruction* code, UInt j, cons
 		std::set<Int> readSlots, writtenSlots, generalSlots, floatSlots;
 		buildLoopSets(code, j, loopIt->second, readSlots, writtenSlots, generalSlots, floatSlots);
 		/*
-			Wanted bindings (v2.2 varying maps): read in the loop AND live-in at the header (a written-first slot
-			like mandelbrot's zx2 burns no binding) AND single-class (a dual-class slot - e.g. a float bounced
-			through MOVE's general line - gets cross-class evicted mid-loop; never pin it). The per-class pressure
-			gate applies to THIS set: what capture would actually pin.
+			Wanted bindings: read in the loop, live-in at the header, and single-class (a dual-class slot gets
+			evicted across classes mid-loop). The pressure gate applies to this set.
 		*/
 		std::set<Int> wantedGeneral, wantedFloat;
 		for (std::set<Int>::const_iterator si = readSlots.begin(); si != readSlots.end(); ++si) {
@@ -920,7 +837,7 @@ void establishLeader(RegisterCache& cache, const Instruction* code, UInt j, cons
 			cache.barrier();
 		} else {
 			ResidencyMap& headerMap = entryMaps[j];
-			cache.capture(headerMap, wantedGeneral, wantedFloat, writtenSlots);											// keep + PRELOAD the wanted bindings
+			cache.capture(headerMap, wantedGeneral, wantedFloat, writtenSlots);
 			for (std::map<UInt, UInt>::const_iterator w = w0; w != loopWeight.end() && w->first <= loopIt->second
 					; ++w) {
 				filterResidencyMap(headerMap, liveIn, w->first, entryMaps[w->first]);									// interior leader: the bindings live there
@@ -930,8 +847,8 @@ void establishLeader(RegisterCache& cache, const Instruction* code, UInt j, cons
 	}
 	if (!freshHeader || gated) {
 		std::map<UInt, ResidencyMap>::const_iterator m = entryMaps.find(j);
-		if (m != entryMaps.end()) { cache.reconcileTo(m->second); }													// interior leader (incl. a header inherited from an enclosing loop): re-establish its entry state
-		else { cache.barrier(); }																						// any other leader: starts empty as in v2.0
+		if (m != entryMaps.end()) { cache.reconcileTo(m->second); }													// interior leader or inherited header: re-establish its entry state
+		else { cache.barrier(); }																						// any other leader starts empty
 	}
 }
 
@@ -959,10 +876,8 @@ void fillResidencyMap(RegisterCacheBackend& backend, const ResidencyMap& map) {
 }
 
 /*
-	Re-establish a header's entry state at a back-edge, from spill/fill primitives alone: spill-and-drop every line the
-	map does not want (including a wanted slot sitting in the wrong register - its refill below reads the home the spill
-	just made current), then fill the missing entries. Emits nothing when the state already matches, which is the common
-	back-edge case. Flags are untouched (loads/stores only), so this may sit between a compare and its branch.
+	Re-establish a map's entry state: spill and drop every line it does not want (a wanted slot in the wrong register
+	included), then fill the missing entries. Emits only loads and stores, so it may sit between a compare and a branch.
 */
 void RegisterCache::reconcileTo(const ResidencyMap& map) {
 	for (int c = 0; c < 2; ++c) {
@@ -990,7 +905,7 @@ void RegisterCache::reconcileTo(const ResidencyMap& map) {
 			cacheBackend.emitFill(entry.physicalRegister, entry.slot, entry.registerClass);							// home is current: the value was spilled above or never diverged
 			line.occupied = true;
 			line.scratchTemp = false;
-			line.dirty = false;																			// just filled FROM the home, so it matches - never inherit the flag the previous occupant left
+			line.dirty = false;																			// filled from the home: never inherit the previous occupant's flag
 			line.slot = entry.slot;
 			line.registerClass = entry.registerClass;
 			line.pinned = false;
@@ -1006,7 +921,7 @@ void RegisterCache::invalidateAll() { flushAndClear(); }
 
 void RegisterCache::enterBlock() {
 	assertNoDirty();																									// contract: a leader is reached only via a barrier, so nothing is dirty
-	flushAndClear();																									// release: never drop a dirty line - spill it - even if the contract was broken
+	flushAndClear();																									// release: spill rather than drop a dirty line, even if the contract was broken
 }
 
 void RegisterCache::evict(int physicalRegister) {
@@ -1041,11 +956,8 @@ void RegisterCache::assertNoDirty() const {
 }
 
 /*
-	The field ABI JitCompiler bakes into the machine code - byte offsets of the run-state fields within a JitProcessor.
-	Arch-neutral (offsetof on JitProcessor fields), so it lives here rather than in a backend .cpp. Static /
-	instance-independent: computed with offsetof, so no engine is needed. offsetof on this polymorphic type is
-	universally correct (single inheritance, fixed layout); the one -Winvalid-offsetof is silenced locally. Non-virtual,
-	so defining it here pulls no vtable into GAZLJit.o.
+	The run-state field offsets the machine code bakes in. offsetof on this polymorphic type is safe (single
+	inheritance, fixed layout), so -Winvalid-offsetof is silenced locally.
 */
 Offsets JitProcessor::layout() {
 	Offsets o;
@@ -1077,13 +989,9 @@ Status JitProcessor::enterCall(Target target) {
 }
 
 /*
-	pushCall() under the JIT - the mirror of Processor::pushCall over compiled continuations. The native-call
-	sequence (both backends) presets ctx.nativeAfter to its `after` label and, on native OK, continues with an
-	indirect jump through it; each pushCall links the CURRENT continuation into a plain frame and retargets the
-	slot at the pushed callee's compiled entry. So the last-pushed callee runs first and every RETU chains through
-	the pushed frames (LIFO) back to `after`, which normalizes dsp to the caller frame - which is why every pushed
-	frame stores the WINDOW (this->dsp), first and chained alike, unlike the interpreter's frames. `after` also
-	zeroes ctx.nativeAfter, restoring the "only inside a native call" guard.
+	On native OK the compiled call sequence jumps through `nativeAfter`, so each push links the current continuation
+	into a frame and retargets `nativeAfter` at the callee. Callees run LIFO and chain back to `after`, which restores
+	dsp; that is why every pushed frame stores the window (this->dsp), unlike the interpreter's frames.
 */
 Value* JitProcessor::pushCall(Target target) {
 	UInt ui = target - FUNCTION_OFFSET;
@@ -1100,23 +1008,14 @@ Value* JitProcessor::pushCall(Target target) {
 
 Status JitProcessor::run() {
 	typedef int (*Disp)(JitProcessor*);
-	/*
-		nativeAfter is the one dispatch-scratch field live ACROSS a native call (the redirectable OK continuation
-		the compiled sequence reads after the native returns). A blocking native that nests run() (enterCall +
-		run, the documented interrupt pattern) would clobber it via its own native calls - so give it the same
-		C++-stack isolation the interpreter's locals enjoy. Everything else the sequence reads post-call
-		(ctx.dsp / ctx.ipsp / ctx.fuel) is stable across a well-formed nested episode by the sentinel discipline.
-	*/
+	// nativeAfter is live across a native call, and a native that nests run() would clobber it: save and restore it.
 	void* const outerNativeAfter = nativeAfter;
 	const Status s = static_cast<Status>(reinterpret_cast<Disp>(jitDispatch)(this));
 	nativeAfter = outerNativeAfter;
 	return s;
 }
 
-/*
-	Bind the compiled module into this engine + zero the native-call scratch. Shared by both constructors (C++03 has no
-	delegation). Precondition: the module holds compiled code - an empty module has no dispatcher to run.
-*/
+// Shared by both constructors. The module must be compiled: an empty one has no dispatcher.
 void JitProcessor::bindModule(const JitModule& module) {
 	assert(module.isCompiled() && "JitProcessor requires a compiled JitModule");
 	nativeAfter = 0;
@@ -1125,31 +1024,19 @@ void JitProcessor::bindModule(const JitModule& module) {
 }
 
 /*
-	jitAvailable() - the two-layer capability probe declared in GAZLJit.h. Layer 1 is makeExecutable() itself (a policy
-	denial such as a missing macOS allow-jit entitlement or Windows Arbitrary Code Guard fails the syscalls). Layer 2 runs
-	a position-independent stub under a fault guard, so a page that mapped but cannot execute turns into `false` instead of
-	a crash - and the stub does a real JIT->C round-trip (it calls a C function through the platform convention and returns
-	its result), so a broken native calling convention - the exact crossing CALL_NVC bakes in - also fails the probe rather
-	than Permut8. The stub is one word-aligned block (makeExecutable works in 32-bit words); it is architecture- and
-	ABI-specific but tiny, so it lives here rather than in a backend. Both shipping targets are little-endian.
+	Helpers for the jitAvailable() probe. Its stub runs under a fault guard and calls back into C, so a page that cannot
+	execute or a broken native calling convention makes the probe fail instead of crashing. The stub is one block of
+	32-bit words (what makeExecutable takes), little-endian on both targets.
 */
 namespace {
 
-/*
-	The native ABI the JIT bakes into CALL_NVC: a plain C function of one pointer, returning a single-register Status.
-	Pinned so a future change to either (a wider Status, a by-value struct return, a non-default convention) can't
-	silently break the hand-emitted call/return. The runtime counterpart - an actual JIT->C round-trip - is the probe stub.
-*/
+// The native ABI CALL_NVC bakes in: a C function of one pointer, returning Status in one integer register.
 typedef Status (*JitNativeSignatureCheck)(Processor*);
 #if __cplusplus >= 201103L
 static_assert(sizeof(Status) <= sizeof(void*), "JIT CALL_NVC assumes a native's Status returns in one integer register");
 #endif
 
-/*
-	The probe stub: `uint32_t stub(ProbeCallee callee, const void* arg)` - move callee out of arg0, move arg into arg0,
-	call it through the platform's native convention, hand back its return. Exercises the exact JIT->C crossing CALL_NVC
-	bakes in (arg in the ABI arg register, the call/return, frame alignment + Win64 shadow space).
-*/
+// `uint32_t stub(ProbeCallee callee, const void* arg)`: returns `callee(arg)`, called through the native convention.
 #if defined(__aarch64__) || defined(_M_ARM64)
 const uint32_t PROBE_STUB[] = {																							// stp x29,x30,[sp,#-16]! ; mov x9,x0 ; mov x0,x1 ; blr x9 ; ldp x29,x30,[sp],#16 ; ret
 	0xA9BF7BFDu, 0xAA0003E9u, 0xAA0103E0u, 0xD63F0120u, 0xA8C17BFDu, 0xD65F03C0u
@@ -1171,10 +1058,7 @@ const uint32_t PROBE_STUB[] = {																							// sub rsp,8 ; mov rax,rdi
 #if !defined(GAZL_NO_PROBE_STUB)
 typedef uint32_t (*ProbeCallee)(const void*);
 typedef uint32_t (*ProbeFunc)(ProbeCallee, const void*);
-/*
-	The C side of the round-trip: read the 32-bit input and add 0x1111, so a passing probe proves the call really ran (not
-	a passthrough) and the arg pointer crossed intact. probeCallee(&PROBE_INPUT) == 0xC0DE - the value the stub returns.
-*/
+// Adds 0x1111, so a passing probe proves the call really ran and the argument arrived intact.
 uint32_t probeCallee(const void* arg) { return *static_cast<const uint32_t*>(arg) + 0x1111u; }
 const uint32_t PROBE_INPUT = 0xAFCDu;																					// 0xAFCD + 0x1111 == 0xC0DE
 #endif
@@ -1185,10 +1069,7 @@ void probeFaultHandler(int) { siglongjmp(gProbeJump, 1); }
 #endif
 
 #if !defined(GAZL_NO_PROBE_STUB)
-/*
-	Run `func` under a fault guard: true only if it returned 0xC0DE. A SIGILL/SIGSEGV/SIGBUS/SIGTRAP (POSIX) or any
-	structured exception (Windows) means executing generated code faults on this host -> false.
-*/
+// True only if `func` returns 0xC0DE; a fault (signal or structured exception) gives false.
 bool runProbe(ProbeFunc func) {
 #if defined(_WIN32)
 	__try {
@@ -1220,10 +1101,8 @@ bool runProbe(ProbeFunc func) {
 
 #if defined(_M_X64) || defined(__x86_64__)
 /*
-	Layer 0 of the probe: the BASELINE ISA the x64 backend emits. Only `roundss` (OP_FLOF) exceeds SSE2, and a single
-	FLOf on a pre-SSE4.1 host would raise #UD at run time rather than degrade - the page probe below cannot see that,
-	because the stub it runs is plain SSE2. Returning false here routes the whole program to the interpreter, which is
-	the documented fallback. arm64 needs no equivalent: everything that backend emits is base ARMv8-A.
+	The x64 backend needs SSE4.1 for `roundss` (FLOF), which the SSE2 probe stub cannot detect, so a host without it
+	uses the interpreter. arm64 emits only base ARMv8-A.
 */
 static bool x64BaselineIsa() {
 	unsigned int regs[4] = { 0, 0, 0, 0 };
@@ -1245,16 +1124,16 @@ bool jitAvailable() {
 	static int cached = -1;																								// -1 unknown / 0 no / 1 yes; probed once (single-threaded startup)
 	if (cached < 0) {
 #if defined(_M_X64) || defined(__x86_64__)
-		if (!x64BaselineIsa()) { cached = 0; return false; }								// layer 0: ISA, before spending a page on the probe
+		if (!x64BaselineIsa()) { cached = 0; return false; }								// ISA first, before spending a page on the probe
 #endif
 		const size_t words = sizeof(PROBE_STUB) / sizeof(PROBE_STUB[0]);
-		void* page = makeExecutable(PROBE_STUB, words);																	// layer 1: policy denial fails the syscalls here
+		void* page = makeExecutable(PROBE_STUB, words);																	// a policy denial fails here
 		if (page == 0) {
 			cached = 0;
 		} else {
 			ProbeFunc func;
 			std::memcpy(&func, &page, sizeof(func));																	// void* -> function pointer without an ISO-illegal cast
-			cached = runProbe(func) ? 1 : 0;																			// layer 2: the emitted stub actually runs and returns 0xC0DE
+			cached = runProbe(func) ? 1 : 0;																			// the stub actually runs and returns 0xC0DE
 			freeExecutable(page, words);
 		}
 	}
