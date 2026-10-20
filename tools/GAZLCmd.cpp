@@ -1016,7 +1016,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size) {
 			globals.registerNative(NATIVE_NAMES[i], i);
 		}
 		
-		AssembledProgram program;
+		AssembledProgram program = { 0, 0, 0, 0, { 0, 0, 0, 0 } };
 
 		{
 			std::istringstream gazlStream(std::string(reinterpret_cast<const char*>(Data), reinterpret_cast<const char*>(Data) + Size));
@@ -1188,7 +1188,9 @@ int main(int argc, const char* argv[]) {
 		}
 		const Target mainFunction = globals.findFunction("main");
 #ifdef FUZZ_POISON
-		for (UInt i = program.constsSize - 1 + program.globalsSize; i + 1 < program.memorySize; ++i) { memory[i].i = 0x7F7F7F7F; }
+		for (UInt i = program.sizes.constsSize - 1 + program.sizes.globalsSize; i + 1 < program.memorySize; ++i) {
+			memory[i].i = 0x7F7F7F7F;
+		}
 #endif
 		Processor interp(program, CALL_STACK_SIZE, callStack, NT, 0);
 		const Status st = runEngine(interp, mainFunction, 10000000);
@@ -1455,8 +1457,8 @@ int main(int argc, const char* argv[]) {
 				at = comma + 1;
 			}
 		}
-		
-		AssembledProgram program;
+
+		AssembledProgram program = { 0, 0, 0, 0, { 0, 0, 0, 0 } };
 
 		{
 			std::ifstream gazlStream(pos[1], std::ifstream::binary);
@@ -1485,8 +1487,9 @@ int main(int argc, const char* argv[]) {
 
 				assem.finalize(program);
 
-				std::cerr << "Code size: " << program.codeSize << ", globals size: " << program.globalsSize << ", consts size: "
-						<< program.constsSize << ", functions: " << program.functionCount << std::endl;
+				std::cerr << "Code size: " << program.sizes.codeSize << ", globals size: " << program.sizes.globalsSize
+						<< ", consts size: " << program.sizes.constsSize
+						<< ", functions: " << program.sizes.functionCount << std::endl;
 				std::cerr << "--------------------------------------------------------------------------------"
 						<< std::endl;
 			}
@@ -1518,7 +1521,7 @@ int main(int argc, const char* argv[]) {
 			*/
 			const char* base = static_cast<const char*>(module.dispatchEntry());
 			void* const* entries = module.entryTable();
-			for (UInt f = 0; f < program.functionCount; ++f) {
+			for (UInt f = 0; f < program.sizes.functionCount; ++f) {
 				if (static_cast<const char*>(entries[f]) < base) { base = static_cast<const char*>(entries[f]); }
 			}
 			std::ofstream binary(emitJit, std::ofstream::binary);
@@ -1532,11 +1535,11 @@ int main(int argc, const char* argv[]) {
 #endif
 			sidecar << "code_bytes " << (module.codeWords() * 4) << "\n";
 			sidecar << "dispatch " << (static_cast<const char*>(module.dispatchEntry()) - base) << "\n";
-			for (UInt f = 0; f < program.functionCount; ++f) {
+			for (UInt f = 0; f < program.sizes.functionCount; ++f) {
 				sidecar << "function " << f << " " << (static_cast<const char*>(entries[f]) - base) << "\n";
 			}
 			std::cerr << "emit-jit: wrote " << emitJit << " + sidecar (" << (module.codeWords() * 4) << " bytes, "
-					<< program.functionCount << " functions)" << std::endl;
+					<< program.sizes.functionCount << " functions)" << std::endl;
 			return 0;
 		}
 #else
@@ -1564,9 +1567,9 @@ int main(int argc, const char* argv[]) {
 					if (jitStats) {							// machine-readable line for the benchmark harness
 						const double ms = (t1 - t0) * 1000.0;
 						std::cerr << "jitstats compile_ms=" << ms << " code_bytes=" << (module.codeWords() * 4)
-								<< " funcs=" << program.functionCount << std::endl;
+								<< " funcs=" << program.sizes.functionCount << std::endl;
 					} else {
-						std::cerr << "JIT: compiled " << program.functionCount << " function(s) to native code." << std::endl;
+						std::cerr << "JIT: compiled " << program.sizes.functionCount << " function(s) to native code." << std::endl;
 					}
 					proc.reset(new JitProcessor(module, program, CALL_STACK_SIZE, callStack, NATIVE_TABLE));
 				} catch (const JitException& x) {			// host refused executable memory, or an opcode the backend can't lower

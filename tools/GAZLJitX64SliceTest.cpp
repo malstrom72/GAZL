@@ -269,12 +269,12 @@ namespace {
 	Value gClean[DATA_SIZE];			// snapshot of the assembled image (globals + const inits), restored before each run
 	UInt gFunctionTable[FUNCTION_TABLE_SIZE];
 	CallStackEntry gCallStack[CALL_STACK_SIZE];
-	UInt gGlobalsSize = 0, gConstsSize = 0, gFunctionCount = 0;
+	AssembledProgram gProgram;
 	void* gEntryAddr[FUNCTION_TABLE_SIZE];		// ordinal -> native entry address (filled after mapping; for CALL_VVC)
 }
 
 // A pointer plus this is its index in `gMemory`, which starts with the constants, below `MEMORY_OFFSET`.
-static UInt readOffset() { return (gConstsSize - 1) - MEMORY_OFFSET; }
+static UInt readOffset() { return (gProgram.sizes.constsSize - 1) - MEMORY_OFFSET; }
 static UInt memIndex(Pointer pointer) { return pointer + readOffset(); }
 
 // A native, in both flavors: the interpreter's (Processor*, reads via accessParams) and the JIT's (params = dsp+window,
@@ -287,7 +287,6 @@ static const char* const gNatNames[] = { "nsq" };
 
 static bool assembleKernel(Symbols& globals, const char* source, Pointer& gInPtr, Pointer& gOutPtr) {
 	for (int i = 0; i < static_cast<int>(sizeof(gNatNames) / sizeof(*gNatNames)); ++i) { globals.registerNative(gNatNames[i], i); }
-	UInt codeSize = 0, gs = 0, cs = 0, fc = 0;
 	try {
 		Assembler assem(CODE_SIZE, gCode, FUNCTION_TABLE_SIZE, gFunctionTable, DATA_SIZE, gMemory, globals);
 		assem.newUnit("x64slice");
@@ -299,14 +298,11 @@ static bool assembleKernel(Symbols& globals, const char* source, Pointer& gInPtr
 			if (nl == std::string::npos) { break; }
 			pos = nl + 1;
 		}
-		ProgramSizes sizes;
-		assem.finalize(sizes);
-		codeSize = sizes.codeSize; fc = sizes.functionCount; gs = sizes.globalsSize; cs = sizes.constsSize;
+		assem.finalize(gProgram);
 	} catch (const Exception& e) {
 		std::printf("  ASSEMBLE FAILED: %s (%s)\n", ASSEMBLER_ERROR_TEXTS[e.error], e.detail.c_str());
 		return false;
 	}
-	gGlobalsSize = gs; gConstsSize = cs; gFunctionCount = fc;
 	UInt sz = 0;
 	gInPtr = globals.findGlobal("gIn", sz);
 	gOutPtr = globals.findGlobal("gOut", sz);
@@ -314,8 +310,7 @@ static bool assembleKernel(Symbols& globals, const char* source, Pointer& gInPtr
 }
 
 static int interpreterRun(Symbols& globals, Pointer gInPtr, Pointer gOutPtr, int n, Status& outStatus) {
-	Processor p(CODE_SIZE, gCode, gFunctionCount, gFunctionTable, DATA_SIZE, gMemory, gGlobalsSize,
-			gConstsSize, CALL_STACK_SIZE, gCallStack, gNat, 0);
+	Processor p(gProgram, CALL_STACK_SIZE, gCallStack, gNat, 0);
 	p.accessMemory(gInPtr, 1)->i = n;
 	Status s = p.enterCall(globals.findFunction("main"));
 	do { p.resetTimeOut(0x7FFFFFFF); s = p.run(); } while (s == TIME_OUT || s == BLOCK_RETRY);
@@ -698,12 +693,15 @@ static void runKernel(const char* name, const char* source, const int* inputs, s
 	if (!assembleKernel(globals, source, gInPtr, gOutPtr)) { std::printf("  %s: assemble failed\n", name); ++failures; return; }
 	X64Emitter e;
 	static size_t entryOffsets[FUNCTION_TABLE_SIZE];
-	if (!compileProgram(e, gCode, gFunctionTable, gFunctionCount, globals.findFunction("main") - FUNCTION_OFFSET, gNatJit, entryOffsets)) {
+	if (!compileProgram(e, gCode, gFunctionTable, gProgram.sizes.functionCount
+			, globals.findFunction("main") - FUNCTION_OFFSET, gNatJit, entryOffsets)) {
 		std::printf("  %s: unsupported opcode\n", name); ++failures; return;
 	}
 	void* code = mapExecutable(e.code(), e.size());
 	if (code == 0) { std::printf("  %s: mapExecutable failed\n", name); ++failures; return; }
-	for (UInt k = 0; k < gFunctionCount; ++k) { gEntryAddr[k] = reinterpret_cast<char*>(code) + entryOffsets[k]; }
+	for (UInt k = 0; k < gProgram.sizes.functionCount; ++k) {
+		gEntryAddr[k] = reinterpret_cast<char*>(code) + entryOffsets[k];
+	}
 	JitFn jit = reinterpret_cast<JitFn>(code);
 	std::memcpy(gClean, gMemory, sizeof(gMemory));		// clean image (globals + DATi/DATf inits) to restore each run
 	std::printf("Kernel \"%s\" (%zu bytes):\n", name, e.size());
@@ -714,7 +712,7 @@ static void runKernel(const char* name, const char* source, const int* inputs, s
 		const int want = interpreterRun(globals, gInPtr, gOutPtr, n, wantStatus);
 		std::memcpy(gMemory, gClean, sizeof(gMemory));	// JIT run too
 		gMemory[memIndex(gInPtr)].i = n;
-		const int st = jit(&gMemory[gConstsSize - 1 + gGlobalsSize], &gMemory[0]);
+		const int st = jit(&gMemory[gProgram.sizes.constsSize - 1 + gProgram.sizes.globalsSize], &gMemory[0]);
 		const int got = gMemory[memIndex(gOutPtr)].i;
 		const bool ok = (st == static_cast<int>(wantStatus)) && (wantStatus != OK || got == want);
 		std::printf("  n=%-8d interp=%-12d/%d jit=%-12d/%d %s\n", n, want, static_cast<int>(wantStatus), got, st, ok ? "OK" : "MISMATCH");

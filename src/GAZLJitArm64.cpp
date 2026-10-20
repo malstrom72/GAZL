@@ -629,8 +629,8 @@ void JitCompilerArm64::lowerFunction(Arm64Emitter& e, const AssembledProgram& pr
 		is the value its range check tests. `memory`, for the analyses, is the word at `MEMORY_OFFSET`.
 	*/
 	const Instruction* const code = program.code;
-	const UInt functionCount = program.functionCount;
-	const UInt constantsSize = program.constsSize - 1;
+	const UInt functionCount = program.sizes.functionCount;
+	const UInt constantsSize = program.sizes.constsSize - 1;
 	const Value* const memory = program.memory + constantsSize;
 	const UInt readOffset = constantsSize - MEMORY_OFFSET;
 	const Pointer lowestAddress = MEMORY_OFFSET - constantsSize;
@@ -1178,20 +1178,21 @@ void JitCompilerArm64::compile(const AssembledProgram& program, JitModule& out) 
 	EmittedModule emitted;
 	const Offsets o = JitProcessor::layout();
 	Arm64Emitter e;
-	std::vector<Label> entryLabels(program.functionCount);
-	for (UInt k = 0; k < program.functionCount; ++k) { entryLabels[k] = e.newLabel(); }
+	std::vector<Label> entryLabels(program.sizes.functionCount);
+	for (UInt k = 0; k < program.sizes.functionCount; ++k) { entryLabels[k] = e.newLabel(); }
 	Label exitLabel = e.newLabel();																						// the one dispatcher exit
-	for (UInt ord = 0; ord < program.functionCount; ++ord) {
-		const UInt funcEnd = ((ord + 1 < program.functionCount) ? program.functionTable[ord + 1] : program.codeSize) - 1;
+	for (UInt ord = 0; ord < program.sizes.functionCount; ++ord) {
+		const UInt funcEnd = ((ord + 1 < program.sizes.functionCount) ? program.functionTable[ord + 1]
+				: program.sizes.codeSize) - 1;
 		lowerFunction(e, program, program.functionTable[ord], funcEnd, o, entryLabels, ord, exitLabel);
 	}
-	const size_t dispatchOffset = emitDispatcher(e, o, exitLabel, program.constsSize - 1);
+	const size_t dispatchOffset = emitDispatcher(e, o, exitLabel, program.sizes.constsSize - 1);
 	e.finalize();
 	// Offsets are in words; the module wants bytes.
 	const size_t words = e.wordCount();
 	emitted.code.assign(e.code(), e.code() + words);
-	emitted.entryByteOffsets.resize(program.functionCount);
-	for (UInt ord = 0; ord < program.functionCount; ++ord) {
+	emitted.entryByteOffsets.resize(program.sizes.functionCount);
+	for (UInt ord = 0; ord < program.sizes.functionCount; ++ord) {
 		emitted.entryByteOffsets[ord] = static_cast<size_t>(e.labelOffset(entryLabels[ord])) * 4;
 	}
 	emitted.dispatchByteOffset = dispatchOffset * 4;

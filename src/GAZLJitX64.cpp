@@ -475,8 +475,8 @@ void JitCompilerX64::lowerFunction(X64Emitter& emitter, const AssembledProgram& 
 		`MEMORY_OFFSET`.
 	*/
 	const Instruction* const code = program.code;
-	const UInt functionCount = program.functionCount;
-	const UInt constantsSize = program.constsSize - 1;
+	const UInt functionCount = program.sizes.functionCount;
+	const UInt constantsSize = program.sizes.constsSize - 1;
 	const Value* const memory = program.memory + constantsSize;
 	const UInt readOffset = constantsSize - MEMORY_OFFSET;
 	const int32_t rwDisplacement = static_cast<int32_t>(constantsSize * 4);
@@ -1021,14 +1021,15 @@ void JitCompilerX64::compile(const AssembledProgram& program, JitModule& out) {
 	EmittedModule emitted;
 	const Offsets offsets = JitProcessor::layout();
 	X64Emitter emitter;
-	std::vector<Label> entryLabels(program.functionCount);
-	for (UInt k = 0; k < program.functionCount; ++k) { entryLabels[k] = emitter.newLabel(); }
+	std::vector<Label> entryLabels(program.sizes.functionCount);
+	for (UInt k = 0; k < program.sizes.functionCount; ++k) { entryLabels[k] = emitter.newLabel(); }
 	Label epilogue = emitter.newLabel();
 
-	for (UInt ordinal = 0; ordinal < program.functionCount; ++ordinal) {
+	for (UInt ordinal = 0; ordinal < program.sizes.functionCount; ++ordinal) {
 		emitter.alignTo(16);																							// so a code-layout shift stays within one function
 		emitter.bind(entryLabels[ordinal]);
-		const UInt funcEnd = ((ordinal + 1 < program.functionCount) ? program.functionTable[ordinal + 1] : program.codeSize) - 1;
+		const UInt funcEnd = ((ordinal + 1 < program.sizes.functionCount) ? program.functionTable[ordinal + 1]
+				: program.sizes.codeSize) - 1;
 		lowerFunction(emitter, program, program.functionTable[ordinal], funcEnd, offsets, entryLabels, epilogue);
 	}
 	const size_t dispatcherOffset = emitDispatcher(emitter, offsets, epilogue);
@@ -1039,8 +1040,8 @@ void JitCompilerX64::compile(const AssembledProgram& program, JitModule& out) {
 	const size_t byteCount = emitter.size();
 	emitted.code.assign((byteCount + 3) / 4, 0);
 	if (byteCount != 0) { std::memcpy(&emitted.code[0], emitter.code(), byteCount); }
-	emitted.entryByteOffsets.resize(program.functionCount);
-	for (UInt ordinal = 0; ordinal < program.functionCount; ++ordinal) {
+	emitted.entryByteOffsets.resize(program.sizes.functionCount);
+	for (UInt ordinal = 0; ordinal < program.sizes.functionCount; ++ordinal) {
 		emitted.entryByteOffsets[ordinal] = static_cast<size_t>(emitter.labelOffset(entryLabels[ordinal]));
 	}
 	emitted.dispatchByteOffset = dispatcherOffset;

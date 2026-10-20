@@ -298,8 +298,8 @@ static int joinRealm(int a, int b) {
 }
 
 bool isDataAddress(const AssembledProgram& program, Pointer pointer) {
-	const UInt constantsSize = program.constsSize - 1;
-	return pointer - (MEMORY_OFFSET - constantsSize) < constantsSize + program.globalsSize;
+	const UInt constantsSize = program.sizes.constsSize - 1;
+	return pointer - (MEMORY_OFFSET - constantsSize) < constantsSize + program.sizes.globalsSize;
 }
 
 void buildPointerRealms(const AssembledProgram& program, UInt from, UInt to, std::map<Int, int>& realm) {

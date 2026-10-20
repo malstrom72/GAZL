@@ -295,13 +295,13 @@ static bool emitFunction(std::ostringstream& out, const Instruction* code, UInt 
 
 std::string translateToCpp(const AssembledProgram& program, UInt mainOrdinal, bool promoteLocals) {
 	const Instruction* const code = program.code;
-	const UInt functionCount = program.functionCount;
+	const UInt functionCount = program.sizes.functionCount;
 	const UInt* const functionTable = program.functionTable;
 	const Value* const memory = program.memory;
 	const UInt memorySize = program.memorySize;
-	const UInt codeSize = program.codeSize;
-	const UInt globalsSize = program.globalsSize;
-	const UInt constantsSize = program.constsSize - 1;																// the constants, without the zero guard at the end
+	const UInt codeSize = program.sizes.codeSize;
+	const UInt globalsSize = program.sizes.globalsSize;
+	const UInt constantsSize = program.sizes.constsSize - 1;																// the constants, without the zero guard at the end
 	const UInt readOffset = constantsSize - MEMORY_OFFSET;
 
 	// Caller-shared window per callee: the widest `*N` any CALL_CVC passes it (its OUT/INP region; excluded from promotion).

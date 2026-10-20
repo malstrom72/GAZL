@@ -123,11 +123,9 @@ struct KernelLayout {
 	(`dsp`, `ip`, `ipsp`, `clockCyclesLeft`, `memoryBase`, `codeBase`) with no change to src/GAZL.*.
 */
 class ProtoEngine : public Processor {
-	public:		ProtoEngine(UInt codeSize, const Instruction* code, UInt fnCount, const UInt* fnTable, UInt memSize
-						, Value* mem, UInt globalsSize, UInt constsSize, UInt ipStackSize, CallStackEntry* ipStack
+	public:		ProtoEngine(const AssembledProgram& program, UInt ipStackSize, CallStackEntry* ipStack
 						, NativeFunc const* natives)
-					: Processor(codeSize, code, fnCount, fnTable, memSize, mem, globalsSize, constsSize, ipStackSize
-						, ipStack, natives, 0) { }
+					: Processor(program, ipStackSize, ipStack, natives, 0) { }
 
 		// Run `native` for the function already selected by a prior `enterCall()` (which set `ip`=FUNC, pushed the call
 		// stack, and left `dsp`=frame base). On a fuel suspend, publish interpreter-resumable state: the recorded GAZL
@@ -174,16 +172,15 @@ namespace {
 	UInt gFunctionTable[FUNCTION_TABLE_SIZE];
 	CallStackEntry gCallStack[CALL_STACK_SIZE];
 
-	UInt gGlobalsSize = 0, gConstsSize = 0, gFunctionCount = 0;
+	AssembledProgram gProgram;
 	std::vector<Value> gCleanImage;			// gMemory right after assembly, restored before every run
 }
 
 // The index in `gMemory` of the word at `pointer`: the memory starts with the constants, below `MEMORY_OFFSET`.
-static UInt wordIndex(Pointer pointer) { return pointer - MEMORY_OFFSET + (gConstsSize - 1); }
+static UInt wordIndex(Pointer pointer) { return pointer - MEMORY_OFFSET + (gProgram.sizes.constsSize - 1); }
 
 // Assemble the kernel; fill in `layout` and the gIn/gOut pointers. Returns false on failure.
 static bool assembleKernel(Symbols& globals, KernelLayout& layout, Pointer& gInPtr, Pointer& gOutPtr) {
-	UInt codeSize = 0, globalsSize = 0, constsSize = 0, functionCount = 0;
 	try {
 		Assembler assem(CODE_SIZE, gCode, FUNCTION_TABLE_SIZE, gFunctionTable, DATA_SIZE, gMemory, globals);
 		assem.newUnit("engineKernel");
@@ -198,17 +195,11 @@ static bool assembleKernel(Symbols& globals, KernelLayout& layout, Pointer& gInP
 			}
 			pos = nl + 1;
 		}
-		ProgramSizes sizes;
-		assem.finalize(sizes);
-		codeSize = sizes.codeSize; functionCount = sizes.functionCount;
-		globalsSize = sizes.globalsSize; constsSize = sizes.constsSize;
+		assem.finalize(gProgram);
 	} catch (const Exception& e) {
 		std::printf("  ASSEMBLE FAILED: %s (%s)\n", ASSEMBLER_ERROR_TEXTS[e.error], e.detail.c_str());
 		return false;
 	}
-	gGlobalsSize = globalsSize;
-	gConstsSize = constsSize;
-	gFunctionCount = functionCount;
 	gCleanImage.assign(gMemory, gMemory + DATA_SIZE);
 
 	UInt sz = 0;
@@ -297,8 +288,7 @@ static void restoreCleanImage() {
 // Pure interpreter run for input n; returns the full final memory image.
 static std::vector<Value> runInterpreter(Symbols& globals, Pointer gInPtr, int n) {
 	restoreCleanImage();
-	Processor p(CODE_SIZE, gCode, gFunctionCount, gFunctionTable, DATA_SIZE, gMemory, gGlobalsSize, gConstsSize,
-			CALL_STACK_SIZE, gCallStack, nullptr, nullptr);
+	Processor p(gProgram, CALL_STACK_SIZE, gCallStack, nullptr, nullptr);
 	p.accessMemory(gInPtr, 1)->i = n;
 	Status s = p.enterCall(globals.findFunction("main"));
 	do {
@@ -357,8 +347,7 @@ int main() {
 		const std::vector<Value> want = runInterpreter(globals, gInPtr, n);
 
 		restoreCleanImage();
-		ProtoEngine eng(CODE_SIZE, gCode, gFunctionCount, gFunctionTable, DATA_SIZE, gMemory, gGlobalsSize, gConstsSize,
-				CALL_STACK_SIZE, gCallStack, nullptr);
+		ProtoEngine eng(gProgram, CALL_STACK_SIZE, gCallStack, nullptr);
 		eng.accessMemory(gInPtr, 1)->i = n;
 		eng.enterCall(mainPtr);
 		const Status s = eng.dispatch(jitKernel, 0x7FFFFFFF, layout);
@@ -380,8 +369,7 @@ int main() {
 		const std::vector<Value> want = runInterpreter(globals, gInPtr, n);
 
 		restoreCleanImage();
-		ProtoEngine eng(CODE_SIZE, gCode, gFunctionCount, gFunctionTable, DATA_SIZE, gMemory, gGlobalsSize, gConstsSize,
-				CALL_STACK_SIZE, gCallStack, nullptr);
+		ProtoEngine eng(gProgram, CALL_STACK_SIZE, gCallStack, nullptr);
 		eng.accessMemory(gInPtr, 1)->i = n;
 		eng.enterCall(mainPtr);
 		Status s = eng.dispatch(jitKernel, 8, layout);		// 8 fuel: suspends after a few blocks (n>=5 cases)
