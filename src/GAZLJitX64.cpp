@@ -1138,7 +1138,8 @@ void JitCompilerX64::compile(const AssembledProgram& program, JitModule& out) {
 	for (UInt ordinal = 0; ordinal < program.sizes.functionCount; ++ordinal) {
 		emitter.alignTo(16);																							// 16-align entries: code-layout shifts stay within one function
 		emitter.bind(entryLabels[ordinal]);
-		const UInt funcEnd = ((ordinal + 1 < program.sizes.functionCount) ? program.functionTable[ordinal + 1] : program.sizes.codeSize) - 1;
+		const UInt funcEnd = ((ordinal + 1 < program.sizes.functionCount) ? program.functionTable[ordinal + 1]
+				: program.sizes.codeSize) - 1;
 		lowerFunction(emitter, program, program.functionTable[ordinal], funcEnd, offsets, entryLabels, epilogue);
 	}
 	/*

@@ -328,7 +328,8 @@ static bool isBranchTaken(int opcode, const Value& a, const Value& b, DenormalMo
 
 Machine::Machine(const AssembledProgram& program, UInt ipStackSize, const Native* natives, DenormalMode denormalMode)
 		: code(program.code), codeSize(program.sizes.codeSize), functionTable(program.functionTable)
-		, functionCount(program.sizes.functionCount), memory(program.memory), constantWords(program.sizes.constsSize - 1)
+		, functionCount(program.sizes.functionCount), memory(program.memory)
+		, constantWords(program.sizes.constsSize - 1)
 		, readableWords(program.memorySize - 1), writableWords(program.memorySize - program.sizes.constsSize)
 		, stackBase(program.sizes.constsSize - 1 + program.sizes.globalsSize), stackEnd(program.memorySize - 1)
 		, ipStackSize(ipStackSize), natives(natives), denormalMode(denormalMode), fuel(0), ip(0), dsp(0) {

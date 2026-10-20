@@ -190,10 +190,9 @@ static void runKernel(const char* name, const char* source, const int* inputs, s
 	// Compile the whole program once through the facade; the returned module owns the page (freed at scope exit) and
 	// backs every JitProcessor constructed below.
 	JitModule module;
-	const AssembledProgram& program = gProgram;
 	NativeJitCompiler compiler;
-	compiler.compile(program, module);							// always yields a compiled module (throws on host denial / a backend bug)
-	std::printf("  compiled %zu native words for %u function(s)\n", module.codeWords(), program.sizes.functionCount);
+	compiler.compile(gProgram, module);							// always yields a compiled module (throws on host denial / a backend bug)
+	std::printf("  compiled %zu native words for %u function(s)\n", module.codeWords(), gProgram.sizes.functionCount);
 
 	for (size_t k = 0; k < nInputs; ++k) {
 		const int n = inputs[k];
@@ -203,7 +202,7 @@ static void runKernel(const char* name, const char* source, const int* inputs, s
 		for (int pass = 0; pass < 2; ++pass) {
 			const int fuel = (pass == 0) ? 0x7FFFFFFF : 100;	// tiny grant (> MAX_BLOCK_WEIGHT) forces repeated suspend/resume
 			restoreClean();
-			JitProcessor eng(module, program, CALL_STACK_SIZE, gCallStack, gNativeTable);
+			JitProcessor eng(module, gProgram, CALL_STACK_SIZE, gCallStack, gNativeTable);
 			eng.accessMemory(gInPtr, 1)->i = n;
 			gNativeCallCount = 0;
 			// Drive the JIT through the polymorphic base interface - the exact host loop the interpreter uses (§5.1).
