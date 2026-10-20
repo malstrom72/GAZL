@@ -1,6 +1,6 @@
 # Coding Style and Design Principles
 
-Version: 2026-10-08
+Version: 2026-10-19
 
 The coding style and design principles shared across these projects: the basis for both humans and agents, and held to
 in review. Each project adds its own operational notes (directory layout, build and test gates, dependencies) in that
@@ -24,8 +24,11 @@ These are the most important principles in the codebase. Get them wrong and the 
   Prefer the `assert(condition && "why this must hold")` form so a failure reads as an explanation. Include it as
   `#include "assert.h"` (with quotes, not `<cassert>`) so a project can override the handler with a local `assert.h`.
   Asserts are how programmer errors are handled: you never reach for `abort()`.
-- **Silence an assert-only variable with `(void)name;`.** Not `static_cast<void>(name)`, `[[maybe_unused]]` or a
-  macro. A library ships no `assert.h` of its own; the host product supplies it.
+- **Silence an unused parameter or an assert-only variable with `(void)name;`.** Not `static_cast<void>(name)`,
+  `[[maybe_unused]]`, a macro, or dropping or commenting out the parameter name: the name documents the parameter. A
+  one-line stub stays on one line: `virtual void setEnabled(bool enable) override { (void)enable; }`. The same cast
+  discards a value on purpose: `((void)(x *= 1000), true)`. A library ships no `assert.h` of its own; the host product
+  supplies it.
 - **Trust the contract inward; validate only at the boundary.** A function states its preconditions and then relies on
   them. It does not re-check what a caller is contractually obligated to provide, and it does not defensively null-,
   range-, or enum-check a value the contract already pins down. It accesses it directly. Untrusted data (external
@@ -107,6 +110,10 @@ These are the most important principles in the codebase. Get them wrong and the 
   what makes a definition legal in every translation unit that includes it, so header definitions keep it.
 - **Keep the client surface minimal.** Internal helpers are not public API: make them protected members of the class
   that uses them, or namespace-internal, not part of what a client sees when they include the header.
+- **Default arguments only where a default is the natural call.** Never add a default to avoid updating callers inside
+  the same library: update them. Only public API may keep a default for backward compatibility. Otherwise a parameter
+  gets a default only when the alternative would be an overload that just drops trailing arguments, when the function
+  is very commonly called with only its leading arguments, or when wanting anything but the default is extremely rare.
 - **C++ standard is per-repo, not a universal rule.** Match whatever standard the target repo requires. Application and
   product code is typically C++11 with some C++14; reusable libraries lean C++03 for maximum portability and stability,
   but pragmatically go to C++11 where it clearly pays (e.g. `shared_ptr`); it is a judgement call, not dogma. (GAZL, for
@@ -245,6 +252,21 @@ These are the most important principles in the codebase. Get them wrong and the 
   `for (size_t i = n; i-- > 0;)`. Idioms that read at a glance are fine: a byte copy `*d++ = *s++`, a buffer write
   `*p++ = c`, a stack push `*++sp = v`. An atomic counter that must increment and read in one operation
   (`if (instanceCount++ == 0)`) is required, not a style choice. When in doubt, write it out.
+
+## 10. Integer types
+
+- **`int` is the everyday integer and is assumed to be 32 bits wide**: counts, indices, loop counters, small values.
+- **When the exact width matters, use the `<stdint.h>` types**: `uint32_t`, `int64_t`, `uint8_t` and so on. That means
+  file and state formats, hashes, bit manipulation, wraparound arithmetic, ABI structs, and anything that may exceed 32
+  bits. A project typedef for the same thing (`UInt32`) is fine and is used where the project has one; the direction is
+  toward the standard types everywhere.
+- **Never `long`, `long long` or `unsigned long long`.** `long` is 32 bits on Windows and 64 on macOS. Use `int64_t` and
+  `uint64_t`.
+- **`unsigned int` is legacy.** Settled code keeps `int` and `unsigned int`. New code uses `int`, or `uint32_t` when it
+  needs an exact unsigned 32 bits.
+- **Format fixed-width integers with the `<inttypes.h>` macros**: `"%" PRIu64`, `"%" PRId32`, `"%" PRIx32`. Never cast
+  to `long` or `long long` just to make a format fit. `uint64_t` is `unsigned long` on 64-bit Linux, so `%llu`
+  mismatches there; on MSVC and macOS it is `unsigned long long`.
 
 ## Local additions
 
