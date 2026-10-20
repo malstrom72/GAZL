@@ -862,17 +862,20 @@ bool Symbols::lookup(const Char* nameBegin, const Char* nameEnd, int acceptedTyp
 	return true;
 }
 
-void Symbols::link(const Char* labelBegin, const Char* labelEnd, Value* storage, int accepts, Int offset) {
+const Symbols::Symbol* Symbols::link(const Char* labelBegin, const Char* labelEnd, Value* storage, int accepts
+		, Int offset) {
 	// Note: it would be OK to forward all forwardables directly (according to typeMask) if that would improve performance.
 	std::string name(labelBegin, labelEnd);
 	if (!isValidIdentifier(labelBegin, labelEnd)) throw Exception(INVALID_IDENTIFIER, name);
 	Reference ref(name, storage, accepts, offset, 0);
 	SymbolMap::const_iterator symbolIt = symbols.find(ref.label);
-	if (symbolIt != symbols.end()) resolve(ref, symbolIt->second);
-	else {
-		if ((accepts & FORWARD) == 0) throw Exception(NON_FORWARD_SYMBOL_NOT_FOUND, name);
-		forwardRefs.push_back(ref);
-	}	
+	if (symbolIt != symbols.end()) {
+		resolve(ref, symbolIt->second);
+		return &symbolIt->second;
+	}
+	if ((accepts & FORWARD) == 0) throw Exception(NON_FORWARD_SYMBOL_NOT_FOUND, name);
+	forwardRefs.push_back(ref);
+	return 0;
 }
 
 void Symbols::resolveForwardRefs() {
@@ -1030,7 +1033,7 @@ Char Assembler::parseOperandType(const Char* b, const Char* e) {
 	}
 }
 
-void Assembler::linkWithOffset(Symbols& defs, const char* b, const char* e, int accepts, Value* v) {
+const Symbols::Symbol* Assembler::linkWithOffset(Symbols& defs, const char* b, const char* e, int accepts, Value* v) {
 	Value o;
 	o.i = 0;
 	const Char* p = reinterpret_cast<const Char*>(memchr(b, ':', e - b));
@@ -1040,10 +1043,11 @@ void Assembler::linkWithOffset(Symbols& defs, const char* b, const char* e, int 
 	} else {
 		p = e;
 	}
-	defs.link(b, p, v, accepts, o.i);
+	return defs.link(b, p, v, accepts, o.i);
 }
 
-void Assembler::parseConstant(const Char* b, const Char* e, int accepts, Value* v) {
+Assembler::Operand Assembler::parseConstant(const Char* b, const Char* e, int accepts, Value* v) {
+	Operand read = { 0, 0 };
 	if ((accepts & KONST) == 0) throw Exception(DID_NOT_EXPECT_CONSTANT, b, e);
 	switch (b < e ? *b : 0) {
 		case '\'': case '+': case '-': case '0': case '1': case '2': case '3':
@@ -1072,21 +1076,24 @@ void Assembler::parseConstant(const Char* b, const Char* e, int accepts, Value* 
 							throw Exception(OFFSET_OUT_OF_BOUNDS, b, e);									// an access, checked only here, and the variable names no label to check it against
 						}
 						*v = cv.value;
+						read.variableTypes = cv.types;
 						break;
 					}
-				
-		default:	globals.link(b, e, v, accepts); break;
+
+		default:	read.symbol = globals.link(b, e, v, accepts); break;
 	}
+	return read;
 }
 
-void Assembler::parseOperand(const Char* b, const Char* e, int accepts, Value* v) {
+Assembler::Operand Assembler::parseOperand(const Char* b, const Char* e, int accepts, Value* v) {
+	Operand read = { 0, 0 };
 	switch (b < e ? *b : 0) {
 		case 0:		if (accepts != 0) throw Exception(MISSING_OPERAND); break;
 		case '#':	if (dialect >= 2) accepts &= ~(FREE_ADDRESS | TEMPORARY | NULL_PTR | FUNC | TARGET);	// inside a GAZL 2 region `#` names only numbers
 					/* continue */
 		case '*':
 		case ':':	++b; /* continue */
-		case '<':	parseConstant(b, e, accepts, v); break;
+		case '<':	read = parseConstant(b, e, accepts, v); break;
 		case '@':	locals.link(b + 1, e, v, accepts, -(Int)(ip - codeBase)); break;		
 
 		case '%':	assert((accepts & TRANSIENT) != 0);
@@ -1096,7 +1103,7 @@ void Assembler::parseOperand(const Char* b, const Char* e, int accepts, Value* v
 					break;		
 
 		case '^':	if ((accepts & NATIVE) == 0) throw Exception(DID_NOT_EXPECT_ADDRESS, b, e);
-					linkWithOffset(globals, b + 1, e, accepts, v);
+					read.symbol = linkWithOffset(globals, b + 1, e, accepts, v);
 					break;
 
 		case '&':	if (dialect >= 2) {
@@ -1106,7 +1113,7 @@ void Assembler::parseOperand(const Char* b, const Char* e, int accepts, Value* v
 						}
 					}
 					if ((accepts & (ADDRESS | FUNC | TARGET)) == 0) throw Exception(DID_NOT_EXPECT_ADDRESS, b, e);
-					linkWithOffset(globals, b + 1, e, accepts, v);
+					read.symbol = linkWithOffset(globals, b + 1, e, accepts, v);
 					break;
 
 		default:	assert((accepts & ANY_VAR) != 0);
@@ -1117,6 +1124,7 @@ void Assembler::parseOperand(const Char* b, const Char* e, int accepts, Value* v
 					v->i -= localsSize;
 					break;
 	}
+	return read;
 }
 
 void Assembler::declareData(const Char* labelBegin, const Char* labelEnd, const Value* first, UInt declaredWords) {
@@ -1524,23 +1532,20 @@ const Char* Assembler::feed(const Char* line) {
 				skipUntilLabel = std::string(op2Begin + 1, op2End);
 		} else {
 			switch (op->opcode) {
-				case DEFI____:	parseOperand(op0Begin, op0End, op->accepts[0], &v);										// ! DEFi, ! DEFf, ! DEFp
-								{
+				case DEFI____:	{																						// ! DEFi, ! DEFf, ! DEFp
+									const Operand read = parseOperand(op0Begin, op0End, op->accepts[0], &v);
+									const Symbols::Symbol* const named = read.symbol;
 									types = op->declareTypes;
 									bool isOutside = false;															// no access through the name may pass
-									if ((types & POINTER_CONSTANT) != 0 && *op0Begin == '<') {						// no label to check against
-										types |= compileTimeVars[static_cast<unsigned char>(op0Begin[1])].types
-												& op->accepts[0];
+									if ((types & POINTER_CONSTANT) != 0 && named == 0) {								// an assembly-time address: no label to check against
+										assert(read.variableTypes != 0);											// DEFp takes no literal, local or forward reference
+										types |= read.variableTypes & op->accepts[0];
 										isOutside = true;
 									} else if ((types & POINTER_CONSTANT) != 0) {									// the kind it names: `NULL` or a function is not data
-										const Char* const colon = reinterpret_cast<const Char*>(memchr(op0Begin, ':'
-												, op0End - op0Begin));
-										const std::string name(op0Begin + 1, (colon != 0 ? colon : op0End));
-										const Symbols::Symbol& named = globals.symbols.find(name)->second;
 										const Int offset = static_cast<Int>(static_cast<UInt>(v.i)
-												- static_cast<UInt>(named.value.i));
-										types |= named.types & op->accepts[0];
-										isOutside = (offset < named.minOffset || offset > named.maxOffset);
+												- static_cast<UInt>(named->value.i));
+										types |= named->types & op->accepts[0];
+										isOutside = (offset < named->minOffset || offset > named->maxOffset);
 									}
 									Symbols::Symbol* const symbol = declare(globals, labelBegin, labelEnd, types, v);
 									if (symbol != 0 && isOutside) symbol->maxOffset = -1;							// below `minOffset`, 0: no offset is in range

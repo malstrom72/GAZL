@@ -250,7 +250,8 @@ class Symbols {
 
 	protected:	bool lookup(const Char* nameBegin, const Char* nameEnd, int acceptedTypes, int& types, Value& value) const;
 	protected:	Symbol* define(const std::string& name, int types, Value value, UInt words = 1);
-	protected:	void link(const Char* labelBegin, const Char* labelEnd, Value* storage, int accepts, Int offset = 0);
+	protected:	const Symbol* link(const Char* labelBegin, const Char* labelEnd, Value* storage, int accepts
+						, Int offset = 0);																		// The symbol, or 0 for a forward reference.
 	protected:	void registerSwitch(const Char* labelBegin, const Char* labelEnd, UInt switchSize, Value* storage, Int offset = 0);
 	protected:	void resolveForwardRefs();
 	public:		void swap(Symbols& other) { symbols.swap(other.symbols); forwardRefs.swap(other.forwardRefs); }		// preAssemble hands its table out with this, so nothing is copied on success
@@ -322,14 +323,20 @@ class Assembler {
 					Value value;
 				};
 
+	protected:	struct Operand {																			// What `parseOperand` read, besides its value.
+					const Symbols::Symbol* symbol;															// The global symbol it names, or 0: an assembly-time variable, a literal, a local or a forward reference.
+					int variableTypes;																		// The types of the assembly-time variable it read, or 0.
+				};
+
 	protected:	Symbols::Symbol* declare(Symbols& where, const Char* labelBegin, const Char* labelEnd, int types, Value value
 						, UInt words = 1);
 	protected:	static int operatorCompare(const void* a, const void* b);
 	protected:	static int nativeDefinitionCompare(const void* a, const void* b);
 	protected:	static Char parseOperandType(const Char* b, const Char* e);
-	protected:	void linkWithOffset(Symbols& defs, const char* b, const char* e, int accepts, Value* v);
-	protected:	void parseConstant(const Char* b, const Char* e, int accepts, Value* v);
-	protected:	void parseOperand(const Char* b, const Char* e, int accepts, Value* v);
+	protected:	const Symbols::Symbol* linkWithOffset(Symbols& defs, const char* b, const char* e, int accepts
+						, Value* v);
+	protected:	Operand parseConstant(const Char* b, const Char* e, int accepts, Value* v);
+	protected:	Operand parseOperand(const Char* b, const Char* e, int accepts, Value* v);
 	protected:	bool doConstantBranch(const Operator* op, const Char* op0Begin, const Char* op0End
 						, const Char* op1Begin, const Char* op1End);
 	protected:	Value calcConstant(const Operator* op, const Char* op1Begin, const Char* op1End, const Char* op2Begin

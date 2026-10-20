@@ -97,6 +97,7 @@ corrupt them. Each runs clean on a current engine and reproduces its defect on t
 | `defpOffsetPastSection`       | a `! DEFp` name took any offset, and `PEEK`/`POKE` through it checked only the name, never the section |
 | `defpOfCompileTimeAddress`    | the same, for a `! DEFp` name of an assembly-time address                |
 | `compileTimeAddressAccess`    | `PEEK`/`POKE` through an assembly-time address, which names no label to check against |
+| `defpOfPrefixedCompileTimeAddress` | `! DEFp #<P>` took the label path, looked up the name `<P>` and read the map's end node (ASan stack-buffer-overflow) |
 
 Only inputs for FIXED defects belong here. An input for a defect that is still open goes somewhere else until the fix
 lands, or it aborts a strict run while the corpus is still loading.
