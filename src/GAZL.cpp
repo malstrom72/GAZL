@@ -103,7 +103,7 @@ inline int absolute(int i) { Int x = i >> (Int)(sizeof (Int) * 8 - 1); return (I
 inline float absolute(float f) { return fabsf(f); }
 inline double absolute(double f) { return fabs(f); }
 #ifdef GAZL_CANONICAL_NAN
-inline Float canonicalNaN(Float f) {	// strict FP: collapse every NaN to one bit pattern. IEEE leaves NaN sign/payload unspecified, so the C++ interpreter and the JIT's SSE/NEON can emit different NaN bits for the same op; that only matters because a GAZL float word is bit-observable (compared / reinterpreted as int). Both engines must canonicalize identically.
+inline Float canonicalNaN(Float f) {	// One NaN bit pattern, so the interpreter and the JIT agree on a word a program can read as an int.
 	if (f != f) { const UInt bits = 0x7FC00000u; Float c; memcpy(&c, &bits, sizeof c); return c; }
 	return f;
 }
@@ -752,31 +752,33 @@ const Int OPERATOR_COUNT = sizeof (OPERATORS) / sizeof (*OPERATORS);
 
 static void scanOperandRoles(Int opcode, OperandRole roles[3]) {
 	roles[0] = roles[1] = roles[2] = OPERAND_OTHER;
-	const int READ = (VAR_INT_R | VAR_FLOAT_R | VAR_PTR_R) & ~TRANSIENT;			// the read bits alone (drop the shared TRANSIENT)
+	const int READ = (VAR_INT_R | VAR_FLOAT_R | VAR_PTR_R) & ~TRANSIENT;
 	const int WRITE = (VAR_INT_W | VAR_FLOAT_W | VAR_PTR_W) & ~TRANSIENT;
 	for (Int i = 0; i < OPERATOR_COUNT; ++i) {
 		const Operator& op = OPERATORS[i];
-		if (op.opcode != opcode) { continue; }
-		if ((op.otherFlags & (SWAP_0_AND_1 | SWAP_1_AND_2)) != 0) { continue; }	// pre-swap alias; the no-swap entry matches the finalized operands
-		for (int j = 0; j < 3; ++j) {
-			const int a = op.accepts[j];
-			if ((a & WRITE) != 0) { roles[j] = OPERAND_SLOT_WRITE; }
-			else if ((a & READ) != 0) { roles[j] = OPERAND_SLOT_READ; }
+		if (op.opcode != opcode || (op.otherFlags & (SWAP_0_AND_1 | SWAP_1_AND_2)) != 0) {	// a swapping row is an alias of the stored order
+			continue;
 		}
-		if (opcode == FORi_VVB || opcode == FORi_VCB) { roles[0] = OPERAND_SLOT_READ_WRITE; }							// the counter is read-modify-write
+		for (int j = 0; j < 3; ++j) {
+			if ((op.accepts[j] & WRITE) != 0) {
+				roles[j] = OPERAND_SLOT_WRITE;
+			} else if ((op.accepts[j] & READ) != 0) {
+				roles[j] = OPERAND_SLOT_READ;
+			}
+		}
+		if (opcode == FORi_VVB || opcode == FORi_VCB) {
+			roles[0] = OPERAND_SLOT_READ_WRITE;
+		}
 		return;
 	}
 }
 
-/*
-	The finalized opcodes are a dense block, so the scan above runs once per opcode at load instead of once per call:
-	the JIT asks for roles per instruction, per analysis pass, per fixed-point sweep. File scope, not a function-local
-	static: JitCompiler makes no thread promises.
-*/
 namespace {
-struct OperandRoleTable {
+struct OperandRoleTable {																// built once: the JIT asks for every instruction, on every pass
 	OperandRoleTable() {
-		for (int i = 0; i < FINALIZED_OPCODE_COUNT; ++i) { scanOperandRoles(FIRST_OPCODE_VALUE + i, roles[i]); }
+		for (int i = 0; i < FINALIZED_OPCODE_COUNT; ++i) {
+			scanOperandRoles(FIRST_OPCODE_VALUE + i, roles[i]);
+		}
 	}
 	OperandRole roles[FINALIZED_OPCODE_COUNT][3];
 };
@@ -785,9 +787,14 @@ static const OperandRoleTable OPERAND_ROLE_TABLE;
 
 void operandRoles(Int opcode, OperandRole roles[3]) {
 	const Int index = opcode - FIRST_OPCODE_VALUE;
-	if (index < 0 || index >= FINALIZED_OPCODE_COUNT) { scanOperandRoles(opcode, roles); return; }
+	if (index < 0 || index >= FINALIZED_OPCODE_COUNT) {
+		scanOperandRoles(opcode, roles);
+		return;
+	}
 	const OperandRole* const cached = OPERAND_ROLE_TABLE.roles[index];
-	roles[0] = cached[0]; roles[1] = cached[1]; roles[2] = cached[2];
+	roles[0] = cached[0];
+	roles[1] = cached[1];
+	roles[2] = cached[2];
 }
 
 static bool isValidIdentifierChar(Char c) {
@@ -1281,27 +1288,22 @@ void Assembler::finalize(UInt& codeSize, UInt& globalsSize, UInt& constsSize, UI
 	functionCount = sizes.functionCount;
 }
 
-void Assembler::finalize(AssembledProgram& program) {												// fill the whole descriptor in one step
+void Assembler::finalize(AssembledProgram& program) {
 	ProgramSizes sizes;
-	finalize(sizes);																				// the computed sizes
+	finalize(sizes);
 	program.codeSize = sizes.codeSize;
 	program.functionCount = sizes.functionCount;
 	program.globalsSize = sizes.globalsSize;
 	program.constsSize = sizes.constsSize;
-	program.code = codeBase;																		// the buffers this Assembler was given
+	program.code = codeBase;
 	program.functionTable = functionTable;
 	program.memory = memoryBase;
 	program.memorySize = (UInt)(memoryEnd - memoryBase);
 }
 
 /*
-	Dry assembly. Assembles into internally-owned scratch that starts small and doubles on the three arena overflows,
-	so the caller neither sizes nor owns a guess and the answer is exact by construction - it IS a real assembly,
-	just thrown away. The cost is a transient allocation and at	most log2 of the largest final arena in restarts;
-	every other outcome, program errors included, is exactly feed()'s. Each attempt works on a COPY of the seed symbols,
-	so the caller's table never learns the program's names and a retry never sees a half-defined one.
-
-	In the future, we may replace this with a true dry-run that does not require any memory allocations.
+	A real assembly into scratch arenas that start small and double whenever one runs out, so the sizes are exact.
+	The table handed back points into none of the scratch: symbol values are offsets, not addresses.
 */
 ProgramSizes Assembler::preAssemble(const Char* source, Symbols& symbols, const ProgramSizes* seed) {
 	UInt codeMax = 256, memoryMax = 256, functionMax = 64;
@@ -1314,8 +1316,7 @@ ProgramSizes Assembler::preAssemble(const Char* source, Symbols& symbols, const 
 		std::vector<Instruction> code(codeMax);
 		std::vector<UInt> functions(functionMax);
 		std::vector<Value> memory(memoryMax);
-		Symbols scratch(symbols);						// FRESH per attempt: a retry re-assembles the whole source, so feeding the
-														// caller's table directly would trip "symbol already defined" on attempt two
+		Symbols scratch(symbols);						// fresh per attempt, or a retry would find the first attempt's names defined
 		Assembler assem(codeMax, &code[0], functionMax, &functions[0], memoryMax, &memory[0], scratch);
 		assem.newUnit(0);
 		try {
@@ -1781,11 +1782,7 @@ Processor::Processor(UInt codeSize, const Instruction* code, UInt functionCount,
 	assert(ipStack != 0);
 }
 
-/*
-	The two AssembledProgram constructors mirror the two raw constructors above, unpacking the descriptor. They repeat the
-	member-init lists rather than delegate because the data members are const (no shared init()) and C++03 has no delegating
-	constructors; if the memory-layout math here ever changes, change it in the matching raw constructor too.
-*/
+// These two repeat the memory layout of the two constructors above; change them together.
 Processor::Processor(const AssembledProgram& program, UInt ipStackSize, CallStackEntry* ipStack
 		, NativeFunc const* natives, void* userData)
 		: codeSize(program.codeSize), codeBase(program.code), functionCount(program.functionCount)
@@ -2373,9 +2370,7 @@ bool unitTest() {
 			}
 		}
 
-		// preAssemble() must agree with the real assembly above exactly - and the deliberately tiny
-		// starting arenas mean this very test exercises its retry-and-double path. It must also hand
-		// BACK the table it built, which is the whole point of it over the old measure().
+		// preAssemble() matches the real assembly above, retries from its small arenas, and hands back its table.
 		{
 			Symbols seed;
 			seedTestNatives(seed);

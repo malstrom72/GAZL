@@ -73,32 +73,14 @@ typedef float Float;
 typedef Int Status;																										// Run-time status code
 
 /*
-	GAZL 2 features - MARK / FREE frame reuse, SPAN data regions, the `GAZL #n` dialect directive with
-	its strict `#` / `&` prefixes and `t` call-target type, and the TAIL instruction. Gated so one source tree produces either engine:
-	define GAZL_2=0 for a GAZL 1.0-compatible engine, which rejects the GAZL 2 words with
-	`Unknown mnemonic` as a real 1.0 engine does. Permut8 ships GAZL 1; Synplant and AudioClay ship
-	GAZL 2 (design/gazl/GAZL2Versioning.md).
-
-	A GAZL 2 engine also runs GAZL 1 sources unchanged - a file without a `GAZL #2` bracket assembles in
-	dialect 1 - so this flag is a GUARANTEE that v2 words cannot be used, not a prerequisite for running
-	v1 code. What it does NOT yet gate is the `t` operand spellings (MOVt, EQUt, DATt, ...), which stay
-	in the mnemonic table either way; without the `GAZL` directive the dialect can never leave 1, so they
-	cannot mint a TARGET-typed address, but a GAZL_2=0 engine does still parse those words.
-
-	The OPCODE ENUM is deliberately NOT gated (src/GAZLOpcodes.h): compiling an opcode out renumbers
-	every opcode after it, which would make the instruction encoding depend on a build flag. The gate is
-	on ACCEPTANCE - the mnemonic table - which is where engine generations actually differ: a 1.0 engine
-	never knew the words at all, rather than knowing them and refusing.
-
-	The JIT needs nothing here beyond TAIL. MARK / FREE / SPAN and the dialect directive are resolved
-	entirely by the assembler and never reach the code stream, so both backends lower the same
-	instructions either way and the built-in unit test runs on both.
+	`GAZL_2=0` builds a GAZL 1.0-compatible engine: it opens no `GAZL #2` region, so it refuses every GAZL 2 word as a
+	real 1.0 engine does. The opcode enum is not gated, so the instruction encoding is the same either way.
 */
 #ifndef GAZL_2
 	#define GAZL_2 1
 #endif
 
-const int VERSION = GAZL_2 ? 2 : 1;			// Pin an exact version with `! EQUi`; require a minimum with `! GEQi #GAZL_VERSION #2 @label`; skip a version-specific REGION by branching over it, as UnitTest.gazl does for its MARK block - a taken compile-time branch skips the lines it jumps over without parsing them, so they need not be mnemonics the engine reading them knows.
+const int VERSION = GAZL_2 ? 2 : 1;			// `GAZL_VERSION` in source.
 const int WORD_SIZE = 32;
 const Pointer MEMORY_OFFSET = 0x12345678;																				// All memory pointers in GAZL are offsetted by this amount (thus the address of the first memory word is not zero). This makes it easier to detect invalid memory operations (such as writing to a null-pointer).
 const Target FUNCTION_OFFSET = 0x56789ABC;																				// All function pointers in GAZL are offsetted by this amount (thus the ordinal of the first function is not zero). A function pointer is an ordinal indexing `functionTable`, not a code address.
@@ -263,23 +245,9 @@ class Symbols {
 
 struct Operator;
 
-enum OperandRole { OPERAND_OTHER = 0, OPERAND_SLOT_READ = 1, OPERAND_SLOT_WRITE = 2, OPERAND_SLOT_READ_WRITE = 3 };
-
 /*
-	Per-operand roles for a finalized `opcode`, in the canonical (post-swap) layout that matches Instruction.p0/p1/p2.
-	Lets tools reason about which operands are frame-slot reads vs writes without duplicating the operator table - the JIT
-	register allocator uses it for its next-use (Belady) scan. Fills roles[0..2]; absent operands and non-slots (consts,
-	branch targets) are OPERAND_OTHER. The roles are bit flags - a FORi counter is OPERAND_SLOT_READ_WRITE - so test
-	them with `&`.
-*/
-void operandRoles(Int opcode, OperandRole roles[3]);
-
-/*
-	One assembled program: the buffers the Assembler filled plus the sizes it computed - everything a Processor or the JIT
-	needs to run it, in one value. Static and read-only after assembly, so a single AssembledProgram is shareable across
-	many Processors / threads (§5.6). A non-owning view: the code / functionTable / memory buffers it points at are owned by
-	whoever allocated them (typically the caller who passed them to the Assembler) and must outlive it. `code` /
-	`functionTable` are const (frozen after assembly); `memory` stays writable because globals and the data stack live in it.
+	A finalized program: the buffers the `Assembler` filled and the sizes it computed. It does not own the buffers, and
+	only `memory`, which holds the globals and the data stack, is written after assembly.
 */
 struct AssembledProgram {
 	const Instruction* code;
@@ -313,10 +281,8 @@ class Assembler {
 	public:		const Char* feed(const Char* line); 														// Assemble a single line and return pointer to the next.
 	public:		void finalize(ProgramSizes& sizes); 														// Finish assembly and report memory usage. `sizes.functionCount` is the number of entries filled in `functionTable`.
 	public:		void finalize(UInt& codeSize, UInt& globalsSize, UInt& constsSize, UInt& functionCount); 	// Positional form of `finalize`; prefer the `ProgramSizes` overload.
-	public:		void finalize(AssembledProgram& program); 													// Finish assembly and fill `program` (the buffers this Assembler was given + the computed sizes) in one step.
-	public:		static ProgramSizes preAssemble(const Char* source, Symbols& symbols, const ProgramSizes* seed = 0); 					/* The assembly that precedes the real one: report what a real assembly of `source` (whole NUL-terminated text) will need, without the caller sizing or owning any buffer, AND hand back the symbol table it computed on the way. Seed `symbols` exactly as for a real assembly (natives, host defines); on SUCCESS it is replaced by the full table, so a host can read back any constant the program defined (`lookupConstant`) instead of parsing it out of a comment. A caller wanting the old isolation copies its table first. Program errors throw exactly as feed() does, and `symbols` is then UNTOUCHED - the retry loop keeps a fresh internal table per attempt precisely so a space exception cannot leave half an assembly behind, and so attempt two does not trip "symbol already defined" on attempt one's work. `seed`, when given, is what an earlier build of about the same program used (from `finalize`), so the first attempt is sized to fit it and a large program is not re-assembled once per doubling.
-
-					What makes handing the table out safe, since it is not obvious: the buffers this assembles into are local and die on return, but nothing in the table points into them. Forward references DO hold raw `Value*` into the code array - and `finalize` resolves them and clears the list, so a successful return leaves none. Symbol values are `MEMORY_OFFSET`-relative offsets rather than addresses. Both properties are load-bearing here; a future forward-ref that outlives `finalize` would make this unsafe. */
+	public:		void finalize(AssembledProgram& program); 													// Finish assembly and describe the result in `program`.
+	public:		static ProgramSizes preAssemble(const Char* source, Symbols& symbols, const ProgramSizes* seed = 0); 					// The sizes a real assembly of `source` needs, from a throwaway one. On success `symbols`, seeded as for a real assembly, becomes the full table; on a throw it is untouched. `seed` sizes the first attempt.
 
 	protected:	struct CompileTimeVar {
 					int types;
@@ -471,17 +437,17 @@ class Processor {
 						, UInt dataStackSize, UInt ipStackSize, CallStackEntry* ipStack, NativeFunc const* natives
 						, void* userData = 0);																			// lower level routine, useful for running multiple processors on the same code (i.e. threads) where each processor needs its own stack; `rwMemorySize` and `dataStackOffset` count from the base
 	public:		Processor(const AssembledProgram& program, UInt ipStackSize, CallStackEntry* ipStack
-						, NativeFunc const* natives, void* userData = 0);											// higher level, from an AssembledProgram (delegates to the ctor above)
+						, NativeFunc const* natives, void* userData = 0);											// higher level, from an `AssembledProgram`
 	public:		Processor(const AssembledProgram& program, UInt rwMemorySize, UInt dataStackOffset, UInt dataStackSize
-						, UInt ipStackSize, CallStackEntry* ipStack, NativeFunc const* natives, void* userData = 0);	// lower level, from an AssembledProgram (delegates to the ctor above)
+						, UInt ipStackSize, CallStackEntry* ipStack, NativeFunc const* natives, void* userData = 0);	// lower level, from an `AssembledProgram`
 	public:		void resetTimeOut(Int clockCycles); 																	// It is allowed to use `resetTimeOut(0)` from a native call to make the processor return immediately before executing its next instruction. Alternatively if you want to suspend the processor from a native call, but retry the call when resumed (e.g. simulating a blocking call), return non-zero from the native call and the instruction pointer will not be incremented.
 	public:		const Value* accessConstMemory(Pointer pointer, UInt count) const; 										// If returning null pointer you should normally return `ACCESS_VIOLATION`
 	public:		Value* accessMemory(Pointer pointer, UInt count) const; 												// If returning null pointer you should normally return `ACCESS_VIOLATION`
 	public:		Value* accessParams(UInt count) const; 																	// If returning null pointer you should normally return `DATA_STACK_OVERFLOW`
-	public:		virtual ~Processor() { }																				// Virtual: interpreter and JIT are subclasses over one shared state (§5.1). Vtable cost is nil.
+	public:		virtual ~Processor() { }																				// The JIT processor is a subclass.
 	public:		virtual Status enterCall(Target target);																// After `enterCall()`, call `run()` (and on time out, repeatedly call `run()` until it returns OK). It is ok to call `enterCall()` at any time, current instruction pointer and stack is pushed and popped as expected which makes `enterCall()` double as a mean to issue interrupts.
-	public:		virtual Value* pushCall(Target target);																// From inside a native callback only: when the native returns OK, the function runs as if the `^native` call had called it. Returns its argument window ([0] = result), or 0 on error. Several pushes run last-pushed first and share that one window. Supported by both engines (the JIT redirects its compiled after-native continuation; see GAZLJit.cpp).
-	public:		virtual Status run();																					// `run()` and `enterCall()` are the only virtual methods (per-block / per-call, so vtable cost is nil).
+	public:		virtual Value* pushCall(Target target);																// From inside a native callback only: when the native returns OK, the function runs as if the `^native` call had called it. Returns its argument window ([0] = result), or 0 on error. Several pushes run last-pushed first and share that one window.
+	public:		virtual Status run();
 	public:		void* getUserData() const;
 	public:		int getClockCyclesLeft() const;
 	
@@ -504,7 +470,7 @@ class Processor {
 	protected:	Value* dsp;
 	protected:	CallStackEntry* ipsp;
 	protected:	void* userData;
-	protected:	void* resume;				// RESUME continuation (§5.7.5): native code address the JIT dispatcher jumps to; unused by the interpreter.
+	protected:	void* resume;				// Where the JIT resumes compiled code; unused by the interpreter.
 };
 
 inline void Processor::resetTimeOut(Int clockCycles) { clockCyclesLeft = clockCycles; }

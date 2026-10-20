@@ -93,6 +93,7 @@ global.warming:         GLOB *2
 ; SPAN regions (GAZL 2): symbolic offsets, out-of-order placement, and the
 ; zero-filled words a region claims but never writes. SPAN only assembles
 ; inside a GAZL #2 region; the PEEKs in test that read the data are GAZL 1.
+            ! LSSi #GAZL_VERSION #2 @noSpans
 OFF_HI:                 ! DEFi #5
 OFF_LO:                 ! DEFi #1
 EXT_LO:                 ! DEFi #3
@@ -107,6 +108,7 @@ span.lo:                SPAN :OFF_LO *EXT_LO                 ; claims words 1-3,
                         DATi #200
 span.mark:              SPAN :7 *1                           ; label only: a named word with no DAT rows at all
                         GAZL #1
+noSpans:    !
 
 ;-------------------------------------------------------------------------------
 test:                   FUNC
@@ -132,6 +134,7 @@ test:                   FUNC
 ;
 ; Test SPAN data regions (GAZL 2).
 ;
+            ! LSSi #GAZL_VERSION #2 @noSpanTests
  PEEK       i0              &span.test:OFF_HI
  NEQi       i0              #500            @fail            ; landed at the symbolic offset
  ! ADDi     <A>             #OFF_HI         #1
@@ -150,12 +153,15 @@ test:                   FUNC
  POKE       &span.mark      #700
  PEEK       i1              &span.test:7
  NEQi       i1              #700            @fail            ; a label-only SPAN names a word with no DAT behind it
+noSpanTests: !
 
 ;
 ; MARK / FREE, the `t` call-target type and TAIL only assemble inside a GAZL #2 region, so their tests
 ; are testGazl2, in the region at the end of this file. A GAZL 1 caller may still CALL a GAZL 2 function.
 ;
+            ! LSSi #GAZL_VERSION #2 @noGazl2Call
  CALL       &testGazl2
+noGazl2Call: !
 
  PEEK       f0		       &consts.float
  PEEK       i0              &consts.int
@@ -2290,8 +2296,9 @@ CallPointerConstants:   FUNC
 ; GAZL 2 region: functions declared between `GAZL #2` and `GAZL #1` have TARGET
 ; (`t`) addresses, so `&tOne` can never enter a `p` position, here or in any
 ; other unit. Closing with `GAZL #1` is what makes this file safe to
-; CONCATENATE: whatever follows starts back in the GAZL 1 default.
+; CONCATENATE: whatever follows starts back in the GAZL 1 default. A 1.0 engine skips it all.
 ;===============================================================================
+            ! LSSi #GAZL_VERSION #2 @noRegion
                         GAZL #2
 
 ;-------------------------------------------------------------------------------
@@ -2394,3 +2401,4 @@ tNamed:                 CNST *2
                         DATt &T_TWO &T_NONE
 
                         GAZL #1
+noRegion:   !

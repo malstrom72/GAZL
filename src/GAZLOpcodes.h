@@ -99,6 +99,10 @@ const int FIRST_COMPILE_TIME_OPCODE = MOVE_CC_;
 */
 const int FINALIZED_OPCODE_COUNT = SWCH_VCC - FUNC_CC_ + 1;
 
+enum OperandRole { OPERAND_OTHER = 0, OPERAND_SLOT_READ = 1, OPERAND_SLOT_WRITE = 2, OPERAND_SLOT_READ_WRITE = 3 };
+
+void operandRoles(int opcode, OperandRole roles[3]);	// The frame-slot role of each operand of a finalized `opcode`, in `p0`, `p1`, `p2` order. Roles are bit flags.
+
 }																														// namespace GAZL
 
 #endif
