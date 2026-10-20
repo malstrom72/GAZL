@@ -601,9 +601,9 @@ int main(int argc, const char* argv[]) {
 
 				assem.finalize(program);
 
-				const ProgramSizes& sizes = program.sizes;
-				std::cerr << "Code size: " << sizes.codeSize << ", globals size: " << sizes.globalsSize << ", consts size: "
-						<< sizes.constsSize << ", functions: " << sizes.functionCount << std::endl;
+				std::cerr << "Code size: " << program.sizes.codeSize << ", globals size: " << program.sizes.globalsSize
+						<< ", consts size: " << program.sizes.constsSize << ", functions: " << program.sizes.functionCount
+						<< std::endl;
 				std::cerr << "--------------------------------------------------------------------------------"
 						<< std::endl;
 			}
