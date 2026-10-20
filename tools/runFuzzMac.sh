@@ -59,10 +59,13 @@ echo "  lane2_x64_diff: --gen seed walk -> output/fuzz/lane2_x64_diff.log"
 # lane 6's growing corpus through the x64 backend each pass - arm64 lane 6 discovers programs, x64 replays them for
 # x64-backend-specific crashes (an assembler/JIT-compiler crash the arm64 text lane can't see). A crash aborts the pass;
 # the last "Running:" line in the log names the offending file. Per-file stdout is dropped to keep the log readable.
+# Each pass replays a copy of the corpus: lane 6 deletes inputs as it reduces them, and a file that vanished mid-pass
+# failed the replay as if it had crashed. A file that vanishes during the copy is simply left out of it.
 ( cd "$FUZZ" && nohup bash -c '
 	end=$(( $(date +%s) + '"$SECS"' ))
 	while [ "$(date +%s)" -lt "$end" ]; do
-		arch -x86_64 '"$OUT"'/GAZLFuzzTextX64 lane6_text/corpus/ >/dev/null || { echo "=== x64 replay CRASH: see the last Running: line above ==="; break; }
+		rsync -a --delete lane6_text/corpus/ lane7_snapshot/ 2>/dev/null || true
+		arch -x86_64 '"$OUT"'/GAZLFuzzTextX64 lane7_snapshot/ >/dev/null || { echo "=== x64 replay CRASH: see the last Running: line above ==="; break; }
 		sleep 30
 	done' > lane7_x64_text.log 2>&1 & )
 echo "  lane7_x64_text: replay lane6 corpus on x64 backend -> output/fuzz/lane7_x64_text.log"
