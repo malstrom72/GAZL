@@ -1031,7 +1031,6 @@ void JitProcessor::bindModule(const JitModule& module) {
 namespace {
 
 // The native ABI CALL_NVC bakes in: a C function of one pointer, returning Status in one integer register.
-typedef Status (*JitNativeSignatureCheck)(Processor*);
 #if __cplusplus >= 201103L
 static_assert(sizeof(Status) <= sizeof(void*), "JIT CALL_NVC assumes a native's Status returns in one integer register");
 #endif
