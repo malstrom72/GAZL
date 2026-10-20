@@ -1315,8 +1315,9 @@ void Assembler::finalize(AssembledProgram& program) {												// fill the who
 	Dry assembly. Assembles into internally-owned scratch that starts small and doubles on the three arena overflows,
 	so the caller neither sizes nor owns a guess and the answer is exact by construction - it IS a real assembly,
 	just thrown away. The cost is a transient allocation and at	most log2 of the largest final arena in restarts;
-	every other outcome, program errors included, is exactly feed()'s. Each attempt works on a COPY of the seed symbols,
-	so the caller's table never learns the program's names and a retry never sees a half-defined one.
+	every other outcome, program errors included, is exactly feed()'s. Each attempt works on a copy of the seed symbols,
+	so a retry never sees a half-defined name. The table handed back points into none of the scratch: `finalize`
+	resolves and clears every forward reference, and symbol values are offsets, not addresses.
 
 	In the future, we may replace this with a true dry-run that does not require any memory allocations.
 */
