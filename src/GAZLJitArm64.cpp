@@ -1255,7 +1255,8 @@ void JitCompilerArm64::compile(const AssembledProgram& program, JitModule& out) 
 	for (UInt k = 0; k < program.sizes.functionCount; ++k) { entryLabels[k] = e.newLabel(); }
 	Label exitLabel = e.newLabel();																						// the one dispatcher EXIT; every segment terminal branches here (§5.4 (b))
 	for (UInt ord = 0; ord < program.sizes.functionCount; ++ord) {
-		const UInt funcEnd = ((ord + 1 < program.sizes.functionCount) ? program.functionTable[ord + 1] : program.sizes.codeSize) - 1;
+		const UInt funcEnd = ((ord + 1 < program.sizes.functionCount) ? program.functionTable[ord + 1]
+				: program.sizes.codeSize) - 1;
 		lowerFunction(e, program, program.functionTable[ord], funcEnd, o, entryLabels, ord, exitLabel);
 	}
 	const size_t dispatchOffset = emitDispatcher(e, o, exitLabel, program.sizes.constsSize - 1);

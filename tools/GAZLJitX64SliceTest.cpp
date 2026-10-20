@@ -693,12 +693,15 @@ static void runKernel(const char* name, const char* source, const int* inputs, s
 	if (!assembleKernel(globals, source, gInPtr, gOutPtr)) { std::printf("  %s: assemble failed\n", name); ++failures; return; }
 	X64Emitter e;
 	static size_t entryOffsets[FUNCTION_TABLE_SIZE];
-	if (!compileProgram(e, gCode, gFunctionTable, gProgram.sizes.functionCount, globals.findFunction("main") - FUNCTION_OFFSET, gNatJit, entryOffsets)) {
+	if (!compileProgram(e, gCode, gFunctionTable, gProgram.sizes.functionCount
+			, globals.findFunction("main") - FUNCTION_OFFSET, gNatJit, entryOffsets)) {
 		std::printf("  %s: unsupported opcode\n", name); ++failures; return;
 	}
 	void* code = mapExecutable(e.code(), e.size());
 	if (code == 0) { std::printf("  %s: mapExecutable failed\n", name); ++failures; return; }
-	for (UInt k = 0; k < gProgram.sizes.functionCount; ++k) { gEntryAddr[k] = reinterpret_cast<char*>(code) + entryOffsets[k]; }
+	for (UInt k = 0; k < gProgram.sizes.functionCount; ++k) {
+		gEntryAddr[k] = reinterpret_cast<char*>(code) + entryOffsets[k];
+	}
 	JitFn jit = reinterpret_cast<JitFn>(code);
 	std::memcpy(gClean, gMemory, sizeof(gMemory));		// clean image (globals + DATi/DATf inits) to restore each run
 	std::printf("Kernel \"%s\" (%zu bytes):\n", name, e.size());

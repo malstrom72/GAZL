@@ -1726,33 +1726,26 @@ const Char* Assembler::feed(const Char* line) {
 	return eatEOL(e);
 }
 
-Processor::Processor() : codeSize(0), codeBase(0), functionCount(0), functionTable(0), memorySize(0), memoryBase(0)
+Processor::Processor() : codeBase(0), functionCount(0), functionTable(0), memorySize(0), memoryBase(0)
 		, constantsSize(0), readOffset(0), rwMemorySize(0), dataStackBase(0), dataStackEnd(0), ipStackBase(0)
 		, ipStackEnd(0), natives(0), clockCyclesLeft(0), ip(0), dsp(0), ipsp(0), userData(0), resume(0) {
 }
 
+// C++03 cannot delegate, so this assigns the lower-level construction: the data stack runs from the globals to the guard.
 Processor::Processor(const AssembledProgram& program, UInt ipStackSize, CallStackEntry* ipStack
-		, NativeFunc const* natives, void* userData)
-		: codeSize(program.sizes.codeSize), codeBase(program.code), functionCount(program.sizes.functionCount)
-		, functionTable(program.functionTable), memorySize(program.memorySize - 1), memoryBase(program.memory)
-		, constantsSize(program.sizes.constsSize - 1), readOffset(constantsSize - MEMORY_OFFSET)
-		, rwMemorySize(program.memorySize - program.sizes.constsSize)
-		, dataStackBase(program.memory + constantsSize + program.sizes.globalsSize)
-		, dataStackEnd(program.memory + program.memorySize - 1), ipStackBase(ipStack), ipStackEnd(ipStack + ipStackSize)
-		, natives(natives), clockCyclesLeft(0x7FFFFFFFU), ip(program.code), dsp(dataStackBase), ipsp(ipStackBase)
-		, userData(userData), resume(0) {
+		, NativeFunc const* natives, void* userData) {
 	assert(program.sizes.constsSize >= 1
 			&& program.sizes.globalsSize + program.sizes.constsSize <= program.memorySize);	// `constsSize` includes the zero guard
-	assert(program.code != 0);
-	assert(program.memory != 0);
-	assert(ipStack != 0);
+	const UInt rwMemorySize = program.memorySize - program.sizes.constsSize;
+	*this = Processor(program, rwMemorySize, program.sizes.globalsSize, rwMemorySize - program.sizes.globalsSize
+			, ipStackSize, ipStack, natives, userData);
 }
 
 Processor::Processor(const AssembledProgram& program, UInt rwMemorySize, UInt dataStackOffset, UInt dataStackSize
 		, UInt ipStackSize, CallStackEntry* ipStack, NativeFunc const* natives, void* userData)
-		: codeSize(program.sizes.codeSize), codeBase(program.code), functionCount(program.sizes.functionCount)
-		, functionTable(program.functionTable), memorySize(program.memorySize - 1), memoryBase(program.memory)
-		, constantsSize(program.sizes.constsSize - 1), readOffset(constantsSize - MEMORY_OFFSET), rwMemorySize(rwMemorySize)
+		: codeBase(program.code), functionCount(program.sizes.functionCount), functionTable(program.functionTable)
+		, memorySize(program.memorySize - 1), memoryBase(program.memory), constantsSize(program.sizes.constsSize - 1)
+		, readOffset(constantsSize - MEMORY_OFFSET), rwMemorySize(rwMemorySize)
 		, dataStackBase(program.memory + constantsSize + dataStackOffset)
 		, dataStackEnd(program.memory + constantsSize + dataStackOffset + dataStackSize), ipStackBase(ipStack)
 		, ipStackEnd(ipStack + ipStackSize), natives(natives), clockCyclesLeft(0x7FFFFFFFU), ip(program.code)

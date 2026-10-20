@@ -1188,7 +1188,9 @@ int main(int argc, const char* argv[]) {
 		}
 		const Target mainFunction = globals.findFunction("main");
 #ifdef FUZZ_POISON
-		for (UInt i = program.sizes.constsSize - 1 + program.sizes.globalsSize; i + 1 < program.memorySize; ++i) { memory[i].i = 0x7F7F7F7F; }
+		for (UInt i = program.sizes.constsSize - 1 + program.sizes.globalsSize; i + 1 < program.memorySize; ++i) {
+			memory[i].i = 0x7F7F7F7F;
+		}
 #endif
 		Processor interp(program, CALL_STACK_SIZE, callStack, NT, 0);
 		const Status st = runEngine(interp, mainFunction, 10000000);
@@ -1485,9 +1487,9 @@ int main(int argc, const char* argv[]) {
 
 				assem.finalize(program);
 
-				const ProgramSizes& sizes = program.sizes;
-				std::cerr << "Code size: " << sizes.codeSize << ", globals size: " << sizes.globalsSize << ", consts size: "
-						<< sizes.constsSize << ", functions: " << sizes.functionCount << std::endl;
+				std::cerr << "Code size: " << program.sizes.codeSize << ", globals size: " << program.sizes.globalsSize
+						<< ", consts size: " << program.sizes.constsSize
+						<< ", functions: " << program.sizes.functionCount << std::endl;
 				std::cerr << "--------------------------------------------------------------------------------"
 						<< std::endl;
 			}
