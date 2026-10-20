@@ -81,9 +81,9 @@ typedef Int Status;																										// Run-time status code
 
 	A GAZL 2 engine also runs GAZL 1 sources unchanged - a file without a `GAZL #2` bracket assembles in
 	dialect 1 - so this flag is a GUARANTEE that v2 words cannot be used, not a prerequisite for running
-	v1 code. What it does NOT yet gate is the `t` operand spellings (MOVt, EQUt, DATt, ...), which stay
-	in the mnemonic table either way; without the `GAZL` directive the dialect can never leave 1, so they
-	cannot mint a TARGET-typed address, but a GAZL_2=0 engine does still parse those words.
+	v1 code. The `t` words (LOCt, INPt, OUTt, MOVt, DATt, the `t` compares, DIFt and `! DEFt`) stay in
+	the table, but like every GAZL 2 word they assemble only inside a `GAZL #2` region, which this engine
+	never opens, so a GAZL 1 program that assembles here assembles on a real 1.0 engine too.
 
 	The OPCODE ENUM is deliberately NOT gated (src/GAZLOpcodes.h): compiling an opcode out renumbers
 	every opcode after it, which would make the instruction encoding depend on a build flag. The gate is
