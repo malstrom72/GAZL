@@ -317,6 +317,11 @@ static Instruction code[CODE_MEMORY_SIZE];
 static UInt functionTable[FUNCTION_TABLE_SIZE];
 static CallStackEntry callStack[CALL_STACK_SIZE];
 
+static Processor interpreter(const AssembledProgram& program, NativeFunc const* natives) {	// on `callStack`
+	return Processor(program.codeSize, program.code, program.functionCount, program.functionTable, program.memorySize
+			, program.memory, program.globalsSize, program.constsSize, CALL_STACK_SIZE, callStack, natives, 0);
+}
+
 #if defined(LIBFUZZ) || defined(LIBFUZZ_STANDALONE)
 
 #include <sstream>
@@ -893,7 +898,7 @@ static void runDiff(const std::string& programText) {
 		{
 			// Interpreter and reference DO agree on arbitrary source (the realm contract binds only the JIT), so this
 			// lane compares those two, fuel included.
-			Processor interp(program, CALL_STACK_SIZE, callStack, NATIVE_TABLE, 0);
+			Processor interp = interpreter(program, NATIVE_TABLE);
 			if (interp.enterCall(mainFunction) == OK) {
 				interp.resetTimeOut(TEXT_FUEL);
 				const Status status = interp.run();
@@ -904,7 +909,7 @@ static void runDiff(const std::string& programText) {
 		if (FlushToZeroScope::isAvailable()) {									// the same again on a flush-to-zero host
 			FlushToZeroScope flush;
 			std::memcpy(memory, snapshot, sizeof (memory));
-			Processor interp(program, CALL_STACK_SIZE, callStack, NATIVE_TABLE, 0);
+			Processor interp = interpreter(program, NATIVE_TABLE);
 			if (interp.enterCall(mainFunction) == OK) {
 				interp.resetTimeOut(TEXT_FUEL);
 				const Status status = interp.run();
@@ -916,7 +921,7 @@ static void runDiff(const std::string& programText) {
 		{ JitProcessor jit(module, program, CALL_STACK_SIZE, callStack, NATIVE_TABLE); if (jit.enterCall(mainFunction) == OK) { jit.resetTimeOut(TEXT_FUEL); jit.run(); } }
 #else
 		std::memcpy(memory, snapshot, sizeof (memory));
-		Processor interp(program, CALL_STACK_SIZE, callStack, NATIVE_TABLE, 0);
+		Processor interp = interpreter(program, NATIVE_TABLE);
 		const Status interpStatus = runEngine(interp, mainFunction, 10000000);	// the oracle
 		std::memcpy(interpImage, memory, sizeof (memory));
 		// ...itself checked against the reference executor, run to completion as runEngine does (fuel is not compared).
@@ -926,7 +931,7 @@ static void runDiff(const std::string& programText) {
 			static Value flushedImage[DATA_MEMORY_SIZE];
 			FlushToZeroScope flush;
 			std::memcpy(memory, snapshot, sizeof (memory));
-			Processor flushedInterp(program, CALL_STACK_SIZE, callStack, NATIVE_TABLE, 0);
+			Processor flushedInterp = interpreter(program, NATIVE_TABLE);
 			const Status flushedStatus = runEngine(flushedInterp, mainFunction, 10000000);
 			std::memcpy(flushedImage, memory, sizeof (memory));
 			requireReference("generated, flush-to-zero", Data, Size, program, mainFunction, REFERENCE_NATIVES, snapshot
@@ -944,7 +949,7 @@ static void runDiff(const std::string& programText) {
 		std::memcpy(memory, snapshot, sizeof (memory));
 		{ JitProcessor jit(module, program, CALL_STACK_SIZE, callStack, NATIVE_TABLE); const Status s = runEngine(jit, mainFunction, 64); requireMatch("jit tiny-fuel", Data, Size, interpStatus, interpImage, s, memory); }
 		std::memcpy(memory, snapshot, sizeof (memory));
-		{ Processor it(program, CALL_STACK_SIZE, callStack, NATIVE_TABLE, 0); const Status s = runEngine(it, mainFunction, 64); requireMatch("interp tiny-fuel", Data, Size, interpStatus, interpImage, s, memory); }
+		{ Processor it = interpreter(program, NATIVE_TABLE); const Status s = runEngine(it, mainFunction, 64); requireMatch("interp tiny-fuel", Data, Size, interpStatus, interpImage, s, memory); }
 #endif
 	}
 	catch (GAZL::Exception& e) {
@@ -1033,7 +1038,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size) {
 		}
 
 		{
-			Processor pmachine(program, CALL_STACK_SIZE, callStack, NATIVE_TABLE, 0);
+			Processor pmachine = interpreter(program, NATIVE_TABLE);
 			Target mainFunction = globals.findFunction("main");
 			if (mainFunction != NULL_TARGET) {
 				static Value snapshot[DATA_MEMORY_SIZE];
@@ -1047,7 +1052,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size) {
 				if (FlushToZeroScope::isAvailable()) {								// the same again on a flush-to-zero host
 					FlushToZeroScope flush;
 					std::memcpy(memory, snapshot, sizeof (memory));
-					Processor flushed(program, CALL_STACK_SIZE, callStack, NATIVE_TABLE, 0);
+					Processor flushed = interpreter(program, NATIVE_TABLE);
 					status = flushed.enterCall(mainFunction);
 					assert(status == OK);
 					flushed.resetTimeOut(10000000);
@@ -1190,7 +1195,7 @@ int main(int argc, const char* argv[]) {
 #ifdef FUZZ_POISON
 		for (UInt i = program.constsSize - 1 + program.globalsSize; i + 1 < program.memorySize; ++i) { memory[i].i = 0x7F7F7F7F; }
 #endif
-		Processor interp(program, CALL_STACK_SIZE, callStack, NT, 0);
+		Processor interp = interpreter(program, NT);
 		const Status st = runEngine(interp, mainFunction, 10000000);
 		uint32_t sum = 2166136261u;
 		for (int i = 0; i < DATA_MEMORY_SIZE; ++i) { sum = (sum ^ static_cast<uint32_t>(memory[i].i)) * 16777619u; }
@@ -1581,9 +1586,6 @@ int main(int argc, const char* argv[]) {
 			}
 		#endif
 			const bool jitEngine = (proc != 0);				// remember which engine was picked (for per-iteration recreation)
-			if (!proc) {
-				proc.reset(new Processor(program, CALL_STACK_SIZE, callStack, NATIVE_TABLE, 0));
-			}
 			/*
 				Recreate the engine (fresh dsp/ipsp). exit() terminates MID-FLIGHT, leaving frames on both stacks -
 				re-entering main without this makes every --bench iteration creep upward until the deepest workload
@@ -1593,8 +1595,11 @@ int main(int argc, const char* argv[]) {
 			#ifdef GAZL_JIT
 				if (jitEngine) { proc.reset(new JitProcessor(module, program, CALL_STACK_SIZE, callStack, NATIVE_TABLE)); return; }
 			#endif
-				proc.reset(new Processor(program, CALL_STACK_SIZE, callStack, NATIVE_TABLE, 0));
+				proc.reset(new Processor(interpreter(program, NATIVE_TABLE)));
 			};
+			if (!proc) {
+				remakeProc();
+			}
 
 			for (size_t i = 0; i < forwardFunctionNames.size(); ++i) {		// resolve --forward targets against the assembled program
 				forwardTargets[i] = globals.findFunction(forwardFunctionNames[i].c_str());

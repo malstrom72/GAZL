@@ -436,10 +436,6 @@ class Processor {
 						, UInt memorySize, Value* memory, UInt constsSize, UInt rwMemorySize, UInt dataStackOffset
 						, UInt dataStackSize, UInt ipStackSize, CallStackEntry* ipStack, NativeFunc const* natives
 						, void* userData = 0);																			// lower level routine, useful for running multiple processors on the same code (i.e. threads) where each processor needs its own stack; `rwMemorySize` and `dataStackOffset` count from the base
-	public:		Processor(const AssembledProgram& program, UInt ipStackSize, CallStackEntry* ipStack
-						, NativeFunc const* natives, void* userData = 0);											// higher level, from an `AssembledProgram`
-	public:		Processor(const AssembledProgram& program, UInt rwMemorySize, UInt dataStackOffset, UInt dataStackSize
-						, UInt ipStackSize, CallStackEntry* ipStack, NativeFunc const* natives, void* userData = 0);	// lower level, from an `AssembledProgram`
 	public:		void resetTimeOut(Int clockCycles); 																	// It is allowed to use `resetTimeOut(0)` from a native call to make the processor return immediately before executing its next instruction. Alternatively if you want to suspend the processor from a native call, but retry the call when resumed (e.g. simulating a blocking call), return non-zero from the native call and the instruction pointer will not be incremented.
 	public:		const Value* accessConstMemory(Pointer pointer, UInt count) const; 										// If returning null pointer you should normally return `ACCESS_VIOLATION`
 	public:		Value* accessMemory(Pointer pointer, UInt count) const; 												// If returning null pointer you should normally return `ACCESS_VIOLATION`

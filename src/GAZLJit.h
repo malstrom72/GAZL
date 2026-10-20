@@ -183,22 +183,22 @@ inline void swap(JitModule& a, JitModule& b) { a.swap(b); }				// ADL swap
 */
 class JitProcessor : public Processor {
 	public:
-		/*
-			Two constructors, mirroring the base Processor's two: the higher-level one (data stack = the whole span
-			from the end of the globals to the zero guard) and the lower-level one (explicit rwMemorySize / dataStackOffset /
-			dataStackSize, for running several engines over one shared code image - e.g. a JitProcessor per thread, each
-			with its own data + ip stack; the compiled code is immutable after publish, so it is safe to share). Both add
-			the JitModule up front and delegate to the matching Processor constructor.
-		*/
+		// The two `Processor` constructors, taking the program's buffers and sizes from `program`.
 		JitProcessor(const JitModule& module, const AssembledProgram& program, UInt ipStackSize
 					, CallStackEntry* ipStack, NativeFunc const* natives, void* userData = 0)
-			: Processor(program, ipStackSize, ipStack, natives, userData) { bindModule(module); }
+			: Processor(program.codeSize, program.code, program.functionCount, program.functionTable, program.memorySize
+					, program.memory, program.globalsSize, program.constsSize, ipStackSize, ipStack, natives, userData) {
+			bindModule(module);
+		}
 
 		JitProcessor(const JitModule& module, const AssembledProgram& program, UInt rwMemorySize
 					, UInt dataStackOffset, UInt dataStackSize, UInt ipStackSize, CallStackEntry* ipStack
 					, NativeFunc const* natives, void* userData = 0)
-			: Processor(program, rwMemorySize, dataStackOffset, dataStackSize, ipStackSize, ipStack, natives
-				, userData) { bindModule(module); }
+			: Processor(program.codeSize, program.code, program.functionCount, program.functionTable, program.memorySize
+					, program.memory, program.constsSize, rwMemorySize, dataStackOffset, dataStackSize, ipStackSize, ipStack
+					, natives, userData) {
+			bindModule(module);
+		}
 
 		/*
 			The field ABI JitCompiler bakes into the machine code (byte offsets of dsp/memoryBase/... in a JitProcessor).
