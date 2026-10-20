@@ -253,7 +253,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size) {
 			globals.registerNative(NATIVE_NAMES[i], i);
 		}
 		
-		AssembledProgram program = { 0, 0, 0, 0, 0, 0, 0, 0 };
+		AssembledProgram program = { 0, 0, 0, 0, { 0, 0, 0, 0 } };
 
 		{
 			std::istringstream gazlStream(std::string(reinterpret_cast<const char*>(Data), reinterpret_cast<const char*>(Data) + Size));
@@ -572,7 +572,7 @@ int main(int argc, const char* argv[]) {
 			}
 		}
 
-		AssembledProgram program = { 0, 0, 0, 0, 0, 0, 0, 0 };
+		AssembledProgram program = { 0, 0, 0, 0, { 0, 0, 0, 0 } };
 
 		{
 			std::ifstream gazlStream(pos[1], std::ifstream::binary);
@@ -601,8 +601,9 @@ int main(int argc, const char* argv[]) {
 
 				assem.finalize(program);
 
-				std::cerr << "Code size: " << program.codeSize << ", globals size: " << program.globalsSize
-						<< ", consts size: " << program.constsSize << ", functions: " << program.functionCount << std::endl;
+				const ProgramSizes& sizes = program.sizes;
+				std::cerr << "Code size: " << sizes.codeSize << ", globals size: " << sizes.globalsSize << ", consts size: "
+						<< sizes.constsSize << ", functions: " << sizes.functionCount << std::endl;
 				std::cerr << "--------------------------------------------------------------------------------"
 						<< std::endl;
 			}

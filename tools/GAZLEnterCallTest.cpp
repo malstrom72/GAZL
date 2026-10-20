@@ -385,7 +385,7 @@ static void check(const char* label, Symbols& globals, const char* fn, Int fuel,
 	const Status s = runToCompletion(globals, fn, fuel, suspends);
 	UInt sz = 0;
 	const Pointer outPtr = globals.findGlobal("gOut", sz);
-	const Int out = (outPtr != NULL_POINTER) ? gMemory[outPtr - MEMORY_OFFSET + (gProgram.constsSize - 1)].i : -999999;	// constants come first
+	const Int out = (outPtr != NULL_POINTER) ? gMemory[outPtr - MEMORY_OFFSET + (gProgram.sizes.constsSize - 1)].i : -999999;	// constants come first
 	const bool good = (s == OK) && (out == wantOut) && (!wantSuspends || suspends > 0);
 	std::printf("  %-36s status=%-3d gOut=%-8d want=%-8d suspends=%-5d %s\n",
 			label, s, out, wantOut, suspends, good ? "OK" : "FAILED");

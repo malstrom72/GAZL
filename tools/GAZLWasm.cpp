@@ -156,7 +156,7 @@ int gazlRun(const char* source, const char* entry) {
 		for (size_t i = 0; i < sizeof (NATIVE_TABLE) / sizeof (*NATIVE_TABLE); ++i)
 			globals.registerNative(NATIVE_NAMES[i], i);
 
-		AssembledProgram program = { 0, 0, 0, 0, 0, 0, 0, 0 };
+		AssembledProgram program = { 0, 0, 0, 0, { 0, 0, 0, 0 } };
 		{
 			Assembler assem(CODE_MEMORY_SIZE, code, FUNCTION_TABLE_SIZE, functionTable, DATA_MEMORY_SIZE, memory, globals);
 			assem.newUnit("output.gazl");

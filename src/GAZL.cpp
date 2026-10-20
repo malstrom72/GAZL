@@ -1223,7 +1223,7 @@ void Assembler::closeDataRegion() {
 	dataRegions.insert(it, claim);
 }
 
-void Assembler::finalize(ProgramSizes& sizes) {
+void Assembler::finalize(AssembledProgram& program) {
 	newUnit(0);
 	if (dialect != 1) throw Exception(UNCLOSED_GAZL_REGION);	// so a unit concatenated after this one starts in GAZL 1
 	threadBranches();
@@ -1243,23 +1243,14 @@ void Assembler::finalize(ProgramSizes& sizes) {
 	// Poison the data stack, so a local read before its first write gets 0xDEADBEEF rather than a plausible value.
 	Value* const stackEnd = memoryEnd - 1;
 	for (Value* p = memoryBase + constantsSize + (globalsPointer - memoryBase); p < stackEnd; ++p) p->p = 0xDEADBEEF;
-	sizes.codeSize = (UInt)(ip - codeBase);
-	sizes.functionCount = this->functionCount;
-	sizes.globalsSize = (UInt)(globalsPointer - memoryBase);
-	sizes.constsSize = (UInt)(memoryEnd - constantsPointer);
-}
-
-void Assembler::finalize(AssembledProgram& program) {
-	ProgramSizes sizes;
-	finalize(sizes);
-	program.codeSize = sizes.codeSize;
-	program.functionCount = sizes.functionCount;
-	program.globalsSize = sizes.globalsSize;
-	program.constsSize = sizes.constsSize;
 	program.code = codeBase;
 	program.functionTable = functionTable;
 	program.memory = memoryBase;
 	program.memorySize = (UInt)(memoryEnd - memoryBase);
+	program.sizes.codeSize = (UInt)(ip - codeBase);
+	program.sizes.functionCount = this->functionCount;
+	program.sizes.globalsSize = (UInt)(globalsPointer - memoryBase);
+	program.sizes.constsSize = (UInt)(memoryEnd - constantsPointer);
 }
 
 void Assembler::newUnit(const Char* unitName) {
@@ -1677,15 +1668,16 @@ Processor::Processor() : codeSize(0), codeBase(0), functionCount(0), functionTab
 
 Processor::Processor(const AssembledProgram& program, UInt ipStackSize, CallStackEntry* ipStack
 		, NativeFunc const* natives, void* userData)
-		: codeSize(program.codeSize), codeBase(program.code), functionCount(program.functionCount)
+		: codeSize(program.sizes.codeSize), codeBase(program.code), functionCount(program.sizes.functionCount)
 		, functionTable(program.functionTable), memorySize(program.memorySize - 1), memoryBase(program.memory)
-		, constantsSize(program.constsSize - 1), readOffset(constantsSize - MEMORY_OFFSET)
-		, rwMemorySize(program.memorySize - program.constsSize)
-		, dataStackBase(program.memory + constantsSize + program.globalsSize)
+		, constantsSize(program.sizes.constsSize - 1), readOffset(constantsSize - MEMORY_OFFSET)
+		, rwMemorySize(program.memorySize - program.sizes.constsSize)
+		, dataStackBase(program.memory + constantsSize + program.sizes.globalsSize)
 		, dataStackEnd(program.memory + program.memorySize - 1), ipStackBase(ipStack), ipStackEnd(ipStack + ipStackSize)
 		, natives(natives), clockCyclesLeft(0x7FFFFFFFU), ip(program.code), dsp(dataStackBase), ipsp(ipStackBase)
 		, userData(userData) {
-	assert(program.constsSize >= 1 && program.globalsSize + program.constsSize <= program.memorySize);	// `constsSize` includes the zero guard
+	assert(program.sizes.constsSize >= 1
+			&& program.sizes.globalsSize + program.sizes.constsSize <= program.memorySize);	// `constsSize` includes the zero guard
 	assert(program.code != 0);
 	assert(program.memory != 0);
 	assert(ipStack != 0);
@@ -1693,14 +1685,14 @@ Processor::Processor(const AssembledProgram& program, UInt ipStackSize, CallStac
 
 Processor::Processor(const AssembledProgram& program, UInt rwMemorySize, UInt dataStackOffset, UInt dataStackSize
 		, UInt ipStackSize, CallStackEntry* ipStack, NativeFunc const* natives, void* userData)
-		: codeSize(program.codeSize), codeBase(program.code), functionCount(program.functionCount)
+		: codeSize(program.sizes.codeSize), codeBase(program.code), functionCount(program.sizes.functionCount)
 		, functionTable(program.functionTable), memorySize(program.memorySize - 1), memoryBase(program.memory)
-		, constantsSize(program.constsSize - 1), readOffset(constantsSize - MEMORY_OFFSET), rwMemorySize(rwMemorySize)
+		, constantsSize(program.sizes.constsSize - 1), readOffset(constantsSize - MEMORY_OFFSET), rwMemorySize(rwMemorySize)
 		, dataStackBase(program.memory + constantsSize + dataStackOffset)
 		, dataStackEnd(program.memory + constantsSize + dataStackOffset + dataStackSize), ipStackBase(ipStack)
 		, ipStackEnd(ipStack + ipStackSize), natives(natives), clockCyclesLeft(0x7FFFFFFFU), ip(program.code)
 		, dsp(dataStackBase), ipsp(ipStackBase), userData(userData) {
-	assert(program.constsSize >= 1 && program.constsSize - 1 + rwMemorySize <= program.memorySize - 1);
+	assert(program.sizes.constsSize >= 1 && program.sizes.constsSize - 1 + rwMemorySize <= program.memorySize - 1);
 	assert(dataStackOffset + dataStackSize <= rwMemorySize);
 	assert(program.code != 0);
 	assert(program.memory != 0);
@@ -2245,7 +2237,7 @@ bool unitTest() {
 		Symbols globals;
 		seedTestNatives(globals);
 
-		AssembledProgram program = { 0, 0, 0, 0, 0, 0, 0, 0 };
+		AssembledProgram program = { 0, 0, 0, 0, { 0, 0, 0, 0 } };
 		{
 			Assembler assem(MAX_CODE_SIZE, cody, MAX_FUNCTION_COUNT, functionTable, MEMORY_SIZE, memory, globals);
 			assem.newUnit("UnitTest");
@@ -2304,7 +2296,7 @@ bool unitTest() {
 			Symbols globals2;
 			seedTestNatives(globals2);
 
-			AssembledProgram program2 = { 0, 0, 0, 0, 0, 0, 0, 0 };
+			AssembledProgram program2 = { 0, 0, 0, 0, { 0, 0, 0, 0 } };
 			{
 				Assembler assem(MAX_CODE_SIZE, &cody2[0], MAX_FUNCTION_COUNT, &functionTable2[0], MEMORY_SIZE, &memory2[0]
 						, globals2);
@@ -2326,7 +2318,7 @@ bool unitTest() {
 			for (bool ok = globals.findFirstGlobal(it); ok; ok = globals.findNextGlobal(it)) {
 				const GlobalInfo info = globals.getGlobalInfo(it);
 				if (info.section == TEMP_SECTION) continue;
-				const UInt index = info.address - MEMORY_OFFSET + (program.constsSize - 1);			// the buffer starts with the constants
+				const UInt index = info.address - MEMORY_OFFSET + (program.sizes.constsSize - 1);		// the buffer starts with the constants
 				for (UInt i = 0; i < info.ownedWords; ++i) assert(memory2[index + i].i == memory[index + i].i);
 			}
 			// The restored function pointer resolves to CallBack in the fresh assembly (and equals the original ordinal).

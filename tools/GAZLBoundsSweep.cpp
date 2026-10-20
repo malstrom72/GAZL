@@ -487,8 +487,8 @@ bool assemble(Machine& m, const std::string& source, Layout& layout, std::string
 		return false;
 	}
 	UInt size = 0;
-	layout.globalsSize = m.program.globalsSize;
-	layout.constsSize = m.program.constsSize;
+	layout.globalsSize = m.program.sizes.globalsSize;
+	layout.constsSize = m.program.sizes.constsSize;
 	layout.inAddress = m.symbols.findGlobal("in", size);
 	layout.outAddress = m.symbols.findGlobal("out", size);
 	layout.gAddress = m.symbols.findGlobal("g", size);
@@ -1107,8 +1107,8 @@ int assemblyError(const std::string& source) {
 		assem.newUnit("text");
 		const Char* cp = source.c_str();
 		while (*cp != 0) cp = assem.feed(cp);
-		ProgramSizes sizes = { 0, 0, 0, 0 };
-		assem.finalize(sizes);
+		AssembledProgram program;
+		assem.finalize(program);
 	}
 	catch (const Exception& e) {
 		return e.error;

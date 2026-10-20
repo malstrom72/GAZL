@@ -76,7 +76,7 @@ Use the `Assembler` class to parse assembly source and the `Processor` class to 
 Symbols globals;
 for (int i = 0; i < nativeCount; ++i) globals.registerNative(NATIVE_NAMES[i], i);
 
-AssembledProgram program = { 0, 0, 0, 0, 0, 0, 0, 0 };
+AssembledProgram program = { 0, 0, 0, 0, { 0, 0, 0, 0 } };
 {
     Assembler assem(CODE_MEMORY_SIZE, code, FUNCTION_TABLE_SIZE, functionTable,
             DATA_MEMORY_SIZE, memory, globals);

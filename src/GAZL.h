@@ -236,21 +236,6 @@ class Symbols {
 struct Operator;
 
 /*
-	A finalized program: the buffers the `Assembler` filled and the sizes it computed. It does not own the buffers, and
-	only `memory`, which holds the globals and the data stack, is written after assembly.
-*/
-struct AssembledProgram {
-	const Instruction* code;
-	UInt codeSize;
-	const UInt* functionTable;
-	UInt functionCount;
-	Value* memory;
-	UInt memorySize;
-	UInt globalsSize;
-	UInt constsSize;
-};
-
-/*
 	The four sizes an assembly computes: what a program actually used, from `finalize`. `constsSize` counts the
 	constants plus the one-word zero guard at the end of memory, so `globalsSize + constsSize` is the least memory
 	a program needs before its data stack.
@@ -262,14 +247,25 @@ struct ProgramSizes {
 	UInt constsSize;
 };
 
+/*
+	A finalized program: the buffers the `Assembler` filled and the sizes it computed. It does not own the buffers, and
+	only `memory`, which holds the globals and the data stack, is written after assembly.
+*/
+struct AssembledProgram {
+	const Instruction* code;
+	const UInt* functionTable;
+	Value* memory;
+	UInt memorySize;
+	ProgramSizes sizes;
+};
+
 // Assembles GAZL source, line by line, into the code, function-table and memory buffers the caller provides.
 class Assembler {
 	friend class Symbols;
 	public:		Assembler(UInt maxCodeSize, Instruction* codeBase, UInt maxFunctionCount, UInt* functionTable, UInt maxMemorySize, Value* memoryBase, Symbols& globals); // Create an assembler for the provided buffers. `functionTable` maps each function's ordinal to its code offset (see `finalize`).
 	public:		void newUnit(const Char* unitName);																		// Begin assembling a new source unit.
 	public:		const Char* feed(const Char* line); 																	// Assemble a single line and return pointer to the next.
-	public:		void finalize(ProgramSizes& sizes); 																	// Finish assembly and report memory usage. `sizes.functionCount` is the number of entries filled in `functionTable`.
-	public:		void finalize(AssembledProgram& program); 																// Finish assembly and describe the result in `program`.
+	public:		void finalize(AssembledProgram& program); 																// Finish assembly and report memory usage. `program.sizes.functionCount` is the number of entries filled in `functionTable`.
 
 	protected:	struct CompileTimeVar {
 					int types;

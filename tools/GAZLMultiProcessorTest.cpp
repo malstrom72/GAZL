@@ -146,8 +146,8 @@ static bool assemble() {
 }
 
 static Processor* makeProcessor(int k, UInt partSize) {													// processor k gets the k-th part
-	return new Processor(gProgram, DATA_SIZE - gProgram.constsSize, gProgram.globalsSize + k * PART_SIZE, partSize
-			, CALL_STACK_SIZE, gCallStacks[k], 0);
+	return new Processor(gProgram, DATA_SIZE - gProgram.sizes.constsSize, gProgram.sizes.globalsSize + k * PART_SIZE
+			, partSize, CALL_STACK_SIZE, gCallStacks[k], 0);
 }
 
 static Int expected(int k) {
@@ -158,7 +158,7 @@ static Int expected(int k) {
 static Value& global(const char* name, UInt index) {														// the constants come first in memory
 	UInt size = 0;
 	const Pointer p = gGlobals.findGlobal(name, size);
-	return gMemory[p - MEMORY_OFFSET + (gProgram.constsSize - 1) + index];
+	return gMemory[p - MEMORY_OFFSET + (gProgram.sizes.constsSize - 1) + index];
 }
 
 static void clearResults() {
@@ -273,7 +273,7 @@ static void threads() {
 */
 static void fences() {
 	clearResults();
-	const UInt base1 = gProgram.constsSize - 1 + gProgram.globalsSize + PART_SIZE;							// processor 1's part in gMemory
+	const UInt base1 = gProgram.sizes.constsSize - 1 + gProgram.sizes.globalsSize + PART_SIZE;							// processor 1's part in gMemory
 	for (UInt i = 0; i < PART_SIZE; ++i) gMemory[base1 + i].p = 0xA5A5A5A5u;
 	Processor* small = makeProcessor(0, 64);
 	Status s = small->enterCall(gGlobals.findFunction("thread0"));
