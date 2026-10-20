@@ -1506,7 +1506,17 @@ int sweepPointerConstantKinds() {
 		{ "a target name of a pointer name of NULL", "P:\t! DEFp &NULL\n\tGAZL #2\nT:\t! DEFt &P\nmain:\tFUNC\n"
 				"x:\tLOCt\n\tMOVt x &T\n\tRETU\n\tGAZL #1\n", -1 },
 		{ "a pointer name of a target name of NULL", "\tGAZL #2\nT:\t! DEFt &NULL\n\tGAZL #1\nP:\t! DEFp &T\n"
-				"main:\tFUNC\np:\tLOCp\n\tMOVp p &P\n\tRETU\n", -1 }
+				"main:\tFUNC\np:\tLOCp\n\tMOVp p &P\n\tRETU\n", -1 },
+		{ "a PEEK through a name of an assembly-time address written #<P>", "g:\tGLOB *2\n\t! ADDp <P> &g #1\n"
+				"R:\t! DEFp #<P>\nmain:\tFUNC\nv:\tLOCi\n\tPEEK v &R\n\tRETU\n", OFFSET_OUT_OF_BOUNDS },
+		{ "a name of an assembly-time address written #<P> as a value", "g:\tGLOB *2\n\t! ADDp <P> &g #1\n"
+				"R:\t! DEFp #<P>\nmain:\tFUNC\np:\tLOCp\n\tMOVp p &R\n\tRETU\n", -1 },
+		{ "a PEEK through a name of a SUBp address", "g:\tGLOB *2\n\t! SUBp <P> &g:1 #1\nR:\t! DEFp <P>\n"
+				"main:\tFUNC\nv:\tLOCi\n\tPEEK v &R\n\tRETU\n", OFFSET_OUT_OF_BOUNDS },
+		{ "a name of a MOVp address as a value", "g:\tGLOB *2\n\t! MOVp <P> &g\nR:\t! DEFp <P>\nmain:\tFUNC\n"
+				"p:\tLOCp\n\tMOVp p &R\n\tRETU\n", -1 },
+		{ "a PEEK through a name of a name of a MOVp address", "g:\tGLOB *2\n\t! MOVp <P> &g\nR:\t! DEFp <P>\n"
+				"S:\t! DEFp &R\nmain:\tFUNC\nv:\tLOCi\n\tPEEK v &S\n\tRETU\n", OFFSET_OUT_OF_BOUNDS }
 	};
 	const int count = sizeof (CASES) / sizeof (*CASES);
 	int failures = 0;
