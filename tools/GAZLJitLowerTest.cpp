@@ -490,16 +490,16 @@ static const char* const K_DIVFZERO =		// DIVf by a runtime zero divisor: IEEE, 
 
 
 static const char* const K_TAIL =		// GAZL 2 TAIL: self tail-recursion in constant stack, then an INDIRECT tail through a target slot
-	"gIn: GLOB *1\n DATi #0\n" "gOut: GLOB *1\n DATi #0\n"
+	" GAZL #2\n" "gIn: GLOB *1\n DATi #0\n" "gOut: GLOB *1\n DATi #0\n"
 	"tSum: FUNC\n$acc: OUTi\n$n: INPi\n$run: INPi\n"
 	" NEQi $n #0 @tmore\n MOVi $acc $run\n RETU\n"
 	" tmore: ADDi %2 $run $n\n SUBi %1 $n #1\n TAIL &tSum *3\n"			// slides the window onto our own frame base and re-enters
-	"tHop: FUNC\n$hout: OUTi\n$hfn: INPp\n$hn: INPi\n"
+	"tHop: FUNC\n$hout: OUTi\n$hfn: INPt\n$hn: INPi\n"
 	" MOVi %1 $hn\n MOVi %2 #0\n TAIL $hfn *3\n"						// indirect form: the target is read before the slide
 	"main: FUNC\n PARA *1\n$k: LOCi\n$r: LOCi\n"
 	" PEEK $k &gIn\n MOVi %1 $k\n MOVi %2 #0\n CALL &tSum %0 *3\n MOVi $r %0\n"
-	" MOVp %1 &tSum\n MOVi %2 $k\n CALL &tHop %0 *3\n ADDi $r $r %0\n"
-	" POKE &gOut $r\n RETU\n";
+	" MOVt %1 &tSum\n MOVi %2 $k\n CALL &tHop %0 *3\n ADDi $r $r %0\n"
+	" POKE &gOut $r\n RETU\n GAZL #1\n";
 
 /*
 	TAIL past every emitter threshold, direct AND indirect. The sizes are chosen to cross limits - do not shrink them:
@@ -509,7 +509,7 @@ static const char* const K_TAIL =		// GAZL 2 TAIL: self tail-recursion in consta
 	- window > frame: the destination overlaps the source, so a descending (wrong-direction) copy corrupts the sum.
 */
 static const char* const K_TAILBIG =
-	"gIn: GLOB *1\n DATi #0\n" "gOut: GLOB *1\n DATi #0\n"
+	" GAZL #2\n" "gIn: GLOB *1\n DATi #0\n" "gOut: GLOB *1\n DATi #0\n"
 	"bSum: FUNC\n$bs: OUTi\n$bw: PARA *4999\n$bi: LOCi\n$bx: LOCi\n"
 	" MOVi $bs #0\n MOVi $bi #0\n"
 	".s: GETL $bx $bw $bi\n ADDi $bs $bs $bx\n FORi $bi #4999 @.s\n RETU\n"
@@ -517,14 +517,14 @@ static const char* const K_TAILBIG =
 	" MOVi $hi #1\n"
 	".f: MULi $hv $hi #3\n ADDi $hv $hv $hn\n SETL %0 $hi $hv\n FORi $hi #5000 @.f\n"	// %k = n + 3k for k in 1..4999
 	" TAIL &bSum *5000\n"
-	"bHeadI: FUNC\n$ir: OUTi\n$in: INPi\n$ifn: INPp\n$ipad: LOCA *1500\n$ii: LOCi\n$iv: LOCi\n"
+	"bHeadI: FUNC\n$ir: OUTi\n$in: INPi\n$ifn: INPt\n$ipad: LOCA *1500\n$ii: LOCi\n$iv: LOCi\n"
 	" MOVi $ii #1\n"
 	".g: MULi $iv $ii #5\n ADDi $iv $iv $in\n SETL %0 $ii $iv\n FORi $ii #5000 @.g\n"	// %k = n + 5k
 	" TAIL $ifn *5000\n"
 	"main: FUNC\n PARA *1\n$k: LOCi\n$r: LOCi\n"
 	" PEEK $k &gIn\n MOVi %1 $k\n CALL &bHead %0 *2\n MOVi $r %0\n"
-	" MOVi %1 $k\n MOVp %2 &bSum\n CALL &bHeadI %0 *3\n ADDi $r $r %0\n"
-	" POKE &gOut $r\n RETU\n";
+	" MOVi %1 $k\n MOVt %2 &bSum\n CALL &bHeadI %0 *3\n ADDi $r $r %0\n"
+	" POKE &gOut $r\n RETU\n GAZL #1\n";
 
 static const char* const K_FTOISAT =		// fTOi saturation: a huge float clamps to the int range (must match the interpreter)
 	"gIn: GLOB *1\n DATi #0\n" "gOut: GLOB *1\n DATi #0\n"

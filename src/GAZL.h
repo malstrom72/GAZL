@@ -331,6 +331,7 @@ class Assembler {
 	protected:	Symbols::Symbol* declare(Symbols& where, const Char* labelBegin, const Char* labelEnd, int types, Value value
 						, UInt words = 1);
 	protected:	static int operatorCompare(const void* a, const void* b);
+	protected:	const Operator* findOperator(const Char* key, const Char* b, const Char* e) const;	// Throws `INVALID_INSTRUCTION` for no row, or a GAZL 2 word outside a `GAZL #2` region.
 	protected:	static int nativeDefinitionCompare(const void* a, const void* b);
 	protected:	static Char parseOperandType(const Char* b, const Char* e);
 	protected:	const Symbols::Symbol* linkWithOffset(Symbols& defs, const char* b, const char* e, int accepts

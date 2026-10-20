@@ -465,8 +465,10 @@ requires GAZL 2 or guards each use with `! GEQi #GAZL_VERSION #2 @label`; a skip
 - **Closing.** The dialect carries over from one unit to the next, and the program must end in dialect 1
   (`UNCLOSED_GAZL_REGION`). A unit that starts with `GAZL #2` and ends with `GAZL #1` can therefore be combined
   with units of either dialect, in any order.
-- **What it changes.** The dialect decides only how functions and function addresses are typed, which positions take
-  them, and what the `#` and `&` prefixes take, below. Every other GAZL 2 mnemonic means the same in both dialects.
+- **What it changes.** Inside a region the GAZL 2 mnemonics assemble, and the dialect decides how functions and
+  function addresses are typed, which positions take them, and what the `#` and `&` prefixes take, below. Outside
+  one, every GAZL 2 mnemonic but `GAZL` itself is `INVALID_INSTRUCTION`, as on a GAZL 1 engine, so dialect 1 is
+  exactly GAZL 1.
 
 **Prefixes.** Inside a GAZL 2 region the prefix decides the kind of name (section 5):
 - **`#`** takes only numbers: literals and `DEFi` and `DEFf` names.
@@ -487,7 +489,8 @@ position, so a target is only ever named, copied or loaded, never computed.
 - **Named targets.** `! DEFt` names a target constant, as `! DEFp` names a pointer (section 7). Its operand is the
   address of a GAZL 2 function or `&NULL`, and the name is accepted wherever that operand is: in `MOVt`, `DATt` and
   the target compares, and in `CALL` and `TAIL` when it names a function. Like a `DEFp` name it takes no offset.
-- **Calls.** `CALL` and `TAIL` take a function of either dialect, so GAZL 1 and GAZL 2 functions call each other.
+- **Calls.** `CALL` takes a function of either dialect, in either dialect, so GAZL 1 and GAZL 2 functions call
+  each other. `TAIL` does too, inside a region.
 - **Pointers.** A `p` position (`MOVp`, `DATp`, `EQUp` and the rest) refuses a GAZL 2 function's address in either
   dialect, with `INCOMPATIBLE_TYPES`. Inside a GAZL 2 region it refuses a GAZL 1 function's address too, and an
   indirect `CALL` or `TAIL` must go through a `t` variable or a transient, not a `p` variable.

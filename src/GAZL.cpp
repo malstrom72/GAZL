@@ -410,8 +410,8 @@ const int FWD_FREE_R		= ADDRESS_R | UNCHECKED_ADDRESS | FORWARD;
 // happens because inside a `GAZL #2` region a FUNC declaration mints `TARGET` instead of `FUNC`, so its
 // `&function` never matches a `p` position - and `parseOperand` additionally strips `FUNC` from every
 // ADDRESS-carrying position there, so no `p` position takes ANY function constant inside a region. The
-// `t` rows accept only `TGT_*`, which is what gates them away from GAZL 1 code with no version check in
-// this table. `CALL` accepts FUNC | TARGET, so cross-dialect calls always work.
+// `t` rows accept only `TGT_*` and, like every GAZL 2 word, are `GAZL_2_ONLY`. `CALL` accepts
+// FUNC | TARGET, so cross-dialect calls always work.
 const int ANY_FREE			= NULL_PTR | FREE_ADDRESS | FUNC;
 const int ANY_FWD_FREE		= ANY_FREE | FORWARD;
 const int TGT_FREE			= NULL_PTR | TARGET;
@@ -428,6 +428,7 @@ const int YIELDS_GOTO		= 0x08; // Instruction can be resolved to either a GOTO o
 const int LOCAL_BOUNDS		= 0x10;	// Operand 1 is a variable (local or transient), operand 2 is a size. Make sure frame bounds >= &variable + size.
 const int CHECK_DIV_BY_0	= 0x20; // Operand 1 is a constant used in a division or modulo operation, must check for division by zero. Can only be used if operand 2 is either a CONST_FLOAT or CONST_INT
 const int BRANCH_IS_TABLE	= 0x40; // The BRANCH operand is a jump-table BASE in memory, not a relative displacement - threadBranches must not rewrite it (SWCH).
+const int GAZL_2_ONLY		= 0x80; // A GAZL 2 word: outside a `GAZL #2` region it is unknown, as on a GAZL 1 engine.
 
 struct Operator {
 	char key[10];
@@ -479,15 +480,15 @@ static const Operator OPERATORS[] = {
 	// (`DATp &func &data` assembles). Needs a sibling DATt. See design/gazl/GAZL2FunctionPointers.md.
 	, { " DATp_c__", DATA____,	{ ANY_FWD_FREE	, 0				, 0				}		, 0				, 0				}
 	, { " DATs____", DATA____,	{ 0				, 0				, 0				}		, 0				, 0				}
-	, { " DATt_c__", DATA____,	{ TGT_FWD_FREE	, 0				, 0				}		, 0				, 0				}
+	, { " DATt_c__", DATA____,	{ TGT_FWD_FREE	, 0				, 0				}		, GAZL_2_ONLY	, 0				}
 	, { " DIFp_vcc", SUBI_CCC,	{ VAR_INT_W		, FREE_ADDRESS		, FREE_ADDRESS		}		, YIELDS_CONST	, CONST_INT		}
 	, { " DIFp_vcv", SUBI_VCV,	{ VAR_INT_W		, FWD_FREE		, VAR_PTR_R		}		, 0				, 0				}
 	, { " DIFp_vvc", SUBI_VVC,	{ VAR_INT_W		, VAR_PTR_R		, FWD_FREE		}		, 0				, 0				}
 	, { " DIFp_vvv", SUBI_VVV,	{ VAR_INT_W		, VAR_PTR_R		, VAR_PTR_R		}		, 0				, 0				}
-	, { " DIFt_vcc", SUBI_CCC,	{ VAR_INT_W		, TGT_FREE		, TGT_FREE		}		, YIELDS_CONST	, CONST_INT		}
-	, { " DIFt_vcv", SUBI_VCV,	{ VAR_INT_W		, TGT_FWD_FREE	, VAR_TGT_R		}		, 0				, 0				}
-	, { " DIFt_vvc", SUBI_VVC,	{ VAR_INT_W		, VAR_TGT_R		, TGT_FWD_FREE	}		, 0				, 0				}
-	, { " DIFt_vvv", SUBI_VVV,	{ VAR_INT_W		, VAR_TGT_R		, VAR_TGT_R		}		, 0				, 0				}
+	, { " DIFt_vcc", SUBI_CCC,	{ VAR_INT_W		, TGT_FREE		, TGT_FREE		}		, YIELDS_CONST | GAZL_2_ONLY, CONST_INT }
+	, { " DIFt_vcv", SUBI_VCV,	{ VAR_INT_W		, TGT_FWD_FREE	, VAR_TGT_R		}		, GAZL_2_ONLY	, 0				}
+	, { " DIFt_vvc", SUBI_VVC,	{ VAR_INT_W		, VAR_TGT_R		, TGT_FWD_FREE	}		, GAZL_2_ONLY	, 0				}
+	, { " DIFt_vvv", SUBI_VVV,	{ VAR_INT_W		, VAR_TGT_R		, VAR_TGT_R		}		, GAZL_2_ONLY	, 0				}
 	, { " DIVf_vcc", DIVF_CCC,	{ VAR_FLOAT_W	, CONST_FLOAT	, CONST_FLOAT	}		, YIELDS_CONST	, CONST_FLOAT	}
 	, { " DIVf_vcv", DIVF_VCV,	{ VAR_FLOAT_W	, CONST_FLOAT	, VAR_FLOAT_R	}		, 0				, 0				}
 	, { " DIVf_vvc", DIVF_VVC,	{ VAR_FLOAT_W	, VAR_FLOAT_R	, CONST_FLOAT	}		, 0				, 0				}
@@ -508,10 +509,10 @@ static const Operator OPERATORS[] = {
 	, { " EQUp_cvb", EQUI_VCB,	{ ANY_FWD_FREE	, VAR_PTR_R		, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
 	, { " EQUp_vcb", EQUI_VCB,	{ VAR_PTR_R		, ANY_FWD_FREE	, FWD_BRANCH	}		, 0				, 0				}
 	, { " EQUp_vvb", EQUI_VVB,	{ VAR_PTR_R		, VAR_PTR_R		, FWD_BRANCH	}		, 0				, 0				}
-	, { " EQUt_ccb", EQUI_CCB,	{ TGT_FREE		, TGT_FREE		, FWD_BRANCH	}		, YIELDS_GOTO	, 0				}
-	, { " EQUt_cvb", EQUI_VCB,	{ TGT_FWD_FREE	, VAR_TGT_R		, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
-	, { " EQUt_vcb", EQUI_VCB,	{ VAR_TGT_R		, TGT_FWD_FREE	, FWD_BRANCH	}		, 0				, 0				}
-	, { " EQUt_vvb", EQUI_VVB,	{ VAR_TGT_R		, VAR_TGT_R		, FWD_BRANCH	}		, 0				, 0				}
+	, { " EQUt_ccb", EQUI_CCB,	{ TGT_FREE		, TGT_FREE		, FWD_BRANCH	}		, YIELDS_GOTO | GAZL_2_ONLY, 0	}
+	, { " EQUt_cvb", EQUI_VCB,	{ TGT_FWD_FREE	, VAR_TGT_R		, FWD_BRANCH	}		, SWAP_0_AND_1 | GAZL_2_ONLY, 0	}
+	, { " EQUt_vcb", EQUI_VCB,	{ VAR_TGT_R		, TGT_FWD_FREE	, FWD_BRANCH	}		, GAZL_2_ONLY	, 0				}
+	, { " EQUt_vvb", EQUI_VVB,	{ VAR_TGT_R		, VAR_TGT_R		, FWD_BRANCH	}		, GAZL_2_ONLY	, 0				}
 	, { " FLOf_vc_", FLOF_CC_,	{ VAR_FLOAT_W	, CONST_FLOAT	, 0				}		, YIELDS_CONST	, CONST_FLOAT	}
 	, { " FLOf_vv_", FLOF_VV_,	{ VAR_FLOAT_W	, VAR_FLOAT_R	, 0				}		, 0				, 0				}
 	, { " FORi_vcb", FORi_VCB,	{ VAR_INT_W		, CONST_INT		, FWD_BRANCH	}		, 0				, 0				}
@@ -519,7 +520,7 @@ static const Operator OPERATORS[] = {
 	, { " FORp_vcb", FORi_VCB,	{ VAR_PTR_W		, FWD_FREE		, FWD_BRANCH	}		, 0				, 0				}
 	, { " FORp_vvb", FORi_VVB,	{ VAR_PTR_W		, VAR_PTR_R		, FWD_BRANCH	}		, 0				, 0				}
 #if GAZL_2
-	, { " FREE____", FREE____,	{ 0				, 0				, 0				}		, 0				, 0				}
+	, { " FREE____", FREE____,	{ 0				, 0				, 0				}		, GAZL_2_ONLY	, 0				}
 #endif
 	, { " FUNC____", FUNC_CC_,	{ 0				, 0				, 0				}		, 0				, FUNC			}
 #if GAZL_2
@@ -537,10 +538,10 @@ static const Operator OPERATORS[] = {
 	, { " GEQp_cvb", NLSI_CVB,	{ ANY_FWD_FREE	, VAR_PTR_R		, FWD_BRANCH	}		, 0				, 0				}
 	, { " GEQp_vcb", NLSI_VCB,	{ VAR_PTR_R		, ANY_FWD_FREE	, FWD_BRANCH	}		, 0				, 0				}
 	, { " GEQp_vvb", NLSI_VVB,	{ VAR_PTR_R		, VAR_PTR_R		, FWD_BRANCH	}		, 0				, 0				}
-	, { " GEQt_ccb", NLSI_CCB,	{ TGT_FREE		, TGT_FREE		, FWD_BRANCH	}		, YIELDS_GOTO	, 0				}
-	, { " GEQt_cvb", NLSI_CVB,	{ TGT_FWD_FREE	, VAR_TGT_R		, FWD_BRANCH	}		, 0				, 0				}
-	, { " GEQt_vcb", NLSI_VCB,	{ VAR_TGT_R		, TGT_FWD_FREE	, FWD_BRANCH	}		, 0				, 0				}
-	, { " GEQt_vvb", NLSI_VVB,	{ VAR_TGT_R		, VAR_TGT_R		, FWD_BRANCH	}		, 0				, 0				}
+	, { " GEQt_ccb", NLSI_CCB,	{ TGT_FREE		, TGT_FREE		, FWD_BRANCH	}		, YIELDS_GOTO | GAZL_2_ONLY, 0	}
+	, { " GEQt_cvb", NLSI_CVB,	{ TGT_FWD_FREE	, VAR_TGT_R		, FWD_BRANCH	}		, GAZL_2_ONLY	, 0				}
+	, { " GEQt_vcb", NLSI_VCB,	{ VAR_TGT_R		, TGT_FWD_FREE	, FWD_BRANCH	}		, GAZL_2_ONLY	, 0				}
+	, { " GEQt_vvb", NLSI_VVB,	{ VAR_TGT_R		, VAR_TGT_R		, FWD_BRANCH	}		, GAZL_2_ONLY	, 0				}
 	, { " GETL_vvv", GETL_VVV,	{ ANY_VAR_W		, ANY_VAR_FREE_R, VAR_INT_R		}		, 0				, 0				}
 	, { " GLOB_s__", GLOB____,	{ CONST_INT_P	, 0				, 0				}		, 0				, FREE_ADDRESS	}
 	, { " GOTO_b__", GOTO_B__,	{ FWD_BRANCH	, 0				, 0				}		, 0				, 0				}
@@ -556,14 +557,14 @@ static const Operator OPERATORS[] = {
 	, { " GRTp_cvb", LSSI_VCB,	{ ANY_FWD_FREE	, VAR_PTR_R		, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
 	, { " GRTp_vcb", LSSI_CVB,	{ VAR_PTR_R		, ANY_FWD_FREE	, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
 	, { " GRTp_vvb", LSSI_VVB,	{ VAR_PTR_R		, VAR_PTR_R		, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
-	, { " GRTt_ccb", LSSI_CCB,	{ TGT_FREE		, TGT_FREE		, FWD_BRANCH	}		, SWAP_0_AND_1 | YIELDS_GOTO, 0	}
-	, { " GRTt_cvb", LSSI_VCB,	{ TGT_FWD_FREE	, VAR_TGT_R		, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
-	, { " GRTt_vcb", LSSI_CVB,	{ VAR_TGT_R		, TGT_FWD_FREE	, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
-	, { " GRTt_vvb", LSSI_VVB,	{ VAR_TGT_R		, VAR_TGT_R		, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
+	, { " GRTt_ccb", LSSI_CCB,	{ TGT_FREE		, TGT_FREE		, FWD_BRANCH	}		, SWAP_0_AND_1 | YIELDS_GOTO | GAZL_2_ONLY, 0 }
+	, { " GRTt_cvb", LSSI_VCB,	{ TGT_FWD_FREE	, VAR_TGT_R		, FWD_BRANCH	}		, SWAP_0_AND_1 | GAZL_2_ONLY, 0	}
+	, { " GRTt_vcb", LSSI_CVB,	{ VAR_TGT_R		, TGT_FWD_FREE	, FWD_BRANCH	}		, SWAP_0_AND_1 | GAZL_2_ONLY, 0	}
+	, { " GRTt_vvb", LSSI_VVB,	{ VAR_TGT_R		, VAR_TGT_R		, FWD_BRANCH	}		, SWAP_0_AND_1 | GAZL_2_ONLY, 0	}
 	, { " INPf____", LOCA____,	{ 0				, 0				, 0				}		, 0				, VAR_FLOAT_R & ~TRANSIENT }
 	, { " INPi____", LOCA____,	{ 0				, 0				, 0				}		, 0				, VAR_INT_R & ~TRANSIENT }
 	, { " INPp____", LOCA____,	{ 0				, 0				, 0				}		, 0				, VAR_PTR_R & ~TRANSIENT }
-	, { " INPt____", LOCA____,	{ 0				, 0				, 0				}		, 0				, VAR_TGT_R & ~TRANSIENT }
+	, { " INPt____", LOCA____,	{ 0				, 0				, 0				}		, GAZL_2_ONLY	, VAR_TGT_R & ~TRANSIENT }
 	, { " IORi_vcc", IORI_CCC,	{ VAR_INT_W		, CONST_INT		, CONST_INT		}		, YIELDS_CONST	, CONST_INT		}
 	, { " IORi_vcv", IORI_VVC,	{ VAR_INT_W		, CONST_INT		, VAR_INT_R		}		, SWAP_1_AND_2	, 0				}
 	, { " IORi_vvc", IORI_VVC,	{ VAR_INT_W		, VAR_INT_R		, CONST_INT		}		, 0				, 0				}
@@ -580,15 +581,15 @@ static const Operator OPERATORS[] = {
 	, { " LEQp_cvb", NLSI_VCB,	{ ANY_FWD_FREE	, VAR_PTR_R		, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
 	, { " LEQp_vcb", NLSI_CVB,	{ VAR_PTR_R		, ANY_FWD_FREE	, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
 	, { " LEQp_vvb", NLSI_VVB,	{ VAR_PTR_R		, VAR_PTR_R		, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
-	, { " LEQt_ccb", NLSI_CCB,	{ TGT_FREE		, TGT_FREE		, FWD_BRANCH	}		, SWAP_0_AND_1 | YIELDS_GOTO, 0	}
-	, { " LEQt_cvb", NLSI_VCB,	{ TGT_FWD_FREE	, VAR_TGT_R		, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
-	, { " LEQt_vcb", NLSI_CVB,	{ VAR_TGT_R		, TGT_FWD_FREE	, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
-	, { " LEQt_vvb", NLSI_VVB,	{ VAR_TGT_R		, VAR_TGT_R		, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
+	, { " LEQt_ccb", NLSI_CCB,	{ TGT_FREE		, TGT_FREE		, FWD_BRANCH	}		, SWAP_0_AND_1 | YIELDS_GOTO | GAZL_2_ONLY, 0 }
+	, { " LEQt_cvb", NLSI_VCB,	{ TGT_FWD_FREE	, VAR_TGT_R		, FWD_BRANCH	}		, SWAP_0_AND_1 | GAZL_2_ONLY, 0	}
+	, { " LEQt_vcb", NLSI_CVB,	{ VAR_TGT_R		, TGT_FWD_FREE	, FWD_BRANCH	}		, SWAP_0_AND_1 | GAZL_2_ONLY, 0	}
+	, { " LEQt_vvb", NLSI_VVB,	{ VAR_TGT_R		, VAR_TGT_R		, FWD_BRANCH	}		, SWAP_0_AND_1 | GAZL_2_ONLY, 0	}
 	, { " LOCA_s__", LOCA____,	{ CONST_INT_P	, 0				, 0				}		, 0				, ANY_VAR & ~TRANSIENT }
 	, { " LOCf____", LOCA____,	{ 0				, 0				, 0				}		, 0				, (VAR_FLOAT_R | VAR_FLOAT_W) & ~TRANSIENT }
 	, { " LOCi____", LOCA____,	{ 0				, 0				, 0				}		, 0				, (VAR_INT_R | VAR_INT_W) & ~TRANSIENT }
 	, { " LOCp____", LOCA____,	{ 0				, 0				, 0				}		, 0				, (VAR_PTR_R | VAR_PTR_W) & ~TRANSIENT }
-	, { " LOCt____", LOCA____,	{ 0				, 0				, 0				}		, 0				, (VAR_TGT_R | VAR_TGT_W) & ~TRANSIENT }
+	, { " LOCt____", LOCA____,	{ 0				, 0				, 0				}		, GAZL_2_ONLY	, (VAR_TGT_R | VAR_TGT_W) & ~TRANSIENT }
 	, { " LSSf_ccb", LSSF_CCB,	{ CONST_FLOAT	, CONST_FLOAT	, FWD_BRANCH	}		, YIELDS_GOTO	, 0				}
 	, { " LSSf_cvb", LSSF_CVB,	{ CONST_FLOAT	, VAR_FLOAT_R	, FWD_BRANCH	}		, 0				, 0				}
 	, { " LSSf_vcb", LSSF_VCB,	{ VAR_FLOAT_R	, CONST_FLOAT	, FWD_BRANCH	}		, 0				, 0				}
@@ -601,12 +602,12 @@ static const Operator OPERATORS[] = {
 	, { " LSSp_cvb", LSSI_CVB,	{ ANY_FWD_FREE	, VAR_PTR_R		, FWD_BRANCH	}		, 0				, 0				}
 	, { " LSSp_vcb", LSSI_VCB,	{ VAR_PTR_R		, ANY_FWD_FREE	, FWD_BRANCH	}		, 0				, 0				}
 	, { " LSSp_vvb", LSSI_VVB,	{ VAR_PTR_R		, VAR_PTR_R		, FWD_BRANCH	}		, 0				, 0				}
-	, { " LSSt_ccb", LSSI_CCB,	{ TGT_FREE		, TGT_FREE		, FWD_BRANCH	}		, YIELDS_GOTO	, 0				}
-	, { " LSSt_cvb", LSSI_CVB,	{ TGT_FWD_FREE	, VAR_TGT_R		, FWD_BRANCH	}		, 0				, 0				}
-	, { " LSSt_vcb", LSSI_VCB,	{ VAR_TGT_R		, TGT_FWD_FREE	, FWD_BRANCH	}		, 0				, 0				}
-	, { " LSSt_vvb", LSSI_VVB,	{ VAR_TGT_R		, VAR_TGT_R		, FWD_BRANCH	}		, 0				, 0				}
+	, { " LSSt_ccb", LSSI_CCB,	{ TGT_FREE		, TGT_FREE		, FWD_BRANCH	}		, YIELDS_GOTO | GAZL_2_ONLY, 0	}
+	, { " LSSt_cvb", LSSI_CVB,	{ TGT_FWD_FREE	, VAR_TGT_R		, FWD_BRANCH	}		, GAZL_2_ONLY	, 0				}
+	, { " LSSt_vcb", LSSI_VCB,	{ VAR_TGT_R		, TGT_FWD_FREE	, FWD_BRANCH	}		, GAZL_2_ONLY	, 0				}
+	, { " LSSt_vvb", LSSI_VVB,	{ VAR_TGT_R		, VAR_TGT_R		, FWD_BRANCH	}		, GAZL_2_ONLY	, 0				}
 #if GAZL_2
-	, { " MARK____", MARK____,	{ 0				, 0				, 0				}		, 0				, 0				}
+	, { " MARK____", MARK____,	{ 0				, 0				, 0				}		, GAZL_2_ONLY	, 0				}
 #endif
 	, { " MODi_vcc", MODI_CCC,	{ VAR_INT_W		, CONST_INT		, CONST_INT		}		, YIELDS_CONST|CHECK_DIV_BY_0, CONST_INT }
 	, { " MODi_vcv", MODI_VCV,	{ VAR_INT_W		, CONST_INT		, VAR_INT_R		}		, 0				, 0				}
@@ -619,8 +620,8 @@ static const Operator OPERATORS[] = {
 	, { " MOVi_vv_", MOVE_VV_,	{ VAR_INT_W		, VAR_INT_R		, 0				}		, 0				, 0				}
 	, { " MOVp_vc_", MOVE_VC_,	{ VAR_PTR_W		, ANY_FWD_FREE	, 0				}		, 0				, 0				}
 	, { " MOVp_vv_", MOVE_VV_,	{ VAR_PTR_W		, VAR_PTR_R		, 0				}		, 0				, 0				}
-	, { " MOVt_vc_", MOVE_VC_,	{ VAR_TGT_W		, TGT_FWD_FREE	, 0				}		, 0				, 0				}
-	, { " MOVt_vv_", MOVE_VV_,	{ VAR_TGT_W		, VAR_TGT_R		, 0				}		, 0				, 0				}
+	, { " MOVt_vc_", MOVE_VC_,	{ VAR_TGT_W		, TGT_FWD_FREE	, 0				}		, GAZL_2_ONLY	, 0				}
+	, { " MOVt_vv_", MOVE_VV_,	{ VAR_TGT_W		, VAR_TGT_R		, 0				}		, GAZL_2_ONLY	, 0				}
 	, { " MULf_vcc", MULF_CCC,	{ VAR_FLOAT_W	, CONST_FLOAT	, CONST_FLOAT	}		, YIELDS_CONST	, CONST_FLOAT	}
 	, { " MULf_vcv", MULF_VVC,	{ VAR_FLOAT_W	, CONST_FLOAT	, VAR_FLOAT_R	}		, SWAP_1_AND_2	, 0				}
 	, { " MULf_vvc", MULF_VVC,	{ VAR_FLOAT_W	, VAR_FLOAT_R	, CONST_FLOAT	}		, 0				, 0				}
@@ -641,15 +642,15 @@ static const Operator OPERATORS[] = {
 	, { " NEQp_cvb", NEQI_VCB,	{ ANY_FWD_FREE	, VAR_PTR_R		, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
 	, { " NEQp_vcb", NEQI_VCB,	{ VAR_PTR_R		, ANY_FWD_FREE	, FWD_BRANCH	}		, 0				, 0				}
 	, { " NEQp_vvb", NEQI_VVB,	{ VAR_PTR_R		, VAR_PTR_R		, FWD_BRANCH	}		, 0				, 0				}
-	, { " NEQt_ccb", NEQI_CCB,	{ TGT_FREE		, TGT_FREE		, FWD_BRANCH	}		, YIELDS_GOTO	, 0				}
-	, { " NEQt_cvb", NEQI_VCB,	{ TGT_FWD_FREE	, VAR_TGT_R		, FWD_BRANCH	}		, SWAP_0_AND_1	, 0				}
-	, { " NEQt_vcb", NEQI_VCB,	{ VAR_TGT_R		, TGT_FWD_FREE	, FWD_BRANCH	}		, 0				, 0				}
-	, { " NEQt_vvb", NEQI_VVB,	{ VAR_TGT_R		, VAR_TGT_R		, FWD_BRANCH	}		, 0				, 0				}
+	, { " NEQt_ccb", NEQI_CCB,	{ TGT_FREE		, TGT_FREE		, FWD_BRANCH	}		, YIELDS_GOTO | GAZL_2_ONLY, 0	}
+	, { " NEQt_cvb", NEQI_VCB,	{ TGT_FWD_FREE	, VAR_TGT_R		, FWD_BRANCH	}		, SWAP_0_AND_1 | GAZL_2_ONLY, 0	}
+	, { " NEQt_vcb", NEQI_VCB,	{ VAR_TGT_R		, TGT_FWD_FREE	, FWD_BRANCH	}		, GAZL_2_ONLY	, 0				}
+	, { " NEQt_vvb", NEQI_VVB,	{ VAR_TGT_R		, VAR_TGT_R		, FWD_BRANCH	}		, GAZL_2_ONLY	, 0				}
 	, { " NOOP____", NOOP____,	{ 0				, 0				, 0				}		, 0				, 0				}
 	, { " OUTf____", LOCA____,	{ 0				, 0				, 0				}		, 0				, (VAR_FLOAT_R | VAR_FLOAT_W) & ~TRANSIENT }
 	, { " OUTi____", LOCA____,	{ 0				, 0				, 0				}		, 0				, (VAR_INT_R | VAR_INT_W) & ~TRANSIENT }
 	, { " OUTp____", LOCA____,	{ 0				, 0				, 0				}		, 0				, (VAR_PTR_R | VAR_PTR_W) & ~TRANSIENT }
-	, { " OUTt____", LOCA____,	{ 0				, 0				, 0				}		, 0				, (VAR_TGT_R | VAR_TGT_W) & ~TRANSIENT }
+	, { " OUTt____", LOCA____,	{ 0				, 0				, 0				}		, GAZL_2_ONLY	, (VAR_TGT_R | VAR_TGT_W) & ~TRANSIENT }
 	, { " PARA_s__", LOCA____,	{ CONST_INT_P	, 0				, 0				}		, 0				, ANY_VAR & ~TRANSIENT }
 	, { " PEEK_vc_", PEEK_VC_,	{ ANY_VAR_W		, FWD_ADDRESS_R	, 0				}		, 0				, 0				}
 	, { " PEEK_vcv", PEEK_VCV,	{ ANY_VAR_W		, FWD_FREE_R	, VAR_INT_R		}		, 0				, 0				}
@@ -682,7 +683,7 @@ static const Operator OPERATORS[] = {
 	, { " SHRu_vvc", SHRU_VVC,	{ VAR_INT_W		, VAR_INT_R		, CONST_INT_P	}		, 0				, 0				}
 	, { " SHRu_vvv", SHRU_VVV,	{ VAR_INT_W		, VAR_INT_R		, VAR_INT_R		}		, 0				, 0				}
 #if GAZL_2
-	, { " SPAN_os_", SPAN____,	{ CONST_INT_P	, CONST_INT_P	, 0				}		, 0				, 0				}
+	, { " SPAN_os_", SPAN____,	{ CONST_INT_P	, CONST_INT_P	, 0				}		, GAZL_2_ONLY	, 0				}
 #endif
 	, { " SUBf_vcc", SUBF_CCC,	{ VAR_FLOAT_W	, CONST_FLOAT	, CONST_FLOAT	}		, YIELDS_CONST	, CONST_FLOAT	}
 	, { " SUBf_vcv", SUBF_VCV,	{ VAR_FLOAT_W	, CONST_FLOAT	, VAR_FLOAT_R	}		, 0				, 0				}
@@ -698,8 +699,8 @@ static const Operator OPERATORS[] = {
 	, { " SUBp_vvv", SUBI_VVV,	{ VAR_PTR_W		, VAR_PTR_R		, VAR_INT_R		}		, 0				, 0				}
 	, { " SWCH_vsb", SWCH_VCC,	{ VAR_INT_R		, CONST_INT_P	, FWD_BRANCH	}		, BRANCH_IS_TABLE, 0			}
 #if GAZL_2
-	, { " TAIL_cs_", TAIL_CC_,	{ FUNC|TARGET|FORWARD, CONST_INT_P, 0			}		, 0				, 0				}
-	, { " TAIL_vs_", TAIL_VC_,	{ VAR_PTR_R|VAR_TGT_R, CONST_INT_P, 0			}		, 0				, 0				}
+	, { " TAIL_cs_", TAIL_CC_,	{ FUNC|TARGET|FORWARD, CONST_INT_P, 0			}		, GAZL_2_ONLY	, 0				}
+	, { " TAIL_vs_", TAIL_VC_,	{ VAR_PTR_R|VAR_TGT_R, CONST_INT_P, 0			}		, GAZL_2_ONLY	, 0				}
 #endif
 	, { " TEMP_s__", GLOB____,	{ CONST_INT_P	, 0				, 0				}		, 0				, FREE_ADDRESS | TEMPORARY }
 	, { " XORi_vcc", XORI_CCC,	{ VAR_INT_W		, CONST_INT		, CONST_INT		}		, YIELDS_CONST	, CONST_INT		}
@@ -721,7 +722,7 @@ static const Operator OPERATORS[] = {
 	, { "!DEFi_c__", DEFI____,	{ CONST_INT		, 0				, 0				}		, 0				, CONST_INT		}
 	, { "!DEFp_c__", DEFI____,	{ ANY_FREE		, 0				, 0				}		, 0				, POINTER_CONSTANT	}
 #if GAZL_2
-	, { "!DEFt_c__", DEFI____,	{ TGT_FREE		, 0				, 0				}		, 0				, POINTER_CONSTANT	}
+	, { "!DEFt_c__", DEFI____,	{ TGT_FREE		, 0				, 0				}		, GAZL_2_ONLY	, POINTER_CONSTANT	}
 #endif
 	, { "!DIFp_ccc", SUBI_CCC,	{ COMPILE_TIME	, FREE_ADDRESS	, FREE_ADDRESS	}		, 0				, CONST_INT		}
 	, { "!DIVf_ccc", DIVF_CCC,	{ COMPILE_TIME	, CONST_FLOAT	, CONST_FLOAT	}		, 0				, CONST_FLOAT	}
@@ -1017,6 +1018,15 @@ Symbols::Symbol* Assembler::declare(Symbols& where, const Char* labelBegin, cons
 
 int Assembler::operatorCompare(const void* a, const void* b) {
 	return strcmp(reinterpret_cast<const Char*>(a), reinterpret_cast<const Operator*>(b)->key);
+}
+
+const Operator* Assembler::findOperator(const Char* key, const Char* b, const Char* e) const {
+	const Operator* const op = reinterpret_cast<const Operator*>(bsearch(key, OPERATORS, OPERATOR_COUNT
+			, sizeof (*OPERATORS), operatorCompare));
+	if (op == 0 || (dialect < 2 && (op->otherFlags & GAZL_2_ONLY) != 0)) {
+		throw Exception(INVALID_INSTRUCTION, b, e);
+	}
+	return op;
 }
 
 Char Assembler::parseOperandType(const Char* b, const Char* e) {
@@ -1451,20 +1461,11 @@ const Char* Assembler::feed(const Char* line) {
 							return eatEOL(eatSpace(e));
 						}
 
-			case 'i':
-			case 'f':
-			case 'p':
-			case 't':
-			case 'A':	{																								// DATi, DATf, DATp, DATt and DATA
+			default:	{																								// DATi, DATf, DATp, DATt and DATA
+							const Char key[10] = { ' ', 'D', 'A', 'T', mnemonicBegin[3], '_', 'c', '_', '_', 0 };
+							const int accepts = findOperator(key, mnemonicBegin, mnemonicBegin + 4)->accepts[0];
 							if (dataPointer == 0) throw Exception(DATA_SECTION_MISSING);
 							Value* const first = dataPointer;
-							int accepts = KONST;
-							switch (mnemonicBegin[3]) {
-								case 'i': accepts = CONST_INT; break;
-								case 'f': accepts = CONST_FLOAT; break;
-								case 'p': accepts = ANY_FWD_FREE; break;
-								case 't': accepts = TGT_FWD_FREE; break;
-							}
 							p = eatSpaceAndComment(e);
 							while (!isEOL(*p)) {
 								const Char* b = p;
@@ -1478,8 +1479,6 @@ const Char* Assembler::feed(const Char* line) {
 							declareData(labelBegin, labelEnd, first, static_cast<UInt>(dataPointer - first));
 							return eatEOL(p);
 						}
-			
-			default:	throw Exception(INVALID_INSTRUCTION, mnemonicBegin, mnemonicBegin + 4);
 		}
 	}
 	
@@ -1508,10 +1507,8 @@ const Char* Assembler::feed(const Char* line) {
 	key[8] = parseOperandType(op2Begin, op2End);
 	key[9] = 0;
 
-	const Operator* op = reinterpret_cast<const Operator*>(bsearch(key, OPERATORS, OPERATOR_COUNT, sizeof (*OPERATORS)
-			, operatorCompare));
-	if (op == 0) throw Exception(INVALID_INSTRUCTION, mnemonicBegin, op2End);
-	
+	const Operator* op = findOperator(key, mnemonicBegin, op2End);
+
 	Value v;
 	UInt size;
 	int types;
@@ -2319,6 +2316,8 @@ bool unitTest() {
 	for (int i = 0; i < OPERATOR_COUNT; ++i) {
 		const Operator& op = OPERATORS[i];
 		assert(i == 0 || strcmp(op.key, OPERATORS[i - 1].key) > 0);
+		assert(i == 0 || strncmp(op.key, OPERATORS[i - 1].key, 5) != 0													// every row of a word is GAZL 2 or none is
+				|| ((op.otherFlags ^ OPERATORS[i - 1].otherFlags) & GAZL_2_ONLY) == 0);
 		// std::cout << op.key << std::endl;
 		for (int j = 0; j < 3; ++j) {
 			assert(strchr("_bcnosv", op.key[6 + j]) != 0);

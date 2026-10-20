@@ -1236,10 +1236,10 @@ ever needs to exist in the legacy validator path.
 
 ---
 
-## Inline functions (requires a GAZL 2 engine)
+## Inline functions (requires `--gazl2`)
 
-> **Status: available.** An expansion places its locals with GAZL 2 `MARK` / `FREE`, so `inline` needs a
-> GAZL 2 engine; a 1.0 engine rejects `MARK` with `Unknown mnemonic`. It was parked while Impala 2 had to
+> **Status: available.** An expansion places its locals with GAZL 2 `MARK` / `FREE`, which assemble only
+> inside a `GAZL #2` region, so `inline` needs `--gazl2` (`E471` otherwise). It was parked while Impala 2 had to
 > keep running on 1.0 engines, and un-parked when this line gained the GAZL 2 engine, so `E439` is no
 > longer emitted. `E432` was RE-ALLOCATED 2026-08-05 to the host-owned-array rank rule while the feature
 > was away and stays there; `E433` was deleted outright by the extent-naming rework. See
@@ -1669,6 +1669,7 @@ foo.impala:12:9: note: use a cast: (int pointer)
 | E468 | `tail` requires `--gazl2` (the `TAIL` instruction it compiles to exists only on GAZL 2 engines) |
 | E469 | `tail` can only target the enclosing function in Impala 2.0 (self-recursion; the cross-function return-contract check is future work) |
 | E470 | `tail` cannot be used in an `inline function` (an inline body runs in its caller's frame) |
+| E471 | `inline` requires `--gazl2` (an expansion's `MARK` / `FREE` assemble only inside a `GAZL #2` region) |
 
 E418, E424 and E425 are **not allocated to anything that fires**. They were reserved for extern-struct
 guards that were never needed once the features shipped (`design/impala/StructLayoutConstants.md` records the

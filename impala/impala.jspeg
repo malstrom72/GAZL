@@ -5414,6 +5414,10 @@ FuncDecl    <-                                                        { $inl = f
                                                                          /* E439 (`inline` is parked) belongs to the Impala 2 line, which must run on GAZL
                                                                             1.0 engines. This branch HAS the `MARK`/`FREE` an expansion needs, so the
                                                                             feature is live here and the rejection does not come across. */
+                                                                         if ($inl && !$$parser.gazl2) {
+                                                                             $$parser.fail('inline requires --gazl2', $$s, $inlAt, 'E471',
+                                                                                     'an expansion places its locals with MARK / FREE, which assemble only inside a GAZL #2 region');
+                                                                         }
                                                                          $$parser.inlineMode = $inl;
                                                                          $$parser.inlineLocals = [];
                                                                          if ($inl && $$parser.symbols.functions[$id] !== undefined) {

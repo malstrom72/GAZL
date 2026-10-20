@@ -30,8 +30,7 @@
             ! IFDF #GAZL_VERSION @gotVersion
             ! FAIL GAZL_VERSION not defined!
 ; Two versions, because one tree builds either engine: GAZL_2=0 compiles a 1.0 engine that
-; does not know MARK / FREE. Everything else here is common to both, so this pins the RANGE it supports
-; and the MARK block below skips itself on 1.
+; does not know the GAZL 2 words. Everything else here is common to both, so this pins the RANGE it supports.
 gotVersion: ! GEQi #GAZL_VERSION #1 @notTooOld
             ! FAIL This code is for version 1 or 2 of GAZL only.
 notTooOld:  ! LEQi #GAZL_VERSION #2 @versionOK
@@ -92,10 +91,12 @@ global.warming:         GLOB *2
 
 ;-------------------------------------------------------------------------------
 ; SPAN regions (GAZL 2): symbolic offsets, out-of-order placement, and the
-; zero-filled words a region claims but never writes.
+; zero-filled words a region claims but never writes. SPAN only assembles
+; inside a GAZL #2 region; the PEEKs in test that read the data are GAZL 1.
 OFF_HI:                 ! DEFi #5
 OFF_LO:                 ! DEFi #1
 EXT_LO:                 ! DEFi #3
+                        GAZL #2
 span.test:              GLOB *8
 ;-------------------------------------------------------------------------------
                         SPAN :OFF_HI *2                      ; out of order on purpose: 5 first, 1 below it later
@@ -105,6 +106,7 @@ span.lo:                SPAN :OFF_LO *EXT_LO                 ; claims words 1-3,
                         DATi #100
                         DATi #200
 span.mark:              SPAN :7 *1                           ; label only: a named word with no DAT rows at all
+                        GAZL #1
 
 ;-------------------------------------------------------------------------------
 test:                   FUNC
@@ -121,44 +123,12 @@ test:                   FUNC
     p1:                 LOCp
     p2:                 LOCp
     p3:                 LOCp
-    t0:                 LOCt
     lArray:             LOCA *777
-; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-; MARK / FREE: sB comes after sA's FREE, so the two share offsets; sInner is
-; marked inside sA's block, so it must not collide with sA. Everything above
-; stays untouched.
-; The declarations AND the assertions that read them are one skip region - nothing but comments sits
-; between them - so a 1.0 engine never sees the mnemonics it does not know.
-            ! LSSi #GAZL_VERSION #2 @noMarks
-                        MARK
-    sA:                 LOCi
-                        MARK
-    sInner:             LOCi
-                        FREE
-                        FREE
-                        MARK
-    sB:                 LOCi
-    sB2:                LOCi
-                        FREE
 ; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 ;
 ; Test that global / const data is initialized correctly.
 ;
-;
-; Test MARK / FREE frame reuse (GAZL 2).
-;
- MOVi       i0              #111
- MOVi       sA              #222
- MOVi       sInner          #333
- NEQi       sA              #222            @fail            ; a nested MARK must not disturb the words of the one around it
- MOVi       sB              #444
- NEQi       sA              #444            @fail            ; a declaration after FREE reuses the freed offset
- MOVi       sB2             #555
- NEQi       sInner          #555            @fail            ; sB2 overlays sInner likewise
- NEQi       i0              #111            @fail            ; anything declared before the first MARK is untouched
-noMarks:    !
-
 ;
 ; Test SPAN data regions (GAZL 2).
 ;
@@ -182,37 +152,10 @@ noMarks:    !
  NEQi       i1              #700            @fail            ; a label-only SPAN names a word with no DAT behind it
 
 ;
-; Test the GAZL 2 `t` call-target type. tOne / tTwo are minted inside the GAZL #2 region at the end of
-; this file, so their addresses are targets; this caller needs no region of its own - the discipline
-; rides on the SYMBOLS, which is what lets mixed-dialect units concatenate.
+; MARK / FREE, the `t` call-target type and TAIL only assemble inside a GAZL #2 region, so their tests
+; are testGazl2, in the region at the end of this file. A GAZL 1 caller may still CALL a GAZL 2 function.
 ;
- MOVt       t0              &tOne
- CALL       t0              %0              *1
- NEQi       %0              #1111           @fail            ; called through a target local
- PEEK       t0              &tTargets:1
- CALL       t0              %0              *1
- NEQi       %0              #2222           @fail            ; loaded from a DATt table - memory stays typeless
- EQUt       t0              &tTwo           @tSame
- GOTO       @fail
-    tSame:  NEQt t0         &tOne           @tDiffer
- GOTO       @fail
-    tDiffer: DIFt i0        t0              &tOne
- NEQi       i0              #1              @fail            ; declaration-order ordinals: tTwo - tOne = 1
- MOVi       %1              #5
- CALL       &tLoop          %0              *2
- NEQi       %0              #3333           @fail            ; tLoop TAILed itself 5 times in ONE frame - the callee's RETU came straight back here
- MOVt       t0              &T_TWO
- CALL       t0              %0              *1
- NEQi       %0              #2222           @fail            ; a `! DEFt` name, used before the region defines it
- CALL       &T_TWO          %0              *1
- NEQi       %0              #2222           @fail
- MOVt       t0              &T_NONE
- NEQt       t0              &NULL           @fail
- PEEK       t0              &tNamed:0
- EQUt       t0              &T_TWO          @tNamedOk        ; DATt and the target compares take `! DEFt` names
- GOTO       @fail
-    tNamedOk: PEEK t0       &tNamed:1
- NEQt       t0              &T_NONE         @fail
+ CALL       &testGazl2
 
  PEEK       f0		       &consts.float
  PEEK       i0              &consts.int
@@ -2350,6 +2293,70 @@ CallPointerConstants:   FUNC
 ; CONCATENATE: whatever follows starts back in the GAZL 1 default.
 ;===============================================================================
                         GAZL #2
+
+;-------------------------------------------------------------------------------
+testGazl2:              FUNC
+;
+; The GAZL 2 words that only assemble inside a GAZL #2 region: MARK / FREE frame
+; reuse, the `t` call-target type and TAIL. Called from test.
+;-------------------------------------------------------------------------------
+    i0:                 LOCi
+    t0:                 LOCt
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+; MARK / FREE: sB comes after sA's FREE, so the two share offsets; sInner is
+; marked inside sA's block, so it must not collide with sA. Everything above
+; stays untouched.
+                        MARK
+    sA:                 LOCi
+                        MARK
+    sInner:             LOCi
+                        FREE
+                        FREE
+                        MARK
+    sB:                 LOCi
+    sB2:                LOCi
+                        FREE
+; - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+                        MOVi i0 #111
+                        MOVi sA #222
+                        MOVi sInner #333
+                        NEQi sA #222 @fail                      ; a nested MARK must not disturb the words of the one around it
+                        MOVi sB #444
+                        NEQi sA #444 @fail                      ; a declaration after FREE reuses the freed offset
+                        MOVi sB2 #555
+                        NEQi sInner #555 @fail                  ; sB2 overlays sInner likewise
+                        NEQi i0 #111 @fail                      ; anything declared before the first MARK is untouched
+
+                        MOVt t0 &tOne
+                        CALL t0 %0 *1
+                        NEQi %0 #1111 @fail                     ; called through a target local
+                        PEEK t0 &tTargets:1
+                        CALL t0 %0 *1
+                        NEQi %0 #2222 @fail                     ; loaded from a DATt table - memory stays typeless
+                        EQUt t0 &tTwo @tSame
+                        GOTO @fail
+    tSame:              NEQt t0 &tOne @tDiffer
+                        GOTO @fail
+    tDiffer:            DIFt i0 t0 &tOne
+                        NEQi i0 #1 @fail                        ; declaration-order ordinals: tTwo - tOne = 1
+                        MOVi %1 #5
+                        CALL &tLoop %0 *2
+                        NEQi %0 #3333 @fail                     ; tLoop TAILed itself 5 times in ONE frame - the callee's RETU came straight back here
+                        MOVt t0 &T_TWO
+                        CALL t0 %0 *1
+                        NEQi %0 #2222 @fail                     ; a `! DEFt` name, used before the region defines it
+                        CALL &T_TWO %0 *1
+                        NEQi %0 #2222 @fail
+                        MOVt t0 &T_NONE
+                        NEQt t0 &NULL @fail
+                        PEEK t0 &tNamed:0
+                        EQUt t0 &T_TWO @tNamedOk                ; DATt and the target compares take `! DEFt` names
+                        GOTO @fail
+    tNamedOk:           PEEK t0 &tNamed:1
+                        NEQt t0 &T_NONE @fail
+                        RETU
+    fail:               CALL ^assertFail
+                        RETU
 
 ;-------------------------------------------------------------------------------
 tOne:                   FUNC

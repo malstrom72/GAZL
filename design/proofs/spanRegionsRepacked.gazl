@@ -18,6 +18,7 @@
 .o.Voice.gain:  ! DEFi #0
 .z.Voice:       ! DEFi #7
 
+                GAZL #2
 voice:          GLOB *.z.Voice
                 SPAN :.o.Voice.note *1
                 DATi #60
@@ -25,6 +26,7 @@ voice:          GLOB *.z.Voice
                 DATi #1 #2 #3
                 SPAN :.o.Voice.gain *1
                 DATi #9
+                GAZL #1
 
 main:           FUNC
 sum:            LOCi

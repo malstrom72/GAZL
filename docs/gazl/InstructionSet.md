@@ -327,6 +327,8 @@ back in dialect 1 at the end (`GAZL 2 region not closed with GAZL #1`), and a de
 
 Inside a `GAZL #2` region:
 
+- The GAZL 2 mnemonics assemble: `MARK`, `FREE`, `SPAN`, `TAIL`, `! DEFt` and the `t` family. Outside a region each
+  is an unknown mnemonic, as on a GAZL 1 engine, so dialect 1 is exactly GAZL 1.
 - `FUNC` declares functions whose addresses are `t` (target) values, accepted by the `t` instruction family and by
   `CALL` - but by no `p` position, in this region or any other unit.
 - No `p` position accepts ANY function address, GAZL 1 functions included: within the region, a function is never a
@@ -820,8 +822,8 @@ avoid huge switch ranges.
 - `&function       *size`
 - `tgt             *size`
 
-Tail call (GAZL 2 and later; an additive mnemonic, so it is legal in any dialect on an engine that knows it, and an
-older engine rejects it as an unknown mnemonic). Like `CALL`, but the argument window is always `%0` .. `%size - 1`,
+Tail call (GAZL 2 and later; only inside a `GAZL #2` region, and outside one, as on an older engine, it is an unknown
+mnemonic). Like `CALL`, but the argument window is always `%0` .. `%size - 1`,
 and NO return address is pushed: the engine slides the window down onto the current function's own frame base,
 rewinds to it, and re-enters the target - so the frame is REUSED and the target's eventual `RETU` returns directly
 to this function's original caller, with its outputs in the slots that caller already reads. Recursion through

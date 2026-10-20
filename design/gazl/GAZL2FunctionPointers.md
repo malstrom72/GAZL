@@ -5,8 +5,8 @@ Status: IMPLEMENTED 2026-08-25, with the migration REVISED from the hard break d
 `docs/gazl/InstructionSet.md` (`GAZL`, `MOVt`, `EQUt`, `DIFt`, `DATt`) for the shipped semantics. The
 mechanism: `GAZL #n` sets the dialect for what follows; inside a `GAZL #2` region, `FUNC` mints a
 `TARGET`-typed address (one conditional - the whole dialect switch) and no ADDRESS-carrying position
-accepts any function constant. The `t` rows accept only targets, so they are gated away from GAZL 1
-code by the type bits alone, with no version check in the operator table. Impala emits the full
+accepts any function constant. The `t` rows accept only targets, and since 2026-10-20 they assemble only
+inside a `GAZL #2` region at all, like every GAZL 2 word. Impala emits the full
 `GAZL #2` ... `GAZL #1` bracket under `--gazl2`, which is what keeps concatenation-linking working in
 every dialect mix. Blast radius of the shipped form: ZERO forced migrations - undeclared files keep
 GAZL 1 meaning forever, and `src/UnitTest.gazl` tests both dialects in one file.

@@ -44,10 +44,12 @@ including which mnemonics exist - is dialect-free.
   with it and hands the stream back to the default when it ends. Bracketed and unbracketed units mix in
   ANY order; per-symbol `TARGET` minting carries the funcptr protection across the seams. Emit the
   bracket in anything meant for concatenation - `--gazl2` does.
-- **Additive mnemonics are NOT gated by the directive** (decided 2026-08-24, unchanged). `MARK`, `FREE`,
-  `SPAN` and the `t` family are self-gating: an engine that lacks them rejects them as unknown
-  mnemonics, and a `t` row outside a region can never receive a function constant anyway (the type bits
-  gate it). The directive exists solely for the meaning change - the `t` split.
+- **The GAZL 2 mnemonics ARE gated by the directive** (decided 2026-10-20, reversing 2026-08-24). `MARK`,
+  `FREE`, `SPAN`, `TAIL`, `! DEFt` and the `t` family assemble only inside a `GAZL #2` region; outside one
+  each is an unknown mnemonic, as on a GAZL 1 engine, so dialect 1 is exactly GAZL 1 on every engine. The
+  2026-08-24 rule called them self-gating (an engine that lacks them rejects them anyway), but that left
+  dialect 1 meaning more on a GAZL 2 engine than on a GAZL 1 one, which a GAZL 1 program tested on a
+  GAZL 2 engine would not notice.
 
 Considered and rejected on the way (each killed by the concatenation constraint or by strictness):
 `VERS #2` (says less as a first word); a `!` compile-time spelling (no gain); a single sticky
