@@ -168,7 +168,7 @@ static Int stringToInt(const Char* &p, const Char* e) {
 					} /* else continue */
 		default:	for (; p < e && *p >= '0' && *p <= '9'; ++p) i = i * 10 + (*p - '0'); break;
 	}
-	return (Int)(sign < 0 ? 0u - i : i);																	// negate in UNSIGNED: `(Int)i * -1` is signed-overflow UB at i == 2^31, the literal -2147483648
+	return (Int)(sign < 0 ? 0u - i : i);																	// negated unsigned, so -2147483648 does not overflow
 }
 
 // An unsigned integer of up to 1024 bits, enough for the exact comparisons in `parseFloat`.
@@ -418,7 +418,7 @@ const int NATIVE			= 0x10000;
 const int COMPILE_TIME		= 0x20000;
 const int FORWARD			= 0x40000;
 const int UNCHECKED_ADDRESS	= 0x80000;					// Do *not* check the offset against the symbol's range: the address is only a value (`MOVp`, `ADDp` and the like).
-const int OFFSET_GIVEN		= 0x1000000;				// Set per operand, not in the table: a `:offset` was written, `:0` included, which only data and locals take.
+const int OFFSET_GIVEN		= 0x1000000;				// Set per operand, never in the table: a `:k` was written, `:0` included.
 const int POINTER_CONSTANT	= 0x2000000;				// On a symbol, never in an operand: a `! DEFp` name, an address with no data of its own.
 const int FWD_ADDRESS_W		= ADDRESS_W | FORWARD;
 const int FWD_ADDRESS_R		= ADDRESS_R | FORWARD;
@@ -1656,7 +1656,7 @@ Int Processor::run() {
 								err = ACCESS_VIOLATION;
 								goto ret;
 							}
-			case FORi_VVB:	V0.i = iadd(V0.i, 1); if (V0.i < V1.i) { ip += C2.i; continue; }; break;					// iadd, not ++: a counter already at INT_MAX made `++` signed-overflow UB. Wrap is unchanged, and FORp maps here too
+			case FORi_VVB:	V0.i = iadd(V0.i, 1); if (V0.i < V1.i) { ip += C2.i; continue; }; break;					// `iadd`, not `++`: a counter at `INT_MAX` wraps instead of overflowing
 			case FORi_VCB:	V0.i = iadd(V0.i, 1); if (V0.i < C1.i) { ip += C2.i; continue; }; break;
 			case LSSI_VVB:	if (V0.i < V1.i) { ip += C2.i; continue; }; break;
 			case LSSI_VCB:	if (V0.i < C1.i) { ip += C2.i; continue; }; break;
