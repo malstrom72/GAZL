@@ -53,6 +53,10 @@ corpus of real `.gazl` files IS useful here (unlike the differential fuzzer). It
 [design/fuzzing.md](../../design/fuzzing.md). Unpack it into an EMPTY folder. `textCrashes/` holds the input of each
 fixed text-lane crash as a plain file, kept outside the archive because `-merge=1` would drop it.
 
+`textSeeds/` holds small programs written as text-lane seeds for the GAZL 2 additions (regions, call targets, `TAIL`,
+`MARK` / `FREE` and `SPAN`), which the other small `.gazl` files in the repo barely use. Each has a `main` and prints a
+checksum, given in its header. `tools/seedTextCorpus.sh` picks them up with every other small `.gazl` file.
+
 ## Both backends
 
 Each binary links ONE JIT backend - the host's - and diffs it against the (arch-neutral) interpreter, so a single run

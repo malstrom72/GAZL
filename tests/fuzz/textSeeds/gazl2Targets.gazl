@@ -1,0 +1,152 @@
+; Text-lane seed: call targets. A table of targets called in a loop and through a higher-order function, targets
+; compared, subtracted, passed in and out of parameters, stored to memory and read back, and calls in both directions
+; between GAZL 1 and GAZL 2 functions.
+;   output/GAZLCmd tests/fuzz/textSeeds/gazl2Targets.gazl main      ; 459
+
+;-------------------------------------------------------------------------------
+g1Double:               FUNC
+    r:                  OUTi
+    x:                  INPi
+;-------------------------------------------------------------------------------
+                        ADDi r x x
+                        RETU
+
+                        GAZL #2
+
+;-------------------------------------------------------------------------------
+addOne:                 FUNC
+    r:                  OUTi
+    x:                  INPi
+;-------------------------------------------------------------------------------
+                        ADDi r x #1
+                        RETU
+
+;-------------------------------------------------------------------------------
+square:                 FUNC
+    r:                  OUTi
+    x:                  INPi
+;-------------------------------------------------------------------------------
+                        MULi r x x
+                        RETU
+
+;-------------------------------------------------------------------------------
+negate:                 FUNC
+    r:                  OUTi
+    x:                  INPi
+;-------------------------------------------------------------------------------
+                        MULi r x #-1
+                        RETU
+
+;-------------------------------------------------------------------------------
+viaGazl1:               FUNC
+    r:                  OUTi
+    x:                  INPi
+;-------------------------------------------------------------------------------
+                        MOVi %1 x
+                        CALL &g1Double %0 *2
+                        ADDi r %0 #1
+                        RETU
+
+;-------------------------------------------------------------------------------
+twice:                  FUNC
+    r:                  OUTi
+    f:                  INPt
+    x:                  INPi
+;-------------------------------------------------------------------------------
+                        MOVi %1 x
+                        CALL f %0 *2
+                        MOVi %1 %0
+                        CALL f %0 *2
+                        MOVi r %0
+                        RETU
+
+;-------------------------------------------------------------------------------
+pickOp:                 FUNC
+    r:                  OUTt
+    k:                  INPi
+    p:                  LOCp
+;-------------------------------------------------------------------------------
+                        MOVp p &ops
+                        ADDp p p k
+                        PEEK r p
+                        RETU
+
+OP_SQUARE:              ! DEFt &square
+OP_NONE:                ! DEFt &NULL
+OPS_COUNT:              ! DEFi #5
+
+;-------------------------------------------------------------------------------
+ops:                    CNST *OPS_COUNT
+;-------------------------------------------------------------------------------
+                        DATt &addOne &OP_SQUARE &negate &viaGazl1 &addOne
+
+;-------------------------------------------------------------------------------
+slot:                   GLOB *2
+;-------------------------------------------------------------------------------
+
+;-------------------------------------------------------------------------------
+main:                   FUNC
+    sum:                LOCi
+    i:                  LOCi
+    d:                  LOCi
+    t:                  LOCt
+    u:                  LOCt
+;-------------------------------------------------------------------------------
+                        MOVi sum #0
+                        MOVi i #0
+    loop:               MOVi %1 i
+                        CALL &pickOp %0 *2
+                        MOVt t %0
+                        MOVt %1 t
+                        MOVi %2 #3
+                        CALL &twice %0 *3
+                        ADDi sum sum %0
+                        POKE &slot t
+                        PEEK u &slot
+                        NEQt u t @fail
+                        FORi i #OPS_COUNT @loop
+
+                        LSSt &addOne &square @ordered
+                        GOTO @fail
+    ordered:            GEQt &negate &square @ordered2
+                        GOTO @fail
+    ordered2:           MOVt t &viaGazl1
+                        GRTt t &addOne @ordered3
+                        GOTO @fail
+    ordered3:           LEQt &addOne t @ordered4
+                        GOTO @fail
+    ordered4:           DIFt d t &addOne
+                        MULi d d #100
+                        ADDi sum sum d
+
+                        MOVt u &OP_NONE
+                        EQUt u &NULL @isNull
+                        GOTO @fail
+    isNull:             POKE &slot:1 u
+                        PEEK t &slot:1
+                        NEQt t &NULL @fail
+                        MOVt t &OP_SQUARE
+                        EQUt t &square @named
+                        GOTO @fail
+    named:              MOVi %1 #7
+                        CALL &OP_SQUARE %0 *2
+                        ADDi sum sum %0
+                        MOVi %1 sum
+                        CALL &g1Caller %0 *2
+                        MOVi %1 %0
+                        CALL ^printInt %0 *2
+                        RETU
+    fail:               CALL ^assertFail
+                        RETU
+
+                        GAZL #1
+
+;-------------------------------------------------------------------------------
+g1Caller:               FUNC
+    r:                  OUTi
+    x:                  INPi
+;-------------------------------------------------------------------------------
+                        MOVi %1 x
+                        CALL &addOne %0 *2
+                        MOVi r %0
+                        RETU
