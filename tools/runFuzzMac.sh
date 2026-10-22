@@ -44,12 +44,13 @@ mkdir -p "$FUZZ/lane6_text/corpus"; ./seedTextCorpus.sh "$FUZZ/lane6_text/corpus
 # or pathologically slow program) so it can't stall the lane. A dropped unit becomes a timeout-* artifact.
 launch_libfuzzer lane6_text       GAZLFuzzText 4 "-max_len=8192 -timeout=25"
 
-# lane 2: --gen has no timer/corpus; loop disjoint seed bands until the deadline (prints live to stderr).
+# lane 2: --gen has no timer/corpus; loop disjoint seed bands until the deadline (prints live to stderr). The deadline
+# is checked only between bands, so a band is kept to about half an hour under Rosetta.
 ( cd "$FUZZ" && nohup bash -c '
 	end=$(( $(date +%s) + '"$SECS"' )); seed=0
 	while [ "$(date +%s)" -lt "$end" ]; do
-		arch -x86_64 '"$OUT"'/GAZLFuzzX64 --gen 50000000 "$seed" deep || exit 1
-		seed=$(( seed + 50000000 ))
+		arch -x86_64 '"$OUT"'/GAZLFuzzX64 --gen 1000000 "$seed" deep || exit 1
+		seed=$(( seed + 1000000 ))
 	done' > lane2_x64_diff.log 2>&1 & )
 echo "  lane2_x64_diff: --gen seed walk -> output/fuzz/lane2_x64_diff.log"
 
