@@ -139,9 +139,9 @@ What is fuzzed or replayed, with which toolchain, and when. Branch is the first 
 | Text, Windows | `buildGazlFuzz.cmd` | MSVC, libFuzzer + ASan | `main` | Windows campaigns |
 | Corpus + crash replay | `test-fuzz.sh` / `.cmd` | the build's compiler (MSVC, Apple clang, g++), `beta`, no sanitizers | `main` | Every build, all three CI jobs |
 | The same replay under UBSan | `test-ubsan.sh` | clang++, UBSan | `main` | Linux CI job |
-| Impala generator | `impala/fuzzImpala.js` | Node, no C++ | `Impala2` | JS gate; `fuzz48h` for long rounds |
+| Impala generator | `impala/fuzzImpala.js` | Node, no C++ | `Impala2`; its `--gazl2` twin on `GAZL2` | JS gate; `fuzz48h` for long rounds |
 | JIT differential, `--gen` | `buildGazlFuzz.sh standalone` | clang, no sanitizers | `jit-compiler` | 2000 programs in `test-jit`; `fuzzSoak.ps1` and `runFuzzMac.sh` for soaks |
-| Text through both engines | `buildGazlFuzz.sh text` | clang, libFuzzer + ASan | `jit-compiler` | `runFuzzMac.sh` lanes 6 and 7 |
+| Text through both engines | `buildGazlFuzz.sh text` | clang, libFuzzer + ASan | `jit-compiler` | `runFuzzMac.sh` lane 6 |
 | Crash replay through both engines | `buildGazlFuzz.sh standalone text` | clang, no sanitizers | `jit-compiler` | Every build (`test-jit`) |
 
 On `jit-compiler`, `buildGazlFuzz.cmd` builds the `--gen` differential instead of the text lane (see below).
