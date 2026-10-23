@@ -174,7 +174,8 @@ var DATA_LABEL_RE = /^\s*(\.[\w.]+|[A-Za-z_]\w*):\s+(\S.*)$/;
 var STORAGE_HEAD_RE = /^(?:DAT[ifpst]?|DATA|GLOB|CNST|TEMP)\b/;  // a header that ALLOCATES storage and owns the DATA rows under it
 var DEF_FOLD_RE = /^!\s*DEF[ifp]?\b/;                            // a `! DEF` compile-time fold: a const value, or a `.z.`/`.o.` extent
 var ANON_ALLOC_RE = /^\s*(?:GLOB|CNST|TEMP)\s+\*/;    // an unlabeled section allocation
-var DATA_ROW_RE = /^\s*(?:DAT[ifpst]?|DATA)\s/;       // an unlabeled initializer continuation row
+// An unlabeled initializer continuation row. Under --gazl2 a SPAN opens a region of the same initializer.
+var DATA_ROW_RE = /^\s*(?:DAT[ifpst]?|DATA|SPAN)\s/;
 // A compile-time line that computes or names a data definition's extent: an unlabeled `!` fold, or the
 // `.z.<name>: ! DEFi` naming THIS definition's size. The name must match, because `.z.` also labels a
 // struct's own size (`.z.Voice`) and a struct layout block sits immediately above the arrays that use

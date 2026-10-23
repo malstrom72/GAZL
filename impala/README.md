@@ -51,7 +51,7 @@ build if they drift from their grammar.
 | `jspegCompilerTests.js` | The main suite: self-host equivalence, grammar regressions, diagnostics and both golden systems. |
 | `runJspegTests.js` | The golden gate over `../tests/impala/sources` -> `../tests/impala/golden`. Owns `--makegold`. |
 | `importBuildTests.js` | Import-as-linking, dead-strip and cycle cases. Owns its own two goldens. |
-| `fuzzImpala.js` | Seeded generative fuzzer. A coded `error[Exxx]` is a pass; a raw JS throw is a compiler bug. Every program is also dead-stripped, and `--vm` runs both builds and compares. |
+| `fuzzImpala.js` | Seeded generative fuzzer. A coded `error[Exxx]` is a pass; a raw JS throw is a compiler bug. Every program is also dead-stripped and has a `--gazl2` twin, and `--vm` runs every build and compares. |
 | `fuzzCampaign.js` | Long-running driver that respawns `fuzzImpala.js` in chunks. |
 | `docSamples.js` | Compiles every code sample in `Impala.md` and `WhatsNewInImpala2.md`, so the prose cannot promise a diagnostic the compiler does not give. |
 | `nuxjsParityTests.js` | Compiles the same programs under Node and NuXJS and byte-compares them. |

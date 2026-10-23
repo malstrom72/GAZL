@@ -3762,6 +3762,24 @@ function runGazlText(gazlPath, text, cmdArgs, label) {
 	}
 }
 
+// --- --gazl2: a nested expansion of an inline function with locals ---------------------------------
+// Expanded inside g's body there is no frame to declare f's locals in, so they join g's own and every
+// expansion of g declares them. They used to come out as a MARK block outside every FUNC, which the
+// compile-only inline cases cannot see: only the assembler refuses it.
+{
+	const nestedOut = compileWithJsImpala("extern native printInt\nextern native printLF\n"
+		+ "inline function f(int a) returns int r\nlocals int t\n{\n\tt = a * 2;\n\tr = t + 1;\n}\n"
+		+ "inline function g(int a) returns int r { r = f(a) + 10; }\n"
+		+ "function main() { printInt(g(3)); printLF(); }\n", { randomId: 42, gazl2: true });
+	assert(nestedOut.indexOf("MARK") > nestedOut.indexOf("main:"),
+		"--gazl2: a nested expansion's locals must be declared inside the function that expands it");
+	if (haveGazlCmd()) {
+		const gazlPath = path.join(dir, "..", "tests", "impala", "erroneous", "gazl2Inline.gazl");
+		assert(runGazlText(gazlPath, nestedOut, [ "main" ], "gazl2 nested inline").startsWith("17\n"),
+			"gazl2: a nested inline expansion with locals must assemble and compute f(3) + 10");
+	}
+}
+
 // --- --gazl2: struct initializers are PLACED with SPAN regions ---------------------------------------
 // The flag's contract: (1) default output is untouched - the golden corpus is that gate, so here only
 // "no SPAN without the flag" is pinned; (2) struct data comes out as one SPAN region per leaf field
@@ -3792,6 +3810,11 @@ function runGazlText(gazlPath, text, cmdArgs, label) {
 		"--gazl2: rows must come out TYPED per leaf field, not as one mixed DATA row");
 	assert(!compileWithJsImpala(placedSrc, { randomId: 42 }).includes("SPAN"),
 		"without --gazl2 nothing may emit SPAN - the corpus byte-gate depends on it");
+	// --dead-strip threw on every placed initializer: it did not count a SPAN row as part of the block.
+	const placedStripped = require("./impalaImportClosure").deadStrip(compileWithJsImpala(
+		placedSrc.replace("function main()", "export function main()"), { randomId: 42, gazl2: true }));
+	assert(placedStripped.includes("SPAN :.o.Voice.note *1") && placedStripped.includes("DATi #60"),
+		"--gazl2: dead-strip must keep a placed initializer's SPAN and DAT rows with their block");
 
 	const externSrc = "const int DEBUG = 1\n"
 		+ "extern struct Host { int mode; float level }\n"
@@ -3820,6 +3843,8 @@ function runGazlText(gazlPath, text, cmdArgs, label) {
 		const expected = "60\n1.5\n0\n0.9\n2\n0.75\n";   // the 0 is state[1]: a region's zero-filled tail
 		assert(runOne(placed, [ "main" ]).startsWith(expected),
 			"gazl2: placed struct data must read back exactly, zero tails included");
+		assert(runOne(placedStripped, [ "main" ]).startsWith(expected),
+			"gazl2: dead-stripped placed struct data must read back exactly");
 		// A repack is two header labels trading places (note and gain are both one word). Every line
 		// below the header is untouched, and the program must not notice.
 		const repacked = placed

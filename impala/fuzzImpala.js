@@ -16,6 +16,14 @@
 // (4) below now generates - while 3000 fuzz programs stayed green, purely because nothing here called
 // it. `main` is exported so the strip has a root to walk from.
 //
+// Every program also has a --gazl2 TWIN: the same source with `inline` on each function no functype can
+// point at, and the fixed helper fnT recursing with `tail`. The twin must compile and strip wherever the
+// program did, and under --vm it must print the same thing, so it is a reference oracle over all of
+// Impala's GAZL 2 output: SPAN-placed initializers, `t` function pointers, MARK / FREE expansions and TAIL.
+// It brought back the inline differential that was parked with `inline` on the Impala 2 line. Its first run
+// found two bugs: dead-strip threw on every SPAN row, and an inline function expanded inside another
+// emitted its locals' MARK block outside every FUNC. Every other mutant is of the twin, under --gazl2.
+//
 // Control flow covers `if`/`else`/`switch`/`for`/`do`-while/`loop`/`goto`. The last three were added
 // after a landed fix for two dangling-label shapes in the short-circuit pass was found to have exactly
 // one hand-written fixture and no fuzz coverage at all - the generator emitted none of the three. Both
@@ -33,6 +41,7 @@
 //   which no crash oracle can. --vm additionally runs the DEAD-STRIPPED module and requires byte-identical
 //   stdout - a third reference oracle, over what the strip removed rather than over what the compiler
 //   emitted. Without --vm the run is compile-only, so none of the three apply.
+//   `--print <seed>` shows one program instead, and `--print <seed> --gazl2` its twin.
 // Long sweeps are chunked across processes (for s in 0 20000 40000; do ... done) to cap the memory a
 // single node process accumulates - NOT because the compiler is reloaded per call, which it stopped
 // being when impalaJsCompilerRunner started caching the module (it cost ~5x on fuzz runs).
@@ -56,7 +65,13 @@ const GAZLCMD = path.join(__dirname, '..', 'output', process.platform === 'win32
 const COMPILE_OPTS = { randomId: 0x4d2, retabulate: true, trailingNewline: true };
 const RANGE_OPTS = { ...COMPILE_OPTS, rangeChecks: true };
 const LEGACY_OPTS = { ...COMPILE_OPTS, legacy: true };
+const GAZL2_OPTS = { ...COMPILE_OPTS, gazl2: true };
 const MUTANTS_PER_SEED = 3;
+// The fixed recursive helper, and the one line that differs between a program and its --gazl2 twin.
+const TAIL_STEP_GAZL1 = 'r = fnT(n - 1, acc + n);';
+const TAIL_STEP_GAZL2 = 'tail fnT(n - 1, acc + n);';
+const TAIL_HELPER = (step) => 'function fnT(int n, int acc) returns int r\n{\n'
+		+ '\tif (n <= 0) { r = acc; return; }\n\tif (n > 8) { r = acc; return; }\n\t' + step + '\n}\n';
 
 // Run a compiled program on the VM. Returns null when there is no compiler fault, or a message when
 // the loader/assembler REJECTS the emitted GAZL - that means the compiler produced structurally
@@ -166,6 +181,19 @@ function checkRangeChecked(src, ref, defines) {
 	return sameAsReference('range-checks', runGazl(gazl, defines), ref, 'checked');
 }
 
+// The --gazl2 twin must print what the GAZL 1 build printed. It is the same program lowered differently:
+// SPAN-placed initializers, `t` function pointers, inline expansions under MARK / FREE, and a TAIL. So this
+// is a reference oracle over all of Impala's GAZL 2 output, and it brings back the inline differential.
+// A run that trapped is skipped, as the old differential skipped it: a trap is the program's own undefined
+// behaviour, and inlining legitimately moves where it strikes.
+function checkGazl2(gazl2, ref, defines) {
+	const res = runGazl(gazl2, defines);
+	const load = runOnVm(res);
+	if (load) return '--gazl2: ' + load;
+	if (ref.status !== 0 || res.status !== 0) return null;
+	return firstDiff('--gazl2', ref.stdout, res.stdout, 'gazl2');
+}
+
 // The INVERTED oracle for a deliberate over-fill (see section (4)): Impala cannot count the words of a
 // symbolic extent, so the only thing between the surplus and the next field is assertFitsExtent's
 // deferred `! FAIL` guard. The compile must SUCCEED and the assembly must FAIL. A silent pass means the
@@ -173,6 +201,13 @@ function checkRangeChecked(src, ref, defines) {
 function checkMustFail(res) {
 	return /FAIL directive/.test((res.stderr || '') + (res.stdout || '')) ? null
 			: 'over-filled symbolic initializer assembled without tripping the ! FAIL guard';
+}
+
+// The same over-fill in the --gazl2 twin needs no guard: the SPAN that places the field has the extent, so
+// the assembler itself refuses the surplus row.
+function checkMustFailGazl2(res) {
+	return /Not enough space in data section/.test((res.stderr || '') + (res.stdout || '')) ? null
+			: '--gazl2: over-filled symbolic initializer assembled without overflowing its SPAN';
 }
 
 // The value oracle: `main` prints the checked initializers before anything else, so the first
@@ -419,6 +454,10 @@ function genProgram() {
 	const extVals = Array.from({ length: extN }, chkVal);
 	extVals.forEach((v, i) => chkPrint.push('\tglobal cE.e' + i + ' = ' + v + ';'));
 	extVals.forEach((v, i) => chk('global cE.e' + i, v));
+	// fnT (see TAIL_HELPER) sums n..1 onto acc. Its arguments come from `uid`, not from `rnd`, so adding it
+	// left every seed's program as it was.
+	const tailN = uid % 9, tailAcc = 1 + uid % 100;
+	chk('fnT(' + tailN + ', ' + tailAcc + ')', tailAcc + tailN * (tailN + 1) / 2);
 
 	// how a value is referenced: globals need the `global` keyword prefix
 	const ref = (e) => (e.isGlobal ? 'global ' + e.name : e.name);
@@ -467,8 +506,12 @@ function genProgram() {
 	// reason a struct local and a local array are: assembled from the random population the shape needs
 	// about seven flips to line up and simply never appeared. (Bare `p`/`a`/`b`/`r` cannot collide with
 	// generated names, which all carry a digit suffix.) Both were `inline` until that was parked.
+	// fnT is the third, called only by the checked prints and never added to `funcs`: it is the `tail` of the
+	// --gazl2 twin, which in the GAZL 1 build recurses through an ordinary call instead. Depth is capped at 8, so
+	// that recursion stays far from the frame check and both builds print the same sum.
 	const HELPERS = 'function fnW(int pointer p) returns int r { p[0] = 7; r = 0; }\n'
-			+ 'function fnA(int a, int b) returns int r { r = a + b; }\n';
+			+ 'function fnA(int a, int b) returns int r { r = a + b; }\n'
+			+ TAIL_HELPER(TAIL_STEP_GAZL1);
 	funcs.push({ name: 'fnW', params: [{ name: 'p', t: 'p:i' }], rets: ['i'], retNames: ['r'],
 			fixed: true, aliasWriter: true });
 	funcs.push({ name: 'fnA', params: [{ name: 'a', t: 'i' }, { name: 'b', t: 'i' }], rets: ['i'],
@@ -991,7 +1034,15 @@ function genProgram() {
 		if (!funcs[i].fixed) out += renderFunc(funcs[i], false, funcs.slice(0, i));
 	}
 	out += renderFunc({ name: 'main', params: [], rets: [], retNames: [] }, true, funcs.slice());
-	return { src: out, expect: expect, defines: defines, mustFail: symOver };
+
+	// The --gazl2 twin: the same program with fnT's recursion as a `tail`, and `inline` on every function no
+	// functype can point at (an inline function has no address). Built from the text, without drawing on `rnd`.
+	const inlined = funcs.filter((fn) => !functypes.some((ft) => funcMatches(fn, ft))).map((fn) => fn.name);
+	let outGazl2 = out.replace(TAIL_HELPER(TAIL_STEP_GAZL1), TAIL_HELPER(TAIL_STEP_GAZL2));
+	for (const name of inlined) {
+		outGazl2 = outGazl2.replace('\nfunction ' + name + '(', '\ninline function ' + name + '(');
+	}
+	return { src: out, srcGazl2: outGazl2, inlined: inlined, expect: expect, defines: defines, mustFail: symOver };
 }
 
 // ---- crash oracle ------------------------------------------------------------
@@ -1045,8 +1096,10 @@ function main() {
 	if (printIdx >= 0) {
 		rnd = mulberry32(parseInt(process.argv[printIdx + 1] || '1', 10));
 		const shown = genProgram();
-		process.stdout.write(shown.src + '\n; expected checked words: ' + shown.expect.join(' ')
+		process.stdout.write((process.argv.includes('--gazl2') ? shown.srcGazl2 : shown.src)
+				+ '\n; expected checked words: ' + shown.expect.join(' ')
 				+ '\n; host layout supplied at load: ' + shown.defines.join(' ')
+				+ '\n; --gazl2 twin: fnT uses `tail`, inline: ' + (shown.inlined.join(' ') || '(none)')
 				+ (shown.mustFail ? '\n; THIS ONE MUST NOT ASSEMBLE: cY.sv is over-filled on purpose' : '')
 				+ '\n');
 		return;
@@ -1098,13 +1151,25 @@ function main() {
 			// checked here rather than under --vm so the default gate covers it.
 			const stripped = deadStrip(gazl);
 			if (/^\s*cD:/m.test(stripped)) throw new Error('dead-strip kept the unreferenced global cD');
+			// The --gazl2 twin must compile wherever the program did, and strip the same way. A coded
+			// rejection is a fault here too: the twin only adds `inline` and `tail` where both are legal.
+			let gazl2;
+			try {
+				gazl2 = compileWithJsImpala(p.srcGazl2 + '\n', GAZL2_OPTS);
+			} catch (err) {
+				// Without its `error[...]` wrapper, or `classify` would take the message for a clean rejection.
+				const msg = ((err && err.message) || String(err)).split('\n')[0].replace(/error\[(E\d+)\]/, '$1');
+				throw new Error('--gazl2: the twin failed to compile: ' + msg);
+			}
+			if (/^\s*cD:/m.test(deadStrip(gazl2))) throw new Error('--gazl2: dead-strip kept the unreferenced global cD');
 			if (useVm) {
 				const res = runGazl(gazl, p.defines);
-				const vmFault = p.mustFail ? checkMustFail(res)
+				const vmFault = p.mustFail ? (checkMustFail(res) || checkMustFailGazl2(runGazl(gazl2, p.defines)))
 						: (runOnVm(res) || checkExpected(res, p.expect)
 								|| sameAsReference('dead-strip', runGazl(stripped, p.defines), res, 'stripped')
 								|| checkRangeChecked(p.src + '\n', res, p.defines)
-								|| checkImportSplit(p, res));
+								|| checkImportSplit(p, res)
+								|| checkGazl2(gazl2, res, p.defines));
 				vmRun++;
 				if (vmFault) {
 					bugs++;
@@ -1128,11 +1193,13 @@ function main() {
 			}
 		}
 		for (let m = 0; m < MUTANTS_PER_SEED; ++m) {
-			const mut = mutate(p.src + '\n', ri);
+			const twin = (m % 2 === 1);                 /* every other mutant is of the --gazl2 twin */
+			const mut = mutate((twin ? p.srcGazl2 : p.src) + '\n', ri);
 			if (mut === undefined) { continue; }        /* nothing any mutator could bite */
+			if (twin) mut.name += ', --gazl2';
 			mutants++;
 			try {
-				compileWithJsImpala(mut.src, COMPILE_OPTS);
+				compileWithJsImpala(mut.src, twin ? GAZL2_OPTS : COMPILE_OPTS);
 			} catch (err) {
 				const crash = classify(err);
 				if (!crash) {

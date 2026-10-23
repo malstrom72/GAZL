@@ -2166,7 +2166,17 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
             The transient block below is a different matter and stays transient - it carries the
             body's own `%k` slots, including CALL windows, whose base must be a transient.
         */
-        if (info.locals.length > 0) {
+        if (info.locals.length > 0 && inlineMode) {
+            /* Expanding inside another inline function's body: there is no frame here to declare into, and a
+               MARK block emitted now would land outside every FUNC. The renamed locals join that function's
+               own instead, so each of ITS expansions declares them in its MARK block. */
+            for (k = 0; k < info.locals.length; ++k) {
+                var nested = info.locals[k];
+                inlineLocals.push({ name: nested.name + tag, kind: nested.kind, type: nested.type,
+                        size: nested.size, elem: nested.elem });
+                subst[nested.name] = nested.name + tag;
+            }
+        } else if (info.locals.length > 0) {
             var _tab = (typeof TAB !== 'undefined' ? TAB : '\t');    /* same shape declare() renders */
             emitLine(_tab + '\tMARK');
             for (k = 0; k < info.locals.length; ++k) {
