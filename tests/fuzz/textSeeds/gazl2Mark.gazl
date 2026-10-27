@@ -1,0 +1,96 @@
+; Text-lane seed: MARK / FREE. Blocks shaped like inlined bodies share frame words: sequential blocks overlay each
+; other, nested blocks stack, sizes come from assembly-time names, and the words declared before the first MARK
+; survive them all. Arrays in the blocks are filled through ADRL pointers and SETL / GETL.
+;   output/GAZLCmd tests/fuzz/textSeeds/gazl2Mark.gazl main      ; 7408
+
+BUF_SIZE:               ! DEFi #6
+PAIR_SIZE:              ! DEFi #2
+
+                        GAZL #2
+
+;-------------------------------------------------------------------------------
+fill:                   FUNC                            ; buf[i] = i * step, through a pointer
+    p:                  INPp
+    n:                  INPi
+    step:               INPi
+    i:                  LOCi
+    v:                  LOCi
+;-------------------------------------------------------------------------------
+                        MOVi i #0
+    loop:               MULi v i step
+                        POKE p i v
+                        FORi i n @loop
+                        RETU
+
+;-------------------------------------------------------------------------------
+main:                   FUNC
+    total:              LOCi
+    keep:               LOCf
+    k:                  LOCi
+                        MARK
+    bufA:               LOCA *BUF_SIZE
+    pA:                 LOCp
+                        MARK
+    inner:              LOCi
+    innerF:             LOCf
+                        FREE
+                        MARK
+    inner2:             LOCA *PAIR_SIZE
+                        FREE
+                        FREE
+                        MARK
+    bufB:               LOCA *BUF_SIZE
+    iB:                 LOCi
+    tB:                 LOCt
+                        MARK
+                        FREE
+                        FREE
+                        MARK
+    x:                  LOCi
+    y:                  LOCf
+                        MARK
+    z:                  LOCA *PAIR_SIZE
+                        MARK
+    w:                  LOCi
+                        FREE
+                        FREE
+                        FREE
+;-------------------------------------------------------------------------------
+                        MOVi total #0
+                        MOVf keep #1.5
+                        ADRL pA bufA *BUF_SIZE
+                        MOVp %0 pA
+                        MOVi %1 #BUF_SIZE
+                        MOVi %2 #3
+                        CALL &fill %0 *3
+                        MOVi inner #1000
+                        MOVf innerF #0.25
+                        MOVi k #0
+    sumA:               GETL iB bufA k                  ; iB overlays pA, which is dead by now
+                        ADDi total total iB
+                        FORi k #BUF_SIZE @sumA          ; + 45
+                        ADDi total total inner          ; + 1000, inner sits above bufA
+                        MOVi inner2:0 #7
+                        MOVi inner2:1 #8
+                        ADDi total total inner2:1       ; + 8, inner2 overlays inner
+                        MOVi k #0
+    fillB:              MULi iB k k
+                        SETL bufB k iB
+                        FORi k #BUF_SIZE @fillB
+                        MOVi k #0
+    sumB:               GETL iB bufB k
+                        ADDi total total iB
+                        FORi k #BUF_SIZE @sumB          ; + 55
+                        MOVt tB &fill
+                        MOVi x #6000
+                        ADDi total total x              ; + 6000
+                        MOVf y keep
+                        fTOi k y #200.0
+                        ADDi total total k              ; + 300, keep outlived every block
+                        MOVi w #0
+                        ADDi total total w
+                        MOVi %1 total
+                        CALL ^printInt %0 *2
+                        RETU
+
+                        GAZL #1
