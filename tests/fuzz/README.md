@@ -5,9 +5,14 @@ with [`tools/buildGazlFuzz.sh`](../../tools/buildGazlFuzz.sh) or its `.cmd`, and
 [`tools/seedTextCorpus.sh`](../../tools/seedTextCorpus.sh). How to build and run the lane, on which machine, and
 with which sanitizers, is in [`design/fuzzing.md`](../../design/fuzzing.md).
 
-`textCorpus.tar.gz` is a corpus grown by that lane, minimized with `-merge=1` to 1367 inputs and packed
+`textCorpus.tar.gz` is a corpus grown by that lane, minimized with `-merge=1` to 2039 inputs and packed
 deterministically as `design/fuzzing.md` describes. **Unpack it into an EMPTY folder** - inputs left behind from a
 previous unpack would be replayed as well.
+
+`textSeeds/` holds small programs written as seeds for the GAZL 2 additions (regions, call targets, `TAIL`,
+`MARK` / `FREE` and `SPAN`), which the other small `.gazl` files in the repo barely use. Each has a `main` and prints a
+checksum, given in its header. `tools/seedTextCorpus.sh` picks them up with every other small `.gazl` file, and the
+build replays them with the corpus.
 
 `textCrashes/` holds the input of each FIXED text-lane defect, as a plain file rather than inside the archive,
 because `-merge=1` drops any input whose coverage others already cover and would throw these away. They are marked

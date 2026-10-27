@@ -1,0 +1,90 @@
+; Text-lane seed: SPAN. Regions placed through layout names, out of order, with zero-filled tails, a label-only
+; region, rows before the first SPAN, targets and floats inside regions, and a writable section whose regions are
+; read back after the program writes into them.
+;   output/GAZLCmd tests/fuzz/textSeeds/gazl2Span.gazl main      ; 61442
+
+                        ! MOVi <a> #0                   ; layout of struct Voice { note, state[4], gain, op }
+.o.Voice.note:          ! DEFi #<a>
+                        ! ADDi <a> #<a> #1
+.o.Voice.state:         ! DEFi #<a>
+.z.Voice.state:         ! DEFi #4
+                        ! ADDi <a> #<a> #.z.Voice.state
+.o.Voice.gain:          ! DEFi #<a>
+                        ! ADDi <a> #<a> #1
+.o.Voice.op:            ! DEFi #<a>
+                        ! ADDi <a> #<a> #1
+.z.Voice:               ! DEFi #<a>
+
+                        GAZL #2
+
+;-------------------------------------------------------------------------------
+voice:                  GLOB *.z.Voice
+;-------------------------------------------------------------------------------
+                        SPAN :.o.Voice.gain *1          ; last field first
+                        DATi #9
+                        SPAN :.o.Voice.state *.z.Voice.state
+                        DATi #1 #2 #3                   ; the fourth word stays zero
+voiceNote:              SPAN :.o.Voice.note *1          ; label only: zero until main writes it
+
+;-------------------------------------------------------------------------------
+preset:                 CNST *.z.Voice
+;-------------------------------------------------------------------------------
+                        DATi #72                        ; before the first SPAN: offset 0
+                        SPAN :.o.Voice.op *1
+                        DATt &double
+                        SPAN :.o.Voice.state *2
+                        DATf #0.5 #0.25
+
+;-------------------------------------------------------------------------------
+double:                 FUNC
+    r:                  OUTi
+    x:                  INPi
+;-------------------------------------------------------------------------------
+                        ADDi r x x
+                        RETU
+
+;-------------------------------------------------------------------------------
+main:                   FUNC
+    sum:                LOCi
+    v:                  LOCi
+    f:                  LOCf
+    k:                  LOCi
+    t:                  LOCt
+    p:                  LOCp
+;-------------------------------------------------------------------------------
+                        PEEK v &preset:.o.Voice.note
+                        POKE &voiceNote v
+                        PEEK sum &voice:.o.Voice.note
+                        MULi sum sum #1000             ; 72000, written through the label-only region
+                        MOVp p &voice:.o.Voice.state
+                        MOVi k #0
+    loop:               PEEK v p k
+                        ADDi sum sum v
+                        FORi k #.z.Voice.state @loop  ; + 6, the zero tail included
+                        PEEK v &voice:.o.Voice.gain
+                        MULi v v #100
+                        ADDi sum sum v                  ; + 900
+                        PEEK f &preset:.o.Voice.state
+                        ! ADDi <a> #.o.Voice.state #1
+                        PEEK v &preset:<a>              ; a float word read as an int is its bit pattern
+                        NEQi v #0 @nonZero
+                        GOTO @fail
+    nonZero:            fTOi v f #1000.0
+                        ADDi sum sum v                  ; + 500
+                        ! ADDi <a> #.o.Voice.state #2
+                        PEEK v &preset:<a>
+                        NEQi v #0 @fail                 ; a word no region wrote is zero
+                        PEEK t &preset:.o.Voice.op
+                        MOVi %1 #-5984
+                        CALL t %0 *2
+                        ADDi sum sum %0                 ; - 11968
+                        POKE &voice:.o.Voice.state #4
+                        PEEK v &voice:.o.Voice.state
+                        ADDi sum sum v                  ; + 4
+                        MOVi %1 sum
+                        CALL ^printInt %0 *2
+                        RETU
+    fail:               CALL ^assertFail
+                        RETU
+
+                        GAZL #1

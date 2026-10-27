@@ -1,0 +1,89 @@
+; Text-lane seed: dialect regions. Several GAZL 2 regions in one file between GAZL 1 code, a version-guarded region,
+; GAZL 1 function pointers next to GAZL 2 targets, and named constants of each kind on both sides.
+;   output/GAZLCmd tests/fuzz/textSeeds/gazl2Regions.gazl main      ; 3141
+
+SCALE:                  ! DEFi #10
+NOTHING:                ! DEFp &NULL
+
+;-------------------------------------------------------------------------------
+g1Add:                  FUNC
+    r:                  OUTi
+    a:                  INPi
+    b:                  INPi
+;-------------------------------------------------------------------------------
+                        ADDi r a b
+                        RETU
+
+;-------------------------------------------------------------------------------
+g1Apply:                FUNC                            ; a GAZL 1 indirect call through a p variable
+    r:                  OUTi
+    f:                  INPp
+    x:                  INPi
+;-------------------------------------------------------------------------------
+                        MOVi %1 x
+                        MOVi %2 #SCALE
+                        CALL f %0 *3
+                        MOVi r %0
+                        RETU
+
+                        GAZL #2
+
+;-------------------------------------------------------------------------------
+g2Mul:                  FUNC
+    r:                  OUTi
+    a:                  INPi
+    b:                  INPi
+;-------------------------------------------------------------------------------
+                        MULi r a b
+                        RETU
+
+MUL:                    ! DEFt &g2Mul
+
+                        GAZL #1
+
+;-------------------------------------------------------------------------------
+g1Table:                CNST *2
+;-------------------------------------------------------------------------------
+                        DATp &g1Add &NOTHING
+
+            ! LSSi #GAZL_VERSION #2 @noRegion
+                        GAZL #2
+
+;-------------------------------------------------------------------------------
+main:                   FUNC
+    sum:                LOCi
+    t:                  LOCt
+    p:                  LOCp
+;-------------------------------------------------------------------------------
+                        MOVi sum #0
+                        PEEK p &g1Table
+                        MOVp %1 p
+                        MOVi %2 #300
+                        CALL &g1Apply %0 *3
+                        ADDi sum sum %0                 ; 310
+                        PEEK p &g1Table:1
+                        NEQp p &NULL @fail
+                        MOVt t &MUL
+                        MOVi %1 #283
+                        MOVi %2 #SCALE
+                        CALL t %0 *3
+                        ADDi sum sum %0                 ; + 2830
+                        MOVi %1 #1
+                        CALL &g1Copy %0 *2              ; declared below the region
+                        ADDi sum sum %0                 ; + 1
+                        MOVi %1 sum
+                        CALL ^printInt %0 *2
+                        RETU
+    fail:               CALL ^assertFail
+                        RETU
+
+                        GAZL #1
+noRegion:   !
+
+;-------------------------------------------------------------------------------
+g1Copy:                 FUNC
+    r:                  OUTi
+    x:                  INPi
+;-------------------------------------------------------------------------------
+                        MOVi r x
+                        RETU
