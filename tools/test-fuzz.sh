@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Replay the committed text-lane corpus and the fixed-crash inputs through the assembler and interpreter, and
+# Replay the committed text-lane corpus, the seeds and the fixed-crash inputs through the assembler and interpreter, and
 # require that none of them crashes. This is a REGRESSION gate, not a fuzz run: it finds nothing new, it stops the
 # defects already found from coming back. The .cmd twin does the same work with the same driver.
 #
@@ -24,6 +24,7 @@ tar -xzf tests/fuzz/textCorpus.tar.gz -C "$WORK"
 LIST="$WORK/inputs.txt"
 find "$WORK/corpus" -type f > "$LIST"
 find tests/fuzz/textCrashes -type f -name '*.gazl' >> "$LIST"
+find tests/fuzz/textSeeds -type f -name '*.gazl' >> "$LIST"
 N=$(wc -l < "$LIST" | tr -d ' ')
 
 echo "test-fuzz: replaying $N inputs"

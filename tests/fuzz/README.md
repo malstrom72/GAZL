@@ -49,13 +49,14 @@ cd tools && bash buildGazlFuzz.sh text                 # -> ../output/GAZLFuzzTe
 This is a different tool with a different goal: it hunts assembler crashes/UB on malformed and mutated GAZL, and a
 corpus of real `.gazl` files IS useful here (unlike the differential fuzzer). Its own corpus is separate from `corpus/`.
 
-`textCorpus.tar.gz` is that corpus, minimized with `-merge=1` (1367 inputs) and packed as in
+`textCorpus.tar.gz` is that corpus, minimized with `-merge=1` (2330 inputs) and packed as in
 [design/fuzzing.md](../../design/fuzzing.md). Unpack it into an EMPTY folder. `textCrashes/` holds the input of each
 fixed text-lane crash as a plain file, kept outside the archive because `-merge=1` would drop it.
 
 `textSeeds/` holds small programs written as text-lane seeds for the GAZL 2 additions (regions, call targets, `TAIL`,
 `MARK` / `FREE` and `SPAN`), which the other small `.gazl` files in the repo barely use. Each has a `main` and prints a
-checksum, given in its header. `tools/seedTextCorpus.sh` picks them up with every other small `.gazl` file.
+checksum, given in its header. `tools/seedTextCorpus.sh` picks them up with every other small `.gazl` file, and the
+build replays them with the corpus.
 
 ## Both backends
 
