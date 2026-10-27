@@ -5,7 +5,7 @@ with [`tools/buildGazlFuzz.sh`](../../tools/buildGazlFuzz.sh) or its `.cmd`, and
 [`tools/seedTextCorpus.sh`](../../tools/seedTextCorpus.sh). How to build and run the lane, on which machine, and
 with which sanitizers, is in [`design/fuzzing.md`](../../design/fuzzing.md).
 
-`textCorpus.tar.gz` is a corpus grown by that lane, minimized with `-merge=1` to 1367 inputs and packed
+`textCorpus.tar.gz` is a corpus grown by that lane, minimized with `-merge=1` to 2076 inputs and packed
 deterministically as `design/fuzzing.md` describes. **Unpack it into an EMPTY folder** - inputs left behind from a
 previous unpack would be replayed as well.
 
