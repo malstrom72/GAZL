@@ -8,9 +8,9 @@ mkdir -p ../output
 bash UpdateUnitTest.sh
 
 if [ "$mode" = "beta" ]; then
-    out="../output/GAZLCmdBeta"
+	out="../output/GAZLCmdBeta"
 else
-    out="../output/GAZLCmd"
+	out="../output/GAZLCmd"
 fi
 
 bash BuildCpp.sh "$mode" native "$out" -I.. GAZLCmd.cpp ../src/GAZL.cpp
