@@ -33,5 +33,5 @@ var parse = eval(src);
 var cases=[["1+2*3",7],["2*3+1",7],["(1+2)*3",9],["10/2-3",2],["  1 + 2  ",3],["100",100],["2*3*4",24],["1+2+3+4",10],["(2+3)*(4-1)",15]];
 var fails=0;
 for(var k=0;k<cases.length;++k){var r=parse(cases[k][0]);var pass=(r[0]===true&&r[1]===cases[k][1]);if(!pass)++fails;
-  console.log((pass?"PASS":"FAIL")+"  "+JSON.stringify(cases[k][0])+" -> ok="+r[0]+" val="+r[1]+" (expect "+cases[k][1]+")");}
+	console.log((pass?"PASS":"FAIL")+"  "+JSON.stringify(cases[k][0])+" -> ok="+r[0]+" val="+r[1]+" (expect "+cases[k][1]+")");}
 console.log(fails===0?"\nDUAL-MODE INTEROP ALL PASS ("+cases.length+")":"\n"+fails+" FAILED");
