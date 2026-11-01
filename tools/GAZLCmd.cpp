@@ -164,8 +164,8 @@ class CmdException : public std::exception {
 	public:		CmdException(const char* string = "General Exception") throw() : string(string) { }
 	public:		CmdException(const std::string& string) throw() : string(string) { }
 	public:		virtual ~CmdException() throw() { }
-    public:		virtual const char* what() const throw() { return string.c_str(); }
-    public:		const std::string& getString() const { return string; }
+	public:		virtual const char* what() const throw() { return string.c_str(); }
+	public:		const std::string& getString() const { return string; }
 	public:		std::string string;
 };
 
@@ -995,7 +995,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size) {
 	memset(code, 0, sizeof code);
 	memset(functionTable, 0, sizeof functionTable);
 	memset(callStack, 0, sizeof callStack);
-    try {
+	try {
 		Symbols globals;
 
 		static const NativeFunc NATIVE_TABLE[] = {
@@ -1061,7 +1061,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size) {
 	catch (GAZL::Exception&) {
 		return 0;
 	}
-  	return 0;  // Non-zero return values are reserved for future use.
+	return 0;  // Non-zero return values are reserved for future use.
 }
 
 #endif	// JITDIFF
