@@ -49,10 +49,10 @@ POPD
 
 REM Validate generated .gazl metadata for the JSPEG fixtures.
 FOR %%F IN (impala\testdata\*.expected.gazl) DO (
-  IF /I NOT "%%~nxF"=="externAssignment.expected.gazl" IF /I NOT "%%~nxF"=="returnContractCaller.expected.gazl" (
-    CALL tools\gazl-validate.cmd "%%F"
-    IF ERRORLEVEL 1 EXIT /B 1
-  )
+	IF /I NOT "%%~nxF"=="externAssignment.expected.gazl" IF /I NOT "%%~nxF"=="returnContractCaller.expected.gazl" (
+		CALL tools\gazl-validate.cmd "%%F"
+		IF ERRORLEVEL 1 EXIT /B 1
+	)
 )
 CALL tools\gazl-validate.cmd impala\testdata\returnContractCaller.expected.gazl impala\testdata\returnContractProviderFloat.expected.gazl
 IF ERRORLEVEL 1 EXIT /B 1

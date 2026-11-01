@@ -193,7 +193,7 @@ extern native print;
 
 function showoffMessage()
 {
-    print("Called via function pointer!\n");
+	print("Called via function pointer!\n");
 }
 
 function showoff()
