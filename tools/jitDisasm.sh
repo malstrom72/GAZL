@@ -50,22 +50,22 @@ binPath, triple, llvmmc, only = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[
 data = open(binPath, "rb").read()
 layout = {}
 for line in open(binPath + ".txt"):
-    parts = line.split()
-    if parts[0] == "function": layout[int(parts[1])] = int(parts[2])
-    elif parts[0] == "dispatch": dispatch = int(parts[1])
-    elif parts[0] == "arch": arch = parts[1]
+	parts = line.split()
+	if parts[0] == "function": layout[int(parts[1])] = int(parts[2])
+	elif parts[0] == "dispatch": dispatch = int(parts[1])
+	elif parts[0] == "arch": arch = parts[1]
 regions = sorted([(offset, "function %d" % ordinal) for ordinal, offset in layout.items()] + [(dispatch, "dispatcher")])
 print("; %s, %d bytes, %d functions + dispatcher" % (arch, len(data), len(layout)))
 for index, (offset, name) in enumerate(regions):
-    if only != "" and name != "function " + only: continue
-    end = regions[index + 1][0] if index + 1 < len(regions) else len(data)
-    print("\n; ===== %s [0x%x..0x%x) =====" % (name, offset, end))
-    chunk = data[offset:end]
-    text = subprocess.run([llvmmc, "--disassemble", "--triple=" + triple],
-            input=" ".join("0x%02x" % b for b in chunk), capture_output=True, text=True).stdout
-    for line in text.split("\n"):
-        line = line.strip()
-        if line and not line.startswith(".") and not line.startswith("#"): print("\t" + line)
+	if only != "" and name != "function " + only: continue
+	end = regions[index + 1][0] if index + 1 < len(regions) else len(data)
+	print("\n; ===== %s [0x%x..0x%x) =====" % (name, offset, end))
+	chunk = data[offset:end]
+	text = subprocess.run([llvmmc, "--disassemble", "--triple=" + triple],
+			input=" ".join("0x%02x" % b for b in chunk), capture_output=True, text=True).stdout
+	for line in text.split("\n"):
+		line = line.strip()
+		if line and not line.startswith(".") and not line.startswith("#"): print("\t" + line)
 PY
 	rm -f "$tmp.bin" "$tmp.bin.txt"
 }

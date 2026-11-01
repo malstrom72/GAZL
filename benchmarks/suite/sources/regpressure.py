@@ -16,20 +16,20 @@ lines.append(" PARA *2")
 lines.append("$acc: LOCi")
 lines.append("$i: LOCi")
 for k in range(W):
-    lines.append("$t%d: LOCi" % k)
+	lines.append("$t%d: LOCi" % k)
 for k in range(W):
-    lines.append(" MOVi $t%d #%d" % (k, k + 1))
+	lines.append(" MOVi $t%d #%d" % (k, k + 1))
 lines.append(" MOVi $i #0")
 first = True
 for r in range(R):
-    for k in range(W):
-        label = ".loop:" if first else ""
-        lines.append("%s ADDi $t%d $t%d #%d" % (label, k, k, k + 1))       # ti += (k+1): in-place, independent
-        first = False
+	for k in range(W):
+		label = ".loop:" if first else ""
+		lines.append("%s ADDi $t%d $t%d #%d" % (label, k, k, k + 1))       # ti += (k+1): in-place, independent
+		first = False
 lines.append(" FORi $i #%d @.loop" % N)
 lines.append(" MOVi $acc #0")
 for k in range(W):
-    lines.append(" ADDi $acc $acc $t%d" % k)
+	lines.append(" ADDi $acc $acc $t%d" % k)
 lines.append(" MOVi %1 $acc")
 lines.append(" CALL ^printInt %0 *2")
 lines.append(" RETU")
