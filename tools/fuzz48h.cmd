@@ -27,9 +27,9 @@ IF "%~2"=="" (SET "CHUNK=5000") ELSE (SET "CHUNK=%~2")
 IF "%~3"=="" (SET "start=1") ELSE (SET "start=%~3")
 
 IF NOT EXIST "output\GAZLCmd.exe" (
-    ECHO output\GAZLCmd.exe not found - --vm needs it. Build it first:
-    ECHO   tools\buildGAZLCmd.cmd release
-    EXIT /B 1
+	ECHO output\GAZLCmd.exe not found - --vm needs it. Build it first:
+	ECHO   tools\buildGAZLCmd.cmd release
+	EXIT /B 1
 )
 IF NOT EXIST fuzzlogs MKDIR fuzzlogs
 
@@ -48,8 +48,8 @@ node impala\fuzzImpala.js %CHUNK% !start! --vm > "!log!" 2>&1
 SET "rc=!ERRORLEVEL!"
 TYPE "!log!"
 IF NOT "!rc!"=="0" (
-    ECHO !!! FAULT in seeds !start!..!end! - full program in !log!
-    EXIT /B 1
+	ECHO !!! FAULT in seeds !start!..!end! - full program in !log!
+	EXIT /B 1
 )
 SET /A start=end + 1
 GOTO loop

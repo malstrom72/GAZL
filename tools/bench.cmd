@@ -32,10 +32,10 @@ POPD
 ECHO.
 ECHO === micro (128M ops; xor = control, must stay flat) ===
 FOR %%O IN (add sub mul div mod shl shr shru abs ftoi xor) DO (
-  output\GAZLCmdBench.exe tests\bench\golden\op_%%O.gazl main --bench=%ITERS% --warmup=%WARMUP% 2>NUL | findstr /B bench
+	output\GAZLCmdBench.exe tests\bench\golden\op_%%O.gazl main --bench=%ITERS% --warmup=%WARMUP% 2>NUL | findstr /B bench
 )
 ECHO.
 ECHO === macro ===
 FOR %%O IN (perfTest1 perfTest2) DO (
-  output\GAZLCmdBench.exe tests\impala\golden\%%O.gazl main --bench=%ITERS% --warmup=%WARMUP% 2>NUL | findstr /B bench
+	output\GAZLCmdBench.exe tests\impala\golden\%%O.gazl main --bench=%ITERS% --warmup=%WARMUP% 2>NUL | findstr /B bench
 )
