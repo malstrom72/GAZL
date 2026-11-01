@@ -7,8 +7,8 @@ IF ERRORLEVEL 1 EXIT /B 1
 
 output\NuXJS.exe tools\UpdateUnitTest.nuxjs.js
 IF ERRORLEVEL 1 (
-    ECHO Failed updating unit test
-    EXIT /B 1
+	ECHO Failed updating unit test
+	EXIT /B 1
 )
 
 EXIT /B 0
