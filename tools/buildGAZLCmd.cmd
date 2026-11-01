@@ -2,9 +2,9 @@
 SETLOCAL ENABLEEXTENSIONS ENABLEDELAYEDEXPANSION
 CD /D %~dp0
 IF "%~1"=="" (
-    SET mode=release
+	SET mode=release
 ) ELSE (
-    SET mode=%1
+	SET mode=%1
 )
 IF NOT EXIST ..\output MKDIR ..\output
 CALL UpdateUnitTest.cmd
@@ -12,9 +12,9 @@ REM Same lesson as below, one line earlier: UpdateUnitTest.cmd deliberately `EXI
 REM nothing was reading it - so a failed unit-test regeneration let the build carry on and report green.
 IF ERRORLEVEL 1 EXIT /B 1
 IF "%mode%"=="beta" (
-    SET out=..\output\GAZLCmdBeta.exe
+	SET out=..\output\GAZLCmdBeta.exe
 ) ELSE (
-    SET out=..\output\GAZLCmd.exe
+	SET out=..\output\GAZLCmd.exe
 )
 CALL BuildCpp.cmd %mode% x64 %out% -I.. GAZLCmd.cpp ..\src\GAZL.cpp
 REM Propagate the compile result BEFORE anything else runs. A script's exit status is its LAST command,
