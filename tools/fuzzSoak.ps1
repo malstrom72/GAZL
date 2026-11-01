@@ -16,20 +16,20 @@ $deadline = (Get-Date).AddHours($Hours)
 $span = [int64](4200000000 / $Workers)   # disjoint bands, all within uint32 (strtoul limit)
 $jobs = @()
 for ($w = 0; $w -lt $Workers; $w++) {
-  $base = [int64]$w * $span
-  $log  = Join-Path $logs ("fz{0}.log" -f $w)
-  "worker $w : seeds [$base .. $($base + $span)) -> $log"
-  $jobs += Start-Job -ArgumentList $exe,$base,$span,$Chunk,$deadline,$log -ScriptBlock {
-    param($exe,$base,$span,$chunk,$deadline,$log)
-    $seed = $base; $end = $base + $span
-    while ((Get-Date) -lt $deadline -and $seed -lt $end) {
-      # Run through cmd so its redirection swallows the fuzzer's stderr progress; PowerShell otherwise turns
-      # every native stderr write into a NativeCommandError. $LASTEXITCODE is cmd's, i.e. the exe's exit code.
-      cmd /c "`"$exe`" --gen $chunk $seed deep >> `"$log`" 2>&1"
-      if ($LASTEXITCODE -ne 0) { "STOP DIVERGENCE seed=$seed rc=$LASTEXITCODE" | Out-File -Append $log; break }
-      $seed += $chunk
-    }
-  }
+	$base = [int64]$w * $span
+	$log  = Join-Path $logs ("fz{0}.log" -f $w)
+	"worker $w : seeds [$base .. $($base + $span)) -> $log"
+	$jobs += Start-Job -ArgumentList $exe,$base,$span,$Chunk,$deadline,$log -ScriptBlock {
+		param($exe,$base,$span,$chunk,$deadline,$log)
+		$seed = $base; $end = $base + $span
+		while ((Get-Date) -lt $deadline -and $seed -lt $end) {
+			# Run through cmd so its redirection swallows the fuzzer's stderr progress; PowerShell otherwise turns
+			# every native stderr write into a NativeCommandError. $LASTEXITCODE is cmd's, i.e. the exe's exit code.
+			cmd /c "`"$exe`" --gen $chunk $seed deep >> `"$log`" 2>&1"
+			if ($LASTEXITCODE -ne 0) { "STOP DIVERGENCE seed=$seed rc=$LASTEXITCODE" | Out-File -Append $log; break }
+			$seed += $chunk
+		}
+	}
 }
 "Started $Workers workers; deadline $deadline. Watch: type fuzzlogs\fz*.log | findstr /I divergence STOP"
 $jobs | Wait-Job | Out-Null
