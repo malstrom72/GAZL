@@ -2,9 +2,9 @@
 SETLOCAL ENABLEEXTENSIONS ENABLEDELAYEDEXPANSION
 CD /D %~dp0
 IF "%~1"=="" (
-    SET mode=release
+	SET mode=release
 ) ELSE (
-    SET mode=%1
+	SET mode=%1
 )
 IF NOT EXIST ..\output MKDIR ..\output
 CALL UpdateUnitTest.cmd
@@ -12,9 +12,9 @@ REM Same lesson as below, one line earlier: UpdateUnitTest.cmd deliberately `EXI
 REM nothing was reading it - so a failed unit-test regeneration let the build carry on and report green.
 IF ERRORLEVEL 1 EXIT /B 1
 IF "%mode%"=="beta" (
-    SET out=..\output\GAZLCmdBeta.exe
+	SET out=..\output\GAZLCmdBeta.exe
 ) ELSE (
-    SET out=..\output\GAZLCmd.exe
+	SET out=..\output\GAZLCmd.exe
 )
 
 REM Pick the JIT backend by host architecture. GAZLCmd.cpp is arch-neutral (it drives JitCompiler / JitProcessor); only

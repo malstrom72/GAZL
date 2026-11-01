@@ -1,5 +1,5 @@
 function main()
 returns int result
 {
-        result = 7;
+	result = 7;
 }
