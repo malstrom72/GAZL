@@ -17,24 +17,24 @@ var parserSrc =
 var parse = eval(parserSrc);
 
 var cases = [
-  ["1+2*3", 7],
-  ["2*3+1", 7],
-  ["(1+2)*3", 9],
-  ["10/2-3", 2],
-  ["  1 + 2  ", 3],
-  ["100", 100],
-  ["2*3*4", 24],
-  ["1+2+3+4", 10],
-  ["(2+3)*(4-1)", 15]
+	["1+2*3", 7],
+	["2*3+1", 7],
+	["(1+2)*3", 9],
+	["10/2-3", 2],
+	["  1 + 2  ", 3],
+	["100", 100],
+	["2*3*4", 24],
+	["1+2+3+4", 10],
+	["(2+3)*(4-1)", 15]
 ];
 
 var fails = 0;
 for (var k = 0; k < cases.length; ++k) {
-  var input = cases[k][0], expect = cases[k][1];
-  var r = parse(input);
-  var ok = r[0], val = r[1];
-  var pass = (ok === true && val === expect);
-  if (!pass) { ++fails; }
-  console.log((pass ? "PASS" : "FAIL") + "  " + JSON.stringify(input) + " -> ok=" + ok + " val=" + val + " (expect " + expect + ")");
+	var input = cases[k][0], expect = cases[k][1];
+	var r = parse(input);
+	var ok = r[0], val = r[1];
+	var pass = (ok === true && val === expect);
+	if (!pass) { ++fails; }
+	console.log((pass ? "PASS" : "FAIL") + "  " + JSON.stringify(input) + " -> ok=" + ok + " val=" + val + " (expect " + expect + ")");
 }
 console.log(fails === 0 ? "\nALL PASS (" + cases.length + " cases)" : "\n" + fails + " FAILED");
