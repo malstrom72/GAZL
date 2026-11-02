@@ -1,10 +1,10 @@
-; Compiled with Impala version 2.0
+; Compiled with Impala version 1.0
 
 ; signatures version=1
-; signature extern native printInt() -> unknown @ op_shr.impala:3:1
+; signature extern native printInt() -> unknown @ 3:23
 
 ;-----------------------------------------------------------------------------
-main:				FUNC		; signature func main() -> void @ op_shr.impala:5:1
+main:				FUNC		; signature func main() -> void @ 5:15
 								PARA *1
 					$i:			LOCi
 					$acc:		LOCi
@@ -54,6 +54,6 @@ main:				FUNC		; signature func main() -> void @ op_shr.impala:5:1
 								SHRi $acc $acc $s				; acc = acc >> s
 								FORi $i #4000000 @.l1			; }
 					.e0:		MOVi %1 $acc 					; printInt(acc)
-								CALL ^printInt %0 *2			; expects printInt(int) -> unknown @ op_shr.impala:43:15
+								CALL ^printInt %0 *2			; expects printInt(int) -> unknown @ 43:15
 								RETU   							; }
 
