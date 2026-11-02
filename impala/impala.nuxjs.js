@@ -81,7 +81,7 @@ function retabulate(line) {
 
 	for (i = 0; i < segments.length; ++i) {
 		stop = tabIndex < INPUT_TAB_STOPS.length ? INPUT_TAB_STOPS[tabIndex] : -1000000000;
-		target = Math.max(stop, column + 1);
+		target = Math.max(stop, tabIndex === 0 ? 0 : column + 1);
 		while (column < target) {
 			remainder = column % OUTPUT_TAB_WIDTH;
 			next = column + (remainder === 0 ? OUTPUT_TAB_WIDTH : OUTPUT_TAB_WIDTH - remainder);
