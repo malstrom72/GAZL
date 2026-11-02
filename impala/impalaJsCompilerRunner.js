@@ -37,7 +37,7 @@ function retabulate(line) {
 
 	for (const segment of line.split("\t")) {
 		const stop = INPUT_TAB_STOPS[tabIndex] ?? -Infinity;
-		align(Math.max(stop, column + 1));
+		align(Math.max(stop, tabIndex === 0 ? 0 : column + 1));
 		tabIndex += 1;
 		result += segment;
 		column += segment.length;
