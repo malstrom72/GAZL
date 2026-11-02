@@ -5,8 +5,18 @@ REM defects already found from coming back. The .sh twin does the same work with
 REM
 REM Build with the ordinary toolchain, no sanitizers and no libFuzzer: this must run everywhere the normal build
 REM runs. `beta` keeps asserts on, so a broken internal contract fails here too.
+REM
+REM Usage: test-fuzz.cmd (the .sh twin's `valgrind` option is Linux only)
 SETLOCAL ENABLEEXTENSIONS
 CD /D "%~dp0.."
+IF "%~1"=="valgrind" (
+	ECHO Valgrind runs on Linux only: use test-fuzz.sh there.
+	EXIT /B 1
+)
+IF NOT "%~1"=="" (
+	ECHO Usage: test-fuzz.cmd
+	EXIT /B 1
+)
 IF NOT EXIST output MKDIR output
 
 ECHO test-fuzz: building the replay driver
