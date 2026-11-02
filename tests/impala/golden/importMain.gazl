@@ -1,134 +1,134 @@
- ; Compiled with Impala version 2.0
+; Compiled with Impala version 2.0
 
- ; signatures version=1
- 					! MOVi <a> #0 ; layout of struct Vec2
- .o.Vec2.x:			! DEFi #<a>
- 					! ADDi <a> #<a> #1
- .o.Vec2.y:			! DEFi #<a>
- 					! ADDi <a> #<a> #1
- .z.Vec2:			! DEFi #<a>
- ; signature struct Vec2 { x : int, y : int } @ mathlib.impala:11:1
+; signatures version=1
+					! MOVi <a> #0 ; layout of struct Vec2
+.o.Vec2.x:			! DEFi #<a>
+					! ADDi <a> #<a> #1
+.o.Vec2.y:			! DEFi #<a>
+					! ADDi <a> #<a> #1
+.z.Vec2:			! DEFi #<a>
+; signature struct Vec2 { x : int, y : int } @ mathlib.impala:11:1
 
- ;-----------------------------------------------------------------------------
- clampi:			FUNC		; signature func clampi(int v, int lo, int hi) -> int @ mathlib.impala:16:1
- 					$r:			OUTi
- 					$v:			INPi
- 					$lo:		INPi
- 					$hi:		INPi
- 					$t:			LOCi
- ;-----------------------------------------------------------------------------
- 								MOVi $t $v 						; t = v
- 								GEQi $t $lo @.f0				; if (t < lo) 
- 								MOVi $t $lo 					; t = lo
- 					.f0:		LEQi $t $hi @.f1				; if (t > hi) 
- 								MOVi $t $hi 					; t = hi
- 					.f1:		MOVi $r $t 						; r = t
- 								RETU   							; }
-
-
- ;-----------------------------------------------------------------------------
- makeVec:			FUNC		; signature func makeVec(Vec2-ptr v, int x, int y) -> void @ mathlib.impala:25:1
- 								PARA *1
- 					$v:			INPp
- 					$x:			INPi
- 					$y:			INPi
- ;-----------------------------------------------------------------------------
- 								POKE $v #.o.Vec2.x $x			; v->x = x
- 								POKE $v #.o.Vec2.y $y			; v->y = y
- 								RETU   							; }
+;-----------------------------------------------------------------------------
+clampi:				FUNC		; signature func clampi(int v, int lo, int hi) -> int @ mathlib.impala:16:1
+					$r:			OUTi
+					$v:			INPi
+					$lo:		INPi
+					$hi:		INPi
+					$t:			LOCi
+;-----------------------------------------------------------------------------
+								MOVi $t $v 						; t = v
+								GEQi $t $lo @.f0				; if (t < lo) 
+								MOVi $t $lo 					; t = lo
+					.f0:		LEQi $t $hi @.f1				; if (t > hi) 
+								MOVi $t $hi 					; t = hi
+					.f1:		MOVi $r $t 						; r = t
+								RETU   							; }
 
 
- ;-----------------------------------------------------------------------------
- addVec:			FUNC		; signature func addVec(Vec2-ptr r, Vec2-ptr a, Vec2-ptr b) -> void @ mathlib.impala:31:1
- 								PARA *1
- 					$r:			INPp
- 					$a:			INPp
- 					$b:			INPp
- ;-----------------------------------------------------------------------------
- 								PEEK %0 $a #.o.Vec2.x			; r->x = a->x + b->x
- 								PEEK %1 $b #.o.Vec2.x
- 								ADDi %0 %0 %1
- 								POKE $r #.o.Vec2.x %0
- 								PEEK %0 $a #.o.Vec2.y			; r->y = a->y + b->y
- 								PEEK %1 $b #.o.Vec2.y
- 								ADDi %0 %0 %1
- 								POKE $r #.o.Vec2.y %0
- 								RETU   							; }
+;-----------------------------------------------------------------------------
+makeVec:			FUNC		; signature func makeVec(Vec2-ptr v, int x, int y) -> void @ mathlib.impala:25:1
+								PARA *1
+					$v:			INPp
+					$x:			INPi
+					$y:			INPi
+;-----------------------------------------------------------------------------
+								POKE $v #.o.Vec2.x $x			; v->x = x
+								POKE $v #.o.Vec2.y $y			; v->y = y
+								RETU   							; }
 
 
- ;-----------------------------------------------------------------------------
- divmod:			FUNC		; signature func divmod(int a, int b, int-ptr rem) -> int @ mathlib.impala:37:1
- 					$q:			OUTi
- 					$a:			INPi
- 					$b:			INPi
- 					$rem:		INPp
- ;-----------------------------------------------------------------------------
- 								DIVi $q $a $b					; q = a / b
- 								DIVi %0 $a $b					; *rem = a - a / b * b
- 								MULi %0 %0 $b
- 								SUBi %0 $a %0
- 								POKE $rem %0 
- 								RETU   							; }
+;-----------------------------------------------------------------------------
+addVec:				FUNC		; signature func addVec(Vec2-ptr r, Vec2-ptr a, Vec2-ptr b) -> void @ mathlib.impala:31:1
+								PARA *1
+					$r:			INPp
+					$a:			INPp
+					$b:			INPp
+;-----------------------------------------------------------------------------
+								PEEK %0 $a #.o.Vec2.x			; r->x = a->x + b->x
+								PEEK %1 $b #.o.Vec2.x
+								ADDi %0 %0 %1
+								POKE $r #.o.Vec2.x %0
+								PEEK %0 $a #.o.Vec2.y			; r->y = a->y + b->y
+								PEEK %1 $b #.o.Vec2.y
+								ADDi %0 %0 %1
+								POKE $r #.o.Vec2.y %0
+								RETU   							; }
 
- DEBUG:				! DEFi #1	; signature const DEBUG : int @ main.impala:8:1
- ; signature extern native printInt() -> unknown @ main.impala:12:1
- ; signature extern native printLF() -> unknown @ main.impala:13:1
 
- ;-----------------------------------------------------------------------------
- main:				FUNC		; signature func main() -> void @ main.impala:15:1
- 								PARA *1
- 					$p:			LOCA *.z.Vec2
- 					$q:			LOCA *.z.Vec2
- 					$s:			LOCA *.z.Vec2
- 					$qt:		LOCi
- 					$rm:		LOCi
- ;-----------------------------------------------------------------------------
- 								ADRL %1 $p *0					; makeVec(&p, 3, 4)
- 								MOVi %2 #3 
- 								MOVi %3 #4 
- 								CALL &makeVec %0 *4				; expects makeVec(Vec2-ptr, int, int) -> void @ main.impala:18:19
- 								ADRL %1 $q *0					; makeVec(&q, 10, 20)
- 								MOVi %2 #10 
- 								MOVi %3 #20 
- 								CALL &makeVec %0 *4				; expects makeVec(Vec2-ptr, int, int) -> void @ main.impala:19:21
- 								ADRL %1 $s *0					; addVec(&s, &p, &q)
- 								ADRL %2 $p *0
- 								ADRL %3 $q *0
- 								CALL &addVec %0 *4				; expects addVec(Vec2-ptr, Vec2-ptr, Vec2-ptr) -> void @ main.impala:20:20
- 								MOVi %1 $s:.o.Vec2.x 			; printInt(s.x)
- 								CALL ^printInt %0 *2			; expects printInt(int) -> unknown @ main.impala:21:15
- 								CALL ^printLF %0 *1				; expects printLF() -> unknown @ main.impala:21:26
- 								MOVi %1 $s:.o.Vec2.y 			; printInt(s.y)
- 								CALL ^printInt %0 *2			; expects printInt(int) -> unknown @ main.impala:22:15
- 								CALL ^printLF %0 *1				; expects printLF() -> unknown @ main.impala:22:26
- 								MOVi %1 #17 					; qt = divmod(17, 5, &rm)
- 								MOVi %2 #5 
- 								ADRL %3 $rm *0
- 								CALL &divmod %0 *4				; expects divmod(int, int, int-ptr) -> int @ main.impala:24:25
- 								MOVi $qt %0 
- 								MOVi %1 $qt 					; printInt(qt)
- 								CALL ^printInt %0 *2			; expects printInt(int) -> unknown @ main.impala:25:14
- 								CALL ^printLF %0 *1				; expects printLF() -> unknown @ main.impala:25:25
- 								MOVi %1 $rm 					; printInt(rm)
- 								CALL ^printInt %0 *2			; expects printInt(int) -> unknown @ main.impala:26:14
- 								CALL ^printLF %0 *1				; expects printLF() -> unknown @ main.impala:26:25
- 								MOVi %2 #-5 					; printInt(clampi(-5, 0, 9))
- 								MOVi %3 #0 
- 								MOVi %4 #9 
- 								CALL &clampi %1 *4				; expects clampi(int, int, int) -> int @ main.impala:28:27
- 								CALL ^printInt %0 *2			; expects printInt(int) -> unknown @ main.impala:28:28
- 								CALL ^printLF %0 *1				; expects printLF() -> unknown @ main.impala:28:39
- 								MOVi %2 #20 					; printInt(clampi(20, 0, 9))
- 								MOVi %3 #0 
- 								MOVi %4 #9 
- 								CALL &clampi %1 *4				; expects clampi(int, int, int) -> int @ main.impala:29:27
- 								CALL ^printInt %0 *2			; expects printInt(int) -> unknown @ main.impala:29:28
- 								CALL ^printLF %0 *1				; expects printLF() -> unknown @ main.impala:29:39
- 								MOVi %2 #5 						; printInt(clampi(5, 0, 9))
- 								MOVi %3 #0 
- 								MOVi %4 #9 
- 								CALL &clampi %1 *4				; expects clampi(int, int, int) -> int @ main.impala:30:26
- 								CALL ^printInt %0 *2			; expects printInt(int) -> unknown @ main.impala:30:27
- 								CALL ^printLF %0 *1				; expects printLF() -> unknown @ main.impala:30:38
- 								RETU   							; }
+;-----------------------------------------------------------------------------
+divmod:				FUNC		; signature func divmod(int a, int b, int-ptr rem) -> int @ mathlib.impala:37:1
+					$q:			OUTi
+					$a:			INPi
+					$b:			INPi
+					$rem:		INPp
+;-----------------------------------------------------------------------------
+								DIVi $q $a $b					; q = a / b
+								DIVi %0 $a $b					; *rem = a - a / b * b
+								MULi %0 %0 $b
+								SUBi %0 $a %0
+								POKE $rem %0 
+								RETU   							; }
+
+DEBUG:				! DEFi #1	; signature const DEBUG : int @ main.impala:8:1
+; signature extern native printInt() -> unknown @ main.impala:12:1
+; signature extern native printLF() -> unknown @ main.impala:13:1
+
+;-----------------------------------------------------------------------------
+main:				FUNC		; signature func main() -> void @ main.impala:15:1
+								PARA *1
+					$p:			LOCA *.z.Vec2
+					$q:			LOCA *.z.Vec2
+					$s:			LOCA *.z.Vec2
+					$qt:		LOCi
+					$rm:		LOCi
+;-----------------------------------------------------------------------------
+								ADRL %1 $p *0					; makeVec(&p, 3, 4)
+								MOVi %2 #3 
+								MOVi %3 #4 
+								CALL &makeVec %0 *4				; expects makeVec(Vec2-ptr, int, int) -> void @ main.impala:18:19
+								ADRL %1 $q *0					; makeVec(&q, 10, 20)
+								MOVi %2 #10 
+								MOVi %3 #20 
+								CALL &makeVec %0 *4				; expects makeVec(Vec2-ptr, int, int) -> void @ main.impala:19:21
+								ADRL %1 $s *0					; addVec(&s, &p, &q)
+								ADRL %2 $p *0
+								ADRL %3 $q *0
+								CALL &addVec %0 *4				; expects addVec(Vec2-ptr, Vec2-ptr, Vec2-ptr) -> void @ main.impala:20:20
+								MOVi %1 $s:.o.Vec2.x 			; printInt(s.x)
+								CALL ^printInt %0 *2			; expects printInt(int) -> unknown @ main.impala:21:15
+								CALL ^printLF %0 *1				; expects printLF() -> unknown @ main.impala:21:26
+								MOVi %1 $s:.o.Vec2.y 			; printInt(s.y)
+								CALL ^printInt %0 *2			; expects printInt(int) -> unknown @ main.impala:22:15
+								CALL ^printLF %0 *1				; expects printLF() -> unknown @ main.impala:22:26
+								MOVi %1 #17 					; qt = divmod(17, 5, &rm)
+								MOVi %2 #5 
+								ADRL %3 $rm *0
+								CALL &divmod %0 *4				; expects divmod(int, int, int-ptr) -> int @ main.impala:24:25
+								MOVi $qt %0 
+								MOVi %1 $qt 					; printInt(qt)
+								CALL ^printInt %0 *2			; expects printInt(int) -> unknown @ main.impala:25:14
+								CALL ^printLF %0 *1				; expects printLF() -> unknown @ main.impala:25:25
+								MOVi %1 $rm 					; printInt(rm)
+								CALL ^printInt %0 *2			; expects printInt(int) -> unknown @ main.impala:26:14
+								CALL ^printLF %0 *1				; expects printLF() -> unknown @ main.impala:26:25
+								MOVi %2 #-5 					; printInt(clampi(-5, 0, 9))
+								MOVi %3 #0 
+								MOVi %4 #9 
+								CALL &clampi %1 *4				; expects clampi(int, int, int) -> int @ main.impala:28:27
+								CALL ^printInt %0 *2			; expects printInt(int) -> unknown @ main.impala:28:28
+								CALL ^printLF %0 *1				; expects printLF() -> unknown @ main.impala:28:39
+								MOVi %2 #20 					; printInt(clampi(20, 0, 9))
+								MOVi %3 #0 
+								MOVi %4 #9 
+								CALL &clampi %1 *4				; expects clampi(int, int, int) -> int @ main.impala:29:27
+								CALL ^printInt %0 *2			; expects printInt(int) -> unknown @ main.impala:29:28
+								CALL ^printLF %0 *1				; expects printLF() -> unknown @ main.impala:29:39
+								MOVi %2 #5 						; printInt(clampi(5, 0, 9))
+								MOVi %3 #0 
+								MOVi %4 #9 
+								CALL &clampi %1 *4				; expects clampi(int, int, int) -> int @ main.impala:30:26
+								CALL ^printInt %0 *2			; expects printInt(int) -> unknown @ main.impala:30:27
+								CALL ^printLF %0 *1				; expects printLF() -> unknown @ main.impala:30:38
+								RETU   							; }
 

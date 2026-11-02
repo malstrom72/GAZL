@@ -83,7 +83,7 @@
 		var result = "", column = 0, tabIndex = 0, segs = line.split("\t");
 		for (var i = 0; i < segs.length; ++i) {
 			var stop = tabIndex < TAB_STOPS.length ? TAB_STOPS[tabIndex] : -1e9;
-			var target = Math.max(stop, column + 1);
+			var target = Math.max(stop, tabIndex === 0 ? 0 : column + 1);
 			while (column < target) {
 				var rem = column % 4, next = column + (rem === 0 ? 4 : 4 - rem);
 				if (next > target) break;
