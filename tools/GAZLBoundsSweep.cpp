@@ -126,7 +126,7 @@ struct Probe {
 
 std::string number(int64_t v) {
 	char buffer[32];
-	snprintf(buffer, sizeof buffer, "%.0f", (double)v);				// exact: every value here is far below 2^53
+	snprintf(buffer, sizeof buffer, "%.0f", static_cast<double>(v));	// exact: every value here is far below 2^53
 	return buffer;
 }
 
@@ -180,10 +180,10 @@ std::vector<UInt> targets(const Layout& layout) {
 			, MEMORY_OFFSET + rw + 1 };									// start of memory, base, end of globals, guard, end
 	std::vector<UInt> t;
 	for (size_t e = 0; e < sizeof (edges) / sizeof (*edges); ++e) {
-		for (int d = -1; d <= 1; ++d) t.push_back(edges[e] + (UInt)d);
+		for (int d = -1; d <= 1; ++d) t.push_back(edges[e] + static_cast<UInt>(d));
 	}
 	t.push_back(0);
-	t.push_back(layout.low() - (UInt)CANARY_SIZE);
+	t.push_back(layout.low() - static_cast<UInt>(CANARY_SIZE));
 	t.push_back(0x7FFFFFFFu);
 	t.push_back(0x80000000u);
 	t.push_back(0xFFFFFFFFu);
@@ -197,7 +197,7 @@ std::vector<UInt> targets(const Layout& layout) {
 std::vector<Probe> generate(const Layout& L) {
 	std::vector<Probe> probes;
 	const std::vector<UInt> T = targets(L);
-	const Int EXTREMES[] = { 0, 1, -1, 0x7FFFFFFF, (Int)0x80000000u };
+	const Int EXTREMES[] = { 0, 1, -1, 0x7FFFFFFF, static_cast<Int>(0x80000000u) };
 	const size_t EXTREME_COUNT = sizeof (EXTREMES) / sizeof (*EXTREMES);
 
 	// Pointer bases for the `ptr` forms: the start of memory, the base, the last writable word, the end, and outside.
@@ -221,7 +221,7 @@ std::vector<Probe> generate(const Layout& L) {
 	struct IndexSet {
 		static std::vector<Int> make(UInt base, const std::vector<UInt>& T, const Int* extremes, size_t n) {
 			std::vector<Int> v;
-			for (size_t i = 0; i < T.size(); ++i) v.push_back((Int)(T[i] - base));
+			for (size_t i = 0; i < T.size(); ++i) v.push_back(static_cast<Int>(T[i] - base));
 			for (size_t i = 0; i < n; ++i) v.push_back(extremes[i]);
 			return v;
 		}
@@ -249,12 +249,12 @@ std::vector<Probe> generate(const Layout& L) {
 				p.form = form;
 				p.op = op;
 				p.source = program(PEEK_POKE_FORMS[f][1]);
-				p.inputs[0] = (Int)(indexed ? bases[b] : T[i]);
+				p.inputs[0] = static_cast<Int>(indexed ? bases[b] : T[i]);
 				p.inputs[1] = indexed ? indexes[i] : 0;
 				p.inputs[2] = POKE_VALUE;
-				p.address = (UInt)p.inputs[0] + (UInt)p.inputs[1];
+				p.address = static_cast<UInt>(p.inputs[0]) + static_cast<UInt>(p.inputs[1]);
 				p.value = POKE_VALUE;
-				p.what = "ptr=" + hex((UInt)p.inputs[0]) + " index=" + number(p.inputs[1]);
+				p.what = "ptr=" + hex(static_cast<UInt>(p.inputs[0])) + " index=" + number(p.inputs[1]);
 				probes.push_back(p);
 			}
 		}
@@ -276,12 +276,12 @@ std::vector<Probe> generate(const Layout& L) {
 				p.form = form;
 				p.op = (form[1] == 'E' ? PEEK : POKE);
 				p.source = program(body);
-				p.inputs[0] = (Int)(T[i] - (UInt)EXTREMES[x]);
+				p.inputs[0] = static_cast<Int>(T[i] - static_cast<UInt>(EXTREMES[x]));
 				p.inputs[1] = 0;
 				p.inputs[2] = POKE_VALUE;
 				p.address = T[i];
 				p.value = POKE_VALUE;
-				p.what = "ptr=" + hex((UInt)p.inputs[0]) + " index=#" + number(EXTREMES[x]);
+				p.what = "ptr=" + hex(static_cast<UInt>(p.inputs[0])) + " index=#" + number(EXTREMES[x]);
 				probes.push_back(p);
 			}
 		}
@@ -308,7 +308,7 @@ std::vector<Probe> generate(const Layout& L) {
 				p.inputs[0] = 0;
 				p.inputs[1] = indexes[i];
 				p.inputs[2] = POKE_VALUE;
-				p.address = LABELS[l].pointer + (UInt)indexes[i];
+				p.address = LABELS[l].pointer + static_cast<UInt>(indexes[i]);
 				p.refusalOk = (op == POKE && LABELS[l].pointer < MEMORY_OFFSET);		// `&address(w)` must be writable
 				p.value = POKE_VALUE;
 				p.what = std::string("&") + LABELS[l].name + ":" + number(LABELS[l].offset)
@@ -373,9 +373,9 @@ std::vector<Probe> generate(const Layout& L) {
 				p.index = SMALL[i];
 			} else if (i < 8) {
 				p.fromEnd = true;
-				p.index = (Int)i - 6;					// -1, 0, +1 around the first slot past the end
+				p.index = static_cast<Int>(i) - 6;		// -1, 0, +1 around the first slot past the end
 			} else {
-				p.index = (i == 8 ? 0x7FFFFFFF : (Int)0x80000000u);
+				p.index = (i == 8 ? 0x7FFFFFFF : static_cast<Int>(0x80000000u));
 			}
 			p.inputs[1] = p.index;
 			probes.push_back(p);
@@ -402,8 +402,8 @@ std::vector<Probe> generate(const Layout& L) {
 			p.refusalOk = (count > rw);
 			// `ad` holds the address of `ar` until the probe; load the source into it from `in:1` first.
 			p.source = program(" PEEK ad &in:1\n COPY pa ad *" + number(count) + "\n");
-			p.inputs[0] = (Int)pairs[k].first;
-			p.inputs[1] = (Int)pairs[k].second;
+			p.inputs[0] = static_cast<Int>(pairs[k].first);
+			p.inputs[1] = static_cast<Int>(pairs[k].second);
 			p.address = pairs[k].first;
 			p.source2 = pairs[k].second;
 			p.count = count;
@@ -429,7 +429,7 @@ std::vector<Probe> generate(const Layout& L) {
 				Probe q = p;
 				q.form = "COPY &address ptr *size";
 				q.source = program(std::string(" COPY &") + lp.dst + " pa *" + number(count) + "\n");
-				q.inputs[0] = (Int)srcs[s];
+				q.inputs[0] = static_cast<Int>(srcs[s]);
 				q.source2 = srcs[s];
 				q.what = std::string("&") + lp.dst + " src=" + hex(srcs[s]) + " *" + number(count);
 				probes.push_back(q);
@@ -437,7 +437,7 @@ std::vector<Probe> generate(const Layout& L) {
 				r.refusalOk = (count > rw);
 				r.form = "COPY ptr &address *size";
 				r.source = program(std::string(" COPY pa &") + lp.src + " *" + number(count) + "\n");
-				r.inputs[0] = (Int)dsts[s];
+				r.inputs[0] = static_cast<Int>(dsts[s]);
 				r.address = dsts[s];
 				r.what = std::string("dst=") + hex(dsts[s]) + " &" + lp.src + " *" + number(count);
 				probes.push_back(r);
@@ -459,7 +459,7 @@ struct Machine {
 	Value* memory() { return &buffer[CANARY_SIZE]; }
 };
 
-UInt canary(size_t i) { return 0xC0DE0000u + (UInt)i; }
+UInt canary(size_t i) { return 0xC0DE0000u + static_cast<UInt>(i); }
 
 /*
 	A processor over the program in `m`, without natives, for the host-side sweeps; they never run it.
@@ -474,7 +474,7 @@ Processor machineProcessor(Machine& m) {
 	refuses it.
 */
 bool assemble(Machine& m, const std::string& source, Layout& layout, std::string& error) {
-	for (size_t i = 0; i < m.buffer.size(); ++i) m.buffer[i].i = (Int)canary(i);
+	for (size_t i = 0; i < m.buffer.size(); ++i) m.buffer[i].i = static_cast<Int>(canary(i));
 	m.symbols = Symbols();
 	ProgramSizes sizes = { 0, 0, 0, 0 };
 	try {
@@ -536,8 +536,8 @@ Status run(Machine& m, Engine engine) {
 }
 
 bool inRange(UInt pointer, UInt count, UInt from, UInt size) {						// [pointer, pointer + count) in [from, from + size)
-	const int64_t start = (int64_t)pointer - (int64_t)from;
-	return start >= 0 && start + (int64_t)count <= (int64_t)size;
+	const int64_t start = static_cast<int64_t>(pointer) - static_cast<int64_t>(from);
+	return start >= 0 && start + static_cast<int64_t>(count) <= static_cast<int64_t>(size);
 }
 
 /*
@@ -549,7 +549,7 @@ std::string check(Machine& m, const Probe& p, const Layout& layout, const std::v
 	const Status status = run(m, engine);
 	const Value* mem = m.memory();
 	const UInt rw = layout.rwSize();
-	const UInt arAddress = (UInt)mem[layout.cell(layout.outAddress) + 1].i;
+	const UInt arAddress = static_cast<UInt>(mem[layout.cell(layout.outAddress) + 1].i);
 
 	// The oracle: is the access in range, which status follows, and which cells must change to what.
 	std::vector<Value> want(before);
@@ -578,8 +578,9 @@ std::string check(Machine& m, const Probe& p, const Layout& layout, const std::v
 			break;
 		case GETL:
 		case SETL: {
-			const UInt slot = arAddress + (UInt)p.index;
-			valid = p.index >= 0 && (int64_t)arAddress + p.index < (int64_t)(MEMORY_OFFSET + rw);
+			const UInt slot = arAddress + static_cast<UInt>(p.index);
+			valid = p.index >= 0
+					&& static_cast<int64_t>(arAddress) + p.index < static_cast<int64_t>(MEMORY_OFFSET + rw);
 			failStatus = (p.op == GETL ? BAD_PEEK : BAD_POKE);
 			if (valid && p.op == SETL) want[g + layout.cell(slot)].i = p.value;
 			if (valid && p.op == GETL && known[g + layout.cell(slot)]) {
@@ -612,9 +613,10 @@ std::string check(Machine& m, const Probe& p, const Layout& layout, const std::v
 	}
 	for (size_t i = 0; i < want.size(); ++i) {
 		if (known[i] && m.buffer[i].i != want[i].i) {
-			const int64_t cell = (int64_t)i - (int64_t)g;
-			return "cell " + number(cell) + " is " + hex((UInt)m.buffer[i].i) + ", want " + hex((UInt)want[i].i)
-					+ (cell < 0 || cell >= (int64_t)MEMORY_SIZE ? " (outside memory)" : "");
+			const int64_t cell = static_cast<int64_t>(i) - static_cast<int64_t>(g);
+			return "cell " + number(cell) + " is " + hex(static_cast<UInt>(m.buffer[i].i)) + ", want "
+					+ hex(static_cast<UInt>(want[i].i))
+					+ (cell < 0 || cell >= static_cast<int64_t>(MEMORY_SIZE) ?" (outside memory)" : "");
 		}
 	}
 	return "";
@@ -671,13 +673,13 @@ int sweepNativeAccess() {
 std::vector<unsigned char> freeze(Machine& m) {
 	const Processor processor = machineProcessor(m);
 	std::vector<unsigned char> frozen(freezeMemorySize(processor, m.symbols));
-	freezeMemory(processor, m.symbols, &frozen[0], (UInt)frozen.size());
+	freezeMemory(processor, m.symbols, &frozen[0], static_cast<UInt>(frozen.size()));
 	return frozen;
 }
 
 MemoryLoad thaw(Machine& m, const std::vector<unsigned char>& frozen, bool prefix) {
 	Processor processor = machineProcessor(m);
-	return thawMemory(processor, m.symbols, frozen.empty() ? 0 : &frozen[0], (UInt)frozen.size(), prefix);
+	return thawMemory(processor, m.symbols, frozen.empty() ? 0 : &frozen[0], static_cast<UInt>(frozen.size()), prefix);
 }
 
 /*
@@ -711,8 +713,10 @@ UInt declaredWords(const Symbols& symbols, const char* name) {
 }
 
 void putWord(std::vector<unsigned char>& b, size_t at, UInt v) {
-	b[at] = (unsigned char)v; b[at + 1] = (unsigned char)(v >> 8); b[at + 2] = (unsigned char)(v >> 16);
-	b[at + 3] = (unsigned char)(v >> 24);
+	b[at] = static_cast<unsigned char>(v);
+	b[at + 1] = static_cast<unsigned char>(v >> 8);
+	b[at + 2] = static_cast<unsigned char>(v >> 16);
+	b[at + 3] = static_cast<unsigned char>(v >> 24);
 }
 
 /*
@@ -759,7 +763,7 @@ int sweepFrameAndThaw() {
 		const std::vector<unsigned char> prefix(frozen.begin(), frozen.begin() + n);	// exactly `n` bytes, nothing after
 		const MemoryLoad expected = (n < 4 ? MEMORY_BAD_MAGIC : MEMORY_TRUNCATED);
 		if (thaw(m, prefix, false) != expected) {
-			std::printf("FAIL thaw: frozen memory cut to %d bytes was not refused as %s\n", (int)n
+			std::printf("FAIL thaw: frozen memory cut to %d bytes was not refused as %s\n", static_cast<int>(n)
 					, n < 4 ? "bad magic" : "truncated");
 			++failures;
 		}
@@ -839,7 +843,7 @@ int sweepFrozenEntries() {
 	int failures = 0;
 	for (int i = 0; i < count && failures == 0; ++i) {
 		std::vector<unsigned char> expected(4);
-		const UInt length = (UInt)strlen(EXPECTED[i].name);
+		const UInt length = static_cast<UInt>(strlen(EXPECTED[i].name));
 		putWord(expected, 0, length);
 		expected.insert(expected.end(), EXPECTED[i].name, EXPECTED[i].name + length);
 		expected.resize(expected.size() + (4 - length % 4) % 4 + 4, 0);
@@ -855,7 +859,8 @@ int sweepFrozenEntries() {
 		at += expected.size();
 	}
 	if (failures == 0 && at != frozen.size()) {
-		std::printf("FAIL frozen entries: %d bytes follow the last expected entry\n", (int)(frozen.size() - at));
+		std::printf("FAIL frozen entries: %d bytes follow the last expected entry\n"
+				, static_cast<int>(frozen.size() - at));
 		++failures;
 	}
 	// A label that owns nothing is still a name: `findGlobal` resolves it, with what its statement declares.
@@ -956,7 +961,7 @@ int sweepThawRules() {
 		{ "a header of 19 bytes", 0, 0, 81, MEMORY_TRUNCATED },
 		{ "format version 2", 4, 2, 0, MEMORY_BAD_VERSION },
 		{ "GAZL version 0", 8, 0, 0, MEMORY_BAD_VERSION },
-		{ "a newer GAZL version", 8, (UInt)VERSION + 1, 0, MEMORY_BAD_VERSION },
+		{ "a newer GAZL version", 8, static_cast<UInt>(VERSION) + 1, 0, MEMORY_BAD_VERSION },
 		{ "word size 64", 12, 64, 0, MEMORY_BAD_WORDSIZE },
 		{ "one entry too many", 16, 5, 0, MEMORY_TRUNCATED },
 		{ "a name length past the end", 48, 0xFFFFFFF0u, 0, MEMORY_TRUNCATED },
@@ -987,8 +992,8 @@ int sweepThawRules() {
 		bool untouched = true;
 		for (UInt w = 0; w < MEMORY_SIZE; ++w) untouched = untouched && memory[w].i == 99;
 		if (got != v.expected || !untouched) {
-			std::printf("FAIL thaw rules: %s gave status %d%s, expected %d\n", v.what, (int)got
-					, untouched ? "" : " and restored words", (int)v.expected);
+			std::printf("FAIL thaw rules: %s gave status %d%s, expected %d\n", v.what, static_cast<int>(got)
+					, untouched ? "" : " and restored words", static_cast<int>(v.expected));
 			++failures;
 		}
 		++checks;
@@ -1022,8 +1027,8 @@ int sweepThawRules() {
 		std::string words;
 		for (int n = 0; n < 4; ++n) words += (n == 0 ? "" : "|") + globalWords(to, NAMES[n]);
 		if (got != r.expected || words != r.words) {
-			std::printf("FAIL thaw rules: %s gave status %d and %s, expected %d and %s\n", r.what, (int)got
-					, words.c_str(), (int)r.expected, r.words);
+			std::printf("FAIL thaw rules: %s gave status %d and %s, expected %d and %s\n", r.what
+					, static_cast<int>(got), words.c_str(), static_cast<int>(r.expected), r.words);
 			++failures;
 		}
 		++checks;
@@ -1067,8 +1072,8 @@ int sweepCanary() {
 			const bool inLength = (byte - NAME_LENGTH_AT < 4 || byte - WORD_COUNT_AT < 4);
 			const bool refused = (got == MEMORY_BAD_CANARY || (inLength && got == MEMORY_TRUNCATED));
 			if (!refused || !untouched) {
-				std::printf("FAIL canary: bit %d of byte %d gave status %d%s\n", bit, (int)byte, (int)got
-						, untouched ? "" : " and restored words");
+				std::printf("FAIL canary: bit %d of byte %d gave status %d%s\n", bit, static_cast<int>(byte)
+						, static_cast<int>(got), untouched ? "" : " and restored words");
 				++failures;
 			}
 			++probes;
@@ -1468,9 +1473,9 @@ int sweep(int engineCount) {
 				// A first run learns where `ar` is; the index is then set relative to the end of the data stack.
 				const std::vector<Value> image(m.buffer);
 				run(m, INTERPRETER);
-				const UInt arAddress = (UInt)m.memory()[layout.cell(layout.outAddress) + 1].i;
+				const UInt arAddress = static_cast<UInt>(m.memory()[layout.cell(layout.outAddress) + 1].i);
 				m.buffer = image;
-				p.index = (Int)(MEMORY_OFFSET + rw - arAddress) + p.index;
+				p.index = static_cast<Int>(MEMORY_OFFSET + rw - arAddress) + p.index;
 				p.inputs[1] = p.index;
 			}
 			if (p.op == GETL || p.op == SETL) p.what = "index=" + number(p.index);
@@ -1495,7 +1500,7 @@ int sweep(int engineCount) {
 		std::printf("%-30s %4d probes, %d failed\n", it->first.c_str(), it->second.probes, it->second.failures);
 	}
 	std::printf("bounds sweep (%s%s): %d probes, %d failed\n", ENGINE_NAMES[0], engineCount > 1 ? " and JIT" : ""
-			, (int)probeCount, failures);
+			, static_cast<int>(probeCount), failures);
 	return failures == 0 ? 0 : 1;
 }
 
