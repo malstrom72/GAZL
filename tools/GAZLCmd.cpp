@@ -27,6 +27,7 @@
 #include <fstream>
 #include <sstream>
 #include <cmath>
+#include <cfloat>
 #include <cstdlib>
 #include <cstring>
 #include <stdint.h>
@@ -143,7 +144,6 @@ FlushToZeroScope::FlushToZeroScope() : previousMXCSR(_mm_getcsr()) {
 	_mm_setcsr(previousMXCSR | MXCSR_FLUSH_TO_ZERO | MXCSR_DENORMALS_ARE_ZERO);
 }
 FlushToZeroScope::~FlushToZeroScope() { _mm_setcsr(previousMXCSR); }
-bool FlushToZeroScope::isAvailable() { return true; }
 #elif defined(__aarch64__)
 FlushToZeroScope::FlushToZeroScope() {
 	asm volatile("mrs %0, fpcr" : "=r"(previousFPCR));
@@ -151,7 +151,30 @@ FlushToZeroScope::FlushToZeroScope() {
 	asm volatile("msr fpcr, %0" :: "r"(flushing));
 }
 FlushToZeroScope::~FlushToZeroScope() { asm volatile("msr fpcr, %0" :: "r"(previousFPCR)); }
-bool FlushToZeroScope::isAvailable() { return true; }
+#endif
+
+#if defined(__SSE2__) || defined(_M_X64) || defined(_M_IX86) || defined(__aarch64__)
+/*
+	Whether the switch takes effect, measured rather than assumed: Valgrind ignores FTZ, DAZ and FZ, so under it the
+	flush-to-zero runs are skipped as on a host without the switch, instead of failing every comparison.
+*/
+static bool measureFlushToZero() {
+	bool isEffective;
+	{
+		FlushToZeroScope flush;
+		const volatile float smallestNormal = FLT_MIN;
+		isEffective = (smallestNormal * 0.5f == 0.0f);								// a denormal unless flushed
+	}
+	if (!isEffective) {
+		std::fprintf(stderr, "flush-to-zero has no effect on this host (Valgrind?), so its runs are skipped\n");
+	}
+	return isEffective;
+}
+
+bool FlushToZeroScope::isAvailable() {
+	static const bool isEffective = measureFlushToZero();
+	return isEffective;
+}
 #else
 FlushToZeroScope::FlushToZeroScope() { }
 FlushToZeroScope::~FlushToZeroScope() { }

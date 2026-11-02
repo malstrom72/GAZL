@@ -5,9 +5,22 @@
 #
 # Build with the ordinary toolchain, no sanitizers and no libFuzzer: this must run everywhere the normal build runs.
 # `beta` keeps asserts on, so a broken internal contract fails here too.
+#
+# Usage: test-fuzz.sh [valgrind]. `valgrind` runs the replay under Valgrind's memcheck, which reports reads of
+# uninitialized memory that the sanitizers miss (Linux only, CI). It is about 25 times slower, so the budget is off.
 set -e -o pipefail -u
 cd "$(dirname "$0")/.."
 mkdir -p output
+
+RUNNER=""
+BUDGET="--budget=30"		# warns past the normal build's 30 s budget
+if [[ "${1:-}" == "valgrind" ]]; then
+	RUNNER="valgrind -q --error-exitcode=1"
+	BUDGET=""
+elif [[ $# -gt 0 ]]; then
+	echo "Usage: test-fuzz.sh [valgrind]"
+	exit 1
+fi
 
 echo "test-fuzz: building the replay driver"
 ( cd tools && bash BuildCpp.sh beta native ../output/GAZLReplay \
@@ -27,6 +40,6 @@ find tests/fuzz/textCrashes -type f -name '*.gazl' >> "$LIST"
 find tests/fuzz/textSeeds -type f -name '*.gazl' >> "$LIST"
 N=$(wc -l < "$LIST" | tr -d ' ')
 
-echo "test-fuzz: replaying $N inputs"
-./output/GAZLReplay --budget=30 "@$LIST" > /dev/null		# warns past the normal build's 30 s budget
+echo "test-fuzz: replaying $N inputs${RUNNER:+ under Valgrind}"
+$RUNNER ./output/GAZLReplay $BUDGET "@$LIST" > /dev/null
 echo "test-fuzz: $N inputs replayed, no crashes"
