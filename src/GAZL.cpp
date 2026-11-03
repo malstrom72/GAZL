@@ -317,9 +317,17 @@ Float parseFloat(const Char*& p, const Char* e) {
 				++p;
 			}
 		} while (p < e && *p >= '0' && *p <= '9');
-		if (p + 1 < e && (*p == 'E' || *p == 'e')) {
-			const Int exponent = stringToInt(++p, e);
-			power += (exponent < -100000 ? -100000 : exponent > 100000 ? 100000 : exponent);					// far beyond any float
+		if (p + 1 < e && (*p == 'E' || *p == 'e')) {																// decimal digits only, not `stringToInt`'s hex or quotes
+			const Char* const exponentStart = p++;
+			const bool isNegativeExponent = (*p == '-');
+			if (*p == '+' || *p == '-') ++p;
+			const Char* const digitsStart = p;
+			Int exponent = 0;
+			for (; p < e && *p >= '0' && *p <= '9'; ++p) {
+				if (exponent < 100000) exponent = exponent * 10 + (*p - '0');										// far beyond any float
+			}
+			if (p == digitsStart) p = exponentStart;																// no digits: no exponent, so the caller rejects the `e`
+			else power += (isNegativeExponent ? -exponent : exponent);
 		}
 	}
 	UInt bits;

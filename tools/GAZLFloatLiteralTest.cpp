@@ -127,6 +127,14 @@ static void check(const std::string& text, UInt expected) {
 	checkPrefix(text, text.size(), expected);
 }
 
+// `text` is no float literal as a whole, so parsing must stop before its end.
+static void checkInvalid(const std::string& text) {
+	const Char* p = text.c_str();
+	const Char* const e = p + text.size();
+	parseFloat(p, e);
+	if (p == e && ++gFailures <= 20) printf("FAIL: %s parsed as a whole, expected it to stop early\n", text.c_str());
+}
+
 static UInt significantDigits(const std::string& plain) {
 	UInt count = 0;
 	bool started = false;
@@ -183,6 +191,10 @@ int main(int argc, const char* argv[]) {
 	checkPrefix("1e0x1", 3, 0x3F800000);																		// an exponent `0` that ends the range
 	checkPrefix("1e-0x1", 4, 0x3F800000);
 	checkPrefix("2.5e0x", 5, 0x40200000);
+	checkInvalid("1e0x10");																						// an exponent is decimal digits only
+	checkInvalid("1e'A'");
+	checkInvalid("1e+");
+	checkInvalid("1e-");
 	UInt tested = 0;
 	for (UInt bits = first; bits < last; bits += step) {
 		testFloat(bits);
