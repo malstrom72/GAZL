@@ -1,0 +1,9 @@
+import "lib.impala"
+
+export function main()
+returns int r
+{
+	r = LIB_VALUE;
+}
+
+/* this comment's end would close lib.impala's */
