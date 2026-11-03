@@ -65,7 +65,7 @@ const pointer WELCOME = "Welcome to Impala!\n"
 ```
 
 The supported escape sequences are `\"`, `\\`, `\b`, `\f`, `\n`, `\r`, `\t`, and
-`\uXXXX` (exactly four hex digits).
+`\uXXXX` (exactly four hex digits). Each character is one byte, so a character above `ÿ` is an error.
 
 ## Types
 

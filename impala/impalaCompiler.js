@@ -1757,6 +1757,12 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
     makeString = function (prefix, x, s,
                                     sourceCode, sourceOffset) {
 
+        for (var c = 0; c < s.length; ++c) {
+            if (s.charCodeAt(c) > 0xFF) {       // a string holds bytes: refuse, rather than cut, a wider character
+                fail('Character above 0xFF in string', sourceCode, sourceOffset);
+            }
+        }
+
         s += char(0);       // NUL-terminate
 
         var byteString = '';
