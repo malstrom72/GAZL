@@ -3717,4 +3717,18 @@ console.log("impala.jspeg compiler treats Object.prototype names as ordinary ide
 	console.log("character class refuses an unescaped ']' range endpoint and keeps the escaped Ford range");
 }
 
+// A string holds bytes, so a wider character must be refused, not cut to its low byte ("\u0100" became a NUL).
+let observedWideCharacter = false;
+try {
+	compileWithJsImpala('const pointer S = "\\u0100x";\nfunction main()\n{\n}\n', { randomId: 42 });
+} catch (err) {
+	observedWideCharacter = err && err.message && err.message.includes("Character above 0xFF in string");
+}
+
+if (!observedWideCharacter) {
+	console.error("impala.jspeg compiler failed to refuse a string character above 0xFF");
+	process.exit(1);
+}
+console.log("impala.jspeg compiler refuses string characters above 0xFF");
+
 console.log("JSPEG regression suite completed successfully");
