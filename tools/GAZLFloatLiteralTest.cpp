@@ -108,18 +108,23 @@ static std::string decrementLastDigit(std::string s) {															// `s` minu
 static int gFailures = 0;
 static UInt gMaxMidpointDigits = 0;
 
-static void check(const std::string& text, UInt expected) {
+// Parses the first `length` characters of `text` only, so a read past the end shows as a wrong stop or value.
+static void checkPrefix(const std::string& text, size_t length, UInt expected) {
 	const Char* p = text.c_str();
-	const Char* const e = p + text.size();
+	const Char* const e = p + length;
 	const Float value = parseFloat(p, e);
 	UInt bits;
 	memcpy(&bits, &value, sizeof (bits));
 	if (p != e || bits != expected) {
 		if (++gFailures <= 20) {
-			printf("FAIL: %s -> 0x%08X (stopped %d from the end), expected 0x%08X\n", text.c_str(), bits
-					, static_cast<int>(e - p), expected);
+			printf("FAIL: %s -> 0x%08X (stopped %d from the end), expected 0x%08X\n", text.substr(0, length).c_str()
+					, bits, static_cast<int>(e - p), expected);
 		}
 	}
+}
+
+static void check(const std::string& text, UInt expected) {
+	checkPrefix(text, text.size(), expected);
 }
 
 static UInt significantDigits(const std::string& plain) {
@@ -175,6 +180,9 @@ int main(int argc, const char* argv[]) {
 	const UInt first = (argc > 2 ? static_cast<UInt>(strtoul(argv[1], 0, 0)) : 0);
 	const UInt last = (argc > 2 ? static_cast<UInt>(strtoul(argv[2], 0, 0)) : 0x7F800000);
 	const UInt step = (argc > 3 ? static_cast<UInt>(strtoul(argv[3], 0, 0)) : 1);
+	checkPrefix("1e0x1", 3, 0x3F800000);																		// an exponent `0` that ends the range
+	checkPrefix("1e-0x1", 4, 0x3F800000);
+	checkPrefix("2.5e0x", 5, 0x40200000);
 	UInt tested = 0;
 	for (UInt bits = first; bits < last; bits += step) {
 		testFloat(bits);

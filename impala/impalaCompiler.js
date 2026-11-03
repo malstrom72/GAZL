@@ -3452,6 +3452,7 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
     /* Zero is the one word that is safe to drop, because the region zero-fills to it under any layout -
        so test the VALUE, not the spelling. `0x0`, `-0`, `0.0e0` and `&NULL` are all zero; comparing
        against the canonical ZEROES strings rejected safe code that merely wrote one of them differently.
+       A float `-0.0` is NOT zero: its sign bit is set, and dropping it reads back as `+0.0`.
        A symbol (`#N`) is NOT zero as far as Impala is concerned - it does not know the value, and per
        design/impala/TwoStageConstants.md it must not guess one. */
     isZeroWord = function (operand) {
@@ -3462,7 +3463,8 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
             return true;                                      /* null pointer / nullfunc */
         }
         var v = (operand.charAt(0) === '#' ? operand.substr(1) : '');
-        return v !== '' && Number(v) === 0;                   /* NaN for a symbol -> not zero */
+        var isNegativeFloat = (v.charAt(0) === '-' && /[.eE]/.test(v));
+        return v !== '' && Number(v) === 0 && !isNegativeFloat;   /* NaN for a symbol -> not zero */
     };
 
     /* emit a flat constant list as one or more data rows (mirrors InitList chunking). The element type
@@ -5183,6 +5185,12 @@ var _sn = strideStruct(field.elem);
      * -------------------------------------------------------- */
     makeString = function (prefix, x, s,
                                     sourceCode, sourceOffset) {
+
+        for (var c = 0; c < s.length; ++c) {
+            if (s.charCodeAt(c) > 0xFF) {       // a string holds bytes: refuse, rather than cut, a wider character
+                fail('Character above 0xFF in string', sourceCode, sourceOffset);
+            }
+        }
 
         s += char(0);       // NUL-terminate
 

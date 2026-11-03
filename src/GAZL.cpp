@@ -136,8 +136,8 @@ static const Char* eatSpaceAndComment(const Char* p) {
 static const Char* eatToken(const Char* p) {
 	do {
 		p += strcspn(p, STR("!; \t\r\n'\""));
-		if (*p == '\"') { while (*(++p) != 0 && *p != '\"') { }; if (*p != 0) ++p; }
-		else if (*p == '\'') { while (*(++p) != 0 && *p != '\'') { }; if (*p != 0) ++p; }
+		if (*p == '\"') { while (*(++p) != '\"' && !isEOL(*p)) { }; if (*p == '\"') ++p; }								// an unterminated quote ends at the line end
+		else if (*p == '\'') { while (*(++p) != '\'' && !isEOL(*p)) { }; if (*p == '\'') ++p; }
 		else return p;
 	} while (true);
 }
@@ -158,15 +158,17 @@ static Int stringToInt(const Char* &p, const Char* e) {
 	switch (p < e ? *p : 0) {
 		case '\'':
 		case '\"':	{
+						const Char* const open = p;
 						const Char quote = *p;
 						while (++p < e && *p != quote) {
 							if ((*p & 0x80) != 0) throw Exception(NON_ASCII_TEXT);
 							i = (i << 8) | (*p & 0xFFU);
 						}
 						if (p < e) ++p;
+						else p = open;																		// unterminated: stop at the quote, so the caller rejects it
 						break;
 					}
-		case '0':	if (*++p == 'x') {
+		case '0':	if (++p < e && *p == 'x') {
 						while (++p < e && ((*p >= '0' && *p <= '9') || (*p >= 'A' && *p <= 'F') || (*p >= 'a' && *p <= 'f')))
 							i = (i << 4) + (*p <= '9' ? *p - '0' : (*p & ~0x20) - ('A' - 10));
 						break;
@@ -2011,11 +2013,13 @@ static void findMemoryOwners(const Symbols& symbols, std::vector<MemoryOwner>& o
 }
 
 static UInt frozenSize(const std::vector<MemoryOwner>& owners) {
-	UInt size = MEMORY_HEADER_SIZE + MEMORY_CHECK_SIZE;
+	uint64_t size = MEMORY_HEADER_SIZE + MEMORY_CHECK_SIZE;
 	for (size_t i = 0; i < owners.size(); ++i) {
-		size += 4 + owners[i].nameLength + memoryPadding(owners[i].nameLength) + 4 + owners[i].info.ownedWords * 4;
+		size += 4 + owners[i].nameLength + memoryPadding(owners[i].nameLength) + 4
+				+ static_cast<uint64_t>(owners[i].info.ownedWords) * 4;
 	}
-	return size;
+	assert(size <= 0xFFFFFFFFu);																						// contract: see `freezeMemorySize`
+	return static_cast<UInt>(size);
 }
 
 UInt freezeMemorySize(const Processor& processor, const Symbols& symbols) {

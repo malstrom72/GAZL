@@ -573,6 +573,36 @@ function testNuXJSCommandCompilerScript(compilerSource) {
 		true,
 	);
 	runCase("numeric output path", ["impala.nuxjs.js", sourcePath, "42"], { "impalaCompiler.js": "ok" }, false);
+
+	// A source with CR-only line ends must report its real line, as the node front end does: counting `\n` alone put
+	// every diagnostic on line 1.
+	const crSource = "function main()\r{\r\tundeclared = 1;\r}\r";
+	const crPrinted = [];
+	const crContext = {
+		arguments: ["impala.nuxjs.js", "cr.impala"],
+		print: (line) => crPrinted.push(String(line)),
+		write: () => {},
+		read: (file) => {
+			if (file === "cr.impala") {
+				return crSource;
+			}
+			throw new Error(`Unexpected read path for the CR case: ${file}`);
+		},
+		load: (file) => {
+			const loadedSource = /impalaImportClosure\.js$/.test(file) ? closureSource : compilerSource;
+			new vm.Script(loadedSource, { filename: file }).runInContext(crContext);
+		},
+	};
+	vm.createContext(crContext);
+	try {
+		new vm.Script(scriptSource, { filename: "impala.nuxjs.js" }).runInContext(crContext);
+	} catch (err) {
+		// the compile is meant to fail; the printed diagnostic is what is checked
+	}
+	assert(
+		crPrinted.some((line) => line.indexOf("cr.impala:3:") === 0),
+		"impala.nuxjs.js must count a lone CR as a line end: " + crPrinted.join(" | "),
+	);
 	console.log("impala.nuxjs.js compiles an Impala source through NuXJS-style command arguments");
 }
 
@@ -4128,5 +4158,36 @@ function runGazlText(gazlPath, text, cmdArgs, label) {
 		"[+-\\]] must be the Ford range '+'..']' (includes digits and ']', excludes '^')");
 	console.log("character class refuses an unescaped ']' range endpoint and keeps the escaped Ford range");
 }
+
+// A string holds bytes, so a wider character must be refused, not cut to its low byte ("\u0100" became a NUL).
+let observedWideCharacter = false;
+try {
+	compileWithJsImpala('const pointer S = "\\u0100x";\nfunction main()\n{\n}\n', { randomId: 42 });
+} catch (err) {
+	observedWideCharacter = err && err.message && err.message.includes("Character above 0xFF in string");
+}
+
+if (!observedWideCharacter) {
+	console.error("impala.jspeg compiler failed to refuse a string character above 0xFF");
+	process.exit(1);
+}
+console.log("impala.jspeg compiler refuses string characters above 0xFF");
+
+// Only a zero word may be dropped from an initializer, and `-0.0` is not one: its sign bit is set, so dropping it read
+// back as `+0.0`. Where the field's word is unknown (an extern struct), it must be refused like any other value.
+let observedNegativeZero = false;
+try {
+	compileWithJsImpala("extern struct E { float a; float b; }\nglobal E e = { a: -0.0 };\nfunction main()\n{\n}\n", {
+		randomId: 42,
+	});
+} catch (err) {
+	observedNegativeZero = err && err.message && err.message.includes("E459");
+}
+
+if (!observedNegativeZero) {
+	console.error("impala.jspeg compiler dropped a -0.0 initializer as if it were zero");
+	process.exit(1);
+}
+console.log("impala.jspeg compiler keeps -0.0 apart from zero in initializers");
 
 console.log("JSPEG regression suite completed successfully");
