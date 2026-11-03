@@ -4188,6 +4188,15 @@ if (!observedNegativeZero) {
 	console.error("impala.jspeg compiler dropped a -0.0 initializer as if it were zero");
 	process.exit(1);
 }
+// A `--gazl2` region pops trailing zero words, and must not pop a `-0.0`.
+const negativeZeroTail = compileWithJsImpala(
+	"struct S { float x; float y; }\nglobal S s = { x: 1.0, y: -0.0 };\nfunction main()\n{\n}\n",
+	{ randomId: 42, gazl2: true },
+);
+if (negativeZeroTail.indexOf("DATf #-0.0") < 0) {
+	console.error("impala.jspeg compiler popped a trailing -0.0 as if it were zero");
+	process.exit(1);
+}
 console.log("impala.jspeg compiler keeps -0.0 apart from zero in initializers");
 
 console.log("JSPEG regression suite completed successfully");
