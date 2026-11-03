@@ -73,20 +73,28 @@
         while (i < str.length && chars.indexOf(str[i]) >= 0) i++;
         return i;
     }
-    function rspan(str, chars) {
-        var i = str.length;
-        while (i > 0 && chars.indexOf(str[i-1]) >= 0) i--;
-        return i;
-    }
-    function char(code) {
-        return String.fromCharCode(code & 0xFF);
-    }
-    function ordinal(ch) {
-        return ((ch + "").charCodeAt(0)) & 0xFF;
-    }
-
-    function evaluate(str) {
-        return JSON.parse(str);
+    /* The characters of a string literal (quotes included in `text`) as numbers, one word each. Numbers, not a JS
+       string, because a `\UXXXXXXXX` character can be any 32-bit value and a JS string char holds only 16 bits. */
+    function stringLiteralCodes(text) {
+        var codes = [];
+        for (var i = 1; i < text.length - 1; ++i) {
+            if (text.charAt(i) !== '\\') {
+                codes.push(text.charCodeAt(i));
+                continue;
+            }
+            var c = text.charAt(++i);
+            switch (c) {
+                case 'b': codes.push(8); break;
+                case 'f': codes.push(12); break;
+                case 'n': codes.push(10); break;
+                case 'r': codes.push(13); break;
+                case 't': codes.push(9); break;
+                case 'u': codes.push(parseInt(text.substr(i + 1, 4), 16)); i += 4; break;
+                case 'U': codes.push(parseInt(text.substr(i + 1, 8), 16)); i += 8; break;
+                default: codes.push(text.charCodeAt(i)); break;      /* `\"` and `\\` */
+            }
+        }
+        return codes;
     }
 
     /** queue ops on plain Arrays */
@@ -1696,30 +1704,33 @@
         return (s[0] === '#') ? s.substr(1) : s;
     };
 
-    /* printable ASCII table (33–126) */
-    $$parser.printable = '';
-    for (var i = 33; i < 127; ++i) {
-        $$parser.printable += char(i);
+    /* printable ASCII (33-126), which a `DATs` row can carry */
+    function isPrintable(code) {
+        return code >= 33 && code < 127;
     }
 
     /* -----------------------------------------------------------
      *  Dump a string constant into assembly
+     *  `codes` holds one number per character word.
      * -------------------------------------------------------- */
-    $$parser.dumpString = function (label, str) {
+    $$parser.dumpString = function (label, codes) {
 
-        var len = str.length;
+        var len = codes.length;
         $$parser.declare('CNST', 'globals', label, '?',
                          true, '*' + len, '', 0);
 
         var offset = 0;
         while (offset < len) {
 
-            /* raw bytes before printable chunk */
-            var non = find(str.substr(offset), $$parser.printable);
+            /* other characters before a printable chunk, as numbers */
+            var non = 0;
+            while (offset + non < len && !isPrintable(codes[offset + non])) {
+                ++non;
+            }
             if (non > 0) {
                 var d = '';
                 for (var k = 0; k < non; ++k) {
-                    d += ' #' + ordinal(str[offset + k]);
+                    d += ' #' + (codes[offset + k] >>> 0);
                 }
                 $$parser.declare('DATi', undefined, undefined, 'i',
                                  true, d.substr(1), '', 0);
@@ -1727,37 +1738,36 @@
                 continue;
             }
 
-            /* printable (plus spaces) */
-            var spanLen = span(str.substr(offset),
-                               $$parser.printable + ' ');
-            spanLen = rspan(str.substr(offset, spanLen), ' ');
-            if (spanLen > 0) {
-                $$parser.declare('DATs', undefined, undefined, 'i',
-                                 true, str.substr(offset, spanLen), '', 0);
-                offset += spanLen;
+            /* printable (plus spaces, but not trailing ones) */
+            var spanLen = 0;
+            while (offset + spanLen < len && (isPrintable(codes[offset + spanLen]) || codes[offset + spanLen] === 32)) {
+                ++spanLen;
             }
+            while (spanLen > 0 && codes[offset + spanLen - 1] === 32) {
+                --spanLen;
+            }
+            var text = '';
+            for (var t = 0; t < spanLen; ++t) {
+                text += String.fromCharCode(codes[offset + t]);
+            }
+            $$parser.declare('DATs', undefined, undefined, 'i',
+                             true, text, '', 0);
+            offset += spanLen;
         }
     };
 
     /* -----------------------------------------------------------
      *  Manage / share string literals
      * -------------------------------------------------------- */
+    /* `s` is the characters as numbers (a string literal), or a JS string (an assert's source text). */
     $$parser.makeString = function (prefix, x, s,
                                     sourceCode, sourceOffset) {
 
+        var codes = [];
         for (var c = 0; c < s.length; ++c) {
-            if (s.charCodeAt(c) > 0xFF) {       // a string holds bytes: refuse, rather than cut, a wider character
-                $$parser.fail('Character above 0xFF in string', sourceCode, sourceOffset);
-            }
+            codes.push(typeof s === 'string' ? s.charCodeAt(c) : s[c]);
         }
-
-        s += char(0);       // NUL-terminate
-
-        var byteString = '';
-        for (var idx = 0; idx < s.length; ++idx) {
-            byteString += char(ordinal(s[idx]));
-        }
-        s = byteString;
+        codes.push(0);      // NUL-terminate
 
         var tbl = $$parser.strings[prefix];
         if (!tbl) {
@@ -1765,26 +1775,42 @@
             tbl.rlookup = {};
         }
 
-        var entry = tbl.rlookup[s];
+        var entry = tbl.rlookup[codes.join(',')];
         if (entry == null) {
 
-            /* generate unique label */
-            var name = '.' + prefix + '_' +
-                       (s.replace(/[^0-9a-zA-Z]/g, '')
-                          .substr(0, 6)) +
-                       '_' +
-                       ( (($$parser.randomId + tbl.length) >>> 0)
+            /* generate unique label from the first ASCII letters and digits */
+            var tag = '';
+            for (var a = 0; a < codes.length && tag.length < 6; ++a) {
+                var ch = (codes[a] < 128 ? String.fromCharCode(codes[a]) : '');
+                if (/[0-9a-zA-Z]/.test(ch)) {
+                    tag += ch;
+                }
+            }
+            /* `tbl.length` counts only deferred strings, so two `const` strings dumped at once with the same
+               tag got the same label: step past a label already taken */
+            if (!tbl.taken) {
+                tbl.taken = {};
+            }
+            var name;
+            for (var serial = tbl.length; ; ++serial) {
+                name = '.' + prefix + '_' + tag + '_' +
+                       ( (($$parser.randomId + serial) >>> 0)
                          .toString(16) );
+                if (tbl.taken[name] !== true) {
+                    break;
+                }
+            }
+            tbl.taken[name] = true;
 
             if ($$parser.noForward) {
-                $$parser.dumpString(name, s);
+                $$parser.dumpString(name, codes);
             } else {
-                tbl.push({ name:name, data:s });
+                tbl.push({ name:name, data:codes });
             }
 
             /* add all suffixes to rlookup */
-            for (var k = 0; k < s.length; ++k) {
-                tbl.rlookup[ s.substr(k) ] =
+            for (var k = 0; k < codes.length; ++k) {
+                tbl.rlookup[ codes.slice(k).join(',') ] =
                     name + (k ? ':' + k : '');
             }
             entry = name;            // full string label
@@ -2888,7 +2914,7 @@ Value       <-  Group
                                                         $$parser.makeMeta($$, ':=', 'i', undefined, '#' + $i, undefined);
                                                       } }
                 / s:StringLiteral                   { if (!$$parser.dry) {
-                                                        $$parser.makeString('s', $$, evaluate($s), $$s, $$i);
+                                                        $$parser.makeString('s', $$, stringLiteralCodes($s), $$s, $$i);
                                                       } }
                 / NULL _                            { if (!$$parser.dry) {
                                                         $$parser.makeMeta($$, ':=', 'p', undefined, '&NULL', undefined);
@@ -2916,7 +2942,7 @@ Variable    <-                                      { $global = false; }
 Identifier      <-  !KEYWORD $$=([A-Za-z_$] SYMBOL_CHAR*) _
 FloatLiteral    <-  $$=([-+]? DIGIT+ "." DIGIT+ (("E" / "e") ([-+]? DIGIT+))?) _
 IntegerLiteral  <-  $$=([-+]? ("0x" HEX+ / "'" (!"'" ASCII)* "'" / DIGIT+)) _
-StringLiteral   <-  $$=( '"' ( !["\\\0-\37] . / "\\" ( [\"\\bfnrt] / 'u' HEX HEX HEX HEX ) )* '"' ) _
+StringLiteral   <-  $$=( '"' ( !["\\\0-\37] . / "\\" ( [\"\\bfnrt] / 'u' HEX HEX HEX HEX / 'U' HEX HEX HEX HEX HEX HEX HEX HEX ) )* '"' ) _
 
 KEYWORD     <-  ABS / ARRAY / ASSERT / CASE / CONST / COPY / DEFAULT / DO / ELSE / EXTERN / FLOAT / FLOOR / FOR / FROM
                 / FTOI / FUNCPTR / FUNCTION / GLOBAL / GOTO / IF / INT / ITOF / LOCALS / LOOP / NATIVE / NULL / NULLFUNC
