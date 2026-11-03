@@ -126,7 +126,7 @@ readonly array VARIOUS_LITERALS[15] = {
 	-123.0e10,									// float
 	256.11E-10,									// float
 	"string1",									// pointer to zero-terminated string, each character is an int
-	"all escapes: \\\"\b\f\n\r\t~",		// - " -
+	"all escapes: \\\"\b\f\n\r\t\u007E",		// - " -
 	null,										// null pointer
 	nullfunc									// null function pointer
 };
