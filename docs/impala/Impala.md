@@ -83,8 +83,9 @@ A string literal yields a pointer to a zero-terminated array of word-sized chara
 const pointer WELCOME = "Welcome to Impala!\n"
 ```
 
-The supported escape sequences are `\"`, `\\`, `\b`, `\f`, `\n`, `\r`, `\t`, and
-`\uXXXX` (exactly four hex digits). Each character is one byte, so a character above `\u00FF` is an error.
+The supported escape sequences are `\"`, `\\`, `\b`, `\f`, `\n`, `\r`, `\t`, `\uXXXX`
+(exactly four hex digits) and `\UXXXXXXXX` (exactly eight hex digits). Each character, escaped or not,
+fills one word, so `\UXXXXXXXX` can store any 32-bit value, `\UFFFFFFFF` included.
 
 **Source must be ASCII.** A byte above 127 in a string or character literal is a syntax
 error - use `\uXXXX` instead. A raw high byte is not a portable way to name a byte
