@@ -6,7 +6,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const { compileProgram, resolveImportClosure, deadStrip } = require('./impala.node.js');
+const { compileProgram, resolveImportClosure, scanImports, deadStrip } = require('./impala.node.js');
 const { compileWithJsImpala } = require('./impalaJsCompilerRunner');
 const { haveGazlCmd, runExpected, parseExpectedRun } = require('./gazlAssembleCheck');
 
@@ -214,5 +214,42 @@ for (const name of ['chess', 'Priyome', 'ImpalaDemo']) {
 		fail('C: --dead-strip threw on ' + name + ': ' + ((err && err.message) || String(err)));
 	}
 }
+
+// The import scanner must find exactly the imports the grammar parses: every spelling `ImportDecl` accepts, and none
+// inside a comment or a literal. A miss leaves a unit unlinked; an extra one links a file the program never names.
+const scanCases = [
+	['import"a.impala"', ['a.impala']],
+	['const int A = 1; import "b.impala"', ['b.impala']],
+	['/* x */ import "c.impala"', ['c.impala']],
+	['import /* x */ "d.impala"', ['d.impala']],
+	["const int Q = 'x'; import \"e.impala\"", ['e.impala']],
+	['/*\nimport "f.impala"\n*/', []],
+	['// import "g.impala"', []],
+	['const pointer S = "import \\"h\\"";', []],
+	['reimport "i.impala"', []],
+];
+for (const [source, want] of scanCases) {
+	const got = scanImports(source);
+	if (JSON.stringify(got) !== JSON.stringify(want)) {
+		fail('scanImports(' + JSON.stringify(source) + ') gave ' + JSON.stringify(got) + ', expected ' + JSON.stringify(want));
+	}
+}
+
+// An unterminated `/*` ending one unit must not swallow the next unit's text up to its first `*/`.
+let openCommentError = '';
+try {
+	compileProgram(path.join(repoRoot, 'tests', 'impala', 'sources', 'importopencomment', 'main.impala'), { randomId: RANDOM_ID });
+} catch (err) {
+	openCommentError = (err && err.message) || String(err);
+}
+if (openCommentError.indexOf('Unterminated /* comment in lib.impala') < 0) {
+	fail('an unterminated /* in an imported unit was not refused: ' + (openCommentError || 'it compiled'));
+}
+
+// --dead-strip must read a `;` inside a quoted literal (`#';'`) as data, not as the start of a comment, or it loses the
+// references after it: here `N`, which only M's fold names, was stripped and the output no longer assembled.
+const quotedSemicolon = deadStrip(compileWithJsImpala(
+	"const int N = 5;\nconst int M = ';' + N;\nexport function main() returns int r { r = M; }\n", { randomId: RANDOM_ID }));
+if (!/(^|\n)\s*N:/.test(quotedSemicolon)) fail('--dead-strip dropped N, named only after a quoted \';\'');
 
 console.log('import build + dead-strip + cycle tests passed.');
