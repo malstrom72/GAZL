@@ -3747,19 +3747,39 @@ console.log("impala.jspeg compiler treats Object.prototype names as ordinary ide
 	console.log("character class refuses an unescaped ']' range endpoint and keeps the escaped Ford range");
 }
 
-// A string holds bytes, so a wider character must be refused, not cut to its low byte ("\u0100" became a NUL).
-let observedWideCharacter = false;
-try {
-	compileWithJsImpala('const pointer S = "\\u0100x";\nfunction main()\n{\n}\n', { randomId: 42 });
-} catch (err) {
-	observedWideCharacter = err && err.message && err.message.includes("Character above 0xFF in string");
-}
-
-if (!observedWideCharacter) {
-	console.error("impala.jspeg compiler failed to refuse a string character above 0xFF");
-	process.exit(1);
-}
-console.log("impala.jspeg compiler refuses string characters above 0xFF");
+// Every string character fills a whole word. A 4-digit escape above 0xFF was cut to its low byte (0x5A7E became `~`,
+// 0x0100 a NUL that ended the string early), and an 8-digit escape holds any 32-bit value, past 0x10FFFF too. Equal
+// strings and suffixes share one table entry, and string constants whose labels have the same ASCII tag (here none)
+// must still get distinct labels.
+const wideOutput = compileWithJsImpala(
+	[
+		'const pointer S = "\\u5A7E\\u0100x\\UFFFFFFFF\\U12345678";',
+		'const pointer A = "\\uABCD\\U12345678";',
+		'const pointer B = "\\U12345678";',
+		'const pointer C = "\\uABCD\\U12345678";',
+		'const pointer D = "\\uABCE";',
+		"function main()",
+		"{",
+		"}",
+		"",
+	].join("\n"),
+	{ randomId: 42 },
+);
+const wideRows = wideOutput
+	.split("\n")
+	.map((line) => line.trim())
+	.filter((line) => /^(\S+:\s+)?(CNST|DAT|!)/.test(line));
+assert(wideOutput.indexOf("DATi #23166 #256") >= 0 && wideOutput.indexOf("DATs x") >= 0,
+	"a string character above 0xFF must keep its whole value: " + wideRows.join(" | "));
+assert(wideOutput.indexOf("DATi #4294967295 #305419896 #0") >= 0,
+	"an 8-digit escape must store its full 32-bit value: " + wideRows.join(" | "));
+assert(wideOutput.indexOf("DATi #43981 #305419896 #0") >= 0, "a wide string must be emitted once: " + wideRows.join(" | "));
+const labelOf = (name) => (new RegExp("\\n" + name + ":\\s+! DEFp &(\\S+)").exec(wideOutput) || [])[1];
+assert(labelOf("C") === labelOf("A") && labelOf("B") === labelOf("A") + ":1",
+	"equal wide strings and suffixes must share one entry: " + wideRows.join(" | "));
+assert(labelOf("D") !== undefined && labelOf("D") !== labelOf("A"),
+	"string constants with the same label tag must get distinct labels: " + wideRows.join(" | "));
+console.log("impala.jspeg compiler keeps every string character's full word value");
 
 // Only a zero word may be dropped from an initializer, and `-0.0` is not one: its sign bit is set, so dropping it read
 // back as `+0.0`. Where the field's word is unknown (an extern struct), it must be refused like any other value.

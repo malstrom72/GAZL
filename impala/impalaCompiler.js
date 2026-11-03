@@ -66,18 +66,29 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         while (i < str.length && chars.indexOf(str[i]) >= 0) i++;
         return i;
     }
-    function rspan(str, chars) {
-        var i = str.length;
-        while (i > 0 && chars.indexOf(str[i-1]) >= 0) i--;
-        return i;
+    /* The characters of a string literal (quotes included in `text`) as numbers, one word each. Numbers, not a JS
+       string, because a `\UXXXXXXXX` character can be any 32-bit value and a JS string char holds only 16 bits. */
+    function stringLiteralCodes(text) {
+        var codes = [];
+        for (var i = 1; i < text.length - 1; ++i) {
+            if (text.charAt(i) !== '\\') {
+                codes.push(text.charCodeAt(i));
+                continue;
+            }
+            var c = text.charAt(++i);
+            switch (c) {
+                case 'b': codes.push(8); break;
+                case 'f': codes.push(12); break;
+                case 'n': codes.push(10); break;
+                case 'r': codes.push(13); break;
+                case 't': codes.push(9); break;
+                case 'u': codes.push(parseInt(text.substr(i + 1, 4), 16)); i += 4; break;
+                case 'U': codes.push(parseInt(text.substr(i + 1, 8), 16)); i += 8; break;
+                default: codes.push(text.charCodeAt(i)); break;      /* `\"` and `\\` */
+            }
+        }
+        return codes;
     }
-    function char(code) {
-        return String.fromCharCode(code & 0xFF);
-    }
-    function ordinal(ch) {
-        return ((ch + "").charCodeAt(0)) & 0xFF;
-    }
-
 
     /* --------------------------------
      *  Impala-JSPEG  ▸  core tables / helpers  (ES3)
@@ -4609,30 +4620,33 @@ var _sn = strideStruct(field.elem);
         return (s[0] === '#') ? s.substr(1) : s;
     };
 
-    /* printable ASCII table (33-126) */
-    printable = '';
-    for (var i = 33; i < 127; ++i) {
-        printable += char(i);
+    /* printable ASCII (33-126), which a `DATs` row can carry */
+    function isPrintable(code) {
+        return code >= 33 && code < 127;
     }
 
     /* -----------------------------------------------------------
      *  Dump a string constant into assembly
+     *  `codes` holds one number per character word.
      * -------------------------------------------------------- */
-    dumpString = function (label, str) {
+    dumpString = function (label, codes) {
 
-        var len = str.length;
+        var len = codes.length;
         declare('CNST', 'globals', label, '?',
                          true, '*' + len, '', 0);
 
         var offset = 0;
         while (offset < len) {
 
-            /* raw bytes before printable chunk */
-            var non = find(str.substr(offset), printable);
+            /* other characters before a printable chunk, as numbers */
+            var non = 0;
+            while (offset + non < len && !isPrintable(codes[offset + non])) {
+                ++non;
+            }
             if (non > 0) {
                 var d = '';
                 for (var k = 0; k < non; ++k) {
-                    d += ' #' + ordinal(str[offset + k]);
+                    d += ' #' + (codes[offset + k] >>> 0);
                 }
                 declare('DATi', undefined, undefined, 'i',
                                  true, d.substr(1), '', 0);
@@ -4640,37 +4654,36 @@ var _sn = strideStruct(field.elem);
                 continue;
             }
 
-            /* printable (plus spaces) */
-            var spanLen = span(str.substr(offset),
-                               printable + ' ');
-            spanLen = rspan(str.substr(offset, spanLen), ' ');
-            if (spanLen > 0) {
-                declare('DATs', undefined, undefined, 'i',
-                                 true, str.substr(offset, spanLen), '', 0);
-                offset += spanLen;
+            /* printable (plus spaces, but not trailing ones) */
+            var spanLen = 0;
+            while (offset + spanLen < len && (isPrintable(codes[offset + spanLen]) || codes[offset + spanLen] === 32)) {
+                ++spanLen;
             }
+            while (spanLen > 0 && codes[offset + spanLen - 1] === 32) {
+                --spanLen;
+            }
+            var text = '';
+            for (var t = 0; t < spanLen; ++t) {
+                text += String.fromCharCode(codes[offset + t]);
+            }
+            declare('DATs', undefined, undefined, 'i',
+                             true, text, '', 0);
+            offset += spanLen;
         }
     };
 
     /* -----------------------------------------------------------
      *  Manage / share string literals
      * -------------------------------------------------------- */
+    /* `s` is the characters as numbers (a string literal), or a JS string (an assert's source text). */
     makeString = function (prefix, x, s,
                                     sourceCode, sourceOffset) {
 
+        var codes = [];
         for (var c = 0; c < s.length; ++c) {
-            if (s.charCodeAt(c) > 0xFF) {       // a string holds bytes: refuse, rather than cut, a wider character
-                fail('Character above 0xFF in string', sourceCode, sourceOffset);
-            }
+            codes.push(typeof s === 'string' ? s.charCodeAt(c) : s[c]);
         }
-
-        s += char(0);       // NUL-terminate
-
-        var byteString = '';
-        for (var idx = 0; idx < s.length; ++idx) {
-            byteString += char(ordinal(s[idx]));
-        }
-        s = byteString;
+        codes.push(0);      // NUL-terminate
 
         var tbl = strings[prefix];
         if (!tbl) {
@@ -4678,26 +4691,42 @@ var _sn = strideStruct(field.elem);
             tbl.rlookup = {};
         }
 
-        var entry = tbl.rlookup[s];
+        var entry = tbl.rlookup[codes.join(',')];
         if (entry == null) {
 
-            /* generate unique label */
-            var name = '.' + prefix + '_' +
-                       (s.replace(/[^0-9a-zA-Z]/g, '')
-                          .substr(0, 6)) +
-                       '_' +
-                       ( ((randomId + tbl.length) >>> 0)
+            /* generate unique label from the first ASCII letters and digits */
+            var tag = '';
+            for (var a = 0; a < codes.length && tag.length < 6; ++a) {
+                var ch = (codes[a] < 128 ? String.fromCharCode(codes[a]) : '');
+                if (/[0-9a-zA-Z]/.test(ch)) {
+                    tag += ch;
+                }
+            }
+            /* `tbl.length` counts only deferred strings, so two `const` strings dumped at once with the same
+               tag got the same label: step past a label already taken */
+            if (!tbl.taken) {
+                tbl.taken = {};
+            }
+            var name;
+            for (var serial = tbl.length; ; ++serial) {
+                name = '.' + prefix + '_' + tag + '_' +
+                       ( ((randomId + serial) >>> 0)
                          .toString(16) );
+                if (tbl.taken[name] !== true) {
+                    break;
+                }
+            }
+            tbl.taken[name] = true;
 
             if (noForward) {
-                dumpString(name, s);
+                dumpString(name, codes);
             } else {
-                tbl.push({ name:name, data:s });
+                tbl.push({ name:name, data:codes });
             }
 
             /* add all suffixes to rlookup */
-            for (var k = 0; k < s.length; ++k) {
-                tbl.rlookup[ s.substr(k) ] =
+            for (var k = 0; k < codes.length; ++k) {
+                tbl.rlookup[ codes.slice(k).join(',') ] =
                     name + (k ? ':' + k : '');
             }
             entry = name;            // full string label
@@ -4864,12 +4893,12 @@ function DestTarget(){var $tgtGlobal,$id=newMetaSlot(),_sv$id,$tgtName;return (f
 function Switch(){var $f=newMetaSlot(),_sv$f,$t=newMetaSlot(),_sv$t,$size,$switcher,$,$switchExit,$progress,$stmt=newMetaSlot(),_sv$stmt;return (function(){var _b=_i;return SWITCH()&&_()&&(_s[_i]==="(")&&(++_i,true)&&_()&&Expr()&&(_s.substr(_i,2)==="==")&&(_i+=2,true)&&_()&&((_sv$f=_val,_val=$f,(Expr()))&&($f=_val,_val=_sv$f,true)||(_val=_sv$f,false))&&TO()&&_()&&((_sv$t=_val,_val=$t,(Expr()))&&($t=_val,_val=_sv$t,true)||(_val=_sv$t,false))&&(function(){ var switchMeta = metaSlot(_val); /* the switch expression must be an int */ if (switchMeta.type !== 'i') { fail('Switch expression needs to be int', _s, _i, 'E306'); } /* lower bound (compile-time constant) */ switchMeta.from = makeConstant($f, 'i', _s, _i); /*    size = to - from   */ $size = subConstInt( makeConstant($t, 'i', _s, _i), switchMeta.from ); /*   switcher = (expr − from)   */ $switcher = subConstInt( makeRValue(switchMeta, '$%'), switchMeta.from ); /* snapshot the range as plain numbers now: the operands are handed back to the scratch pool below, and a case is only checkable while both ends are known. */ switchMeta.fromNum = constInt(switchMeta.from); switchMeta.sizeNum = constInt($size); switchMeta.caseSeen = {}; switchMeta.switchLabel = newLabel('s'); $switchExit              = newLabel('e'); switchStack.push(switchMeta); emit( '-->#', switchMeta.type, $switcher, '*' + dropHash($size), switchMeta.switchLabel ); returnBack($switcher); returnBack($size); $progress = undefined;       /* track case / default presence */ ; return true})()&&(_s[_i]===")")&&(++_i,true)&&_()&&(_s[_i]==="{")&&(++_i,true)&&_()&&((function(){while((function(){var _b=_i;return (function(){var _b=_i;return CASE()&&_()&&(function(){ /* multiple CASE groups -> fall-through handled here */ if ($progress !== undefined) { emit('-->', undefined, $switchExit, undefined, undefined); } else { $progress = 'gotCases'; } /* dump the literal “case ...” comment */ var snippet = _s.substring(_i, find(_s, ":\r\n", _i)); emit( ';', undefined, 'case ' + snippet, undefined, undefined ); ; return true})()&&CaseExpr()&&((function(){while((function(){var _b=_i;return (_s[_i]===",")&&(++_i,true)&&_()&&CaseExpr()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)||DEFAULT()&&_()&&(function(){ if ($progress === 'gotDefault') { fail('Default case already defined', _s, _i, 'E409', 'a switch has at most one `default` arm'); } else if ($progress !== undefined) { emit('-->', undefined, $switchExit, undefined, undefined); } var ctx = switchStack[switchStack.length - 1]; emit(';',    undefined, 'default',       undefined, undefined); emit('<--',  undefined, ctx.switchLabel,  undefined, undefined); $progress = 'gotDefault'; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&(_s[_i]===":")&&(++_i,true)&&_()&&((_sv$stmt=_val,_val=$stmt,(Statement()))&&($stmt=_val,_val=_sv$stmt,true)||(_val=_sv$stmt,false))||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(_s[_i]==="}")&&(++_i,true)&&_()&&(function(){ var ctx = switchStack.pop() || metaSlot(_val); /* no explicit “default” -> hook it up now                        */ if ($progress !== 'gotDefault') { emit('<--', undefined, ctx.switchLabel, undefined, undefined); } emit('<--', undefined, $switchExit, undefined, undefined); returnBack(ctx.from); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function CaseExpr(){var $n;return (function(){var _b=_i;return Expr()&&(function(){ /* offset = constant(expr) - switch.from                         */ var ctx      = switchStack[switchStack.length - 1]; var caseMeta = metaSlot(_val); var baseFrom = (ctx ? ctx.from : caseMeta.from); var baseLabel = (ctx ? ctx.switchLabel : caseMeta.switchLabel); var caseConst = makeConstant(caseMeta, 'i', _s, _i); checkCaseValue(ctx, constInt(caseConst), _s, _i); $n = subConstInt(caseConst, baseFrom); /* A host may narrow the window from BELOW, which makes this arm UNREACHABLE, not wrong - the same situation as a case above the window, which `SWCH` already ignores harmlessly because the offset is only a table index it never looks up. Here the offset is pasted into the LABEL TEXT, so a negative one rendered `.s0.-4` and killed the whole module at load: one direction fell dead, the other refused to build. Guard the label with an assemble-time skip so both drop out of the configuration alike. A skipped line is abandoned BEFORE the label is interpreted (`skipUntilLabel`, GAZL.cpp), so `.s0.-4` is never constructed rather than constructed and rejected. Guarded when the HOST decides: a symbolic range, or a case value naming a host-supplied const under a literal one (`case K`, K valueless and the host's -1 below `0 to 4`, failed to load with `Invalid identifier: .s0.-1`). A value fixed in the source is its author's: E444 where Impala reads it. */ var caseGuard; if (ctx !== undefined && (ctx.fromNum === undefined || hostSupplied(caseConst))) { caseGuard = newLabel('g'); emit('<> <', 'i', $n, '#0', caseGuard); } /* create label for this case                                     */ emit( '<--', undefined, baseLabel + '#' + dropHash($n), undefined, undefined ); if (caseGuard !== undefined) { emit('<-?', true, caseGuard, undefined, undefined); metacode[metacode.length - 1].mayRide = true; } returnBack($n); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function While(){var $loopLabel,$exitLabel;return (function(){var _b=_i;return WHILE()&&_()&&(function(){ $loopLabel = newLabel('l'); emit('<--', undefined, $loopLabel, undefined, undefined); ; return true})()&&BoolGroup()&&(function(){ $exitLabel = newLabel('e'); emit('?->', false, $exitLabel, undefined, undefined); ; return true})()&&Statement()&&(function(){ emit('-->', undefined, $loopLabel, undefined, undefined); emit('<-?', false, $exitLabel, undefined, undefined); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
-function Value(){var $base=newMetaSlot(),_sv$base,$f=newMetaSlot(),_sv$f,$i=newMetaSlot(),_sv$i,$s=newMetaSlot(),_sv$s;return (function(){var _b=_i;return Group()||(_im=(_i>_im?_i:_im),_i=_b,false)||SIZEOF()&&_()&&(_s[_i]==="(")&&(++_i,true)&&_()&&((_sv$base=_val,_val=$base,(TypeBase()))&&($base=_val,_val=_sv$base,true)||(_val=_sv$base,false))&&(function(){ if (!dry) { var head = strideStruct($base); if (head !== undefined) {            /* struct size -> symbolic .z.Name */ if (!isExternStruct(head) && !structDefined(head)) fail('sizeof of incomplete struct ' + head, _s, _i, 'E419'); makeMeta(_val, ':=', 'i', undefined, '#' + extentSymbol(head), undefined); setElem(_val, undefined); } else { makeMeta(_val, ':=', 'i', undefined, '#1', undefined); setElem(_val, undefined); } } ; return true})()&&(_s[_i]===")")&&(++_i,true)&&_()||(_im=(_i>_im?_i:_im),_i=_b,false)||((_sv$f=_val,_val=$f,(FloatLiteral()))&&($f=_val,_val=_sv$f,true)||(_val=_sv$f,false))&&(function(){ if (!dry) { makeMeta(_val, ':=', 'f', undefined, '#' + $f, undefined); setElem(_val, undefined); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||((_sv$i=_val,_val=$i,(IntegerLiteral()))&&($i=_val,_val=_sv$i,true)||(_val=_sv$i,false))&&(function(){ if (!dry) { makeMeta(_val, ':=', 'i', undefined, '#' + $i, undefined); setElem(_val, undefined); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||((_sv$s=_val,_val=$s,(StringLiteral()))&&($s=_val,_val=_sv$s,true)||(_val=_sv$s,false))&&(function(){ if (!dry) { makeString('s', _val, JSON.parse($s), _s, _i); setElem(_val, 'i');      /* string data is int words (Impala 2) */ /* string data lives in a readonly section, so `"abc"[0] = 1` used to compile and fail at GAZL load - mark it readonly so the E404 element-write check catches the store at the source line */ metaSlot(_val).readonly = true; } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||NULL()&&_()&&(function(){ if (!dry) { makeMeta(_val, ':=', 'p', undefined, '&NULL', undefined); setElem(_val, undefined); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||NULLFUNC()&&_()&&(function(){ if (!dry) { makeMeta(_val, ':=', 't', undefined, '&NULL', undefined); setElem(_val, undefined); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||Variable()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
+function Value(){var $base=newMetaSlot(),_sv$base,$f=newMetaSlot(),_sv$f,$i=newMetaSlot(),_sv$i,$s=newMetaSlot(),_sv$s;return (function(){var _b=_i;return Group()||(_im=(_i>_im?_i:_im),_i=_b,false)||SIZEOF()&&_()&&(_s[_i]==="(")&&(++_i,true)&&_()&&((_sv$base=_val,_val=$base,(TypeBase()))&&($base=_val,_val=_sv$base,true)||(_val=_sv$base,false))&&(function(){ if (!dry) { var head = strideStruct($base); if (head !== undefined) {            /* struct size -> symbolic .z.Name */ if (!isExternStruct(head) && !structDefined(head)) fail('sizeof of incomplete struct ' + head, _s, _i, 'E419'); makeMeta(_val, ':=', 'i', undefined, '#' + extentSymbol(head), undefined); setElem(_val, undefined); } else { makeMeta(_val, ':=', 'i', undefined, '#1', undefined); setElem(_val, undefined); } } ; return true})()&&(_s[_i]===")")&&(++_i,true)&&_()||(_im=(_i>_im?_i:_im),_i=_b,false)||((_sv$f=_val,_val=$f,(FloatLiteral()))&&($f=_val,_val=_sv$f,true)||(_val=_sv$f,false))&&(function(){ if (!dry) { makeMeta(_val, ':=', 'f', undefined, '#' + $f, undefined); setElem(_val, undefined); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||((_sv$i=_val,_val=$i,(IntegerLiteral()))&&($i=_val,_val=_sv$i,true)||(_val=_sv$i,false))&&(function(){ if (!dry) { makeMeta(_val, ':=', 'i', undefined, '#' + $i, undefined); setElem(_val, undefined); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||((_sv$s=_val,_val=$s,(StringLiteral()))&&($s=_val,_val=_sv$s,true)||(_val=_sv$s,false))&&(function(){ if (!dry) { makeString('s', _val, stringLiteralCodes($s), _s, _i); setElem(_val, 'i');      /* string data is int words (Impala 2) */ /* string data lives in a readonly section, so `"abc"[0] = 1` used to compile and fail at GAZL load - mark it readonly so the E404 element-write check catches the store at the source line */ metaSlot(_val).readonly = true; } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||NULL()&&_()&&(function(){ if (!dry) { makeMeta(_val, ':=', 'p', undefined, '&NULL', undefined); setElem(_val, undefined); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||NULLFUNC()&&_()&&(function(){ if (!dry) { makeMeta(_val, ':=', 't', undefined, '&NULL', undefined); setElem(_val, undefined); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||Variable()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function Variable(){var $global,$idStart,$id=newMetaSlot(),_sv$id;return (function(){var _b=_i;return (function(){ $global = false; ; return true})()&&((function(){var _b=_i;return GLOBAL()&&_()&&(function(){ $global = true; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&(function(){ $idStart = _i; ; return true})()&&((_sv$id=_val,_val=$id,(Identifier()))&&($id=_val,_val=_sv$id,true)||(_val=_sv$id,false))&&(function(){ if (!dry) { lookup(_val, $id, $global, _s, $idStart); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function Identifier(){return (function(){var _b=_i;return (function(){var _l=_i,_lv=_val,_x=KEYWORD();_i=_l;_val=_lv;return !_x})()&&(function(){var _m=_i;return (function(){var _b=_i;return (!!_s[_i]&&"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_$".indexOf(_s[_i])>=0)&&(++_i,true)&&((function(){while(SYMBOL_CHAR());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&(_val=_s.slice(_m,_i),true)})()&&_()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function FloatLiteral(){return (function(){var _b=_i;return (function(){var _m=_i;return (function(){var _b=_i;return ((!!_s[_i]&&"-+".indexOf(_s[_i])>=0)&&(++_i,true),true)&&((function(){for(var _n=0;DIGIT();++_n);return _n>0})())&&(_s[_i]===".")&&(++_i,true)&&((function(){for(var _n=0;DIGIT();++_n);return _n>0})())&&((function(){var _b=_i;return (function(){var _b=_i;return (_s[_i]==="E")&&(++_i,true)||(_im=(_i>_im?_i:_im),_i=_b,false)||(_s[_i]==="e")&&(++_i,true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&(function(){var _b=_i;return ((!!_s[_i]&&"-+".indexOf(_s[_i])>=0)&&(++_i,true),true)&&((function(){for(var _n=0;DIGIT();++_n);return _n>0})())||(_im=(_i>_im?_i:_im),_i=_b,false)})()||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&(_val=_s.slice(_m,_i),true)})()&&_()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function IntegerLiteral(){return (function(){var _b=_i;return (function(){var _m=_i;return (function(){var _b=_i;return ((!!_s[_i]&&"-+".indexOf(_s[_i])>=0)&&(++_i,true),true)&&(function(){var _b=_i;return (_s.substr(_i,2)==="0x")&&(_i+=2,true)&&((function(){for(var _n=0;HEX();++_n);return _n>0})())||(_im=(_i>_im?_i:_im),_i=_b,false)||(_s[_i]==="'")&&(++_i,true)&&((function(){while((function(){var _b=_i;return (function(){var _l=_i,_lv=_val,_x=(_s[_i]==="'")&&(++_i,true);_i=_l;_val=_lv;return !_x})()&&ASCII()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(_s[_i]==="'")&&(++_i,true)||(_im=(_i>_im?_i:_im),_i=_b,false)||((function(){for(var _n=0;DIGIT();++_n);return _n>0})())||(_im=(_i>_im?_i:_im),_i=_b,false)})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&(_val=_s.slice(_m,_i),true)})()&&_()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
-function StringLiteral(){return (function(){var _b=_i;return (function(){var _m=_i;return (function(){var _b=_i;return (_s[_i]==="\"")&&(++_i,true)&&((function(){while((function(){var _b=_i;return (function(){var _l=_i,_lv=_val,_x=(!!_s[_i]&&"\"\\\u0000\u0001\u0002\u0003\u0004\u0005\u0006\u0007\b\t\n\u000b\f\r\u000e\u000f\u0010\u0011\u0012\u0013\u0014\u0015\u0016\u0017\u0018\u0019\u001a\u001b\u001c\u001d\u001e\u001f ¡¢£¤¥¦§¨©ª«¬­®¯°±²³´µ¶·¸¹º»¼½¾¿ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖ×ØÙÚÛÜÝÞßàáâãäåæçèéêëìíîïðñòóôõö÷øùúûüýþÿ".indexOf(_s[_i])>=0)&&(++_i,true);_i=_l;_val=_lv;return !_x})()&&(!!_s[_i])&&(++_i,true)||(_im=(_i>_im?_i:_im),_i=_b,false)||(_s[_i]==="\\")&&(++_i,true)&&(function(){var _b=_i;return (!!_s[_i]&&"\"\\bfnrt".indexOf(_s[_i])>=0)&&(++_i,true)||(_im=(_i>_im?_i:_im),_i=_b,false)||(_s[_i]==="u")&&(++_i,true)&&HEX()&&HEX()&&HEX()&&HEX()||(_im=(_i>_im?_i:_im),_i=_b,false)})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(_s[_i]==="\"")&&(++_i,true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&(_val=_s.slice(_m,_i),true)})()&&_()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
+function StringLiteral(){return (function(){var _b=_i;return (function(){var _m=_i;return (function(){var _b=_i;return (_s[_i]==="\"")&&(++_i,true)&&((function(){while((function(){var _b=_i;return (function(){var _l=_i,_lv=_val,_x=(!!_s[_i]&&"\"\\\u0000\u0001\u0002\u0003\u0004\u0005\u0006\u0007\b\t\n\u000b\f\r\u000e\u000f\u0010\u0011\u0012\u0013\u0014\u0015\u0016\u0017\u0018\u0019\u001a\u001b\u001c\u001d\u001e\u001f ¡¢£¤¥¦§¨©ª«¬­®¯°±²³´µ¶·¸¹º»¼½¾¿ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖ×ØÙÚÛÜÝÞßàáâãäåæçèéêëìíîïðñòóôõö÷øùúûüýþÿ".indexOf(_s[_i])>=0)&&(++_i,true);_i=_l;_val=_lv;return !_x})()&&(!!_s[_i])&&(++_i,true)||(_im=(_i>_im?_i:_im),_i=_b,false)||(_s[_i]==="\\")&&(++_i,true)&&(function(){var _b=_i;return (!!_s[_i]&&"\"\\bfnrt".indexOf(_s[_i])>=0)&&(++_i,true)||(_im=(_i>_im?_i:_im),_i=_b,false)||(_s[_i]==="u")&&(++_i,true)&&HEX()&&HEX()&&HEX()&&HEX()||(_im=(_i>_im?_i:_im),_i=_b,false)||(_s[_i]==="U")&&(++_i,true)&&HEX()&&HEX()&&HEX()&&HEX()&&HEX()&&HEX()&&HEX()&&HEX()||(_im=(_i>_im?_i:_im),_i=_b,false)})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(_s[_i]==="\"")&&(++_i,true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&(_val=_s.slice(_m,_i),true)})()&&_()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function KEYWORD(){var _b=_i,_words=KEYWORD_WORDS,_word,_end,_x;for(var _k=0;_k<_words.length;++_k){_word=_words[_k];if(_s.substr(_i,_word.length)===_word){_i+=_word.length;_end=_i;_x=SYMBOL_CHAR();_i=_end;if(!_x)return true;_i=_b;}}_im=(_i>_im?_i:_im);_i=_b;return false}
 function ABS(){return (function(){var _b=_i;return (_s.substr(_i,3)==="abs")&&(_i+=3,true)&&(function(){var _l=_i,_lv=_val,_x=SYMBOL_CHAR();_i=_l;_val=_lv;return !_x})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function ARRAY(){return (function(){var _b=_i;return (_s.substr(_i,5)==="array")&&(_i+=5,true)&&(function(){var _l=_i,_lv=_val,_x=SYMBOL_CHAR();_i=_l;_val=_lv;return !_x})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
