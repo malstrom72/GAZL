@@ -1787,7 +1787,19 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
             tbl.rlookup = {};
         }
 
-        var entry = tbl.rlookup[codes.join(',')];
+        /* Key the table one JS char per character: from 0xFFFF up, a 0xFFFF marker and the two halves, so keys stay
+           unique. Joined numbers made every suffix key several times longer. `keyStarts` maps a character to its key
+           offset, so a suffix's key is a substring. */
+        var key = '';
+        var keyStarts = [];
+        for (var q = 0; q < codes.length; ++q) {
+            keyStarts.push(key.length);
+            var code = codes[q] >>> 0;
+            key += (code < 0xFFFF ? String.fromCharCode(code)
+                    : String.fromCharCode(0xFFFF, code >>> 16, code & 0xFFFF));
+        }
+
+        var entry = tbl.rlookup[key];
         if (entry == null) {
 
             /* generate unique label from the first ASCII letters and digits */
@@ -1822,7 +1834,7 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
 
             /* add all suffixes to rlookup */
             for (var k = 0; k < codes.length; ++k) {
-                tbl.rlookup[ codes.slice(k).join(',') ] =
+                tbl.rlookup[ key.substr(keyStarts[k]) ] =
                     name + (k ? ':' + k : '');
             }
             entry = name;            // full string label
