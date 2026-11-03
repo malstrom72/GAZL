@@ -93,20 +93,17 @@ const char* ASSEMBLER_ERROR_TEXTS[] = {
 	Integer and `fTOi` arithmetic with defined results on every target, shared by `Processor::run()` and
 	`calcConstant()` so that run time and constant folding cannot differ (design/gazl/PortabilityAudit.md).
 */
-inline int absolute(int i) {
-	Int x = i >> static_cast<Int>(sizeof (Int) * 8 - 1);
-	return static_cast<Int>((static_cast<UInt>(i) ^ static_cast<UInt>(x)) - static_cast<UInt>(x));						// INT_MIN -> INT_MIN
-}
+inline int absolute(int i) { Int x = i >> (Int)(sizeof (Int) * 8 - 1); return (Int)(((UInt)i ^ (UInt)x) - (UInt)x); } // INT_MIN -> INT_MIN
 inline float absolute(float f) { return fabsf(f); }
 inline double absolute(double f) { return fabs(f); }
-inline Int idiv(Int a, Int b) { return (b == -1) ? static_cast<Int>(0u - static_cast<UInt>(a)) : a / b; }				// caller guarantees b != 0; INT_MIN / -1 -> INT_MIN
-inline Int imod(Int a, Int b) { return (b == -1) ? 0 : a % b; }															// caller guarantees b != 0; INT_MIN % -1 -> 0
-inline Int iadd(Int a, Int b) { return static_cast<Int>(static_cast<UInt>(a) + static_cast<UInt>(b)); }					// two's-complement wrap
-inline Int isub(Int a, Int b) { return static_cast<Int>(static_cast<UInt>(a) - static_cast<UInt>(b)); }					// two's-complement wrap
-inline Int imul(Int a, Int b) { return static_cast<Int>(static_cast<UInt>(a) * static_cast<UInt>(b)); }					// two's-complement wrap
-inline Int ishl(Int a, Int n) { return static_cast<Int>(static_cast<UInt>(a) << (n & 31)); }							// count mod 32; no neg-shift / overflow UB
-inline Int ashr(Int a, Int n) { return a >> (n & 31); }																	// count mod 32; arithmetic (sign-extending)
-inline Int lshr(Int a, Int n) { return static_cast<Int>(static_cast<UInt>(a) >> (n & 31)); }							// count mod 32; logical (zero-fill)
+inline Int idiv(Int a, Int b) { return (b == -1) ? (Int)(0u - (UInt)a) : a / b; }	// caller guarantees b != 0; INT_MIN / -1 -> INT_MIN
+inline Int imod(Int a, Int b) { return (b == -1) ? 0 : a % b; }						// caller guarantees b != 0; INT_MIN % -1 -> 0
+inline Int iadd(Int a, Int b) { return (Int)((UInt)a + (UInt)b); }					// two's-complement wrap
+inline Int isub(Int a, Int b) { return (Int)((UInt)a - (UInt)b); }					// two's-complement wrap
+inline Int imul(Int a, Int b) { return (Int)((UInt)a * (UInt)b); }					// two's-complement wrap
+inline Int ishl(Int a, Int n) { return (Int)((UInt)a << (n & 31)); }				// count mod 32; no neg-shift / overflow UB
+inline Int ashr(Int a, Int n) { return a >> (n & 31); }								// count mod 32; arithmetic (sign-extending)
+inline Int lshr(Int a, Int n) { return (Int)((UInt)a >> (n & 31)); }				// count mod 32; logical (zero-fill)
 inline Int ftoi(Float v) {															// v is the ALREADY-SCALED float
 	/*
 		Classified by bit pattern, not by float comparisons, so that saturation and NaN survive a finite-math
@@ -117,9 +114,9 @@ inline Int ftoi(Float v) {															// v is the ALREADY-SCALED float
 	const UInt e = (b >> 23) & 0xFF;											// biased exponent
 	if (e >= 158) {																// |v| >= 2^31 (exp 158), or inf/NaN (exp 255)
 		if (e == 255 && (b & 0x7FFFFF) != 0) return 0;							// NaN
-		return (b >> 31) != 0 ? static_cast<Int>(-2147483647 - 1) : 2147483647;	// sign -> INT_MIN / INT_MAX (+/-inf too)
+		return (b >> 31) != 0 ? (Int)(-2147483647 - 1) : 2147483647;			// sign -> INT_MIN / INT_MAX (+/-inf too)
 	}
-	return static_cast<Int>(v);													// |v| < 2^31: cast is in range and defined
+	return (Int)v;																// |v| < 2^31: cast is in range and defined
 }
 template<typename T> inline T minimum(T a, T b) { return (a < b) ? a : b; }
 template<typename T> inline T maximum(T a, T b) { return (a < b) ? b : a; }
@@ -171,7 +168,7 @@ static Int stringToInt(const Char* &p, const Char* e) {
 					} /* else continue */
 		default:	for (; p < e && *p >= '0' && *p <= '9'; ++p) i = i * 10 + (*p - '0'); break;
 	}
-	return static_cast<Int>(sign < 0 ? 0u - i : i);																		// negated unsigned, so -2147483648 does not overflow
+	return (Int)(sign < 0 ? 0u - i : i);																	// negated unsigned, so -2147483648 does not overflow
 }
 
 // An unsigned integer of up to 1024 bits, enough for the exact comparisons in `parseFloat`.
@@ -985,7 +982,7 @@ Assembler::Operand Assembler::parseConstant(const Char* b, const Char* e, int ac
 		case '<':	{
 						if (b + 3 != e || b[2] != '>' || !isValidIdentifierChar(b[1]))
 							throw Exception(INVALID_COMPILE_TIME_VARIABLE, b, e);
-						const CompileTimeVar& cv = compileTimeVars[static_cast<unsigned char>(b[1])];
+						const CompileTimeVar& cv = compileTimeVars[(unsigned char)b[1]];
 						if ((accepts & cv.types) == 0) throw Exception(INCOMPATIBLE_COMPILE_TIME_VARIABLE_TYPE, b, e);
 						if ((accepts & UNCHECKED_ADDRESS) == 0 && (accepts & cv.types & ADDRESS) != 0) {
 							throw Exception(OFFSET_OUT_OF_BOUNDS, b, e);									// an access, checked only here, and the variable names no label to check it against
@@ -1007,12 +1004,12 @@ Assembler::Operand Assembler::parseOperand(const Char* b, const Char* e, int acc
 		case '*':
 		case '#':	++b; /* continue */
 		case '<':	read = parseConstant(b, e, accepts, v); break;
-		case '@':	locals.link(b + 1, e, v, accepts, -static_cast<Int>(ip - codeBase)); break;		
+		case '@':	locals.link(b + 1, e, v, accepts, -(Int)(ip - codeBase)); break;		
 
 		case '%':	assert((accepts & TRANSIENT) != 0);
 					parseConstant(++b, e, CONST_INT_P, v);
 					if (v->i == 0x7FFFFFFF) throw Exception(FRAME_TOO_LARGE);
-					paramsSize = maximum(paramsSize, static_cast<UInt>(v->i + 1));
+					paramsSize = maximum(paramsSize, (UInt)(v->i + 1));
 					break;		
 
 		case '^':	if ((accepts & NATIVE) == 0) throw Exception(DID_NOT_EXPECT_ADDRESS, b, e);
@@ -1056,10 +1053,10 @@ bool Assembler::unownedRefused() const {
 Pointer Assembler::makeGAZLPointer(const Value* data, bool constant) const {
 	if (constant) {
 		assert(data >= constantsPointer && data <= memoryEnd - 1);
-		return MEMORY_OFFSET - static_cast<Pointer>(memoryEnd - 1 - data);												// counted down from the zero guard
+		return MEMORY_OFFSET - (Pointer)(memoryEnd - 1 - data);						// counted down from the zero guard
 	} else {
 		assert(data >= memoryBase && data <= globalsPointer);
-		return MEMORY_OFFSET + static_cast<Pointer>(data - memoryBase);
+		return MEMORY_OFFSET + (Pointer)(data - memoryBase);
 	}
 }
 
@@ -1097,7 +1094,7 @@ void Assembler::finalize(ProgramSizes& sizes) {
 		Constants were placed downward from the top during assembly, with addresses counted down from the base.
 		Moving them to just below the globals puts every word at its address; nothing needs patching.
 	*/
-	const UInt constantsSize = static_cast<UInt>(memoryEnd - 1 - constantsPointer);										// the top word is the zero guard
+	const UInt constantsSize = (UInt)(memoryEnd - 1 - constantsPointer);		// the top word is the zero guard
 	if (constantsSize != 0) {
 		const std::vector<Value> constants(constantsPointer, memoryEnd - 1);
 		memmove(memoryBase + constantsSize, memoryBase, (globalsPointer - memoryBase) * sizeof (Value));
@@ -1106,10 +1103,10 @@ void Assembler::finalize(ProgramSizes& sizes) {
 	// Poison the data stack, so a local read before its first write gets 0xDEADBEEF rather than a plausible value.
 	Value* const stackEnd = memoryEnd - 1;
 	for (Value* p = memoryBase + constantsSize + (globalsPointer - memoryBase); p < stackEnd; ++p) p->p = 0xDEADBEEF;
-	sizes.codeSize = static_cast<UInt>(ip - codeBase);
+	sizes.codeSize = (UInt)(ip - codeBase);
 	sizes.functionCount = this->functionCount;
-	sizes.globalsSize = static_cast<UInt>(globalsPointer - memoryBase);
-	sizes.constsSize = static_cast<UInt>(memoryEnd - constantsPointer);
+	sizes.globalsSize = (UInt)(globalsPointer - memoryBase);
+	sizes.constsSize = (UInt)(memoryEnd - constantsPointer);
 }
 
 void Assembler::newUnit(const Char* unitName) {
@@ -1166,7 +1163,7 @@ Value Assembler::calcConstant(const Operator* op, const Char* op1Begin, const Ch
 		case MULF_CCC: v1.f *= v2.f; break;
 		case DIVF_CCC: v1.f /= v2.f; break;																		// IEEE: a zero divisor gives an infinity or NaN
 		case FTOI_CCC: v1.i = ftoi(v1.f * v2.f); break;
-		case ITOF_CCC: v1.f = static_cast<Float>(v1.i) * v2.f; break;
+		case ITOF_CCC: v1.f = (Float)(v1.i) * v2.f; break;
 		default: assert(0);
 	}
 	return v1;
@@ -1288,7 +1285,7 @@ const Char* Assembler::feed(const Char* line) {
 		if ((op->accepts[0] & COMPILE_TIME) != 0) {																		// Compile-time calculation
 			if (op0End != op0Begin + 3 || *op0Begin != '<' || op0Begin[2] != '>' || !isValidIdentifierChar(op0Begin[1]))
 				throw Exception(INVALID_COMPILE_TIME_VARIABLE, op0Begin, op0End);
-			CompileTimeVar& cv = compileTimeVars[static_cast<unsigned char>(op0Begin[1])];
+			CompileTimeVar& cv = compileTimeVars[(unsigned char)op0Begin[1]];
 			cv.value = calcConstant(op, op1Begin, op1End, op2Begin, op2End);
 			cv.types = op->declareTypes;
 			if ((cv.types & CONST_INT_P) != 0 && cv.value.i < 0) cv.types &= ~CONST_INT_P;
@@ -1373,8 +1370,8 @@ const Char* Assembler::feed(const Char* line) {
 							break;
 					
 			case FUNC_CC_:	if (functionCount >= maxFunctionCount) throw Exception(NOT_ENOUGH_FUNCTION_SPACE);			// FUNC
-							v.p = static_cast<Int>(FUNCTION_OFFSET + functionCount);
-							functionTable[functionCount] = static_cast<UInt>(ip - codeBase);
+							v.p = (Int)(FUNCTION_OFFSET + functionCount);
+							functionTable[functionCount] = (UInt)(ip - codeBase);
 							++functionCount;
 							declare(globals, labelBegin, labelEnd, op->declareTypes, v);
 							if (functionStart != 0) finalizeFunction();
@@ -1401,7 +1398,7 @@ const Char* Assembler::feed(const Char* line) {
 							break;
 							
 			default:		if (functionStart == 0) throw Exception(MISSING_FUNCTION_DECLARATION);						// The rest
-							v.p = static_cast<Int>(ip - codeBase);
+							v.p = (Int)(ip - codeBase);
 							if (Symbols::Symbol* const label = declare(locals, labelBegin, labelEnd, BRANCH, v)) {		// a branch's offset is its jump distance, any value
 								label->minOffset = -2147483647 - 1;
 								label->maxOffset = 2147483647;
@@ -1453,7 +1450,7 @@ const Char* Assembler::feed(const Char* line) {
 									v.p = makeGAZLPointer(constantsPointer, true);
 									p2->i = v.i;
 									locals.registerSwitch(op2Begin + 1, op2End, p1->i, constantsPointer
-											, -static_cast<Int>(ip - codeBase));
+											, -(Int)(ip - codeBase));
 								} else {
 									parseOperand(op2Begin, op2End, op->accepts[2], p2);
 									if ((op->otherFlags & CHECK_DIV_BY_0) != 0
@@ -1462,10 +1459,8 @@ const Char* Assembler::feed(const Char* line) {
 										throw Exception(CONSTANT_DIVISION_BY_ZERO);
 								}
 								if ((op->otherFlags & LOCAL_BOUNDS) != 0) {
-									if (static_cast<UInt>(p2->i) > 0x7FFFFFFFu - static_cast<UInt>(p1->i)) {
-										throw Exception(FRAME_TOO_LARGE);
-									}
-									paramsSize = maximum(static_cast<Int>(paramsSize), p1->i + p2->i);
+									if ((UInt)p2->i > 0x7FFFFFFFu - (UInt)p1->i) throw Exception(FRAME_TOO_LARGE);
+									paramsSize = maximum((Int)(paramsSize), p1->i + p2->i);
 								}
 								++ip;
 							}
@@ -1726,9 +1721,7 @@ Value* Processor::pushCall(Pointer functionPointer) {
 	const bool chainedPush = (ipsp != ipStackBase && this->ip->opcode == FUNC_CC_);	// a previous pushCall in this native call
 	if (!atNativeCall && !chainedPush) return 0;				// only valid from inside a native callback
 	if (ipsp >= ipStackEnd) return 0;
-	if (static_cast<UInt>(func->p0.i) + static_cast<UInt>(func->p1.i) > static_cast<UInt>(dataStackEnd - this->dsp)) {
-		return 0;																										// the callee's own FUNC check, done early
-	}
+	if ((UInt)func->p0.i + (UInt)func->p1.i > (UInt)(dataStackEnd - this->dsp)) return 0;	// the callee's own FUNC check, done early
 	ipsp->ip = atNativeCall ? this->ip : this->ip - 1;
 	ipsp++->dsp = atNativeCall ? this->dsp - this->ip->p1.i : this->dsp;
 	this->ip = func;											// this->dsp stays: the ^call's window is the argument window
@@ -2085,8 +2078,7 @@ bool unitTest() {
 			assert(globalPointer != 0);
 			globalPointer->p = globals.findFunction("CallBack");
 			memoryBlob.resize(freezeMemorySize(pmachine, globals));
-			UInt written = freezeMemory(pmachine, globals, memoryBlob.empty() ? 0 : &memoryBlob[0]
-					, static_cast<UInt>(memoryBlob.size()));
+			UInt written = freezeMemory(pmachine, globals, memoryBlob.empty() ? 0 : &memoryBlob[0], (UInt)memoryBlob.size());
 			assert(written == memoryBlob.size());
 		}
 
@@ -2114,7 +2106,7 @@ bool unitTest() {
 			Processor pmachine2(sizes2.codeSize, &cody2[0], sizes2.functionCount, &functionTable2[0], MEMORY_SIZE, &memory2[0]
 					, sizes2.globalsSize, sizes2.constsSize, CALL_STACK_SIZE, &callStack2[0], nativeTable, &callbackData);
 			MemoryLoad loaded = thawMemory(pmachine2, globals2, memoryBlob.empty() ? 0 : &memoryBlob[0]
-					, static_cast<UInt>(memoryBlob.size()), false);
+					, (UInt)memoryBlob.size(), false);
 			assert(loaded == MEMORY_OK);
 
 			// Every non-TEMP global must match the frozen original (identical assemblies share global addresses).

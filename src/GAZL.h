@@ -432,7 +432,7 @@ inline Value* Processor::accessMemory(Pointer pointer, UInt count) const {
 inline Value* Processor::accessParams(UInt count) const {
 	assert(dsp != 0);
 	assert(dsp >= dataStackBase);
-	return (count <= static_cast<UInt>(dataStackEnd - dsp) ? dsp : 0);
+	return (count <= (UInt)(dataStackEnd - dsp) ? dsp : 0);
 }
 
 inline void* Processor::getUserData() const { return userData; }
