@@ -1160,7 +1160,7 @@ void doOne(const char* fn) {
 	fseek(f, 0, SEEK_END);
 	size_t len = ftell(f);
 	fseek(f, 0, SEEK_SET);
-	unsigned char *buf = (unsigned char*)malloc(len);
+	unsigned char *buf = static_cast<unsigned char*>(malloc(len));
 	size_t n_read = fread(buf, 1, len, f);
 	fclose(f);
 	assert(n_read == len);
@@ -1271,7 +1271,8 @@ int main(int argc, const char* argv[]) {
 					const size_t dirLength = strlen(argv[i]);
 					// the directory argument need not end with a separator
 					const char* separator = (dirLength > 0 && argv[i][dirLength - 1] != '/') ? "/" : "";
-					if (snprintf(fn, sizeof fn, "%s%s%s", argv[i], separator, ent->d_name) >= (int)(sizeof fn)) {
+					const int pathLength = snprintf(fn, sizeof fn, "%s%s%s", argv[i], separator, ent->d_name);
+				if (pathLength >= static_cast<int>(sizeof fn)) {
 						fprintf(stderr, "Path too long, skipped: %s%s%s\n", argv[i], separator, ent->d_name);
 						continue;						// a truncated path would replay the WRONG file, or none
 					}
