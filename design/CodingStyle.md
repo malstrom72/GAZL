@@ -270,7 +270,7 @@ These are the most important principles in the codebase. Get them wrong and the 
 
 ## Local additions
 
-GAZL takes four deliberate exceptions to the rules above. Do not "fix" any of them, and do not convert existing
+GAZL takes five deliberate exceptions to the rules above. Do not "fix" any of them, and do not convert existing
 code to match the shared rule; they apply to new and edited code the same way they apply to what is already here.
 
 - **Section 6, braces: a flat dispatch or lookup table stays unbraced.** Where braces clearly hurt, a one-per-line run
@@ -287,6 +287,9 @@ code to match the shared rule; they apply to new and edited code the same way th
   `std::abort()` when the interpreter and the JIT disagree on a generated program. That is not error handling; it
   is the crash signal libFuzzer detects, and it has to fire in release builds, where `assert` compiles away.
   Leave it. Asserts stay the rule everywhere else, including the rest of that file.
+- **Casts: `src/GAZL.cpp` and `src/GAZL.h` keep C-style casts.** Elsewhere a cast is written `static_cast<Int>(v)`
+  (or `reinterpret_cast`, `const_cast`), never `(Int)v`. These two files are exempt, for legacy and formatting
+  reasons, so do not convert their casts, in a sweep or in passing.
 - **Section 8, the CI-first rule applies to `main` only here.** The shared rule counts every long-lived branch as a
   main branch; for this repository that is deliberately narrowed. Only `main` requires CI to have passed on the exact
   content before it lands, which in practice means a pull request. `Impala2`, `GAZL2` and `jit-compiler` take direct
