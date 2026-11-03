@@ -139,6 +139,7 @@ assembly error.
 - **Mnemonics** are exactly four characters and case-sensitive.
 - **Separators.** Tokens are separated by spaces or tabs. A `;` starts a comment that runs to the end of the line.
 - **Quotes.** A token may contain a quoted part (`'...'` or `"..."`); spaces inside the quotes don't end it.
+  The closing quote must be on the same line, or the token is an error.
 - **Identifiers** name everything a program declares: data sections, functions, natives, named constants, locals
   and labels. The rule is exact, and an assembler must refuse anything else with `INVALID_IDENTIFIER`:
   - **First character:** one of the 55 ASCII characters `A`-`Z`, `a`-`z`, `_`, `.` or `$`.

@@ -1,0 +1,4 @@
+// An unterminated block comment at the end of a unit. Compiled alone it is a syntax error; in a closure it would
+// run on into the unit concatenated after it, so the closure must refuse it.
+const int LIB_VALUE = 1;
+/* never closed

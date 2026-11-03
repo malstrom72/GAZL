@@ -1123,7 +1123,8 @@ int assemblyError(const std::string& source) {
 
 /*
 	Source text is ASCII: a byte above 0x7F in `DATs` text or in a quoted literal is refused, while a comment may
-	hold any bytes. Returns the number of failures, each one printed.
+	hold any bytes. A quoted literal must close on its own line, or it is refused rather than swallowing the lines
+	after it. Returns the number of failures, each one printed.
 */
 int sweepTextEncoding() {
 	struct Case { const char* what; const char* source; int error; };
@@ -1132,7 +1133,10 @@ int sweepTextEncoding() {
 		{ "a quoted literal with a byte above 0x7F", "\tGLOB *1\n\tDATi #'\xE5'\n", NON_ASCII_TEXT },
 		{ "a comment with bytes above 0x7F", "t:\tGLOB *1\n\tDATi #1 ; \xE5\xE4\xF6 \xC3\xA5\n; \xFF\n", -1 },
 		{ "ASCII DATs text", "t:\tGLOB *3\n\tDATs abc\n", -1 },
-		{ "an ASCII quoted literal", "t:\tGLOB *1\n\tDATi #'AB'\n", -1 }
+		{ "an ASCII quoted literal", "t:\tGLOB *1\n\tDATi #'AB'\n", -1 },
+		{ "an unterminated quoted literal", "t:\tGLOB *1\n\tDATi #'AB\n\tDATi #1\n", INVALID_NUMERICAL_LITERAL },
+		{ "an unterminated quoted literal, last", "t:\tGLOB *1\n\tDATi #'A", INVALID_NUMERICAL_LITERAL },
+		{ "a quoted semicolon", "t:\tGLOB *1\n\tDATi #';'\n", -1 }
 	};
 	const int count = sizeof (CASES) / sizeof (*CASES);
 	int failures = 0;
