@@ -85,20 +85,28 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         while (i < str.length && chars.indexOf(str[i]) >= 0) i++;
         return i;
     }
-    function rspan(str, chars) {
-        var i = str.length;
-        while (i > 0 && chars.indexOf(str[i-1]) >= 0) i--;
-        return i;
-    }
-    function char(code) {
-        return String.fromCharCode(code & 0xFF);
-    }
-    function ordinal(ch) {
-        return ((ch + "").charCodeAt(0)) & 0xFF;
-    }
-
-    function evaluate(str) {
-        return JSON.parse(str);
+    /* The characters of a string literal (quotes included in `text`) as numbers, one word each. Numbers, not a JS
+       string, because a `\UXXXXXXXX` character can be any 32-bit value and a JS string char holds only 16 bits. */
+    function stringLiteralCodes(text) {
+        var codes = [];
+        for (var i = 1; i < text.length - 1; ++i) {
+            if (text.charAt(i) !== '\\') {
+                codes.push(text.charCodeAt(i));
+                continue;
+            }
+            var c = text.charAt(++i);
+            switch (c) {
+                case 'b': codes.push(8); break;
+                case 'f': codes.push(12); break;
+                case 'n': codes.push(10); break;
+                case 'r': codes.push(13); break;
+                case 't': codes.push(9); break;
+                case 'u': codes.push(parseInt(text.substr(i + 1, 4), 16)); i += 4; break;
+                case 'U': codes.push(parseInt(text.substr(i + 1, 8), 16)); i += 8; break;
+                default: codes.push(text.charCodeAt(i)); break;      /* `\"` and `\\` */
+            }
+        }
+        return codes;
     }
 
     /** queue ops on plain Arrays */
@@ -1708,30 +1716,33 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
         return (s[0] === '#') ? s.substr(1) : s;
     };
 
-    /* printable ASCII table (33–126) */
-    printable = '';
-    for (var i = 33; i < 127; ++i) {
-        printable += char(i);
+    /* printable ASCII (33-126), which a `DATs` row can carry */
+    function isPrintable(code) {
+        return code >= 33 && code < 127;
     }
 
     /* -----------------------------------------------------------
      *  Dump a string constant into assembly
+     *  `codes` holds one number per character word.
      * -------------------------------------------------------- */
-    dumpString = function (label, str) {
+    dumpString = function (label, codes) {
 
-        var len = str.length;
+        var len = codes.length;
         declare('CNST', 'globals', label, '?',
                          true, '*' + len, '', 0);
 
         var offset = 0;
         while (offset < len) {
 
-            /* raw bytes before printable chunk */
-            var non = find(str.substr(offset), printable);
+            /* other characters before a printable chunk, as numbers */
+            var non = 0;
+            while (offset + non < len && !isPrintable(codes[offset + non])) {
+                ++non;
+            }
             if (non > 0) {
                 var d = '';
                 for (var k = 0; k < non; ++k) {
-                    d += ' #' + ordinal(str[offset + k]);
+                    d += ' #' + (codes[offset + k] >>> 0);
                 }
                 declare('DATi', undefined, undefined, 'i',
                                  true, d.substr(1), '', 0);
@@ -1739,31 +1750,36 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
                 continue;
             }
 
-            /* printable (plus spaces) */
-            var spanLen = span(str.substr(offset),
-                               printable + ' ');
-            spanLen = rspan(str.substr(offset, spanLen), ' ');
-            if (spanLen > 0) {
-                declare('DATs', undefined, undefined, 'i',
-                                 true, str.substr(offset, spanLen), '', 0);
-                offset += spanLen;
+            /* printable (plus spaces, but not trailing ones) */
+            var spanLen = 0;
+            while (offset + spanLen < len && (isPrintable(codes[offset + spanLen]) || codes[offset + spanLen] === 32)) {
+                ++spanLen;
             }
+            while (spanLen > 0 && codes[offset + spanLen - 1] === 32) {
+                --spanLen;
+            }
+            var text = '';
+            for (var t = 0; t < spanLen; ++t) {
+                text += String.fromCharCode(codes[offset + t]);
+            }
+            declare('DATs', undefined, undefined, 'i',
+                             true, text, '', 0);
+            offset += spanLen;
         }
     };
 
     /* -----------------------------------------------------------
      *  Manage / share string literals
      * -------------------------------------------------------- */
+    /* `s` is the characters as numbers (a string literal), or a JS string (an assert's source text). */
     makeString = function (prefix, x, s,
                                     sourceCode, sourceOffset) {
 
-        s += char(0);       // NUL-terminate
-
-        var byteString = '';
-        for (var idx = 0; idx < s.length; ++idx) {
-            byteString += char(ordinal(s[idx]));
+        var codes = [];
+        for (var c = 0; c < s.length; ++c) {
+            codes.push(typeof s === 'string' ? s.charCodeAt(c) : s[c]);
         }
-        s = byteString;
+        codes.push(0);      // NUL-terminate
 
         var tbl = strings[prefix];
         if (!tbl) {
@@ -1771,26 +1787,54 @@ $$parser.sourceName = Object.prototype.hasOwnProperty.call(_hostOptions, 'source
             tbl.rlookup = {};
         }
 
-        var entry = tbl.rlookup[s];
+        /* Key the table one JS char per character: from 0xFFFF up, a 0xFFFF marker and the two halves, so keys stay
+           unique. Joined numbers made every suffix key several times longer. `keyStarts` maps a character to its key
+           offset, so a suffix's key is a substring. */
+        var key = '';
+        var keyStarts = [];
+        for (var q = 0; q < codes.length; ++q) {
+            keyStarts.push(key.length);
+            var code = codes[q] >>> 0;
+            key += (code < 0xFFFF ? String.fromCharCode(code)
+                    : String.fromCharCode(0xFFFF, code >>> 16, code & 0xFFFF));
+        }
+
+        var entry = tbl.rlookup[key];
         if (entry == null) {
 
-            /* generate unique label */
-            var name = '.' + prefix + '_' +
-                       (s.replace(/[^0-9a-zA-Z]/g, '')
-                          .substr(0, 6)) +
-                       '_' +
-                       ( ((randomId + tbl.length) >>> 0)
+            /* generate unique label from the first ASCII letters and digits */
+            var tag = '';
+            for (var a = 0; a < codes.length && tag.length < 6; ++a) {
+                var ch = (codes[a] < 128 ? String.fromCharCode(codes[a]) : '');
+                if (/[0-9a-zA-Z]/.test(ch)) {
+                    tag += ch;
+                }
+            }
+            /* `tbl.length` counts only deferred strings, so two `const` strings dumped at once with the same
+               tag got the same label: step past a label already taken */
+            if (!tbl.taken) {
+                tbl.taken = {};
+            }
+            var name;
+            for (var serial = tbl.length; ; ++serial) {
+                name = '.' + prefix + '_' + tag + '_' +
+                       ( ((randomId + serial) >>> 0)
                          .toString(16) );
+                if (tbl.taken[name] !== true) {
+                    break;
+                }
+            }
+            tbl.taken[name] = true;
 
             if (noForward) {
-                dumpString(name, s);
+                dumpString(name, codes);
             } else {
-                tbl.push({ name:name, data:s });
+                tbl.push({ name:name, data:codes });
             }
 
             /* add all suffixes to rlookup */
-            for (var k = 0; k < s.length; ++k) {
-                tbl.rlookup[ s.substr(k) ] =
+            for (var k = 0; k < codes.length; ++k) {
+                tbl.rlookup[ key.substr(keyStarts[k]) ] =
                     name + (k ? ':' + k : '');
             }
             entry = name;            // full string label
@@ -1936,12 +1980,12 @@ function Copy($){var $l=createParserContext(),$f=createParserContext(),$t=create
 function Switch($){var $f=createParserContext(),$t=createParserContext(),$size,$switcher,$,$switchExit,$progress,$stmt=createParserContext();return (function(){var _b=_i;return SWITCH($)&&_($)&&(_s[_i]==="(")&&(++_i,true)&&_($)&&Expr($)&&(_s.substr(_i,2)==="==")&&(_i+=2,true)&&_($)&&Expr($f)&&TO($)&&_($)&&Expr($t)&&(function(){ var switchMeta = metaSlot($._); /* the switch expression must be an int */ if (switchMeta.type !== 'i') { fail('Switch expression needs to be int', _s, _i); } /* lower bound (compile-time constant) */ switchMeta.from = makeConstant($f._, 'i', _s, _i); /*    size = to - from   */ $size = subConstInt( makeConstant($t._, 'i', _s, _i), switchMeta.from ); /*   switcher = (expr − from)   */ $switcher = subConstInt( makeRValue(switchMeta, '$%'), switchMeta.from ); switchMeta.switchLabel = newLabel('s'); $switchExit              = newLabel('e'); switchStack.push(switchMeta); emit( '-->#', switchMeta.type, $switcher, '*' + dropHash($size), switchMeta.switchLabel ); returnBack($switcher); returnBack($size); $progress = undefined;       /* track case / default presence */ ; return true})()&&(_s[_i]===")")&&(++_i,true)&&_($)&&(_s[_i]==="{")&&(++_i,true)&&_($)&&((function(){while((function(){var _b=_i;return (function(){var _b=_i;return CASE($)&&_($)&&(function(){ /* multiple CASE groups → fall-through handled here */ if ($progress !== undefined) { emit('-->', undefined, $switchExit, undefined, undefined); } else { $progress = 'gotCases'; } /* dump the literal “case …” comment */ var snippet = _s.substr(_i); var pos     = find(snippet, ":\r\n"); if (pos >= 0) { snippet = snippet.substr(0, pos); } emit( ';', undefined, 'case ' + snippet, undefined, undefined ); ; return true})()&&CaseExpr($)&&((function(){while((function(){var _b=_i;return (_s[_i]===",")&&(++_i,true)&&_($)&&CaseExpr($)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)||DEFAULT($)&&_($)&&(function(){ if ($progress === 'gotDefault') { fail('Default case already defined'); } else if ($progress !== undefined) { emit('-->', undefined, $switchExit, undefined, undefined); } var ctx = switchStack[switchStack.length - 1]; emit(';',    undefined, 'default',       undefined, undefined); emit('<--',  undefined, ctx.switchLabel,  undefined, undefined); $progress = 'gotDefault'; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&(_s[_i]===":")&&(++_i,true)&&_($)&&Statement($stmt)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(_s[_i]==="}")&&(++_i,true)&&_($)&&(function(){ var ctx = switchStack.pop() || metaSlot($._); /* no explicit “default” → hook it up now                        */ if ($progress !== 'gotDefault') { emit('<--', undefined, ctx.switchLabel, undefined, undefined); } emit('<--', undefined, $switchExit, undefined, undefined); returnBack(ctx.from); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function CaseExpr($){var $n;return (function(){var _b=_i;return Expr($)&&(function(){ /* offset = constant(expr) – switch.from                         */ var ctx      = switchStack[switchStack.length - 1]; var caseMeta = metaSlot($._); var baseFrom = (ctx ? ctx.from : caseMeta.from); var baseLabel = (ctx ? ctx.switchLabel : caseMeta.switchLabel); $n = subConstInt( makeConstant(caseMeta, 'i', _s, _i), baseFrom ); /* create label for this case                                     */ emit( '<--', undefined, baseLabel + '#' + dropHash($n), undefined, undefined ); returnBack($n); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function While($){var $loopLabel,$exitLabel;return (function(){var _b=_i;return WHILE($)&&_($)&&(function(){ $loopLabel = newLabel('l'); emit('<--', undefined, $loopLabel, undefined, undefined); ; return true})()&&BoolGroup($)&&(function(){ $exitLabel = newLabel('e'); emit('?->', false, $exitLabel, undefined, undefined); ; return true})()&&Statement($)&&(function(){ emit('-->', undefined, $loopLabel, undefined, undefined); emit('<-?', false, $exitLabel, undefined, undefined); ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
-function Value($){var $f=createParserContext(),$i=createParserContext(),$s=createParserContext();return (function(){var _b=_i;return Group($)||(_im=(_i>_im?_i:_im),_i=_b,false)||FloatLiteral($f)&&(function(){ if (!dry) { makeMeta($._, ':=', 'f', undefined, '#' + $f._, undefined); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||IntegerLiteral($i)&&(function(){ if (!dry) { makeMeta($._, ':=', 'i', undefined, '#' + $i._, undefined); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||StringLiteral($s)&&(function(){ if (!dry) { makeString('s', $._, evaluate($s._), _s, _i); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||NULL($)&&_($)&&(function(){ if (!dry) { makeMeta($._, ':=', 'p', undefined, '&NULL', undefined); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||NULLFUNC($)&&_($)&&(function(){ if (!dry) { makeMeta($._, ':=', 'F', undefined, '&NULL', undefined); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||Variable($)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
+function Value($){var $f=createParserContext(),$i=createParserContext(),$s=createParserContext();return (function(){var _b=_i;return Group($)||(_im=(_i>_im?_i:_im),_i=_b,false)||FloatLiteral($f)&&(function(){ if (!dry) { makeMeta($._, ':=', 'f', undefined, '#' + $f._, undefined); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||IntegerLiteral($i)&&(function(){ if (!dry) { makeMeta($._, ':=', 'i', undefined, '#' + $i._, undefined); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||StringLiteral($s)&&(function(){ if (!dry) { makeString('s', $._, stringLiteralCodes($s._), _s, _i); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||NULL($)&&_($)&&(function(){ if (!dry) { makeMeta($._, ':=', 'p', undefined, '&NULL', undefined); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||NULLFUNC($)&&_($)&&(function(){ if (!dry) { makeMeta($._, ':=', 'F', undefined, '&NULL', undefined); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)||Variable($)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function Variable($){var $global,$id=createParserContext();return (function(){var _b=_i;return (function(){ $global = false; ; return true})()&&((function(){var _b=_i;return GLOBAL($)&&_($)&&(function(){ $global = true; ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)&&Identifier($id)&&(function(){ if (!dry) { lookup($._, $id._, $global, _s, _i); } ; return true})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function Identifier($){return (function(){var _b=_i;return (function(){var _l=_i,_x=KEYWORD($);_i=_l;return !_x})()&&(function(){var _m=_i;return (function(){var _b=_i;return (!!_s[_i]&&"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_$".indexOf(_s[_i])>=0)&&(++_i,true)&&((function(){while(SYMBOL_CHAR($));})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&($._=_s.slice(_m,_i),true)})()&&_($)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function FloatLiteral($){return (function(){var _b=_i;return (function(){var _m=_i;return (function(){var _b=_i;return ((!!_s[_i]&&"-+".indexOf(_s[_i])>=0)&&(++_i,true),true)&&((function(){for(var _n=0;DIGIT($);++_n);return _n>0})())&&(_s[_i]===".")&&(++_i,true)&&((function(){for(var _n=0;DIGIT($);++_n);return _n>0})())&&((function(){var _b=_i;return (function(){var _b=_i;return (_s[_i]==="E")&&(++_i,true)||(_im=(_i>_im?_i:_im),_i=_b,false)||(_s[_i]==="e")&&(++_i,true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&(function(){var _b=_i;return ((!!_s[_i]&&"-+".indexOf(_s[_i])>=0)&&(++_i,true),true)&&((function(){for(var _n=0;DIGIT($);++_n);return _n>0})())||(_im=(_i>_im?_i:_im),_i=_b,false)})()||(_im=(_i>_im?_i:_im),_i=_b,false)})(),true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&($._=_s.slice(_m,_i),true)})()&&_($)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function IntegerLiteral($){return (function(){var _b=_i;return (function(){var _m=_i;return (function(){var _b=_i;return ((!!_s[_i]&&"-+".indexOf(_s[_i])>=0)&&(++_i,true),true)&&(function(){var _b=_i;return (_s.substr(_i,2)==="0x")&&(_i+=2,true)&&((function(){for(var _n=0;HEX($);++_n);return _n>0})())||(_im=(_i>_im?_i:_im),_i=_b,false)||(_s[_i]==="'")&&(++_i,true)&&((function(){while((function(){var _b=_i;return (function(){var _l=_i,_x=(_s[_i]==="'")&&(++_i,true);_i=_l;return !_x})()&&ASCII($)||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(_s[_i]==="'")&&(++_i,true)||(_im=(_i>_im?_i:_im),_i=_b,false)||((function(){for(var _n=0;DIGIT($);++_n);return _n>0})())||(_im=(_i>_im?_i:_im),_i=_b,false)})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&($._=_s.slice(_m,_i),true)})()&&_($)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
-function StringLiteral($){return (function(){var _b=_i;return (function(){var _m=_i;return (function(){var _b=_i;return (_s[_i]==="\"")&&(++_i,true)&&((function(){while((function(){var _b=_i;return (function(){var _l=_i,_x=(!!_s[_i]&&"\"\\\u0000\u0001\u0002\u0003\u0004\u0005\u0006\u0007\b\t\n\u000b\f\r\u000e\u000f\u0010\u0011\u0012\u0013\u0014\u0015\u0016\u0017\u0018\u0019\u001a\u001b\u001c\u001d\u001e\u001f".indexOf(_s[_i])>=0)&&(++_i,true);_i=_l;return !_x})()&&(!!_s[_i])&&(++_i,true)||(_im=(_i>_im?_i:_im),_i=_b,false)||(_s[_i]==="\\")&&(++_i,true)&&(function(){var _b=_i;return (!!_s[_i]&&"\"\\bfnrt".indexOf(_s[_i])>=0)&&(++_i,true)||(_im=(_i>_im?_i:_im),_i=_b,false)||(_s[_i]==="u")&&(++_i,true)&&HEX($)&&HEX($)&&HEX($)&&HEX($)||(_im=(_i>_im?_i:_im),_i=_b,false)})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(_s[_i]==="\"")&&(++_i,true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&($._=_s.slice(_m,_i),true)})()&&_($)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
+function StringLiteral($){return (function(){var _b=_i;return (function(){var _m=_i;return (function(){var _b=_i;return (_s[_i]==="\"")&&(++_i,true)&&((function(){while((function(){var _b=_i;return (function(){var _l=_i,_x=(!!_s[_i]&&"\"\\\u0000\u0001\u0002\u0003\u0004\u0005\u0006\u0007\b\t\n\u000b\f\r\u000e\u000f\u0010\u0011\u0012\u0013\u0014\u0015\u0016\u0017\u0018\u0019\u001a\u001b\u001c\u001d\u001e\u001f".indexOf(_s[_i])>=0)&&(++_i,true);_i=_l;return !_x})()&&(!!_s[_i])&&(++_i,true)||(_im=(_i>_im?_i:_im),_i=_b,false)||(_s[_i]==="\\")&&(++_i,true)&&(function(){var _b=_i;return (!!_s[_i]&&"\"\\bfnrt".indexOf(_s[_i])>=0)&&(++_i,true)||(_im=(_i>_im?_i:_im),_i=_b,false)||(_s[_i]==="u")&&(++_i,true)&&HEX($)&&HEX($)&&HEX($)&&HEX($)||(_im=(_i>_im?_i:_im),_i=_b,false)||(_s[_i]==="U")&&(++_i,true)&&HEX($)&&HEX($)&&HEX($)&&HEX($)&&HEX($)&&HEX($)&&HEX($)&&HEX($)||(_im=(_i>_im?_i:_im),_i=_b,false)})()||(_im=(_i>_im?_i:_im),_i=_b,false)})());})(),true)&&(_s[_i]==="\"")&&(++_i,true)||(_im=(_i>_im?_i:_im),_i=_b,false)})()&&($._=_s.slice(_m,_i),true)})()&&_($)||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function KEYWORD($){var _b=_i,_words=KEYWORD_WORDS,_word,_end,_x;for(var _k=0;_k<_words.length;++_k){_word=_words[_k];if(_s.substr(_i,_word.length)===_word){_i+=_word.length;_end=_i;_x=SYMBOL_CHAR($);_i=_end;if(!_x)return true;_i=_b;}}_im=(_i>_im?_i:_im);_i=_b;return false}
 function ABS($){return (function(){var _b=_i;return (_s.substr(_i,3)==="abs")&&(_i+=3,true)&&(function(){var _l=_i,_x=SYMBOL_CHAR($);_i=_l;return !_x})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};
 function ARRAY($){return (function(){var _b=_i;return (_s.substr(_i,5)==="array")&&(_i+=5,true)&&(function(){var _l=_i,_x=SYMBOL_CHAR($);_i=_l;return !_x})()||(_im=(_i>_im?_i:_im),_i=_b,false)})()};

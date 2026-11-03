@@ -64,8 +64,9 @@ A string literal yields a pointer to a zero-terminated array of word-sized chara
 const pointer WELCOME = "Welcome to Impala!\n"
 ```
 
-The supported escape sequences are `\"`, `\\`, `\b`, `\f`, `\n`, `\r`, `\t`, and
-`\uXXXX` (exactly four hex digits).
+The supported escape sequences are `\"`, `\\`, `\b`, `\f`, `\n`, `\r`, `\t`, `\uXXXX`
+(exactly four hex digits) and `\UXXXXXXXX` (exactly eight hex digits). Each character, escaped or not,
+fills one word, so `\UXXXXXXXX` can store any 32-bit value, `\UFFFFFFFF` included.
 
 ## Types
 
