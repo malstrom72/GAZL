@@ -143,6 +143,7 @@ inline void swap(JitModule& a, JitModule& b) { a.swap(b); }				// ADL swap
 class JitProcessor : public Processor {
 	public:
 		// The two `AssembledProgram` constructors of `Processor`, plus the compiled `module`, which threads may share.
+		// Requires (asserted) memory under 2^29 words: the machine code addresses it with 32-bit byte offsets.
 		JitProcessor(const JitModule& module, const AssembledProgram& program, UInt ipStackSize
 					, CallStackEntry* ipStack, NativeFunc const* natives, void* userData = 0)
 			: Processor(program, ipStackSize, ipStack, natives, userData) { bindModule(module); }

@@ -985,7 +985,8 @@ Assembler::Assembler(UInt maxCodeSize, Instruction* codeBase, UInt maxFunctionCo
 		, ip(codeBase), functionStart(0), functionCount(0), localsSize(0), maxLocalsSize(0), markDepth(0)
 		, paramsSize(0), globalsPointer(memoryBase)
 		, constantsPointer(memoryEnd), dataLabelType(0), dataPointer(0), dataEnd(0), dataIsConstant(false)
-		, sectionBegin(0), sectionEnd(0), regionStart(0), regionExtent(-1), dialect(1), globals(globals) {
+		, sectionBegin(0), sectionEnd(0), regionStart(0), regionExtent(-1), dialect(1), globals(globals)
+		, memoryShortfall(0) {
 	for (Int i = 0; i < 128; ++i) compileTimeVars[i].types = 0;
 	Value v;
 	v.i = 0;
@@ -1285,8 +1286,16 @@ void Assembler::finalize(AssembledProgram& program) {
 	program.sizes.constsSize = (UInt)(memoryEnd - constantsPointer);
 }
 
+// Grows `size` by `shortfall`, but at least doubles it. False, leaving it, past the `Int` range all sizes live in.
+static bool growArena(UInt& size, UInt shortfall) {
+	const uint64_t grown = static_cast<uint64_t>(size) + std::max(size, shortfall);
+	if (grown > 0x7FFFFFFFu) return false;
+	size = static_cast<UInt>(grown);
+	return true;
+}
+
 /*
-	A real assembly into scratch arenas that start small and double whenever one runs out, so the sizes are exact.
+	A real assembly into scratch arenas that start small and grow whenever one runs out, so the sizes are exact.
 	The table handed back points into none of the scratch: symbol values are offsets, not addresses.
 */
 ProgramSizes Assembler::preAssemble(const Char* source, Symbols& symbols, const ProgramSizes* seed) {
@@ -1296,6 +1305,7 @@ ProgramSizes Assembler::preAssemble(const Char* source, Symbols& symbols, const 
 		memoryMax = std::max(memoryMax, seed->globalsSize + seed->constsSize);
 		functionMax = std::max(functionMax, seed->functionCount);
 	}
+	const Char* failedLine = 0;							// the line whose memory request failed last
 	while (true) {
 		std::vector<Instruction> code(codeMax);
 		std::vector<UInt> functions(functionMax);
@@ -1303,19 +1313,31 @@ ProgramSizes Assembler::preAssemble(const Char* source, Symbols& symbols, const 
 		Symbols scratch(symbols);						// fresh per attempt, or a retry would find the first attempt's names defined
 		Assembler assem(codeMax, &code[0], functionMax, &functions[0], memoryMax, &memory[0], scratch);
 		assem.newUnit(0);
+		const Char* line = source;
 		try {
-			for (const Char* p = source; *p != 0; ) p = assem.feed(p);
+			while (*line != 0) line = assem.feed(line);
 			AssembledProgram program;
 			assem.finalize(program);					// resolves and CLEARS the forward refs, so no Value* into `code` survives
 			scratch.swap(symbols);						// success only: a throw leaves the caller's table untouched
 			return program.sizes;
 		}
 		catch (const Exception& x) {
-			if (x.error != NOT_ENOUGH_CODE_SPACE && x.error != NOT_ENOUGH_MEMORY_SPACE
-					&& x.error != NOT_ENOUGH_FUNCTION_SPACE) throw;
-			codeMax *= 2;								// ALL three, whichever tripped: every retry re-assembles the whole
-			memoryMax *= 2;								// source, so the retry count should be the MAX of the three logs,
-			functionMax *= 2;							// not their sum - transient over-allocation costs nothing here.
+			/*
+				Only the arena that ran out grows: growing all three asked for gigabytes of code space for a large
+				GLOB. Memory grows by at least the request's shortfall, so a request of a fixed size fits next time.
+				If the same line fails again, its request grows with the memory it is given (`GLOB *GAZL_MEMORY_SIZE`)
+				and no size can hold it, so the error stands rather than doubling forever.
+			*/
+			if (x.error == NOT_ENOUGH_MEMORY_SPACE) {
+				if (line == failedLine || !growArena(memoryMax, assem.memoryShortfall)) throw;
+				failedLine = line;
+			} else if (x.error == NOT_ENOUGH_CODE_SPACE) {
+				if (!growArena(codeMax, codeMax)) throw;
+			} else if (x.error == NOT_ENOUGH_FUNCTION_SPACE) {
+				if (!growArena(functionMax, functionMax)) throw;
+			} else {
+				throw;
+			}
 		}
 	}
 }
@@ -1551,7 +1573,10 @@ const Char* Assembler::feed(const Char* line) {
 							closeDataSection();
 							dataLabel = std::string(labelBegin, labelEnd);
 							dataLabelType = op->declareTypes;
-							if (constantsPointer - globalsPointer < size) throw Exception(NOT_ENOUGH_MEMORY_SPACE);
+							if (constantsPointer - globalsPointer < size) {
+							memoryShortfall = size - static_cast<UInt>(constantsPointer - globalsPointer);
+							throw Exception(NOT_ENOUGH_MEMORY_SPACE);
+						}
 							if (op->opcode == GLOB____) {
 								dataPointer = globalsPointer;
 								globalsPointer += size;
@@ -1697,6 +1722,7 @@ const Char* Assembler::feed(const Char* line) {
 									assert(op->accepts[2] == FWD_BRANCH);
 									size = static_cast<UInt>(p1->i) + 1u;
 									if (size > constantsPointer - globalsPointer) {
+										memoryShortfall = size - static_cast<UInt>(constantsPointer - globalsPointer);
 										throw Exception(NOT_ENOUGH_MEMORY_SPACE);
 									}
 									Value v;
