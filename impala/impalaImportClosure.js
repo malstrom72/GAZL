@@ -12,14 +12,109 @@
    is the only behavioural difference between the two runtimes, and it only shows up when the same
    file is reached through a symlink. */
 
-function scanImports(source) {
-	var re = /^[ \t]*import[ \t]+"([^"\r\n]*)"/gm;
+/* Read `source` the way the grammar does for `ImportDecl`: the keyword `import` as a whole word, then
+   spaces and comments, then a string literal. Comments and quoted literals are skipped, so an `import`
+   inside one is no directive. Returns the paths, and whether a `/*` is left open at the end - harmless
+   in a unit compiled alone, where the grammar reports it, but in a closure it would swallow the next
+   unit's text. A linear scan: a regex would have to agree with the grammar on every spelling, and did
+   not (`import"x"`, an import after `;` or a comment, an import inside a comment). */
+function scanUnit(source) {
 	var paths = [];
-	var m;
-	while ((m = re.exec(source)) !== null) {
-		paths[paths.length] = m[1];
+	var openComment = false;
+	var n = source.length;
+
+	function isEOL(c) {
+		return c === "\r" || c === "\n";
 	}
-	return paths;
+
+	function isWordChar(c) {
+		return (c >= "A" && c <= "Z") || (c >= "a" && c <= "z") || (c >= "0" && c <= "9") || c === "_" || c === "$";
+	}
+
+	// Past the comment that starts at `j`, or `j` itself when none does.
+	function pastComment(j) {
+		if (source.charAt(j) !== "/") {
+			return j;
+		}
+		var k = j + 2;
+		if (source.charAt(j + 1) === "/") {
+			while (k < n && !isEOL(source.charAt(k))) {
+				++k;
+			}
+			return k;
+		}
+		if (source.charAt(j + 1) === "*") {
+			var close = source.indexOf("*/", k);
+			if (close < 0) {
+				openComment = true;
+				return n;
+			}
+			return close + 2;
+		}
+		return j;
+	}
+
+	// The quote closing the `"` or `'` literal that starts at `j`, or -1. Like the grammar, it must be on the same line.
+	function closingQuote(j) {
+		var quote = source.charAt(j);
+		var k = j + 1;
+		while (k < n && !isEOL(source.charAt(k))) {
+			var c = source.charAt(k);
+			if (c === quote) {
+				return k;
+			}
+			k += (quote === "\"" && c === "\\" && k + 1 < n && !isEOL(source.charAt(k + 1))) ? 2 : 1;
+		}
+		return -1;
+	}
+
+	// Past the spaces, line breaks and comments that start at `j`.
+	function pastSpace(j) {
+		while (true) {
+			var k = pastComment(j);
+			if (k === j && (source.charAt(j) === " " || source.charAt(j) === "\t" || isEOL(source.charAt(j)))) {
+				k = j + 1;
+			}
+			if (k === j) {
+				return j;
+			}
+			j = k;
+		}
+	}
+
+	var i = 0;
+	while (i < n) {
+		var c = source.charAt(i);
+		var next = pastComment(i);
+		if (next !== i) {
+			i = next;
+		} else if (c === "\"" || c === "'") {
+			var q = closingQuote(i);
+			i = (q >= 0 ? q + 1 : i + 1);
+		} else if (isWordChar(c)) {
+			var wordStart = i;
+			while (i < n && isWordChar(source.charAt(i))) {
+				++i;
+			}
+			if (source.substring(wordStart, i) === "import") {
+				var pathStart = pastSpace(i);
+				var pathEnd = (source.charAt(pathStart) === "\"" ? closingQuote(pathStart) : -1);
+				if (pathEnd >= 0) {
+					paths[paths.length] = source.substring(pathStart + 1, pathEnd);
+					i = pathEnd + 1;
+				} else {
+					i = pathStart;
+				}
+			}
+		} else {
+			++i;
+		}
+	}
+	return { paths: paths, openComment: openComment };
+}
+
+function scanImports(source) {
+	return scanUnit(source).paths;
 }
 
 function dirName(filePath) {
@@ -107,11 +202,11 @@ function resolveImportClosure(rootPath, io) {
 		}
 
 		var dir = dirName(filePath);
-		var imports = scanImports(source);
-		for (var i = 0; i < imports.length; ++i) {
-			visit(joinPath(dir, imports[i]), filePath);
+		var scanned = scanUnit(source);
+		for (var i = 0; i < scanned.paths.length; ++i) {
+			visit(joinPath(dir, scanned.paths[i]), filePath);
 		}
-		order[order.length] = { path: filePath, source: source };
+		order[order.length] = { path: filePath, source: source, openComment: scanned.openComment };
 	}
 
 	visit(normalizePath(rootPath), undefined);
@@ -129,6 +224,10 @@ function concatenateClosure(rootPath, io) {
 	var combined = "";
 	for (var i = 0; i < units.length; ++i) {
 		var name = relativeTo(rootDir, units[i].path);
+		// The last unit has nothing after it to swallow, and its own parse reports the comment.
+		if (units[i].openComment && i < units.length - 1) {
+			throw new Error("Unterminated /* comment in " + name + ", which would swallow the unit after it");
+		}
 		if (units.length > 1) {
 			combined += (combined.length > 0 ? "\n" : "") + "// ==== unit: " + name + " ====\n";
 		}
@@ -199,9 +298,22 @@ function isExtentLineFor(line, name) {
 	return CT_FOLD_RE.test(line) || (m !== null && m[1] === name);
 }
 
+// The line without its `; comment`. As in GAZL, a `;` inside a quoted literal (`#';'`) starts none.
 function stripComment(line) {
-	var at = line.indexOf(";");
-	return at >= 0 ? line.slice(0, at) : line;
+	for (var i = 0; i < line.length; ++i) {
+		var c = line.charAt(i);
+		if (c === ";") {
+			return line.slice(0, i);
+		}
+		if (c === "'" || c === "\"") {
+			var close = line.indexOf(c, i + 1);
+			if (close < 0) {
+				return line;
+			}
+			i = close;
+		}
+	}
+	return line;
 }
 
 function isFuncDef(line) {

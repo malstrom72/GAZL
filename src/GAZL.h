@@ -449,11 +449,11 @@ enum MemoryLoad {
 	, MEMORY_MISMATCH = 7		// Restored as far as `prefix` allows, but entries and owners did not match exactly.
 };
 
-UInt freezeMemorySize(const Processor& processor, const Symbols& symbols);												// Exact byte count a freeze will occupy.
-UInt freezeMemory(const Processor& processor, const Symbols& symbols, void* buffer, UInt bufferSize);					// Writes the frozen memory; returns its size (writes nothing and returns the needed size if `bufferSize` is too small).
+UInt freezeMemorySize(const Processor& processor, const Symbols& symbols);												// Exact byte count a freeze will occupy. Requires (asserted) that it fits a `UInt`: under 4 GiB.
+UInt freezeMemory(const Processor& processor, const Symbols& symbols, void* buffer, UInt bufferSize);					// Writes the frozen memory; returns its size (writes nothing and returns the needed size if `bufferSize` is too small). Requires what `freezeMemorySize` does.
 MemoryLoad thawMemory(Processor& processor, const Symbols& symbols, const void* buffer, UInt bufferSize
 		, bool prefix);																								// Restores nothing unless all of `buffer` is valid. If `prefix`, an owner and an entry of different sizes share their common words.
-Float parseFloat(const Char*& p, const Char* e);																		// Reads a float literal at `p`, advancing it, rounded to the nearest float, ties to even.
+Float parseFloat(const Char*& p, const Char* e);																		// Reads a float literal in [`p`, `e`), advancing `p`, rounded to the nearest float, ties to even. Never reads at `e`.
 
 #if !defined(NDEBUG)
 bool unitTest();

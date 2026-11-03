@@ -162,7 +162,8 @@ function impalaNuxLineColumn(source, offset) {
 	var end = offset < source.length ? offset : source.length;
 	for (var i = 0; i < end; ++i) {
 		var ch = source[i];
-		if (ch === "\n") {
+		// A lone CR ends a line too, as in the node front end; CRLF counts once.
+		if (ch === "\n" || (ch === "\r" && source[i + 1] !== "\n")) {
 			++line;
 			column = 1;
 		} else if (ch !== "\r") {
