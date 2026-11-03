@@ -573,6 +573,36 @@ function testNuXJSCommandCompilerScript(compilerSource) {
 		true,
 	);
 	runCase("numeric output path", ["impala.nuxjs.js", sourcePath, "42"], { "impalaCompiler.js": "ok" }, false);
+
+	// A source with CR-only line ends must report its real line, as the node front end does: counting `\n` alone put
+	// every diagnostic on line 1.
+	const crSource = "function main()\r{\r\tundeclared = 1;\r}\r";
+	const crPrinted = [];
+	const crContext = {
+		arguments: ["impala.nuxjs.js", "cr.impala"],
+		print: (line) => crPrinted.push(String(line)),
+		write: () => {},
+		read: (file) => {
+			if (file === "cr.impala") {
+				return crSource;
+			}
+			throw new Error(`Unexpected read path for the CR case: ${file}`);
+		},
+		load: (file) => {
+			const loadedSource = /impalaImportClosure\.js$/.test(file) ? closureSource : compilerSource;
+			new vm.Script(loadedSource, { filename: file }).runInContext(crContext);
+		},
+	};
+	vm.createContext(crContext);
+	try {
+		new vm.Script(scriptSource, { filename: "impala.nuxjs.js" }).runInContext(crContext);
+	} catch (err) {
+		// the compile is meant to fail; the printed diagnostic is what is checked
+	}
+	assert(
+		crPrinted.some((line) => line.indexOf("cr.impala:3:") === 0),
+		"impala.nuxjs.js must count a lone CR as a line end: " + crPrinted.join(" | "),
+	);
 	console.log("impala.nuxjs.js compiles an Impala source through NuXJS-style command arguments");
 }
 
@@ -4128,5 +4158,65 @@ function runGazlText(gazlPath, text, cmdArgs, label) {
 		"[+-\\]] must be the Ford range '+'..']' (includes digits and ']', excludes '^')");
 	console.log("character class refuses an unescaped ']' range endpoint and keeps the escaped Ford range");
 }
+
+// Every string character fills a whole word. A 4-digit escape above 0xFF was cut to its low byte (0x5A7E became `~`,
+// 0x0100 a NUL that ended the string early), and an 8-digit escape holds any 32-bit value, past 0x10FFFF too. Equal
+// strings and suffixes share one table entry, and string constants whose labels have the same ASCII tag (here none)
+// must still get distinct labels.
+const wideOutput = compileWithJsImpala(
+	[
+		'const pointer S = "\\u5A7E\\u0100x\\UFFFFFFFF\\U12345678";',
+		'const pointer A = "\\uABCD\\U12345678";',
+		'const pointer B = "\\U12345678";',
+		'const pointer C = "\\uABCD\\U12345678";',
+		'const pointer D = "\\uABCE";',
+		"function main()",
+		"{",
+		"}",
+		"",
+	].join("\n"),
+	{ randomId: 42 },
+);
+const wideRows = wideOutput
+	.split("\n")
+	.map((line) => line.trim())
+	.filter((line) => /^(\S+:\s+)?(CNST|DAT|!)/.test(line));
+assert(wideOutput.indexOf("DATi #23166 #256") >= 0 && wideOutput.indexOf("DATs x") >= 0,
+	"a string character above 0xFF must keep its whole value: " + wideRows.join(" | "));
+assert(wideOutput.indexOf("DATi #4294967295 #305419896 #0") >= 0,
+	"an 8-digit escape must store its full 32-bit value: " + wideRows.join(" | "));
+assert(wideOutput.indexOf("DATi #43981 #305419896 #0") >= 0, "a wide string must be emitted once: " + wideRows.join(" | "));
+const labelOf = (name) => (new RegExp("\\n" + name + ":\\s+! DEFp &(\\S+)").exec(wideOutput) || [])[1];
+assert(labelOf("C") === labelOf("A") && labelOf("B") === labelOf("A") + ":1",
+	"equal wide strings and suffixes must share one entry: " + wideRows.join(" | "));
+assert(labelOf("D") !== undefined && labelOf("D") !== labelOf("A"),
+	"string constants with the same label tag must get distinct labels: " + wideRows.join(" | "));
+console.log("impala.jspeg compiler keeps every string character's full word value");
+
+// Only a zero word may be dropped from an initializer, and `-0.0` is not one: its sign bit is set, so dropping it read
+// back as `+0.0`. Where the field's word is unknown (an extern struct), it must be refused like any other value.
+let observedNegativeZero = false;
+try {
+	compileWithJsImpala("extern struct E { float a; float b; }\nglobal E e = { a: -0.0 };\nfunction main()\n{\n}\n", {
+		randomId: 42,
+	});
+} catch (err) {
+	observedNegativeZero = err && err.message && err.message.includes("E459");
+}
+
+if (!observedNegativeZero) {
+	console.error("impala.jspeg compiler dropped a -0.0 initializer as if it were zero");
+	process.exit(1);
+}
+// A `--gazl2` region pops trailing zero words, and must not pop a `-0.0`.
+const negativeZeroTail = compileWithJsImpala(
+	"struct S { float x; float y; }\nglobal S s = { x: 1.0, y: -0.0 };\nfunction main()\n{\n}\n",
+	{ randomId: 42, gazl2: true },
+);
+if (negativeZeroTail.indexOf("DATf #-0.0") < 0) {
+	console.error("impala.jspeg compiler popped a trailing -0.0 as if it were zero");
+	process.exit(1);
+}
+console.log("impala.jspeg compiler keeps -0.0 apart from zero in initializers");
 
 console.log("JSPEG regression suite completed successfully");

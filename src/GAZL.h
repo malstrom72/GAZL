@@ -277,7 +277,7 @@ class Assembler {
 	public:		void newUnit(const Char* unitName); 														// Begin assembling a new source unit.
 	public:		const Char* feed(const Char* line); 														// Assemble a single line and return pointer to the next.
 	public:		void finalize(AssembledProgram& program); 													// Finish assembly and report memory usage. `program.sizes.functionCount` is the number of entries filled in `functionTable`.
-	public:		static ProgramSizes preAssemble(const Char* source, Symbols& symbols, const ProgramSizes* seed = 0); 					// The sizes a real assembly of `source` needs, from a throwaway one. On success `symbols`, seeded as for a real assembly, becomes the full table; on a throw it is untouched. `seed` sizes the first attempt.
+	public:		static ProgramSizes preAssemble(const Char* source, Symbols& symbols, const ProgramSizes* seed = 0); 					// The sizes a real assembly of `source` needs, from a throwaway one. On success `symbols`, seeded as for a real assembly, becomes the full table; on a throw it is untouched. `seed` sizes the first attempt. A program whose memory need grows with the memory it is given (`GLOB *GAZL_MEMORY_SIZE`) fits none, so it throws `NOT_ENOUGH_MEMORY_SPACE`.
 
 	protected:	struct CompileTimeVar {
 					int types;
@@ -343,7 +343,8 @@ class Assembler {
 	protected:	Symbols locals;
 	protected:	CompileTimeVar compileTimeVars[128];
 	protected:	std::string skipUntilLabel;
-	
+	protected:	UInt memoryShortfall;																					// Words the last failing GLOB, CNST or SWCH lacked, for `preAssemble`.
+
 	private:	Assembler(const Assembler&); // N/A
 	private:	Assembler& operator=(const Assembler&); // N/A
 };
@@ -495,11 +496,11 @@ enum MemoryLoad {
 	, MEMORY_MISMATCH = 7		// Restored as far as `prefix` allows, but entries and owners did not match exactly.
 };
 
-UInt freezeMemorySize(const Processor& processor, const Symbols& symbols);												// Exact byte count a freeze will occupy.
-UInt freezeMemory(const Processor& processor, const Symbols& symbols, void* buffer, UInt bufferSize);					// Writes the frozen memory; returns its size (writes nothing and returns the needed size if `bufferSize` is too small).
+UInt freezeMemorySize(const Processor& processor, const Symbols& symbols);												// Exact byte count a freeze will occupy. Requires (asserted) that it fits a `UInt`: under 4 GiB.
+UInt freezeMemory(const Processor& processor, const Symbols& symbols, void* buffer, UInt bufferSize);					// Writes the frozen memory; returns its size (writes nothing and returns the needed size if `bufferSize` is too small). Requires what `freezeMemorySize` does.
 MemoryLoad thawMemory(Processor& processor, const Symbols& symbols, const void* buffer, UInt bufferSize
 		, bool prefix);																								// Restores nothing unless all of `buffer` is valid. If `prefix`, an owner and an entry of different sizes share their common words.
-Float parseFloat(const Char*& p, const Char* e);																		// Reads a float literal at `p`, advancing it, rounded to the nearest float, ties to even.
+Float parseFloat(const Char*& p, const Char* e);																		// Reads a float literal in [`p`, `e`), advancing `p`, rounded to the nearest float, ties to even. Never reads at `e`.
 
 #if !defined(NDEBUG)
 bool unitTest();

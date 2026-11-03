@@ -255,9 +255,7 @@ main:	FUNC	; signature func main() -> void @ ImpalaDemo.impala:283:1
 	DATi #0
 .s_allesc_4d3:	CNST *22
 	DATs all escapes: \"
-	DATi #8 #12 #10 #13 #9
-	DATs ~
-	DATi #0
+	DATi #8 #12 #10 #13 #9 #23166 #0
 .s_Bye_4d4:	CNST *6
 	DATs Bye!
 	DATi #10 #0

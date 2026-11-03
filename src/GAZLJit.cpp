@@ -1018,6 +1018,7 @@ Status JitProcessor::run() {
 // Shared by both constructors. The module must be compiled: an empty one has no dispatcher.
 void JitProcessor::bindModule(const JitModule& module) {
 	assert(module.isCompiled() && "JitProcessor requires a compiled JitModule");
+	assert(memorySize < 0x20000000u && "JitProcessor requires memory under 2^29 words (32-bit byte offsets)");
 	nativeAfter = 0;
 	funcEntries = module.entryTable();
 	jitDispatch = module.dispatchEntry();

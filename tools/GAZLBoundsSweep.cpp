@@ -1123,7 +1123,8 @@ int assemblyError(const std::string& source) {
 
 /*
 	Source text is ASCII: a byte above 0x7F in `DATs` text or in a quoted literal is refused, while a comment may
-	hold any bytes. Returns the number of failures, each one printed.
+	hold any bytes. A quoted literal must close on its own line, or it is refused rather than swallowing the lines
+	after it. Returns the number of failures, each one printed.
 */
 int sweepTextEncoding() {
 	struct Case { const char* what; const char* source; int error; };
@@ -1132,7 +1133,10 @@ int sweepTextEncoding() {
 		{ "a quoted literal with a byte above 0x7F", "\tGLOB *1\n\tDATi #'\xE5'\n", NON_ASCII_TEXT },
 		{ "a comment with bytes above 0x7F", "t:\tGLOB *1\n\tDATi #1 ; \xE5\xE4\xF6 \xC3\xA5\n; \xFF\n", -1 },
 		{ "ASCII DATs text", "t:\tGLOB *3\n\tDATs abc\n", -1 },
-		{ "an ASCII quoted literal", "t:\tGLOB *1\n\tDATi #'AB'\n", -1 }
+		{ "an ASCII quoted literal", "t:\tGLOB *1\n\tDATi #'AB'\n", -1 },
+		{ "an unterminated quoted literal", "t:\tGLOB *1\n\tDATi #'AB\n\tDATi #1\n", INVALID_NUMERICAL_LITERAL },
+		{ "an unterminated quoted literal, last", "t:\tGLOB *1\n\tDATi #'A", INVALID_NUMERICAL_LITERAL },
+		{ "a quoted semicolon", "t:\tGLOB *1\n\tDATi #';'\n", -1 }
 	};
 	const int count = sizeof (CASES) / sizeof (*CASES);
 	int failures = 0;
@@ -1144,6 +1148,41 @@ int sweepTextEncoding() {
 		}
 	}
 	std::printf("text encoding: %d checked, %d failed\n", count, failures);
+	return failures;
+}
+
+/*
+	`preAssemble` grows its scratch memory to fit, and refuses a request that grows with the memory it is given:
+	`GLOB *GAZL_MEMORY_SIZE` never fits, because of the zero guard, and once doubled the arena without limit. Returns
+	the number of failures, each one printed.
+*/
+int sweepPreAssemble() {
+	struct Case { const char* what; const char* source; int error; UInt globalsSize; };
+	const Case CASES[] = {
+		{ "GLOB *GAZL_MEMORY_SIZE", "g:\tGLOB *GAZL_MEMORY_SIZE\n", NOT_ENOUGH_MEMORY_SPACE, 0 },
+		{ "CNST *GAZL_MEMORY_SIZE", "c:\tCNST *GAZL_MEMORY_SIZE\n", NOT_ENOUGH_MEMORY_SPACE, 0 },
+		{ "a large fixed GLOB", "g:\tGLOB *100000\n", -1, 100000 },
+		{ "two large fixed GLOBs", "g:\tGLOB *100000\nh:\tGLOB *300000\n", -1, 400000 }
+	};
+	const int count = sizeof (CASES) / sizeof (*CASES);
+	int failures = 0;
+	for (int i = 0; i < count; ++i) {
+		Symbols symbols;
+		int error = -1;
+		ProgramSizes sizes = { 0, 0, 0, 0 };
+		try {
+			sizes = Assembler::preAssemble(CASES[i].source, symbols);
+		}
+		catch (const Exception& e) {
+			error = e.error;
+		}
+		if (error != CASES[i].error || (error < 0 && sizes.globalsSize != CASES[i].globalsSize)) {
+			std::printf("FAIL preAssemble: %s gave error %d and %u globals, expected %d and %u\n", CASES[i].what, error
+					, sizes.globalsSize, CASES[i].error, CASES[i].globalsSize);
+			++failures;
+		}
+	}
+	std::printf("preAssemble: %d checked, %d failed\n", count, failures);
 	return failures;
 }
 
@@ -1675,8 +1714,8 @@ int main() {
 	}
 #endif
 	const int hostFailures = sweepNativeAccess() + sweepFrameAndThaw() + sweepFrozenEntries() + sweepThawRules()
-			+ sweepCanary() + sweepTextEncoding() + sweepUnnamedSections() + sweepLabelReach() + sweepFunctionOffsets()
-			+ sweepSpanRegions() + sweepPrefixes() + sweepRegionOnly() + sweepPointerConstantKinds()
+			+ sweepCanary() + sweepTextEncoding() + sweepPreAssemble() + sweepUnnamedSections() + sweepLabelReach()
+			+ sweepFunctionOffsets() + sweepSpanRegions() + sweepPrefixes() + sweepRegionOnly() + sweepPointerConstantKinds()
 			+ sweepPointerConstantReach();
 	return (sweep(engineCount) != 0 || hostFailures != 0) ? 1 : 0;
 }

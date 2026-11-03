@@ -212,8 +212,16 @@ void X64Emitter::finalize() {
 		const Fixup& f = fixups[i];
 		const ptrdiff_t target = labelTargets[f.labelId];
 		assert(target >= 0 && "fixup to an unbound label (missing bind() or emitLiteralPool())");
-		const int32_t rel = static_cast<int32_t>(target - static_cast<ptrdiff_t>(f.site + 4));
-		const uint32_t u = static_cast<uint32_t>(rel);
+		const ptrdiff_t disp = target - static_cast<ptrdiff_t>(f.site + 4);
+		/*
+			Range-check before truncating, as arm64 does: past 2 GiB of code (huge SWCH tables reach it) a truncated
+			rel32 jumps silently to the wrong address. The throw fails the whole compile, so the host runs it
+			interpreted.
+		*/
+		if (static_cast<int64_t>(disp) != static_cast<int32_t>(disp)) {
+			throw JitException("JIT: x64 rel32 beyond 2 GiB reach");
+		}
+		const uint32_t u = static_cast<uint32_t>(static_cast<int32_t>(disp));
 		bytes[f.site + 0] = static_cast<uint8_t>(u);
 		bytes[f.site + 1] = static_cast<uint8_t>(u >> 8);
 		bytes[f.site + 2] = static_cast<uint8_t>(u >> 16);
