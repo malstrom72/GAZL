@@ -145,8 +145,10 @@ What is fuzzed or replayed, with which toolchain, and when. Branch is the first 
 | Text: assembler + interpreter | `buildGazlFuzz.sh` | clang, libFuzzer + ASan (UBSan on request) | `main` | Mac campaigns |
 | Text, Windows | `buildGazlFuzz.cmd` | MSVC, libFuzzer + ASan | `main` | Windows campaigns |
 | Corpus + crash replay | `test-fuzz.sh` / `.cmd` | the build's compiler (MSVC, Apple clang, g++), `beta`, no sanitizers | `main` | Every build, all three CI jobs |
+| Crash + seed replay | `test-fuzz.sh` / `.cmd` | the same | `jit-compiler`, replacing the row above | Every build, all three CI jobs |
+| Corpus + crash replay | `replayFuzzCorpus.sh` / `.cmd` | the same | `jit-compiler` | macOS and Windows CI jobs; before every release or freeze |
 | The same replay under UBSan | `test-ubsan.sh` | clang++, UBSan | `main` | Linux CI job |
-| The same replay under Valgrind | `test-fuzz.sh valgrind` | g++, `beta`, no sanitizers, Valgrind memcheck | `main` | Linux CI job |
+| The same replay under Valgrind | `test-fuzz.sh valgrind`; `replayFuzzCorpus.sh valgrind` on `jit-compiler` | g++, `beta`, no sanitizers, Valgrind memcheck | `main` | Linux CI job |
 | Impala generator | `impala/fuzzImpala.js` | Node, no C++ | `Impala2`; its `--gazl2` twin on `GAZL2` | JS gate; `fuzz48h` for long rounds |
 | JIT differential, `--gen` | `buildGazlFuzz.sh standalone` | clang, no sanitizers | `jit-compiler` | 2000 programs in `test-jit`; `fuzzSoak.ps1` and `runFuzzMac.sh` for soaks |
 | Text through both engines | `buildGazlFuzz.sh text` | clang, libFuzzer + ASan | `jit-compiler` | `runFuzzMac.sh` lane 6 |
@@ -156,7 +158,9 @@ On `jit-compiler`, `buildGazlFuzz.cmd` builds the `--gen` differential instead o
 
 **The replay budget.** `test-fuzz` passes `--budget=30` to the replay driver, which prints the replay's wall time
 and warns when it is over 30 seconds. The warning does not fail the build; it is the signal to move the corpus replay
-to its own script, as the shared rules above require.
+to its own script, as the shared rules above require. On `jit-compiler` that has happened: checking every input
+against the reference executor took the replay past the budget, so the build replays only the crash inputs and the
+seeds, and `replayFuzzCorpus` replays the corpus too.
 
 - **Three targets, not one.** The JIT-vs-interpreter differential (`tools/GAZLCmd.cpp` under `-DJITDIFF`), the
   text-assembler crash lane (the same file under `-DLIBFUZZ` without `JITDIFF`), and the Impala compiler fuzzer
@@ -170,10 +174,11 @@ to its own script, as the shared rules above require.
   backends survived 600,000 generated programs across two backends, and was found by reading the check. Treat a
   clean differential run as evidence of agreement only.
 - **The reference executor is the third opinion.** `tools/GAZLReference.h` runs assembled GAZL from the documented
-  semantics and shares only the instruction encoding with `Processor::run()`. The corpus replay (`test-fuzz`), the
-  text lane and the `--gen` lane all require the interpreter to agree with it, on status, memory and (where the run
-  is bounded) fuel, so a bug that the interpreter and the JIT share can now show. It only covers what the inputs
-  exercise, and the `--gen` generator emits no shifts, `FTOi` / `ITOf`, `COPY`, `SWCH`, `TAIL` or `GOTO`.
+  semantics and shares only the instruction encoding with `Processor::run()`. The replays (`test-fuzz`,
+  `replayFuzzCorpus`), the text lane and the `--gen` lane all require the interpreter to agree with it, on status,
+  memory and (where the run is bounded) fuel, so a bug that the interpreter and the JIT share can now show. It only
+  covers what the inputs exercise, and the `--gen` generator emits no shifts, `FTOi` / `ITOf`, `COPY`, `SWCH`, `TAIL`
+  or `GOTO`.
 - **Its floats are integer-only**, so no compiler or FPU setting changes them, and every run is compared twice: with
   denormals kept, and again with the host's flush-to-zero on, against the reference in the boundary convention the
   host was measured to use (Specification.md section 4). Before the first comparison the driver checks the
