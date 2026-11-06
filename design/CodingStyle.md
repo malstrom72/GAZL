@@ -1,6 +1,6 @@
 # Coding Style and Design Principles
 
-Version: 2026-10-19
+Version: 2026-11-06
 
 The coding style and design principles shared across these projects: the basis for both humans and agents, and held to
 in review. Each project adds its own operational notes (directory layout, build and test gates, dependencies) in that
@@ -38,6 +38,10 @@ These are the most important principles in the codebase. Get them wrong and the 
   sync with it. This split (assumption-driven inside, defensive at the edges) is not optional: a defensive check on a
   contract path is a review-blocking defect, not a nicety. An assert is not validation: it vanishes in release builds
   (`NDEBUG`), so input from outside always gets a real check.
+- **A contract is always documented.** Every precondition a function asserts (a minimum buffer size or `n`, a valid
+  range, a non-null argument) is stated in its declaration's comment in the header: the end-of-line comment, or a
+  one-line brief directly above. A caller meets the contract from the header alone; an asserted precondition that the
+  header does not state is a documentation bug. Breaking it stays an assert, never a release-build runtime error.
 - **Exceptions are for runtime conditions, not for bugs.** Throw when a failure CAN happen with correct code because of
   the environment or input (the OS refuses an executable page, allocation fails, malformed source). Never silently
   swallow such an error and never return a half-filled output or a success code on a path that did not succeed. If a
@@ -86,6 +90,8 @@ These are the most important principles in the codebase. Get them wrong and the 
 - **No abbreviations.** Full words: `functionCount` not `fnCount`, `memory` not `mem`, `natives` not `nat`,
   `registerClass` not `regClass`. Established short domain terms that read as words are fine (`dsp`, `ip`).
 - **Boolean queries are prefixed `isX()`**: `isCompiled()`, `isResident()`.
+- **A constructor parameter takes the name of the member it initializes**: `GCList(Heap& heap) : heap(heap)`. Members
+  carry no `m_` prefix or trailing underscore.
 - Wrap variable, parameter, class, and function names in back-ticks inside comment text: "`weight` is the block span".
 
 ## 4. Class layout and headers
@@ -102,7 +108,9 @@ These are the most important principles in the codebase. Get them wrong and the 
   on their own line (one tab in), with members indented one further tab beneath them, as NuXJS does. Do NOT prefix
   every member with its access specifier (`public:  method()` on each line): that per-declaration form is an older
   style being phased out. New code uses grouped sections; when editing an existing file, match whatever that file
-  already uses.
+  already uses. `friend` declarations come before all sections, one tab in.
+- **A derived class names its base `super`.** `typedef GCItem super;` is the first line of its public section, and the
+  base is reached as `super::method()`, so changing the base class is a one-line edit.
 - **No heavy headers.** Big function bodies live in a `.cpp`; only small or hot inlines belong in a header. A large
   method defined inline in a header will be moved out in review.
 - **No `inline` keyword in a `.cpp`.** A file-scope helper is `static`, never `static inline`: the compiler sees the
@@ -156,6 +164,8 @@ These are the most important principles in the codebase. Get them wrong and the 
   */
   ```
   Do NOT write a paragraph as a stack of `//` lines, and do NOT use decorative empty `//` banner lines.
+- **A `.cpp` is divided by one `/* --- Name --- */` line per class or group of helpers**, in the order of the header.
+  These dividers are the only banners.
 - **Struct members take an end-of-line comment, never a preceding block comment.** However long the text runs, it stays
   on the member's own line. Block comments in a public header belong to the file as a whole (`/* # Title ... */`) or to
   a GROUP of declarations (an enum), never to one member. If a member seems to need more than its line, the excess is
@@ -190,7 +200,10 @@ These are the most important principles in the codebase. Get them wrong and the 
   }
   ```
   Both a braceless body (`if (x) blahblah;`) and a one-line braced body (`if (x) { blahblah; duhduh; }`) are wrong.
-  There are no exceptions: a flat run of `if (cond) return X;` rows is braced too.
+  A flat run of `if (cond) return X;` rows is braced too. The one exception is a `case` whose body is a single
+  statement, or a statement and its `break`: it may sit on the label's line, so that a dispatch switch reads as a
+  table (`case NULL_TYPE: return false;`, `case THIS_OP: push(thisObject); break;`).
+- **`sizeof` takes a space, like a keyword**: `sizeof (wchar_t)`, and `sizeof (TABLE) / sizeof (*TABLE)` for a count.
 - **Short inline function bodies may be a single line.** A function or method body of one or two simple statements
   may sit on one line when that reads more elegantly (`int size() const { return count; }`). This is about function
   bodies only, not the control-flow rule above: a control statement inside an inline body still follows that rule.
@@ -238,6 +251,10 @@ These are the most important principles in the codebase. Get them wrong and the 
   than adjusting it in branches. Collapsing statements must not lose a type: a conditional takes the common type of its
   arms, so widen explicitly where the separate statements did. A 32-bit value shifted by 33 is undefined behaviour,
   even when an optimized build happens to do what was meant.
+- **A conditional or boolean expression that is a whole initializer or return value is parenthesized**:
+  `return (i == n ? 0 : a[i] - b[i]);`, `const bool replayOnly = (argc >= 3 && strcmp(argv[1], "-r") == 0);`.
+- **Pointers and numbers are compared explicitly**: `if (list != 0)`, `if (count == 0)`, never `if (list)` or
+  `if (!count)`. Only a `bool` is tested bare.
 - **A local that never changes after initialization is `const`**: `const UInt32 size = header.getSize();`. A pointer
   that is never re-pointed is `const` itself: `char* const p = buffer;`.
 - **By-value parameters are never `const`.** `const` goes on what a parameter points or refers to: `const char* text`,
@@ -247,11 +264,19 @@ These are the most important principles in the codebase. Get them wrong and the 
 - **Named constants are `static const` (or `const`) with UPPERCASE names, never `#define`**: `MAX_PROGRAM_NAME_LENGTH`,
   `STATE_MAGIC_SIZE`. Lookup tables are named constants too: `static const char HEX_DIGITS[16]`.
 - **`++` and `--` are used sparingly.** They are normally a statement of their own (a loop step, a counter), not a
-  value buried in a larger expression, so each line does one thing and a debugger can stop between the steps. Count
-  down with an explicit condition and step, `for (size_t i = n; i > 0; --i)` indexing `[i - 1]`, never
-  `for (size_t i = n; i-- > 0;)`. Idioms that read at a glance are fine: a byte copy `*d++ = *s++`, a buffer write
-  `*p++ = c`, a stack push `*++sp = v`. An atomic counter that must increment and read in one operation
-  (`if (instanceCount++ == 0)`) is required, not a style choice. When in doubt, write it out.
+  value buried in a larger expression, so each line does one thing and a debugger can stop between the steps. As a
+  statement or a loop step they are prefix, `++i`, never `i++`. Count down with an explicit condition and step,
+  `for (size_t i = n; i > 0; --i)` indexing `[i - 1]`, never `for (size_t i = n; i-- > 0;)`. Idioms that read at a
+  glance are fine: a byte copy `*d++ = *s++`, a buffer write `*p++ = c`, a stack push `*++sp = v`. An atomic counter
+  that must increment and read in one operation (`if (instanceCount++ == 0)`) is required, not a style choice. When in
+  doubt, write it out.
+- **A `for` condition tests only its counter** (`i < n`, `i > 0`). To stop on data, such as a terminator or a found
+  flag, compute the count first or write a `while`.
+- **Calls go outside loops when their result does not change**: `const int n = s->GetLength();` before
+  `for (int i = 0; i < n; ++i)`, not `i < s->GetLength()` in the condition. A function call can have any side effect,
+  so it should stand out where it runs once, and a debug build does not optimize the repeated call away.
+- **Operator overloading only where operators are the point of the class** (numbers, vectors, iterators). Elsewhere a
+  named method, so every call looks like a call.
 
 ## 10. Integer types
 
@@ -267,6 +292,23 @@ These are the most important principles in the codebase. Get them wrong and the 
 - **Format fixed-width integers with the `<inttypes.h>` macros**: `"%" PRIu64`, `"%" PRId32`, `"%" PRIx32`. Never cast
   to `long` or `long long` just to make a format fit. `uint64_t` is `unsigned long` on 64-bit Linux, so `%llu`
   mismatches there; on MSVC and macOS it is `unsigned long long`.
+- **Exception: overload sets that must cover every integer type.** A set of overloads or conversions that has to
+  accept whatever `int64_t`, `uint64_t` and `size_t` are on each platform declares the `long`, `unsigned long`,
+  `long long` and `unsigned long long` variants explicitly. Those types are `long` on some platforms and `long long` on
+  others, so there is no way to cover them with the fixed-width types alone. Use them for nothing else.
+- **Settled code built on `long` may stay `long`.** Editing a function or interface that works in `long` does not
+  require converting it; switching an existing interface to fixed-width types is a deliberate change of its own, not a
+  side effect. New code, including new functions in the same file, follows this section.
+
+## 11. Parsers
+
+- **A scanner takes the range it reads and returns how far it got.** The signature is
+  `const Char* parseHex(const Char* p, const Char* e, UInt32& value)`: `p` is the start, `e` the end of the input, the
+  return value is the end of what was consumed, and returning `p` means nothing matched. A result goes in a reference
+  parameter after the range. The caller advances by assigning the return value, `p = parseHex(p, e, value);`.
+- **Parsing code keeps its pointers to one letter.** `b` and `e` are the begin and end of the input, `p` the cursor, `q`
+  a second cursor or a scanner's result, `s` and `d` the source and destination of a copy. This is the exception to
+  the no-abbreviations rule in section 3, for these roles only.
 
 ## Local additions
 
