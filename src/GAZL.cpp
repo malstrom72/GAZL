@@ -1582,9 +1582,9 @@ const Char* Assembler::feed(const Char* line) {
 							dataLabel = std::string(labelBegin, labelEnd);
 							dataLabelType = op->declareTypes;
 							if (constantsPointer - globalsPointer < size) {
-							memoryShortfall = size - static_cast<UInt>(constantsPointer - globalsPointer);
-							throw Exception(NOT_ENOUGH_MEMORY_SPACE);
-						}
+								memoryShortfall = size - static_cast<UInt>(constantsPointer - globalsPointer);
+								throw Exception(NOT_ENOUGH_MEMORY_SPACE);
+							}
 							if (op->opcode == GLOB____) {
 								dataPointer = globalsPointer;
 								globalsPointer += size;

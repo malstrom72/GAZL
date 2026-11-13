@@ -1715,7 +1715,7 @@ int main() {
 #endif
 	const int hostFailures = sweepNativeAccess() + sweepFrameAndThaw() + sweepFrozenEntries() + sweepThawRules()
 			+ sweepCanary() + sweepTextEncoding() + sweepPreAssemble() + sweepUnnamedSections() + sweepLabelReach()
-			+ sweepFunctionOffsets() + sweepSpanRegions() + sweepPrefixes() + sweepRegionOnly() + sweepPointerConstantKinds()
-			+ sweepPointerConstantReach();
+			+ sweepFunctionOffsets() + sweepSpanRegions() + sweepPrefixes() + sweepRegionOnly()
+			+ sweepPointerConstantKinds() + sweepPointerConstantReach();
 	return (sweep(engineCount) != 0 || hostFailures != 0) ? 1 : 0;
 }
