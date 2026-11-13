@@ -1306,7 +1306,7 @@ static bool growArena(UInt& size, UInt shortfall, UInt limit) {
 	A real assembly into scratch arenas that start small and grow whenever one runs out, so the sizes are exact.
 	The table handed back points into none of the scratch: symbol values are offsets, not addresses.
 */
-ProgramSizes Assembler::preAssemble(const Char* source, Symbols& symbols, const ProgramSizes* seed
+ProgramSizes Assembler::preAssemble(const Char* source, Symbols& symbols, const ProgramSizes* initialSizes
 		, const ProgramSizes* limit) {
 	// Without a `limit`, the arenas stop at the `Int` range all sizes live in.
 	UInt codeLimit = 0x7FFFFFFF, memoryLimit = 0x7FFFFFFF, functionLimit = 0x7FFFFFFF;
@@ -1317,10 +1317,10 @@ ProgramSizes Assembler::preAssemble(const Char* source, Symbols& symbols, const 
 		functionLimit = std::min(functionLimit, limit->functionCount);
 	}
 	UInt codeMax = 256, memoryMax = 256, functionMax = 64;
-	if (seed != 0) {
-		codeMax = std::max(codeMax, seed->codeSize);
-		memoryMax = std::max(memoryMax, seed->globalsSize + seed->constsSize);
-		functionMax = std::max(functionMax, seed->functionCount);
+	if (initialSizes != 0) {
+		codeMax = std::max(codeMax, initialSizes->codeSize);
+		memoryMax = std::max(memoryMax, initialSizes->globalsSize + initialSizes->constsSize);
+		functionMax = std::max(functionMax, initialSizes->functionCount);
 	}
 	codeMax = std::min(codeMax, codeLimit);
 	memoryMax = std::min(memoryMax, memoryLimit);
@@ -2376,11 +2376,11 @@ bool unitTest() {
 
 		// preAssemble() matches the real assembly above, retries from its small arenas, and hands back its table.
 		{
-			Symbols seed;
-			seedTestNatives(seed);
+			Symbols measuredGlobals;
+			seedTestNatives(measuredGlobals);
 			ProgramSizes measured = { 0, 0, 0, 0 };
 			try {
-				measured = Assembler::preAssemble(UNITTEST, seed);
+				measured = Assembler::preAssemble(UNITTEST, measuredGlobals);
 			}
 			catch (const Exception& e) {
 				(void)e;
@@ -2393,8 +2393,8 @@ bool unitTest() {
 				ConstantKind kind = FLOAT_CONSTANT;
 				Value constant;
 				constant.i = 0;
-				const bool found = seed.lookupConstant("CR", kind, constant);			// `CR: ! DEFi #13` in UnitTest.gazl
-				assert(found && kind == INT_CONSTANT && constant.i == 13);				// the table really came back, not just the four sizes
+				const bool found = measuredGlobals.lookupConstant("CR", kind, constant);			// `CR: ! DEFi #13` in UnitTest.gazl
+				assert(found && kind == INT_CONSTANT && constant.i == 13);							// the table really came back, not just the four sizes
 				(void)found;
 			}
 		}
