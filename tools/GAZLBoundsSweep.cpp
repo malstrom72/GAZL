@@ -1152,6 +1152,41 @@ int sweepTextEncoding() {
 }
 
 /*
+	`preAssemble` grows its scratch memory to fit, and refuses a request that grows with the memory it is given:
+	`GLOB *GAZL_MEMORY_SIZE` never fits, because of the zero guard, and once doubled the arena without limit. Returns
+	the number of failures, each one printed.
+*/
+int sweepPreAssemble() {
+	struct Case { const char* what; const char* source; int error; UInt globalsSize; };
+	const Case CASES[] = {
+		{ "GLOB *GAZL_MEMORY_SIZE", "g:\tGLOB *GAZL_MEMORY_SIZE\n", NOT_ENOUGH_MEMORY_SPACE, 0 },
+		{ "CNST *GAZL_MEMORY_SIZE", "c:\tCNST *GAZL_MEMORY_SIZE\n", NOT_ENOUGH_MEMORY_SPACE, 0 },
+		{ "a large fixed GLOB", "g:\tGLOB *100000\n", -1, 100000 },
+		{ "two large fixed GLOBs", "g:\tGLOB *100000\nh:\tGLOB *300000\n", -1, 400000 }
+	};
+	const int count = sizeof (CASES) / sizeof (*CASES);
+	int failures = 0;
+	for (int i = 0; i < count; ++i) {
+		Symbols symbols;
+		int error = -1;
+		ProgramSizes sizes = { 0, 0, 0, 0 };
+		try {
+			sizes = Assembler::preAssemble(CASES[i].source, symbols);
+		}
+		catch (const Exception& e) {
+			error = e.error;
+		}
+		if (error != CASES[i].error || (error < 0 && sizes.globalsSize != CASES[i].globalsSize)) {
+			std::printf("FAIL preAssemble: %s gave error %d and %u globals, expected %d and %u\n", CASES[i].what, error
+					, sizes.globalsSize, CASES[i].error, CASES[i].globalsSize);
+			++failures;
+		}
+	}
+	std::printf("preAssemble: %d checked, %d failed\n", count, failures);
+	return failures;
+}
+
+/*
 	Data in an unnamed section before its first label belongs to no name, so freezing could not save it, and the
 	assembler refuses it: at the statement, or for a section with no data, when the next section opens or at
 	`finalize`. Returns the number of failures, each one printed.
@@ -1679,8 +1714,8 @@ int main() {
 	}
 #endif
 	const int hostFailures = sweepNativeAccess() + sweepFrameAndThaw() + sweepFrozenEntries() + sweepThawRules()
-			+ sweepCanary() + sweepTextEncoding() + sweepUnnamedSections() + sweepLabelReach() + sweepFunctionOffsets()
-			+ sweepSpanRegions() + sweepPrefixes() + sweepRegionOnly() + sweepPointerConstantKinds()
-			+ sweepPointerConstantReach();
+			+ sweepCanary() + sweepTextEncoding() + sweepPreAssemble() + sweepUnnamedSections() + sweepLabelReach()
+			+ sweepFunctionOffsets() + sweepSpanRegions() + sweepPrefixes() + sweepRegionOnly()
+			+ sweepPointerConstantKinds() + sweepPointerConstantReach();
 	return (sweep(engineCount) != 0 || hostFailures != 0) ? 1 : 0;
 }

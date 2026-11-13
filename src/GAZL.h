@@ -227,6 +227,7 @@ class Symbols {
 						, Int offset = 0);																		// The symbol, or 0 for a forward reference.
 	protected:	void registerSwitch(const Char* labelBegin, const Char* labelEnd, UInt switchSize, Value* storage, Int offset = 0);
 	protected:	void resolveForwardRefs();
+	public:		void swap(Symbols& other) { symbols.swap(other.symbols); forwardRefs.swap(other.forwardRefs); }		// preAssemble hands its table out with this, so nothing is copied on success
 	protected:	void clear() { symbols.clear(); forwardRefs.clear(); }
 	protected:	void resolve(const Reference& ref, const Symbol& symbol);
 	protected:	SymbolMap symbols;
@@ -236,9 +237,9 @@ class Symbols {
 struct Operator;
 
 /*
-	The four sizes an assembly computes: what a program actually used, from `finalize`. `constsSize` counts the
-	constants plus the one-word zero guard at the end of memory, so `globalsSize + constsSize` is the least memory
-	a program needs before its data stack.
+	The four sizes an assembly computes: what a program actually used (from `finalize`) or will need (from
+	`preAssemble`). `constsSize` counts the constants plus the one-word zero guard at the end of memory, so
+	`globalsSize + constsSize` is the least memory a program needs before its data stack.
 */
 struct ProgramSizes {
 	UInt codeSize;
@@ -266,6 +267,7 @@ class Assembler {
 	public:		void newUnit(const Char* unitName);																		// Begin assembling a new source unit.
 	public:		const Char* feed(const Char* line); 																	// Assemble a single line and return pointer to the next.
 	public:		void finalize(AssembledProgram& program); 																// Finish assembly and report memory usage. `program.sizes.functionCount` is the number of entries filled in `functionTable`.
+	public:		static ProgramSizes preAssemble(const Char* source, Symbols& symbols, const ProgramSizes* seed = 0); 					// The sizes a real assembly of `source` needs, from a throwaway one. On success `symbols`, seeded as for a real assembly, becomes the full table; on a throw it is untouched. `seed` sizes the first attempt. A program whose memory need grows with the memory it is given (`GLOB *GAZL_MEMORY_SIZE`) fits none, so it throws `NOT_ENOUGH_MEMORY_SPACE`.
 
 	protected:	struct CompileTimeVar {
 					int types;
@@ -331,7 +333,8 @@ class Assembler {
 	protected:	Symbols locals;
 	protected:	CompileTimeVar compileTimeVars[128];
 	protected:	std::string skipUntilLabel;
-	
+	protected:	UInt memoryShortfall;																					// Words the last failing GLOB, CNST or SWCH lacked, for `preAssemble`.
+
 	private:	Assembler(const Assembler&); // N/A
 	private:	Assembler& operator=(const Assembler&); // N/A
 };
