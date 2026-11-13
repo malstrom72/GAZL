@@ -1264,11 +1264,11 @@ void Assembler::finalize(AssembledProgram& program) {
 	program.sizes.constsSize = (UInt)(memoryEnd - constantsPointer);
 }
 
-// Grows `size` by `shortfall`, but at least doubles it. False, leaving it, past the `Int` range all sizes live in.
-static bool growArena(UInt& size, UInt shortfall) {
+// Grows `size` by `shortfall`, but at least doubles it, and never past `limit`. False, leaving it, if it is at `limit`.
+static bool growArena(UInt& size, UInt shortfall, UInt limit) {
+	if (size >= limit) return false;
 	const uint64_t grown = static_cast<uint64_t>(size) + std::max(size, shortfall);
-	if (grown > 0x7FFFFFFFu) return false;
-	size = static_cast<UInt>(grown);
+	size = static_cast<UInt>(std::min(grown, static_cast<uint64_t>(limit)));
 	return true;
 }
 
@@ -1276,13 +1276,25 @@ static bool growArena(UInt& size, UInt shortfall) {
 	A real assembly into scratch arenas that start small and grow whenever one runs out, so the sizes are exact.
 	The table handed back points into none of the scratch: symbol values are offsets, not addresses.
 */
-ProgramSizes Assembler::preAssemble(const Char* source, Symbols& symbols, const ProgramSizes* seed) {
-	UInt codeMax = 256, memoryMax = 256, functionMax = 64;
-	if (seed != 0) {
-		codeMax = std::max(codeMax, seed->codeSize);
-		memoryMax = std::max(memoryMax, seed->globalsSize + seed->constsSize);
-		functionMax = std::max(functionMax, seed->functionCount);
+ProgramSizes Assembler::preAssemble(const Char* source, Symbols& symbols, const ProgramSizes* initialSizes
+		, const ProgramSizes* limit) {
+	// Without a `limit`, the arenas stop at the `Int` range all sizes live in.
+	UInt codeLimit = 0x7FFFFFFF, memoryLimit = 0x7FFFFFFF, functionLimit = 0x7FFFFFFF;
+	if (limit != 0) {
+		assert(limit->codeSize >= 1 && limit->functionCount >= 1 && limit->globalsSize + limit->constsSize >= 1);
+		codeLimit = std::min(codeLimit, limit->codeSize);
+		memoryLimit = std::min(memoryLimit, limit->globalsSize + limit->constsSize);
+		functionLimit = std::min(functionLimit, limit->functionCount);
 	}
+	UInt codeMax = 256, memoryMax = 256, functionMax = 64;
+	if (initialSizes != 0) {
+		codeMax = std::max(codeMax, initialSizes->codeSize);
+		memoryMax = std::max(memoryMax, initialSizes->globalsSize + initialSizes->constsSize);
+		functionMax = std::max(functionMax, initialSizes->functionCount);
+	}
+	codeMax = std::min(codeMax, codeLimit);
+	memoryMax = std::min(memoryMax, memoryLimit);
+	functionMax = std::min(functionMax, functionLimit);
 	const Char* failedLine = 0;							// the line whose memory request failed last
 	while (true) {
 		std::vector<Instruction> code(codeMax);
@@ -1291,9 +1303,8 @@ ProgramSizes Assembler::preAssemble(const Char* source, Symbols& symbols, const 
 		Symbols scratch(symbols);						// fresh per attempt, or a retry would find the first attempt's names defined
 		Assembler assem(codeMax, &code[0], functionMax, &functions[0], memoryMax, &memory[0], scratch);
 		assem.newUnit(0);
-		const Char* line = source;
 		try {
-			while (*line != 0) line = assem.feed(line);
+			assem.assemble(source);
 			AssembledProgram program;
 			assem.finalize(program);					// resolves and CLEARS the forward refs, so no Value* into `code` survives
 			scratch.swap(symbols);						// success only: a throw leaves the caller's table untouched
@@ -1304,18 +1315,19 @@ ProgramSizes Assembler::preAssemble(const Char* source, Symbols& symbols, const 
 				Only the arena that ran out grows: growing all three asked for gigabytes of code space for a large
 				GLOB. Memory grows by at least the request's shortfall, so a request of a fixed size fits next time.
 				If the same line fails again, its request grows with the memory it is given (`GLOB *GAZL_MEMORY_SIZE`)
-				and no size can hold it, so the error stands rather than doubling forever.
+				and no size can hold it, so the error stands rather than doubling forever. No arena grows past its
+				limit, so a program that does not fit fails as a real assembly into buffers of the limit sizes would.
 			*/
+			bool grown = false;
 			if (x.error == NOT_ENOUGH_MEMORY_SPACE) {
-				if (line == failedLine || !growArena(memoryMax, assem.memoryShortfall)) throw;
-				failedLine = line;
+				grown = (x.line != failedLine && growArena(memoryMax, assem.memoryShortfall, memoryLimit));
+				failedLine = x.line;
 			} else if (x.error == NOT_ENOUGH_CODE_SPACE) {
-				if (!growArena(codeMax, codeMax)) throw;
+				grown = growArena(codeMax, codeMax, codeLimit);
 			} else if (x.error == NOT_ENOUGH_FUNCTION_SPACE) {
-				if (!growArena(functionMax, functionMax)) throw;
-			} else {
-				throw;
+				grown = growArena(functionMax, functionMax, functionLimit);
 			}
+			if (!grown) throw;
 		}
 	}
 }
@@ -1381,6 +1393,21 @@ Value Assembler::calcConstant(const Operator* op, const Char* op1Begin, const Ch
 }
 
 const Char* Assembler::feed(const Char* line) {
+	try {
+		return feedLine(line);
+	}
+	catch (Exception& x) {
+		x.line = line;
+		throw;
+	}
+}
+
+void Assembler::assemble(const Char* source) {
+	const Char* line = source;
+	while (*line != 0) line = feed(line);
+}
+
+const Char* Assembler::feedLine(const Char* line) {
 	const Char* labelBegin = 0;
 	const Char* labelEnd = 0;
 	const Char* p = eatSpaceAndComment(line);
@@ -2307,26 +2334,23 @@ bool unitTest() {
 		{
 			Assembler assem(MAX_CODE_SIZE, cody, MAX_FUNCTION_COUNT, functionTable, MEMORY_SIZE, memory, globals);
 			assem.newUnit("UnitTest");
-			const Char* cp = UNITTEST;
-			while (*cp != 0) {
-				try {
-					cp = assem.feed(cp);
-					if (*cp == 0) assem.finalize(program);
-				}
-				catch (const Exception& e) {
-					(void)e;
-					assert(0);
-				}
+			try {
+				assem.assemble(UNITTEST);
+				assem.finalize(program);
+			}
+			catch (const Exception& e) {
+				(void)e;
+				assert(0);
 			}
 		}
 
 		// preAssemble() matches the real assembly above, retries from its small arenas, and hands back its table.
 		{
-			Symbols seed;
-			seedTestNatives(seed);
+			Symbols measuredGlobals;
+			seedTestNatives(measuredGlobals);
 			ProgramSizes measured = { 0, 0, 0, 0 };
 			try {
-				measured = Assembler::preAssemble(UNITTEST, seed);
+				measured = Assembler::preAssemble(UNITTEST, measuredGlobals);
 			}
 			catch (const Exception& e) {
 				(void)e;
@@ -2339,8 +2363,8 @@ bool unitTest() {
 				ConstantKind kind = FLOAT_CONSTANT;
 				Value constant;
 				constant.i = 0;
-				const bool found = seed.lookupConstant("CR", kind, constant);			// `CR: ! DEFi #13` in UnitTest.gazl
-				assert(found && kind == INT_CONSTANT && constant.i == 13);				// the table really came back, not just the four sizes
+				const bool found = measuredGlobals.lookupConstant("CR", kind, constant);			// `CR: ! DEFi #13` in UnitTest.gazl
+				assert(found && kind == INT_CONSTANT && constant.i == 13);							// the table really came back, not just the four sizes
 				(void)found;
 			}
 		}
@@ -2392,11 +2416,8 @@ bool unitTest() {
 				Assembler assem(MAX_CODE_SIZE, &cody2[0], MAX_FUNCTION_COUNT, &functionTable2[0], MEMORY_SIZE, &memory2[0]
 						, globals2);
 				assem.newUnit("UnitTest");
-				const Char* cp = UNITTEST;
-				while (*cp != 0) {
-					cp = assem.feed(cp);
-					if (*cp == 0) assem.finalize(program2);
-				}
+				assem.assemble(UNITTEST);
+				assem.finalize(program2);
 			}
 
 			Processor pmachine2(program2, CALL_STACK_SIZE, &callStack2[0], nativeTable, &callbackData);
