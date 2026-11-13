@@ -1264,11 +1264,11 @@ void Assembler::finalize(AssembledProgram& program) {
 	program.sizes.constsSize = (UInt)(memoryEnd - constantsPointer);
 }
 
-// Grows `size` by `shortfall`, but at least doubles it. False, leaving it, past the `Int` range all sizes live in.
-static bool growArena(UInt& size, UInt shortfall) {
+// Grows `size` by `shortfall`, but at least doubles it, and never past `limit`. False, leaving it, if it is at `limit`.
+static bool growArena(UInt& size, UInt shortfall, UInt limit) {
+	if (size >= limit) return false;
 	const uint64_t grown = static_cast<uint64_t>(size) + std::max(size, shortfall);
-	if (grown > 0x7FFFFFFFu) return false;
-	size = static_cast<UInt>(grown);
+	size = static_cast<UInt>(std::min(grown, static_cast<uint64_t>(limit)));
 	return true;
 }
 
@@ -1276,13 +1276,25 @@ static bool growArena(UInt& size, UInt shortfall) {
 	A real assembly into scratch arenas that start small and grow whenever one runs out, so the sizes are exact.
 	The table handed back points into none of the scratch: symbol values are offsets, not addresses.
 */
-ProgramSizes Assembler::preAssemble(const Char* source, Symbols& symbols, const ProgramSizes* seed) {
+ProgramSizes Assembler::preAssemble(const Char* source, Symbols& symbols, const ProgramSizes* seed
+		, const ProgramSizes* limit, const Char** errorLine) {
+	// Without a `limit`, the arenas stop at the `Int` range all sizes live in.
+	UInt codeLimit = 0x7FFFFFFF, memoryLimit = 0x7FFFFFFF, functionLimit = 0x7FFFFFFF;
+	if (limit != 0) {
+		assert(limit->codeSize >= 1 && limit->functionCount >= 1 && limit->globalsSize + limit->constsSize >= 1);
+		codeLimit = std::min(codeLimit, limit->codeSize);
+		memoryLimit = std::min(memoryLimit, limit->globalsSize + limit->constsSize);
+		functionLimit = std::min(functionLimit, limit->functionCount);
+	}
 	UInt codeMax = 256, memoryMax = 256, functionMax = 64;
 	if (seed != 0) {
 		codeMax = std::max(codeMax, seed->codeSize);
 		memoryMax = std::max(memoryMax, seed->globalsSize + seed->constsSize);
 		functionMax = std::max(functionMax, seed->functionCount);
 	}
+	codeMax = std::min(codeMax, codeLimit);
+	memoryMax = std::min(memoryMax, memoryLimit);
+	functionMax = std::min(functionMax, functionLimit);
 	const Char* failedLine = 0;							// the line whose memory request failed last
 	while (true) {
 		std::vector<Instruction> code(codeMax);
@@ -1304,16 +1316,20 @@ ProgramSizes Assembler::preAssemble(const Char* source, Symbols& symbols, const 
 				Only the arena that ran out grows: growing all three asked for gigabytes of code space for a large
 				GLOB. Memory grows by at least the request's shortfall, so a request of a fixed size fits next time.
 				If the same line fails again, its request grows with the memory it is given (`GLOB *GAZL_MEMORY_SIZE`)
-				and no size can hold it, so the error stands rather than doubling forever.
+				and no size can hold it, so the error stands rather than doubling forever. No arena grows past its
+				limit, so a program that does not fit fails as a real assembly into buffers of the limit sizes would.
 			*/
+			bool grown = false;
 			if (x.error == NOT_ENOUGH_MEMORY_SPACE) {
-				if (line == failedLine || !growArena(memoryMax, assem.memoryShortfall)) throw;
+				grown = (line != failedLine && growArena(memoryMax, assem.memoryShortfall, memoryLimit));
 				failedLine = line;
 			} else if (x.error == NOT_ENOUGH_CODE_SPACE) {
-				if (!growArena(codeMax, codeMax)) throw;
+				grown = growArena(codeMax, codeMax, codeLimit);
 			} else if (x.error == NOT_ENOUGH_FUNCTION_SPACE) {
-				if (!growArena(functionMax, functionMax)) throw;
-			} else {
+				grown = growArena(functionMax, functionMax, functionLimit);
+			}
+			if (!grown) {
+				if (errorLine != 0) *errorLine = line;		// the failing line's start, or the end if finalizing
 				throw;
 			}
 		}

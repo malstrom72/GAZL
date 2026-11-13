@@ -1187,6 +1187,75 @@ int sweepPreAssemble() {
 }
 
 /*
+	A real assembly of `source` into buffers of exactly the `limit` sizes. Returns its error, or -1 when it
+	assembles, and sets `errorOffset` to where in `source` it failed, as a host driving `feed` would see it.
+*/
+int limitedAssemblyError(const char* source, const ProgramSizes& limit, size_t& errorOffset) {
+	std::vector<Instruction> code(limit.codeSize);
+	std::vector<UInt> functions(limit.functionCount);
+	std::vector<Value> memory(limit.globalsSize + limit.constsSize);
+	Symbols symbols;
+	const Char* line = source;
+	try {
+		Assembler assem(limit.codeSize, &code[0], limit.functionCount, &functions[0]
+				, limit.globalsSize + limit.constsSize, &memory[0], symbols);
+		assem.newUnit(0);
+		while (*line != 0) line = assem.feed(line);
+		AssembledProgram program;
+		assem.finalize(program);
+	}
+	catch (const Exception& e) {
+		errorOffset = static_cast<size_t>(line - source);
+		return e.error;
+	}
+	return -1;
+}
+
+/*
+	With a `limit`, `preAssemble` never grows an arena past it, so a program that does not fit fails as a real
+	assembly into buffers of the limit sizes does: the same error, on the same line, which `errorLine` reports. A
+	request far past the limit is refused without allocating it. Returns the number of failures, each one printed.
+*/
+int sweepPreAssembleLimits() {
+	struct Case { const char* what; const char* source; int error; };
+	const Case CASES[] = {
+		{ "a GLOB that fits", "g:\tGLOB *99\n", -1 },
+		{ "a GLOB one word over", "g:\tGLOB *100\n", NOT_ENOUGH_MEMORY_SPACE },
+		{ "a huge GLOB on line 2", "a:\tGLOB *10\nb:\tGLOB *2000000000\n", NOT_ENOUGH_MEMORY_SPACE },
+		{ "code over", "f:\tFUNC\n\tRETU\n\tRETU\n\tRETU\n\tRETU\n\tRETU\n\tRETU\n\tRETU\n\tRETU\n"
+				, NOT_ENOUGH_CODE_SPACE },
+		{ "functions over", "a:\tFUNC\n\tRETU\nb:\tFUNC\n\tRETU\nc:\tFUNC\n\tRETU\n", NOT_ENOUGH_FUNCTION_SPACE },
+		{ "an unknown mnemonic on line 2", "g:\tGLOB *1\n\tBOGUS\n", INVALID_MNENOMIC },
+		{ "a failure when finalizing", "f:\tFUNC\n", MISSING_RETURN_INSTRUCTION }
+	};
+	const ProgramSizes LIMIT = { 8, 2, 100, 0 };								// code, functions, then 100 words of memory
+	const int count = sizeof (CASES) / sizeof (*CASES);
+	int failures = 0;
+	for (int i = 0; i < count; ++i) {
+		size_t expectedOffset = 0;
+		const int expected = limitedAssemblyError(CASES[i].source, LIMIT, expectedOffset);
+		Symbols symbols;
+		int error = -1;
+		const Char* errorLine = 0;
+		try {
+			Assembler::preAssemble(CASES[i].source, symbols, 0, &LIMIT, &errorLine);
+		}
+		catch (const Exception& e) {
+			error = e.error;
+		}
+		const size_t offset = (errorLine != 0 ? static_cast<size_t>(errorLine - CASES[i].source) : 0);
+		if (error != CASES[i].error || expected != CASES[i].error || (error >= 0 && offset != expectedOffset)) {
+			std::printf("FAIL preAssemble limits: %s gave error %d at offset %d, a real assembly %d at %d"
+					", expected %d\n", CASES[i].what, error, static_cast<int>(offset), expected, static_cast<int>(expectedOffset)
+					, CASES[i].error);
+			++failures;
+		}
+	}
+	std::printf("preAssemble limits: %d checked, %d failed\n", count, failures);
+	return failures;
+}
+
+/*
 	Data in an unnamed section before its first label belongs to no name, so freezing could not save it, and the
 	assembler refuses it: at the statement, or for a section with no data, when the next section opens or at
 	`finalize`. Returns the number of failures, each one printed.
@@ -1714,8 +1783,8 @@ int main() {
 	}
 #endif
 	const int hostFailures = sweepNativeAccess() + sweepFrameAndThaw() + sweepFrozenEntries() + sweepThawRules()
-			+ sweepCanary() + sweepTextEncoding() + sweepPreAssemble() + sweepUnnamedSections() + sweepLabelReach()
-			+ sweepFunctionOffsets() + sweepSpanRegions() + sweepPrefixes() + sweepRegionOnly()
-			+ sweepPointerConstantKinds() + sweepPointerConstantReach();
+			+ sweepCanary() + sweepTextEncoding() + sweepPreAssemble() + sweepPreAssembleLimits()
+			+ sweepUnnamedSections() + sweepLabelReach() + sweepFunctionOffsets() + sweepSpanRegions()
+			+ sweepPrefixes() + sweepRegionOnly() + sweepPointerConstantKinds() + sweepPointerConstantReach();
 	return (sweep(engineCount) != 0 || hostFailures != 0) ? 1 : 0;
 }

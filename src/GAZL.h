@@ -267,7 +267,8 @@ class Assembler {
 	public:		void newUnit(const Char* unitName);																		// Begin assembling a new source unit.
 	public:		const Char* feed(const Char* line); 																	// Assemble a single line and return pointer to the next.
 	public:		void finalize(AssembledProgram& program); 																// Finish assembly and report memory usage. `program.sizes.functionCount` is the number of entries filled in `functionTable`.
-	public:		static ProgramSizes preAssemble(const Char* source, Symbols& symbols, const ProgramSizes* seed = 0); 					// The sizes a real assembly of `source` needs, from a throwaway one. On success `symbols`, seeded as for a real assembly, becomes the full table; on a throw it is untouched. `seed` sizes the first attempt. A program whose memory need grows with the memory it is given (`GLOB *GAZL_MEMORY_SIZE`) fits none, so it throws `NOT_ENOUGH_MEMORY_SPACE`.
+	public:		static ProgramSizes preAssemble(const Char* source, Symbols& symbols, const ProgramSizes* seed = 0
+						, const ProgramSizes* limit = 0, const Char** errorLine = 0);							// The sizes a real assembly of `source` needs, from a throwaway one. On success `symbols`, seeded as for a real assembly, becomes the full table; on a throw it is untouched. `seed` sizes the first attempt. No arena grows past `limit` (memory: its `globalsSize + constsSize`), so a program that does not fit throws the `NOT_ENOUGH_*` error a real assembly into buffers of that size would; `limit` requires (asserted) each of its three sizes to be at least 1. A program whose memory need grows with the memory it is given (`GLOB *GAZL_MEMORY_SIZE`) fits none, so it throws `NOT_ENOUGH_MEMORY_SPACE`. On a throw, `errorLine` (if not 0) gets the start of the failing line in `source`, or the end of `source` for a failure when finalizing.
 
 	protected:	struct CompileTimeVar {
 					int types;
