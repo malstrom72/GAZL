@@ -1277,7 +1277,7 @@ static bool growArena(UInt& size, UInt shortfall, UInt limit) {
 	The table handed back points into none of the scratch: symbol values are offsets, not addresses.
 */
 ProgramSizes Assembler::preAssemble(const Char* source, Symbols& symbols, const ProgramSizes* seed
-		, const ProgramSizes* limit, const Char** errorLine) {
+		, const ProgramSizes* limit) {
 	// Without a `limit`, the arenas stop at the `Int` range all sizes live in.
 	UInt codeLimit = 0x7FFFFFFF, memoryLimit = 0x7FFFFFFF, functionLimit = 0x7FFFFFFF;
 	if (limit != 0) {
@@ -1303,9 +1303,8 @@ ProgramSizes Assembler::preAssemble(const Char* source, Symbols& symbols, const 
 		Symbols scratch(symbols);						// fresh per attempt, or a retry would find the first attempt's names defined
 		Assembler assem(codeMax, &code[0], functionMax, &functions[0], memoryMax, &memory[0], scratch);
 		assem.newUnit(0);
-		const Char* line = source;
 		try {
-			while (*line != 0) line = assem.feed(line);
+			assem.assemble(source);
 			AssembledProgram program;
 			assem.finalize(program);					// resolves and CLEARS the forward refs, so no Value* into `code` survives
 			scratch.swap(symbols);						// success only: a throw leaves the caller's table untouched
@@ -1321,17 +1320,14 @@ ProgramSizes Assembler::preAssemble(const Char* source, Symbols& symbols, const 
 			*/
 			bool grown = false;
 			if (x.error == NOT_ENOUGH_MEMORY_SPACE) {
-				grown = (line != failedLine && growArena(memoryMax, assem.memoryShortfall, memoryLimit));
-				failedLine = line;
+				grown = (x.line != failedLine && growArena(memoryMax, assem.memoryShortfall, memoryLimit));
+				failedLine = x.line;
 			} else if (x.error == NOT_ENOUGH_CODE_SPACE) {
 				grown = growArena(codeMax, codeMax, codeLimit);
 			} else if (x.error == NOT_ENOUGH_FUNCTION_SPACE) {
 				grown = growArena(functionMax, functionMax, functionLimit);
 			}
-			if (!grown) {
-				if (errorLine != 0) *errorLine = line;		// the failing line's start, or the end if finalizing
-				throw;
-			}
+			if (!grown) throw;
 		}
 	}
 }
@@ -1397,6 +1393,21 @@ Value Assembler::calcConstant(const Operator* op, const Char* op1Begin, const Ch
 }
 
 const Char* Assembler::feed(const Char* line) {
+	try {
+		return feedLine(line);
+	}
+	catch (Exception& x) {
+		x.line = line;
+		throw;
+	}
+}
+
+void Assembler::assemble(const Char* source) {
+	const Char* line = source;
+	while (*line != 0) line = feed(line);
+}
+
+const Char* Assembler::feedLine(const Char* line) {
 	const Char* labelBegin = 0;
 	const Char* labelEnd = 0;
 	const Char* p = eatSpaceAndComment(line);
@@ -2323,16 +2334,13 @@ bool unitTest() {
 		{
 			Assembler assem(MAX_CODE_SIZE, cody, MAX_FUNCTION_COUNT, functionTable, MEMORY_SIZE, memory, globals);
 			assem.newUnit("UnitTest");
-			const Char* cp = UNITTEST;
-			while (*cp != 0) {
-				try {
-					cp = assem.feed(cp);
-					if (*cp == 0) assem.finalize(program);
-				}
-				catch (const Exception& e) {
-					(void)e;
-					assert(0);
-				}
+			try {
+				assem.assemble(UNITTEST);
+				assem.finalize(program);
+			}
+			catch (const Exception& e) {
+				(void)e;
+				assert(0);
 			}
 		}
 
@@ -2408,11 +2416,8 @@ bool unitTest() {
 				Assembler assem(MAX_CODE_SIZE, &cody2[0], MAX_FUNCTION_COUNT, &functionTable2[0], MEMORY_SIZE, &memory2[0]
 						, globals2);
 				assem.newUnit("UnitTest");
-				const Char* cp = UNITTEST;
-				while (*cp != 0) {
-					cp = assem.feed(cp);
-					if (*cp == 0) assem.finalize(program2);
-				}
+				assem.assemble(UNITTEST);
+				assem.finalize(program2);
 			}
 
 			Processor pmachine2(program2, CALL_STACK_SIZE, &callStack2[0], nativeTable, &callbackData);

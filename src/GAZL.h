@@ -149,11 +149,12 @@ class Exception : public std::exception {
 	public:		virtual ~Exception() throw();
 	public:		AssemblerError error;
 	public:		std::string detail;
+	public:		const Char* line;																						// The start of the line `feed` failed on, pointing into the text it was given, or 0 for a failure in `finalize`.
 	protected:	mutable std::string whatString;
 };
-inline Exception::Exception(AssemblerError error) : error(error) { assert(0 <= error && error < ASSEMBLER_ERROR_COUNT); }
-inline Exception::Exception(AssemblerError error, const Char* b, const Char* e) : error(error), detail(b, e) { assert(0 <= error && error < ASSEMBLER_ERROR_COUNT); }
-inline Exception::Exception(AssemblerError error, const std::string& detail) : error(error), detail(detail) { assert(0 <= error && error < ASSEMBLER_ERROR_COUNT); }
+inline Exception::Exception(AssemblerError error) : error(error), line(0) { assert(0 <= error && error < ASSEMBLER_ERROR_COUNT); }
+inline Exception::Exception(AssemblerError error, const Char* b, const Char* e) : error(error), detail(b, e), line(0) { assert(0 <= error && error < ASSEMBLER_ERROR_COUNT); }
+inline Exception::Exception(AssemblerError error, const std::string& detail) : error(error), detail(detail), line(0) { assert(0 <= error && error < ASSEMBLER_ERROR_COUNT); }
 inline Exception::~Exception() throw() { }																				// (GCC requires explicit destructor with one that has throw().)
 
 enum DataSection {
@@ -265,10 +266,11 @@ class Assembler {
 	friend class Symbols;
 	public:		Assembler(UInt maxCodeSize, Instruction* codeBase, UInt maxFunctionCount, UInt* functionTable, UInt maxMemorySize, Value* memoryBase, Symbols& globals); // Create an assembler for the provided buffers. `functionTable` maps each function's ordinal to its code offset (see `finalize`).
 	public:		void newUnit(const Char* unitName);																		// Begin assembling a new source unit.
-	public:		const Char* feed(const Char* line); 																	// Assemble a single line and return pointer to the next.
+	public:		const Char* feed(const Char* line); 																	// Assemble a single line and return pointer to the next. A thrown `Exception` carries `line` as its `line`.
+	public:		void assemble(const Char* source);																		// Assemble every line of `source`, as `feed` one by one would. Call it once per unit, after `newUnit`.
 	public:		void finalize(AssembledProgram& program); 																// Finish assembly and report memory usage. `program.sizes.functionCount` is the number of entries filled in `functionTable`.
 	public:		static ProgramSizes preAssemble(const Char* source, Symbols& symbols, const ProgramSizes* seed = 0
-						, const ProgramSizes* limit = 0, const Char** errorLine = 0);							// The sizes a real assembly of `source` needs, from a throwaway one. On success `symbols`, seeded as for a real assembly, becomes the full table; on a throw it is untouched. `seed` sizes the first attempt. No arena grows past `limit` (memory: its `globalsSize + constsSize`), so a program that does not fit throws the `NOT_ENOUGH_*` error a real assembly into buffers of that size would; `limit` requires (asserted) each of its three sizes to be at least 1. A program whose memory need grows with the memory it is given (`GLOB *GAZL_MEMORY_SIZE`) fits none, so it throws `NOT_ENOUGH_MEMORY_SPACE`. On a throw, `errorLine` (if not 0) gets the start of the failing line in `source`, or the end of `source` for a failure when finalizing.
+						, const ProgramSizes* limit = 0);														// The sizes a real assembly of `source` needs, from a throwaway one. On success `symbols`, seeded as for a real assembly, becomes the full table; on a throw it is untouched. `seed` sizes the first attempt. No arena grows past `limit` (memory: its `globalsSize + constsSize`), so a program that does not fit throws the `NOT_ENOUGH_*` error, on the same line, that a real assembly into buffers of that size would; `limit` requires (asserted) each of its three sizes to be at least 1. A program whose memory need grows with the memory it is given (`GLOB *GAZL_MEMORY_SIZE`) fits none, so it throws `NOT_ENOUGH_MEMORY_SPACE`.
 
 	protected:	struct CompileTimeVar {
 					int types;
@@ -294,6 +296,7 @@ class Assembler {
 						, const Char* op1Begin, const Char* op1End);
 	protected:	Value calcConstant(const Operator* op, const Char* op1Begin, const Char* op1End, const Char* op2Begin
 						, const Char* op2End);
+	protected:	const Char* feedLine(const Char* line);		// `feed` without setting the line of a thrown `Exception`.
 	protected:	void finalizeFunction();
 	protected:	void threadBranches();		// Collapse GOTO chains and turn a GOTO onto a RETU into the RETU. In place: no address moves.
 	protected:	void closeDataRegion();		// Record the closing region's claim and check it against the section's earlier regions.

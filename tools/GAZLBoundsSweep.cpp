@@ -478,8 +478,7 @@ bool assemble(Machine& m, const std::string& source, Layout& layout, std::string
 	try {
 		Assembler assem(CODE_SIZE, &m.code[0], FUNCTION_COUNT, &m.functionTable[0], MEMORY_SIZE, m.memory(), m.symbols);
 		assem.newUnit("sweep");
-		const Char* cp = source.c_str();
-		while (*cp != 0) cp = assem.feed(cp);
+		assem.assemble(source.c_str());
 		assem.finalize(m.program);
 	}
 	catch (const Exception& e) {
@@ -727,8 +726,7 @@ int sweepFrameAndThaw() {
 			Assembler assem(CODE_SIZE, &m.code[0], FUNCTION_COUNT, &m.functionTable[0], MEMORY_SIZE, m.memory()
 					, m.symbols);
 			assem.newUnit("frame");
-			const Char* cp = "f: FUNC\n$a: LOCA *2147483647\n$b: LOCA *1\n RETU\n";
-			while (*cp != 0) cp = assem.feed(cp);
+			assem.assemble("f: FUNC\n$a: LOCA *2147483647\n$b: LOCA *1\n RETU\n");
 		}
 		catch (const Exception& e) {
 			refused = (e.error == FRAME_TOO_LARGE);
@@ -1110,8 +1108,7 @@ int assemblyError(const std::string& source) {
 	try {
 		Assembler assem(CODE_SIZE, &m.code[0], FUNCTION_COUNT, &m.functionTable[0], MEMORY_SIZE, m.memory(), m.symbols);
 		assem.newUnit("text");
-		const Char* cp = source.c_str();
-		while (*cp != 0) cp = assem.feed(cp);
+		assem.assemble(source.c_str());
 		AssembledProgram program;
 		assem.finalize(program);
 	}
@@ -1186,11 +1183,17 @@ int sweepPreAssemble() {
 	return failures;
 }
 
+// Where in `source` the `Exception` `e` says assembly failed, or -1 for a failure in `finalize`.
+int errorOffset(const Exception& e, const char* source) {
+	return (e.line != 0 ? static_cast<int>(e.line - source) : -1);
+}
+
 /*
-	A real assembly of `source` into buffers of exactly the `limit` sizes. Returns its error, or -1 when it
-	assembles, and sets `errorOffset` to where in `source` it failed, as a host driving `feed` would see it.
+	A real assembly of `source` into buffers of exactly the `limit` sizes, driven line by line with `feed` as a host
+	would. Returns its error, or -1 when it assembles. On an error, `offset` is the failing line's offset in
+	`source`, or -1 if `finalize` failed, and `lineMatches` says whether the `Exception` reported that same line.
 */
-int limitedAssemblyError(const char* source, const ProgramSizes& limit, size_t& errorOffset) {
+int limitedAssemblyError(const char* source, const ProgramSizes& limit, int& offset, bool& lineMatches) {
 	std::vector<Instruction> code(limit.codeSize);
 	std::vector<UInt> functions(limit.functionCount);
 	std::vector<Value> memory(limit.globalsSize + limit.constsSize);
@@ -1205,7 +1208,8 @@ int limitedAssemblyError(const char* source, const ProgramSizes& limit, size_t& 
 		assem.finalize(program);
 	}
 	catch (const Exception& e) {
-		errorOffset = static_cast<size_t>(line - source);
+		offset = (*line != 0 ? static_cast<int>(line - source) : -1);
+		lineMatches = (errorOffset(e, source) == offset);
 		return e.error;
 	}
 	return -1;
@@ -1213,8 +1217,8 @@ int limitedAssemblyError(const char* source, const ProgramSizes& limit, size_t& 
 
 /*
 	With a `limit`, `preAssemble` never grows an arena past it, so a program that does not fit fails as a real
-	assembly into buffers of the limit sizes does: the same error, on the same line, which `errorLine` reports. A
-	request far past the limit is refused without allocating it. Returns the number of failures, each one printed.
+	assembly into buffers of the limit sizes does: the same error, on the same line, which the `Exception` carries.
+	A request far past the limit is refused without allocating it. Returns the number of failures, each one printed.
 */
 int sweepPreAssembleLimits() {
 	struct Case { const char* what; const char* source; int error; };
@@ -1232,22 +1236,23 @@ int sweepPreAssembleLimits() {
 	const int count = sizeof (CASES) / sizeof (*CASES);
 	int failures = 0;
 	for (int i = 0; i < count; ++i) {
-		size_t expectedOffset = 0;
-		const int expected = limitedAssemblyError(CASES[i].source, LIMIT, expectedOffset);
+		int expectedOffset = -1;
+		bool lineMatches = true;
+		const int expected = limitedAssemblyError(CASES[i].source, LIMIT, expectedOffset, lineMatches);
 		Symbols symbols;
 		int error = -1;
-		const Char* errorLine = 0;
+		int offset = -1;
 		try {
-			Assembler::preAssemble(CASES[i].source, symbols, 0, &LIMIT, &errorLine);
+			Assembler::preAssemble(CASES[i].source, symbols, 0, &LIMIT);
 		}
 		catch (const Exception& e) {
 			error = e.error;
+			offset = errorOffset(e, CASES[i].source);
 		}
-		const size_t offset = (errorLine != 0 ? static_cast<size_t>(errorLine - CASES[i].source) : 0);
-		if (error != CASES[i].error || expected != CASES[i].error || (error >= 0 && offset != expectedOffset)) {
-			std::printf("FAIL preAssemble limits: %s gave error %d at offset %d, a real assembly %d at %d"
-					", expected %d\n", CASES[i].what, error, static_cast<int>(offset), expected, static_cast<int>(expectedOffset)
-					, CASES[i].error);
+		if (error != CASES[i].error || expected != CASES[i].error || offset != expectedOffset || !lineMatches) {
+			std::printf("FAIL preAssemble limits: %s gave error %d at offset %d, a real assembly %d at %d (%s)"
+					", expected %d\n", CASES[i].what, error, offset, expected, expectedOffset
+					, (lineMatches ? "line reported" : "line NOT reported"), CASES[i].error);
 			++failures;
 		}
 	}
