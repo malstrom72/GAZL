@@ -184,17 +184,7 @@ static bool assembleKernel(Symbols& globals, KernelLayout& layout, Pointer& gInP
 	try {
 		Assembler assem(CODE_SIZE, gCode, FUNCTION_TABLE_SIZE, gFunctionTable, DATA_SIZE, gMemory, globals);
 		assem.newUnit("engineKernel");
-		std::string src(KERNEL_SOURCE);
-		size_t pos = 0;
-		while (pos < src.size()) {
-			const size_t nl = src.find('\n', pos);
-			const std::string line = src.substr(pos, nl == std::string::npos ? std::string::npos : nl - pos);
-			assem.feed(line.c_str());
-			if (nl == std::string::npos) {
-				break;
-			}
-			pos = nl + 1;
-		}
+		assem.assemble(KERNEL_SOURCE);
 		assem.finalize(gProgram);
 	} catch (const Exception& e) {
 		std::printf("  ASSEMBLE FAILED: %s (%s)\n", ASSEMBLER_ERROR_TEXTS[e.error], e.detail.c_str());

@@ -290,14 +290,7 @@ static bool assembleKernel(Symbols& globals, const char* source, Pointer& gInPtr
 	try {
 		Assembler assem(CODE_SIZE, gCode, FUNCTION_TABLE_SIZE, gFunctionTable, DATA_SIZE, gMemory, globals);
 		assem.newUnit("x64slice");
-		std::string src(source);
-		size_t pos = 0;
-		while (pos < src.size()) {
-			const size_t nl = src.find('\n', pos);
-			assem.feed(src.substr(pos, nl == std::string::npos ? std::string::npos : nl - pos).c_str());
-			if (nl == std::string::npos) { break; }
-			pos = nl + 1;
-		}
+		assem.assemble(source);
 		assem.finalize(gProgram);
 	} catch (const Exception& e) {
 		std::printf("  ASSEMBLE FAILED: %s (%s)\n", ASSEMBLER_ERROR_TEXTS[e.error], e.detail.c_str());

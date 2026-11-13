@@ -93,6 +93,10 @@ pmachine.resetTimeOut(0x7FFFFFFF);
 status = pmachine.run();
 ```
 
+`feed` assembles one line and returns the start of the next. With the whole source in one string, `assem.assemble(source)` feeds every line of it; call it once per unit, after `newUnit`. Assembly errors are thrown as `GAZL::Exception`: `error` is the code, `detail` names what it was about, and `line` points at the start of the failing line in the text given to `feed` or `assemble` (0 for an error from `finalize`), so the host can quote it and count its line number. It points into the host's text, so read it before that text goes away.
+
+To size the buffers before assembling, `Assembler::preAssemble(source, symbols)` does a throwaway assembly and returns the four sizes a real one needs, plus the program's own symbol table in `symbols`: allocate `codeSize` instructions, `functionCount` function-table entries and `globalsSize + constsSize` words plus the data stack, then assemble for real into a fresh, identically seeded `Symbols`. An optional `limit` caps all three, so a program that is too large fails with the same error, on the same line, as a real assembly into buffers of that size.
+
 `run()` returns `TIME_OUT` when the cycle budget set by `resetTimeOut` runs out; call `resetTimeOut` and `run()` again to continue. The processor exposes helpers to access memory and parameters (`accessMemory`, `accessParams`). Writing your own native functions involves the `Processor*` interface; see the unit tests for examples. A native can also push a GAZL call onto the continuation with `pushCall()`, which runs a GAZL function as if the native's caller had called it - `GAZLCmd`'s `--forward` uses this to satisfy a `^native` reference with an ordinary GAZL function.
 
 The full version, with the error handling and stream checks left out above, is in `tools/GAZLCmd.cpp` - the `Assembler` construction, `finalize` call and `Processor` construction in `main`.

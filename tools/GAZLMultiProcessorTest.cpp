@@ -134,8 +134,7 @@ static bool assemble() {
 		Assembler assem(CODE_SIZE, gCode, FUNCTION_TABLE_SIZE, gFunctionTable, DATA_SIZE, gMemory, gGlobals);
 		assem.newUnit("program");
 		const std::string source = std::string(SOURCE) + entrySource();
-		const Char* p = source.c_str();
-		while (*p != 0) p = assem.feed(p);
+		assem.assemble(source.c_str());
 		assem.finalize(gProgram);
 		return true;
 	}
