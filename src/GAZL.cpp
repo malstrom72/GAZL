@@ -1136,8 +1136,8 @@ void Assembler::sortByAddress(std::vector<Symbols::Symbol*>& labels) {
 	std::vector<Symbols::Symbol*> merged(count);
 	for (size_t width = 1; width < count; width *= 2) {
 		for (size_t begin = 0; begin < count; begin += 2 * width) {
-			const size_t middle = (count - begin > width ? begin + width : count);
-			const size_t end = (count - begin > 2 * width ? begin + 2 * width : count);
+			const size_t middle = minimum(begin + width, count);
+			const size_t end = minimum(begin + 2 * width, count);
 			size_t left = begin;
 			size_t right = middle;
 			for (size_t i = begin; i < end; ++i) {
@@ -1287,8 +1287,8 @@ void Assembler::finalize(AssembledProgram& program) {
 // Grows `size` by `shortfall`, but at least doubles it, and never past `limit`. False, leaving it, if it is at `limit`.
 static bool growArena(UInt& size, UInt shortfall, UInt limit) {
 	if (size >= limit) return false;
-	const uint64_t grown = static_cast<uint64_t>(size) + (size > shortfall ? size : shortfall);
-	size = (grown < limit ? static_cast<UInt>(grown) : limit);
+	const uint64_t grown = static_cast<uint64_t>(size) + maximum(size, shortfall);
+	size = static_cast<UInt>(minimum(grown, static_cast<uint64_t>(limit)));
 	return true;
 }
 
@@ -1302,21 +1302,19 @@ ProgramSizes Assembler::preAssemble(const Char* source, Symbols& symbols, const 
 	UInt codeLimit = 0x7FFFFFFF, memoryLimit = 0x7FFFFFFF, functionLimit = 0x7FFFFFFF;
 	if (limit != 0) {
 		assert(limit->codeSize >= 1 && limit->functionCount >= 1 && limit->globalsSize + limit->constsSize >= 1);
-		const UInt limitMemory = limit->globalsSize + limit->constsSize;
-		if (limit->codeSize < codeLimit) codeLimit = limit->codeSize;
-		if (limitMemory < memoryLimit) memoryLimit = limitMemory;
-		if (limit->functionCount < functionLimit) functionLimit = limit->functionCount;
+		codeLimit = minimum(codeLimit, limit->codeSize);
+		memoryLimit = minimum(memoryLimit, limit->globalsSize + limit->constsSize);
+		functionLimit = minimum(functionLimit, limit->functionCount);
 	}
 	UInt codeMax = 256, memoryMax = 256, functionMax = 64;
 	if (initialSizes != 0) {
-		const UInt initialMemory = initialSizes->globalsSize + initialSizes->constsSize;
-		if (initialSizes->codeSize > codeMax) codeMax = initialSizes->codeSize;
-		if (initialMemory > memoryMax) memoryMax = initialMemory;
-		if (initialSizes->functionCount > functionMax) functionMax = initialSizes->functionCount;
+		codeMax = maximum(codeMax, initialSizes->codeSize);
+		memoryMax = maximum(memoryMax, initialSizes->globalsSize + initialSizes->constsSize);
+		functionMax = maximum(functionMax, initialSizes->functionCount);
 	}
-	if (codeMax > codeLimit) codeMax = codeLimit;
-	if (memoryMax > memoryLimit) memoryMax = memoryLimit;
-	if (functionMax > functionLimit) functionMax = functionLimit;
+	codeMax = minimum(codeMax, codeLimit);
+	memoryMax = minimum(memoryMax, memoryLimit);
+	functionMax = minimum(functionMax, functionLimit);
 	const Char* failedLine = 0;							// the line whose memory request failed last
 	while (true) {
 		std::vector<Instruction> code(codeMax);
