@@ -29,7 +29,6 @@
 #include <cstdio>
 #include "assert.h"																										// local-overridable, see GAZL.h
 #include <set>
-#include <algorithm>
 #if defined(_M_X64) || defined(__x86_64__)															// the x64 backend lowers FLOF with SSE4.1 `roundss`
 	#if defined(_MSC_VER)
 		#include <intrin.h>
@@ -265,10 +264,16 @@ JitModule::~JitModule() {
 }
 
 void JitModule::swap(JitModule& other) {
-	std::swap(ownedPage, other.ownedPage);
-	std::swap(ownedWords, other.ownedWords);
+	void* const page = ownedPage;
+	const size_t words = ownedWords;
+	void* const dispatcher = dispatch;
+	ownedPage = other.ownedPage;
+	ownedWords = other.ownedWords;
+	dispatch = other.dispatch;
+	other.ownedPage = page;
+	other.ownedWords = words;
+	other.dispatch = dispatcher;
 	entries.swap(other.entries);
-	std::swap(dispatch, other.dispatch);
 }
 
 // A backend bug: asserts, and also throws so a release build degrades to the interpreter. Never returns.
@@ -372,10 +377,65 @@ static void jitSuccessors(const Instruction* code, UInt from, UInt to, const Val
 	if (j + 1 <= to) { succ.push_back(j + 1); }
 }
 
+// The index of the first of the ascending `values` that is not below `value`, or their count. A binary search.
+template<typename T> static size_t firstNotBelow(const std::vector<T>& values, T value) {
+	size_t first = 0;
+	size_t count = values.size();
+	while (count > 0) {
+		const size_t half = count / 2;
+		if (values[first + half] < value) {
+			first += half + 1;
+			count -= half + 1;
+		} else {
+			count = half;
+		}
+	}
+	return first;
+}
+
+// Moves `heap[root]` down until neither of its children among the first `count` values is larger.
+static void siftDown(std::vector<Int>& heap, size_t root, size_t count) {
+	size_t child = 2 * root + 1;
+	while (child < count) {
+		if (child + 1 < count && heap[child] < heap[child + 1]) {
+			++child;
+		}
+		if (heap[root] >= heap[child]) {
+			return;
+		}
+		const Int moved = heap[root];
+		heap[root] = heap[child];
+		heap[child] = moved;
+		root = child;
+		child = 2 * root + 1;
+	}
+}
+
+// Sorts `values` ascending and drops repeats. A heap sort: in place, and n log n for every input.
+static void sortDistinct(std::vector<Int>& values) {
+	const size_t count = values.size();
+	for (size_t i = count / 2; i > 0; --i) {
+		siftDown(values, i - 1, count);
+	}
+	for (size_t heapSize = count; heapSize > 1; --heapSize) {
+		const Int largest = values[0];
+		values[0] = values[heapSize - 1];
+		values[heapSize - 1] = largest;
+		siftDown(values, 0, heapSize - 1);
+	}
+	size_t distinctCount = 0;
+	for (size_t i = 0; i < count; ++i) {
+		if (distinctCount == 0 || values[i] != values[distinctCount - 1]) {
+			values[distinctCount] = values[i];
+			++distinctCount;
+		}
+	}
+	values.resize(distinctCount);
+}
+
 int LiveSets::slotIndex(Int slot) const {
-	const std::vector<Int>::const_iterator it = std::lower_bound(slots.begin(), slots.end(), slot);
-	if (it == slots.end() || *it != slot) { return -1; }
-	return static_cast<int>(it - slots.begin());
+	const size_t index = firstNotBelow(slots, slot);
+	return (index < slots.size() && slots[index] == slot) ? static_cast<int>(index) : -1;
 }
 
 bool LiveSets::isLive(UInt at, Int slot) const {
@@ -404,8 +464,7 @@ void LiveSets::build(const Instruction* code, UInt from, UInt to, const Value* m
 			if ((roles[k] & (OPERAND_SLOT_READ | OPERAND_SLOT_WRITE)) != 0) { slots.push_back(operands[k]->i); }
 		}
 	}
-	std::sort(slots.begin(), slots.end());
-	slots.erase(std::unique(slots.begin(), slots.end()), slots.end());
+	sortDistinct(slots);
 	if (slots.empty()) { return; }
 	const size_t words = rowWords();
 	// gen (reads) / kill (writes) per instruction; a FORi counter is read-modify-write, so it is both.
@@ -530,8 +589,8 @@ uint32_t RegisterCache::nextReadAfter(Int slot) const {
 	const UseSchedule::const_iterator it = useSchedule->find(slot);
 	if (it == useSchedule->end()) { return UINT32_MAX; }
 	const std::vector<UInt>& reads = it->second;
-	const std::vector<UInt>::const_iterator r = std::upper_bound(reads.begin(), reads.end(), instructionIndex);
-	return (r == reads.end()) ? UINT32_MAX : static_cast<uint32_t>(*r);
+	const size_t next = firstNotBelow(reads, instructionIndex + 1);
+	return (next == reads.size()) ? UINT32_MAX : static_cast<uint32_t>(reads[next]);
 }
 
 /*
