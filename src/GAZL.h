@@ -386,12 +386,7 @@ class Processor {
 	public:		void resetTimeOut(Int clockCycles); 																	// It is allowed to use `resetTimeOut(0)` from a native call to make the processor return immediately before executing its next instruction. Alternatively if you want to suspend the processor from a native call, but retry the call when resumed (e.g. simulating a blocking call), return non-zero from the native call and the instruction pointer will not be incremented.
 	public:		const Value* accessConstMemory(Pointer pointer, UInt count) const; 										// If returning null pointer you should normally return `ACCESS_VIOLATION`
 	public:		Value* accessMemory(Pointer pointer, UInt count) const; 												// If returning null pointer you should normally return `ACCESS_VIOLATION`
-	/*
-		In a native, `accessParams` gives that native's arguments. From the host, it gives the argument window of the
-		next `enterCall`: the same words before the call, after `enterCall` and after the call has returned, also
-		while another call is suspended underneath.
-	*/
-	public:		Value* accessParams(UInt count) const; 																	// If returning null pointer you should normally return `DATA_STACK_OVERFLOW`
+	public:		Value* accessParams(UInt count) const; 																	// If returning null pointer you should normally return `DATA_STACK_OVERFLOW`. In a native: its arguments. From the host: the arguments and results of the next `enterCall`, also while another call is suspended.
 	public:		Status enterCall(Pointer functionPointer); 																// After `enterCall()`, call `run()` (and on time out, repeatedly call `run()` until it returns OK). It is ok to call `enterCall()` at any time, current instruction pointer and stack is pushed and popped as expected which makes `enterCall()` double as a mean to issue interrupts.
 	public:		Value* pushCall(Pointer functionPointer);																// From inside a native callback only: when the native returns OK, the function runs as if the `^native` call had called it. Returns its argument window ([0] = result), or 0 on error. Several pushes run last-pushed first and share that one window.
 	public:		Status run();
