@@ -397,9 +397,13 @@ static bool gWaitRetry = false;
 
 static Status nwait(Processor* p) {						// BLOCKS once per call; the retry returns its argument plus one
 	Value* params = p->accessParams(2);
-	if (params == 0) return DATA_STACK_OVERFLOW;
+	if (params == 0) {
+		return DATA_STACK_OVERFLOW;
+	}
 	gWaitRetry = !gWaitRetry;
-	if (gWaitRetry) return BLOCKED;
+	if (gWaitRetry) {
+		return BLOCKED;
+	}
 	params[0].i = params[1].i + 1;
 	return OK;
 }
@@ -477,10 +481,14 @@ static int gInterruptErrors = 0;
 */
 static Status interrupt(Processor& p, int depth, Int argument) {
 	Value* const params = p.accessParams(2);
-	if (params == 0) return DATA_STACK_OVERFLOW;
+	if (params == 0) {
+		return DATA_STACK_OVERFLOW;
+	}
 	params[1].i = argument;
 	Status s = p.enterCall(gScribble);
-	if (s != OK) return s;
+	if (s != OK) {
+		return s;
+	}
 	const bool sameWindowEntered = (p.accessParams(2) == params);
 	Int fuel = 0;
 	do {
@@ -489,7 +497,9 @@ static Status interrupt(Processor& p, int depth, Int argument) {
 		s = p.run();
 		if (s == TIME_OUT && depth > 0) {
 			const Status inner = interrupt(p, depth - 1, argument + 1000);
-			if (inner != OK) return inner;
+			if (inner != OK) {
+				return inner;
+			}
 		}
 	} while (s == TIME_OUT);
 	if (s == OK && !(sameWindowEntered && p.accessParams(2) == params && params[0].i == 2 * argument)) {
@@ -511,41 +521,64 @@ static Status runInterrupted(Processor& p, Pointer function, int interruptAt, in
 	while (s == OK) {
 		p.resetTimeOut(1);
 		s = p.run();
-		if (s != TIME_OUT && s != BLOCKED) break;
-		if (++steps > MAX_STEPS) return ABORTED;
+		if (s != TIME_OUT && s != BLOCKED) {
+			return s;
+		}
+		++steps;
+		if (steps > MAX_STEPS) {
+			return ABORTED;
+		}
 		s = (interruptAt == 0 || interruptAt == steps ? interrupt(p, depth, steps) : OK);
 	}
 	return s;
 }
 
 /*
-	Runs `work` on a data stack of `dataStackSize` words: uninterrupted, interrupted at every suspension, and once
-	for each suspension with an interrupt only there. An interrupted run must end with `wantStatus`, with the same sum
-	when that is OK, and no run may write above the data stack.
+	One run of `work` on a data stack of `dataStackSize` words, interrupted as `runInterrupted` describes. True if it
+	ends with `wantStatus`, with the right sum when that is OK, with the right result from every interrupt, and with
+	nothing written above the data stack.
 */
-static void checkInterrupts(const char* label, Symbols& globals, UInt dataStackSize, int depth, Status wantStatus) {
+static bool interruptedRunIsGood(Symbols& globals, UInt dataStackSize, int depth, int interruptAt, Status wantStatus
+		, int& steps) {
 	const Int WANT_OUT = 1848;
 	const UInt GUARD_COUNT = 32;
 	const Int GUARD = 0x5AFE5AFE;
-	const int NO_FAILURE = -2;
 	UInt size = 0;
 	Value* const out = gMemory + (globals.findGlobal("gOut", size) - MEMORY_OFFSET + (gConstsSize - 1));
 	Value* const stackEnd = gMemory + (gConstsSize - 1) + gGlobalsSize + dataStackSize;
+	out->i = 0;
+	gInterruptErrors = 0;
+	for (UInt i = 0; i < GUARD_COUNT; ++i) {
+		stackEnd[i].i = GUARD;
+	}
+	Processor p(CODE_SIZE, gCode, gFunctionCount, gFunctionTable, DATA_SIZE, gMemory, gConstsSize
+			, DATA_SIZE - gConstsSize, gGlobalsSize, dataStackSize, CALL_STACK_SIZE, gCallStack, gNatives, 0);
+	const Status s = runInterrupted(p, globals.findFunction("work"), interruptAt, depth, steps);
+	bool good = (s == wantStatus && gInterruptErrors == 0 && (s != OK || out->i == WANT_OUT));
+	for (UInt i = 0; i < GUARD_COUNT; ++i) {
+		good = (good && stackEnd[i].i == GUARD);
+	}
+	return good;
+}
+
+/*
+	Runs `work` uninterrupted, then interrupted at every suspension, then once for each suspension with an interrupt
+	only there. The uninterrupted run must end OK and the others with `wantStatus`.
+*/
+static void checkInterrupts(const char* label, Symbols& globals, UInt dataStackSize, int depth, Status wantStatus) {
+	const int NO_FAILURE = -2;
 	int stepCount = 0;
 	int failedAt = NO_FAILURE;
-	for (int interruptAt = -1; interruptAt <= stepCount && failedAt == NO_FAILURE; ++interruptAt) {
-		out->i = 0;
-		gInterruptErrors = 0;
-		for (UInt i = 0; i < GUARD_COUNT; ++i) stackEnd[i].i = GUARD;
-		Processor p(CODE_SIZE, gCode, gFunctionCount, gFunctionTable, DATA_SIZE, gMemory, gConstsSize
-				, DATA_SIZE - gConstsSize, gGlobalsSize, dataStackSize, CALL_STACK_SIZE, gCallStack, gNatives, 0);
+	if (!interruptedRunIsGood(globals, dataStackSize, depth, -1, OK, stepCount)) {
+		failedAt = -1;
+	}
+	int interruptAt = 0;
+	while (failedAt == NO_FAILURE && interruptAt <= stepCount) {
 		int steps = 0;
-		const Status s = runInterrupted(p, globals.findFunction("work"), interruptAt, depth, steps);
-		bool good = (s == (interruptAt < 0 ? OK : wantStatus) && gInterruptErrors == 0);
-		good = (good && (s != OK || out->i == WANT_OUT));
-		for (UInt i = 0; i < GUARD_COUNT; ++i) good = (good && stackEnd[i].i == GUARD);
-		if (interruptAt < 0) stepCount = steps;
-		if (!good) failedAt = interruptAt;
+		if (!interruptedRunIsGood(globals, dataStackSize, depth, interruptAt, wantStatus, steps)) {
+			failedAt = interruptAt;
+		}
+		++interruptAt;
 	}
 	std::printf("  %-36s suspensions=%-4d ", label, stepCount);
 	if (failedAt == NO_FAILURE) {

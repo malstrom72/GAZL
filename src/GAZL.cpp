@@ -120,6 +120,7 @@ inline Int ftoi(Float v) {															// v is the ALREADY-SCALED float
 }
 template<typename T> inline T minimum(T a, T b) { return (a < b) ? a : b; }
 template<typename T> inline T maximum(T a, T b) { return (a < b) ? b : a; }
+template<typename T> inline void swapValues(T& a, T& b) { const T swapped = a; a = b; b = swapped; }
 
 static bool isEOL(const Char p) { return (p == 0 || p == '\n' || p == '\r'); }
 static const Char* eatSpace(const Char* p) { return p + strspn(p, STR(" \t")); }
@@ -1443,8 +1444,8 @@ const Char* Assembler::feed(const Char* line) {
 								Value* p0 = &ip->p0;
 								Value* p1 = &ip->p1;
 								Value* p2 = &ip->p2;
-								if ((op->otherFlags & SWAP_0_AND_1) != 0) std::swap(p0, p1);
-								if ((op->otherFlags & SWAP_1_AND_2) != 0) std::swap(p1, p2);
+								if ((op->otherFlags & SWAP_0_AND_1) != 0) swapValues(p0, p1);
+								if ((op->otherFlags & SWAP_1_AND_2) != 0) swapValues(p1, p2);
 								p0->i = p1->i = p2->i = 0;
 								if (op->opcode == RETU_C__) p0->i = localsSize;											// RETU
 								parseOperand(op0Begin, op0End, op->accepts[0], p0);
@@ -1732,10 +1733,13 @@ Status Processor::enterCall(Pointer functionPointer) {
 Value* Processor::frameCeiling() const {
 	assert(ipsp != ipStackBase);
 	const UInt offset = (UInt)(ip - codeBase);
-	UInt ordinal = 0;																									// binary search: the function is one of `count` from `ordinal`
-	for (UInt count = functionCount; count > 1; ) {
+	UInt ordinal = 0;
+	UInt count = functionCount;																							// binary search: the function is one of `count` from `ordinal`
+	while (count > 1) {
 		const UInt half = count / 2;
-		if (functionTable[ordinal + half] <= offset) ordinal += half;
+		if (functionTable[ordinal + half] <= offset) {
+			ordinal += half;
+		}
 		count -= half;
 	}
 	const Instruction* const func = codeBase + functionTable[ordinal];
@@ -2065,7 +2069,9 @@ bool unitTest() {
 
 		Value v;
 		v.i = 0xAACC5599;
-		std::fill_n(&memory[0], MEMORY_SIZE + CATCH_ZONE_SIZE, v);
+		for (int i = 0; i < MEMORY_SIZE + CATCH_ZONE_SIZE; ++i) {
+			memory[i] = v;
+		}
 		
 		Symbols globals;
 		seedTestNatives(globals);
