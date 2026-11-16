@@ -302,7 +302,7 @@ class Assembler {
 	protected:	void closeDataRegion();		// Record the closing region's claim and check it against the section's earlier regions.
 	protected:	void declareData(const Char* labelBegin, const Char* labelEnd, const Value* first, UInt declaredWords);	// Declare a data label at `first`; what it owns is decided when the section closes.
 	protected:	void closeDataSection();																				// Give each of the section's labels the words it owns, by address.
-	protected:	static bool lowerAddress(const Symbols::Symbol* a, const Symbols::Symbol* b);							// Orders data labels by address.
+	protected:	static void sortByAddress(std::vector<Symbols::Symbol*>& labels);										// Sorts data labels by address; labels on one word keep their order.
 	protected:	Pointer makeGAZLPointer(const Value* data, bool constant) const;										// The pointer to `data`: up from the base for globals, down from it for constants.
 	protected:	Instruction* const codeBase;
 	protected:	Instruction* const codeEnd;

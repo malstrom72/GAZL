@@ -26,7 +26,6 @@
 #include <stdint.h>
 #include <string.h>
 #include <stdlib.h>
-#include <algorithm>
 #include <string>
 #include <iostream>
 
@@ -1128,7 +1127,28 @@ void Assembler::declareData(const Char* labelBegin, const Char* labelEnd, const 
 	dataLabels.push_back(label);
 }
 
-bool Assembler::lowerAddress(const Symbols::Symbol* a, const Symbols::Symbol* b) { return a->value.p < b->value.p; }
+// A bottom-up merge sort, which is stable. Labels are in order already unless `SPAN` placed a region below another.
+void Assembler::sortByAddress(std::vector<Symbols::Symbol*>& labels) {
+	const size_t count = labels.size();
+	size_t ordered = 1;
+	while (ordered < count && labels[ordered - 1]->value.p <= labels[ordered]->value.p) ++ordered;
+	if (ordered >= count) return;
+	std::vector<Symbols::Symbol*> merged(count);
+	for (size_t width = 1; width < count; width *= 2) {
+		for (size_t begin = 0; begin < count; begin += 2 * width) {
+			const size_t middle = (count - begin > width ? begin + width : count);
+			const size_t end = (count - begin > 2 * width ? begin + 2 * width : count);
+			size_t left = begin;
+			size_t right = middle;
+			for (size_t i = begin; i < end; ++i) {
+				const bool takeRight = (left == middle
+						|| (right < end && labels[right]->value.p < labels[left]->value.p));
+				merged[i] = labels[takeRight ? right++ : left++];
+			}
+		}
+		labels.swap(merged);
+	}
+}
 
 /*
 	A stable sort by address keeps source order among labels on one word, so the later one owns its words. Words before
@@ -1136,7 +1156,7 @@ bool Assembler::lowerAddress(const Symbols::Symbol* a, const Symbols::Symbol* b)
 */
 void Assembler::closeDataSection() {
 	if (sectionBegin == 0) return;																// no section yet
-	std::stable_sort(dataLabels.begin(), dataLabels.end(), lowerAddress);
+	sortByAddress(dataLabels);
 	const Pointer begin = makeGAZLPointer(sectionBegin, dataIsConstant);
 	const Pointer end = begin + static_cast<Pointer>(sectionEnd - sectionBegin);
 	const bool frozen = (!dataIsConstant && (dataLabelType & TEMPORARY) == 0);
@@ -1227,11 +1247,11 @@ void Assembler::closeDataRegion() {
 	const Int e = (regionExtent < 0 ? (Int)(dataPointer - sectionBegin) : regionStart + regionExtent);
 	if (e == b) return;
 	const std::pair<Int, Int> claim(b, e);				// kept sorted by start, so overlap is a neighbour test
-	const std::vector< std::pair<Int, Int> >::iterator it
-			= std::lower_bound(dataRegions.begin(), dataRegions.end(), claim);
-	if ((it != dataRegions.end() && it->first < e) || (it != dataRegions.begin() && (it - 1)->second > b))
+	size_t at = dataRegions.size();						// the first region starting at or after `b`, usually the end
+	while (at > 0 && dataRegions[at - 1].first >= b) --at;
+	if ((at < dataRegions.size() && dataRegions[at].first < e) || (at > 0 && dataRegions[at - 1].second > b))
 		throw Exception(OVERLAPPING_DATA_REGIONS, dataLabel);
-	dataRegions.insert(it, claim);
+	dataRegions.insert(dataRegions.begin() + at, claim);
 }
 
 void Assembler::finalize(AssembledProgram& program) {
@@ -1267,8 +1287,8 @@ void Assembler::finalize(AssembledProgram& program) {
 // Grows `size` by `shortfall`, but at least doubles it, and never past `limit`. False, leaving it, if it is at `limit`.
 static bool growArena(UInt& size, UInt shortfall, UInt limit) {
 	if (size >= limit) return false;
-	const uint64_t grown = static_cast<uint64_t>(size) + std::max(size, shortfall);
-	size = static_cast<UInt>(std::min(grown, static_cast<uint64_t>(limit)));
+	const uint64_t grown = static_cast<uint64_t>(size) + (size > shortfall ? size : shortfall);
+	size = (grown < limit ? static_cast<UInt>(grown) : limit);
 	return true;
 }
 
@@ -1282,19 +1302,21 @@ ProgramSizes Assembler::preAssemble(const Char* source, Symbols& symbols, const 
 	UInt codeLimit = 0x7FFFFFFF, memoryLimit = 0x7FFFFFFF, functionLimit = 0x7FFFFFFF;
 	if (limit != 0) {
 		assert(limit->codeSize >= 1 && limit->functionCount >= 1 && limit->globalsSize + limit->constsSize >= 1);
-		codeLimit = std::min(codeLimit, limit->codeSize);
-		memoryLimit = std::min(memoryLimit, limit->globalsSize + limit->constsSize);
-		functionLimit = std::min(functionLimit, limit->functionCount);
+		const UInt limitMemory = limit->globalsSize + limit->constsSize;
+		if (limit->codeSize < codeLimit) codeLimit = limit->codeSize;
+		if (limitMemory < memoryLimit) memoryLimit = limitMemory;
+		if (limit->functionCount < functionLimit) functionLimit = limit->functionCount;
 	}
 	UInt codeMax = 256, memoryMax = 256, functionMax = 64;
 	if (initialSizes != 0) {
-		codeMax = std::max(codeMax, initialSizes->codeSize);
-		memoryMax = std::max(memoryMax, initialSizes->globalsSize + initialSizes->constsSize);
-		functionMax = std::max(functionMax, initialSizes->functionCount);
+		const UInt initialMemory = initialSizes->globalsSize + initialSizes->constsSize;
+		if (initialSizes->codeSize > codeMax) codeMax = initialSizes->codeSize;
+		if (initialMemory > memoryMax) memoryMax = initialMemory;
+		if (initialSizes->functionCount > functionMax) functionMax = initialSizes->functionCount;
 	}
-	codeMax = std::min(codeMax, codeLimit);
-	memoryMax = std::min(memoryMax, memoryLimit);
-	functionMax = std::min(functionMax, functionLimit);
+	if (codeMax > codeLimit) codeMax = codeLimit;
+	if (memoryMax > memoryLimit) memoryMax = memoryLimit;
+	if (functionMax > functionLimit) functionMax = functionLimit;
 	const Char* failedLine = 0;							// the line whose memory request failed last
 	while (true) {
 		std::vector<Instruction> code(codeMax);
