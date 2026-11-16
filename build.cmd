@@ -35,6 +35,10 @@ REM Several processors in one memory, cooperative and on threads (tools\GAZLMult
 CALL tools\test-processors.cmd
 IF ERRORLEVEL 1 EXIT /B 1
 
+REM Calls entered from natives, and interrupts on a suspended processor (tools\GAZLEnterCallTest.cpp).
+CALL tools\buildAndRunGAZLEnterCallTest.cmd
+IF ERRORLEVEL 1 EXIT /B 1
+
 REM Build Impala
 CALL tools\BuildImpala.cmd
 IF ERRORLEVEL 1 EXIT /B 1

@@ -337,3 +337,10 @@ code to match the shared rule; they apply to new and edited code the same way th
   content before it lands, which in practice means a pull request. `Impala2`, `GAZL2` and `jit-compiler` take direct
   pushes. CI does run on all four, so a direct push to one of those three is still verified, just after the fact
   rather than before it.
+
+GAZL also has one rule of its own:
+
+- **The run-time path does not allocate and uses no standard algorithms.** `Processor`, everything a host calls on
+  it while a program runs, and the code the JIT emits write a search or a loop out by hand, and nothing in them may
+  allocate, so what each call costs shows in the source and stays bounded. The assembler and the JIT compiler run
+  before execution and already allocate, so they may use the standard library, containers and algorithms alike.
