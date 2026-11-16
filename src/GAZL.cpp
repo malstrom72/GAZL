@@ -1131,8 +1131,12 @@ void Assembler::declareData(const Char* labelBegin, const Char* labelEnd, const 
 void Assembler::sortByAddress(std::vector<Symbols::Symbol*>& labels) {
 	const size_t count = labels.size();
 	size_t ordered = 1;
-	while (ordered < count && labels[ordered - 1]->value.p <= labels[ordered]->value.p) ++ordered;
-	if (ordered >= count) return;
+	while (ordered < count && labels[ordered - 1]->value.p <= labels[ordered]->value.p) {
+		++ordered;
+	}
+	if (ordered >= count) {
+		return;
+	}
 	std::vector<Symbols::Symbol*> merged(count);
 	for (size_t width = 1; width < count; width *= 2) {
 		for (size_t begin = 0; begin < count; begin += 2 * width) {
@@ -1141,9 +1145,13 @@ void Assembler::sortByAddress(std::vector<Symbols::Symbol*>& labels) {
 			size_t left = begin;
 			size_t right = middle;
 			for (size_t i = begin; i < end; ++i) {
-				const bool takeRight = (left == middle
-						|| (right < end && labels[right]->value.p < labels[left]->value.p));
-				merged[i] = labels[takeRight ? right++ : left++];
+				if (left == middle || (right < end && labels[right]->value.p < labels[left]->value.p)) {
+					merged[i] = labels[right];
+					++right;
+				} else {
+					merged[i] = labels[left];
+					++left;
+				}
 			}
 		}
 		labels.swap(merged);
@@ -1248,9 +1256,12 @@ void Assembler::closeDataRegion() {
 	if (e == b) return;
 	const std::pair<Int, Int> claim(b, e);				// kept sorted by start, so overlap is a neighbour test
 	size_t at = dataRegions.size();						// the first region starting at or after `b`, usually the end
-	while (at > 0 && dataRegions[at - 1].first >= b) --at;
-	if ((at < dataRegions.size() && dataRegions[at].first < e) || (at > 0 && dataRegions[at - 1].second > b))
+	while (at > 0 && dataRegions[at - 1].first >= b) {
+		--at;
+	}
+	if ((at < dataRegions.size() && dataRegions[at].first < e) || (at > 0 && dataRegions[at - 1].second > b)) {
 		throw Exception(OVERLAPPING_DATA_REGIONS, dataLabel);
+	}
 	dataRegions.insert(dataRegions.begin() + at, claim);
 }
 
