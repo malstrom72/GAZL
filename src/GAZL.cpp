@@ -26,7 +26,6 @@
 #include <stdint.h>
 #include <string.h>
 #include <stdlib.h>
-#include <algorithm>
 #include <string>
 #include <iostream>
 
@@ -1732,12 +1731,18 @@ Status Processor::enterCall(Pointer functionPointer) {
 */
 Value* Processor::frameCeiling() const {
 	assert(ipsp != ipStackBase);
-	const UInt* const next = std::upper_bound(functionTable, functionTable + functionCount, (UInt)(ip - codeBase));
-	assert(next != functionTable);
-	const Instruction* const func = codeBase + next[-1];
-	assert(func->opcode == FUNC_CC_);
+	const UInt offset = (UInt)(ip - codeBase);
+	UInt ordinal = 0;																									// binary search: the function is one of `count` from `ordinal`
+	for (UInt count = functionCount; count > 1; ) {
+		const UInt half = count / 2;
+		if (functionTable[ordinal + half] <= offset) ordinal += half;
+		count -= half;
+	}
+	const Instruction* const func = codeBase + functionTable[ordinal];
+	assert(func->opcode == FUNC_CC_ && func <= ip);
 	const UInt frameSize = (UInt)func->p1.i + (ip == func ? (UInt)func->p0.i : 0);
-	return dsp + std::min(frameSize, (UInt)(dataStackEnd - dsp));														// a frame too large for the stack leaves no room
+	const UInt room = (UInt)(dataStackEnd - dsp);
+	return dsp + (frameSize < room ? frameSize : room);																	// a frame too large for the stack leaves no room
 }
 
 /*

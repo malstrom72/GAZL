@@ -337,3 +337,10 @@ code to match the shared rule; they apply to new and edited code the same way th
   content before it lands, which in practice means a pull request. `Impala2`, `GAZL2` and `jit-compiler` take direct
   pushes. CI does run on all four, so a direct push to one of those three is still verified, just after the fact
   rather than before it.
+
+GAZL also has one rule of its own:
+
+- **No standard algorithms in `src/`.** A search, a sort, a minimum or a maximum is written out as a plain loop or
+  conditional, not as `std::lower_bound`, `std::sort`, `std::min` and the like, and `<algorithm>` is not included.
+  GAZL is low-level code: what a line costs must show in the source, nothing may allocate out of sight, and the
+  result must not depend on which standard library it was built with.
