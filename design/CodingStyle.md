@@ -340,7 +340,7 @@ code to match the shared rule; they apply to new and edited code the same way th
 
 GAZL also has one rule of its own:
 
-- **No standard algorithms in `src/`.** A search, a sort, a minimum or a maximum is written out as a plain loop or
-  conditional, not as `std::lower_bound`, `std::sort`, `std::min` and the like, and `<algorithm>` is not included.
-  GAZL is low-level code: what a line costs must show in the source, nothing may allocate out of sight, and the
-  result must not depend on which standard library it was built with.
+- **No standard algorithms in `src/`.** A search or a sort is written out as a plain loop, and a minimum or maximum
+  uses the `minimum` and `maximum` helpers in `src/GAZL.cpp`; not `std::lower_bound`, `std::sort`, `std::min` and the
+  like, and `<algorithm>` is not included. GAZL is low-level code: what a line costs must show in the source, nothing
+  may allocate out of sight, and the result must not depend on which standard library it was built with.
