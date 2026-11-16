@@ -340,8 +340,7 @@ code to match the shared rule; they apply to new and edited code the same way th
 
 GAZL also has one rule of its own:
 
-- **No standard algorithms in `src/`.** A search, a sort or a fill is written out as a plain loop, and a minimum, a
-  maximum or a swap uses the `minimum`, `maximum` and `swapValues` helpers in `src/GAZL.cpp`; not `std::lower_bound`,
-  `std::sort`, `std::fill_n`, `std::min`, `std::swap` and the like, and `<algorithm>` is not included. GAZL is
-  low-level code: what a line costs must show in the source, nothing may allocate out of sight, and the result must
-  not depend on which standard library it was built with.
+- **The run-time path does not allocate and uses no standard algorithms.** `Processor`, everything a host calls on
+  it while a program runs, and the code the JIT emits write a search or a loop out by hand, and nothing in them may
+  allocate, so what each call costs shows in the source and stays bounded. The assembler and the JIT compiler run
+  before execution and already allocate, so they may use the standard library, containers and algorithms alike.
