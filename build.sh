@@ -24,6 +24,9 @@ bash tools/test-float-literals.sh
 # Several processors in one memory, cooperative and on threads (tools/GAZLMultiProcessorTest.cpp).
 bash tools/test-processors.sh
 
+# Calls entered from natives, and interrupts on a suspended processor (tools/GAZLEnterCallTest.cpp).
+bash tools/buildAndRunGAZLEnterCallTest.sh
+
 # Build Impala
 bash tools/BuildImpala.sh
 
