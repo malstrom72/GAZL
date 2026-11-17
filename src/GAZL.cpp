@@ -2039,12 +2039,16 @@ Status Processor::enterCall(Target target) {
 	return OK;
 }
 
+Value* Processor::frameCeiling() const {
+	assert(ipsp != ipStackBase);
+	return dsp + minimum(frameSize(), (UInt)(dataStackEnd - dsp));														// a frame too large for the stack leaves no room
+}
+
 /*
 	Function offsets ascend in `functionTable`, so the last one at or before `ip` belongs to the function `ip` is in.
 	Its transients end `p1` words above `dsp`. Before its `FUNC` has run, `dsp` is where its whole frame will start.
 */
-Value* Processor::frameCeiling() const {
-	assert(ipsp != ipStackBase);
+UInt Processor::frameSize() const {
 	const UInt offset = (UInt)(ip - codeBase);
 	UInt ordinal = 0;
 	UInt count = functionCount;																							// binary search: the function is one of `count` from `ordinal`
@@ -2057,8 +2061,7 @@ Value* Processor::frameCeiling() const {
 	}
 	const Instruction* const func = codeBase + functionTable[ordinal];
 	assert(func->opcode == FUNC_CC_ && func <= ip);
-	const UInt frameSize = (UInt)func->p1.i + (ip == func ? (UInt)func->p0.i : 0);
-	return dsp + minimum(frameSize, (UInt)(dataStackEnd - dsp));														// a frame too large for the stack leaves no room
+	return (UInt)func->p1.i + (ip == func ? (UInt)func->p0.i : 0);
 }
 
 /*

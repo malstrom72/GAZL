@@ -156,9 +156,12 @@ class JitProcessor : public Processor {
 
 		static Offsets layout();					// the field byte offsets JitCompiler bakes into the machine code
 
-		virtual Status enterCall(Target target);	// seeds the resume continuation with the callee's compiled entry
+		virtual Status enterCall(Target target);	// seeds the resume continuation with the callee's compiled entry, keeping the old one to resume after the return
 		virtual Status run();						// one trip through the native dispatcher; GAZL and native calls stay inside it
 		virtual Value* pushCall(Target target);	// same contract as Processor::pushCall; retargets `nativeAfter` at the callee's entry
+
+	protected:
+		virtual UInt frameSize() const;			// as `Processor::frameSize`, with the function found by `resume`
 
 	private:
 		void bindModule(const JitModule& module);	// shared by both constructors; `module` must be compiled

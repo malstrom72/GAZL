@@ -41,6 +41,9 @@ bash tools/buildAndRunGAZLJitLowerTest.sh
 # Every memory instruction form at every edge of the memory arena, through the JIT too, against the sweep's oracle.
 bash tools/buildAndRunGAZLBoundsSweepJit.sh
 
+# Calls entered from natives, and interrupts on a suspended processor, through the JIT (tools/GAZLEnterCallTest.cpp).
+bash tools/buildAndRunGAZLEnterCallTestJit.sh
+
 # The 28 shipped Permut8 firmwares against interpreter-produced goldens: a differential over real products.
 bash tools/checkPermut8Firmwares.sh --jit
 

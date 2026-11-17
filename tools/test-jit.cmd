@@ -53,6 +53,10 @@ REM Every memory instruction form at every edge of the memory arena, through the
 CALL tools\buildAndRunGAZLBoundsSweepJit.cmd
 IF ERRORLEVEL 1 EXIT /B 1
 
+REM Calls entered from natives, and interrupts on a suspended processor, through the JIT (tools\GAZLEnterCallTest.cpp).
+CALL tools\buildAndRunGAZLEnterCallTestJit.cmd
+IF ERRORLEVEL 1 EXIT /B 1
+
 REM The 28 shipped Permut8 firmwares against interpreter-produced goldens: a differential over real products.
 CALL tools\checkPermut8Firmwares.cmd --jit
 IF ERRORLEVEL 1 EXIT /B 1

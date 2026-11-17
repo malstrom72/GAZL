@@ -979,11 +979,18 @@ Offsets JitProcessor::layout() {
 	return o;
 }
 
+/*
+	The two frames `Processor::enterCall` pushes keep the continuation the call interrupts, and `run()` puts it back in
+	`resume` when the call returns, so a suspended function goes on where it stopped.
+*/
 Status JitProcessor::enterCall(Target target) {
+	void* const interrupted = resume;
 	const Status s = Processor::enterCall(target);
 	if (s != OK) {
 		return s;
 	}
+	(ipsp - 2)->returnAddress = interrupted;
+	(ipsp - 1)->returnAddress = interrupted;
 	resume = funcEntries[target - FUNCTION_OFFSET];
 	return OK;
 }
@@ -1010,9 +1017,35 @@ Status JitProcessor::run() {
 	typedef int (*Disp)(JitProcessor*);
 	// nativeAfter is live across a native call, and a native that nests run() would clobber it: save and restore it.
 	void* const outerNativeAfter = nativeAfter;
+	++runDepth;
 	const Status s = static_cast<Status>(reinterpret_cast<Disp>(jitDispatch)(this));
+	--runDepth;
+	callEntered = false;
+	if (s == OK) {
+		resume = ipsp->returnAddress;																					// the frame the returning call just popped
+	}
 	nativeAfter = outerNativeAfter;
 	return s;
+}
+
+/*
+	Each function's code, stubs included, runs from its entry to the next one, and the entries ascend in ordinal order,
+	so the last entry at or before `resume` belongs to the function the processor is in. At that entry its `FUNC` has
+	not run.
+*/
+UInt JitProcessor::frameSize() const {
+	UInt ordinal = 0;
+	UInt count = functionCount;																							// binary search: the function is one of `count` from `ordinal`
+	while (count > 1) {
+		const UInt half = count / 2;
+		if (funcEntries[ordinal + half] <= resume) {
+			ordinal += half;
+		}
+		count -= half;
+	}
+	assert(funcEntries[ordinal] <= resume);
+	const Instruction* const func = codeBase + functionTable[ordinal];
+	return static_cast<UInt>(func->p1.i) + (resume == funcEntries[ordinal] ? static_cast<UInt>(func->p0.i) : 0);
 }
 
 // Shared by both constructors. The module must be compiled: an empty one has no dispatcher.
@@ -1022,6 +1055,9 @@ void JitProcessor::bindModule(const JitModule& module) {
 	nativeAfter = 0;
 	funcEntries = module.entryTable();
 	jitDispatch = module.dispatchEntry();
+	for (UInt ordinal = 1; ordinal < functionCount; ++ordinal) {
+		assert(funcEntries[ordinal - 1] < funcEntries[ordinal]);														// ascending, for `frameSize`
+	}
 }
 
 /*

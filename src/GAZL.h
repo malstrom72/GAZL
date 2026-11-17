@@ -444,7 +444,8 @@ class Processor {
 	public:		void* getUserData() const;
 	public:		int getClockCyclesLeft() const;
 	
-	protected:	Value* frameCeiling() const;																			// The first word above the frame of the function `ip` is in. Requires (asserted) a call in progress.
+	protected:	Value* frameCeiling() const;																			// The first word above the frame of the function the processor is in. Requires (asserted) a call in progress.
+	protected:	virtual UInt frameSize() const;																			// The words of that frame above `dsp`, found by `ip`: its transients, and its locals too if its `FUNC` has not run.
 	protected:	const Instruction* codeBase;
 	protected:	UInt functionCount;
 	protected:	const UInt* functionTable;																				// Maps function ordinal -> code offset; a function pointer is `FUNCTION_OFFSET + ordinal`.

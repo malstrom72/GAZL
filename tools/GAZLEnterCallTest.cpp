@@ -22,7 +22,7 @@
 */
 
 /*
-	Interpreter tests for calls issued from inside a native callback, in both flavors:
+	Tests for calls issued from inside a native callback, in both flavors:
 
 	  - BLOCKING (enterCall):     the native calls enterCall() and then nests run() until the call returns (the
 	                              documented interrupt pattern; the enterCall sentinel frame returns control to
@@ -34,7 +34,8 @@
 
 	Covers: single calls, recursion THROUGH the native (both flavors), a forwarded callee that itself blocks,
 	sequential forwards in a loop, fuel suspend/resume in the middle of forwarded calls, and pushCall chains
-	(order + shared-window semantics). Interpreter only. Exits non-zero on any failure.
+	(order + shared-window semantics). Runs on the interpreter, or on the JIT when built with GAZL_JIT. Exits non-zero
+	on any failure.
 
 	The kernels are compiled Impala (comment-stripped); each kernel's Impala source is quoted above it.
 
@@ -46,8 +47,19 @@
 #include <cstring>
 #include <string>
 #include "../src/GAZL.h"
+#ifdef GAZL_JIT
+#include "../src/GAZLJit.h"
+#endif
 
 using namespace GAZL;
+
+#ifdef GAZL_JIT
+static const char* const ENGINE_NAME = "JIT";
+static const Int STEP_FUEL = 64;		// the least fuel the JIT takes per resume: no block is charged more
+#else
+static const char* const ENGINE_NAME = "interpreter";
+static const Int STEP_FUEL = 1;					// one instruction per run()
+#endif
 
 static int failures = 0;
 
@@ -360,6 +372,9 @@ static UInt gFunctionTable[FUNCTION_TABLE_SIZE];
 static Value gMemory[DATA_SIZE];
 static CallStackEntry gCallStack[CALL_STACK_SIZE];
 static AssembledProgram gProgram;
+#ifdef GAZL_JIT
+static JitModule gModule;						// `gProgram` compiled, at each assembly
+#endif
 
 /*
 	The native flavors under test. All satisfy a `^native` call site by running GAZL functions on the SAME
@@ -428,6 +443,10 @@ static bool assemble(const char* source, Symbols& globals) {
 			pos = nl + 1;
 		}
 		assem.finalize(gProgram);
+#ifdef GAZL_JIT
+		NativeJitCompiler compiler;
+		compiler.compile(gProgram, gModule);
+#endif
 	} catch (const Exception& e) {
 		std::printf("  ASSEMBLE FAILED: %s (%s)\n", ASSEMBLER_ERROR_TEXTS[e.error], e.detail.c_str());
 		return false;
@@ -441,7 +460,11 @@ static bool assemble(const char* source, Symbols& globals) {
 	including inside forwarded calls).
 */
 static Status runToCompletion(Symbols& globals, const char* fn, Int fuel, int& suspends) {
+#ifdef GAZL_JIT
+	JitProcessor p(gModule, gProgram, CALL_STACK_SIZE, gCallStack, gNatives, 0);
+#else
 	Processor p(gProgram, CALL_STACK_SIZE, gCallStack, gNatives, 0);
+#endif
 	const Target mainPtr = globals.findFunction(fn);
 	if (mainPtr == NULL_TARGET) { std::printf("  no function '%s'\n", fn); return BAD_CALL; }
 	Status s = p.enterCall(mainPtr);
@@ -471,7 +494,7 @@ static Target gScribble = NULL_TARGET;
 static int gInterruptErrors = 0;
 
 /*
-	Enters `scribble(argument)` on a suspended processor and runs it to its return, one instruction per run(). With
+	Enters `scribble(argument)` on a suspended processor and runs it to its return, `STEP_FUEL` per run(). With
 	`depth` above 0 it is itself interrupted at every suspension, the first of them before its `FUNC` has run. Counts
 	an error unless `accessParams` gives the same window before the call, once entered and after the return.
 */
@@ -489,7 +512,7 @@ static Status interrupt(Processor& p, int depth, Int argument) {
 	Int fuel = 0;
 	do {
 		p.resetTimeOut(fuel);
-		fuel = 1;
+		fuel = STEP_FUEL;
 		s = p.run();
 		if (s == TIME_OUT && depth > 0) {
 			const Status inner = interrupt(p, depth - 1, argument + 1000);
@@ -505,7 +528,7 @@ static Status interrupt(Processor& p, int depth, Int argument) {
 }
 
 /*
-	Runs `function` one instruction per run(), counting the suspensions in `steps`, and interrupts at suspension
+	Runs `function` `STEP_FUEL` per run(), counting the suspensions in `steps`, and interrupts at suspension
 	number `interruptAt`: 0 is every suspension, -1 is none. A run of more than `MAX_STEPS` suspensions is `ABORTED`,
 	so that a corrupted loop fails the test.
 */
@@ -515,7 +538,7 @@ static Status runInterrupted(Processor& p, Target function, int interruptAt, int
 	steps = 0;
 	Status s = p.enterCall(function);
 	while (s == OK) {
-		p.resetTimeOut(1);
+		p.resetTimeOut(STEP_FUEL);
 		s = p.run();
 		if (s != TIME_OUT && s != BLOCKED) {
 			return s;
@@ -549,8 +572,13 @@ static bool interruptedRunIsGood(Symbols& globals, UInt dataStackSize, int depth
 	for (UInt i = 0; i < GUARD_COUNT; ++i) {
 		stackEnd[i].i = GUARD;
 	}
+#ifdef GAZL_JIT
+	JitProcessor p(gModule, gProgram, gProgram.memorySize - constsSize, globalsSize, dataStackSize, CALL_STACK_SIZE
+			, gCallStack, gNatives, 0);
+#else
 	Processor p(gProgram, gProgram.memorySize - constsSize, globalsSize, dataStackSize, CALL_STACK_SIZE, gCallStack
 			, gNatives, 0);
+#endif
 	const Status s = runInterrupted(p, globals.findFunction("work"), interruptAt, depth, steps);
 	bool good = (s == wantStatus && gInterruptErrors == 0 && (s != OK || out->i == WANT_OUT));
 	for (UInt i = 0; i < GUARD_COUNT; ++i) {
@@ -588,7 +616,7 @@ static void checkInterrupts(const char* label, Symbols& globals, UInt dataStackS
 }
 
 int main(int, const char**) {
-	std::printf("GAZL enterCall and pushCall tests (interpreter)\n");
+	std::printf("GAZL enterCall and pushCall tests (%s)\n", ENGINE_NAME);
 
 	{
 		std::printf("P1: basics\n");

@@ -1,7 +1,9 @@
 # Frame ceiling: toward true interrupts and CPU freeze
 
-Status: design notes / research, 2026-07. Nothing here is implemented; this records the problem, the design
-space we explored, and the recommendation, so the eventual implementation does not have to rediscover it.
+Status: design notes / research, 2026-07. Option C below is implemented for interrupts entered with `enterCall`:
+`Processor::frameCeiling` over a virtual `frameSize`, which searches `functionTable` by `ip` in the interpreter and
+`funcEntries` by `resume` in the JIT, and `accessParams` returns that ceiling while a call is suspended. A separate
+`interruptCall` and the CPU freeze are not implemented.
 
 ## The problem
 
