@@ -436,7 +436,7 @@ class Processor {
 	public:		void resetTimeOut(Int clockCycles); 																	// It is allowed to use `resetTimeOut(0)` from a native call to make the processor return immediately before executing its next instruction. Alternatively if you want to suspend the processor from a native call, but retry the call when resumed (e.g. simulating a blocking call), return non-zero from the native call and the instruction pointer will not be incremented.
 	public:		const Value* accessConstMemory(Pointer pointer, UInt count) const; 										// If returning null pointer you should normally return `ACCESS_VIOLATION`
 	public:		Value* accessMemory(Pointer pointer, UInt count) const; 												// If returning null pointer you should normally return `ACCESS_VIOLATION`
-	public:		Value* accessParams(UInt count) const; 																	// If returning null pointer you should normally return `DATA_STACK_OVERFLOW`
+	public:		Value* accessParams(UInt count) const; 																	// If returning null pointer you should normally return `DATA_STACK_OVERFLOW`. In a native: its arguments. From the host: write the arguments here before `enterCall`, and read the results here when the function has returned.
 	public:		virtual ~Processor() { }																				// The JIT processor is a subclass.
 	public:		virtual Status enterCall(Target target);																// After `enterCall()`, call `run()` (and on time out, repeatedly call `run()` until it returns OK). It is ok to call `enterCall()` at any time, current instruction pointer and stack is pushed and popped as expected which makes `enterCall()` double as a mean to issue interrupts.
 	public:		virtual Value* pushCall(Target target);																// From inside a native callback only: when the native returns OK, the function runs as if the `^native` call had called it. Returns its argument window ([0] = result), or 0 on error. Several pushes run last-pushed first and share that one window.
@@ -444,6 +444,7 @@ class Processor {
 	public:		void* getUserData() const;
 	public:		int getClockCyclesLeft() const;
 	
+	protected:	Value* frameCeiling() const;																			// The first word above the frame of the function `ip` is in. Requires (asserted) a call in progress.
 	protected:	const Instruction* codeBase;
 	protected:	UInt functionCount;
 	protected:	const UInt* functionTable;																				// Maps function ordinal -> code offset; a function pointer is `FUNCTION_OFFSET + ordinal`.
@@ -463,6 +464,8 @@ class Processor {
 	protected:	CallStackEntry* ipsp;
 	protected:	void* userData;
 	protected:	void* resume;				// Where the JIT resumes compiled code; unused by the interpreter.
+	protected:	UInt runDepth;																							// How many `run()` calls are executing. Above 0 the host is inside a native, and `dsp` is its argument window.
+	protected:	bool callEntered;																						// A call is entered and `run()` has not been called since: `dsp` is that call's argument window.
 };
 
 inline void Processor::resetTimeOut(Int clockCycles) { clockCyclesLeft = clockCycles; }
@@ -483,7 +486,8 @@ inline Value* Processor::accessMemory(Pointer pointer, UInt count) const {
 inline Value* Processor::accessParams(UInt count) const {
 	assert(dsp != 0);
 	assert(dsp >= dataStackBase);
-	return (count <= (UInt)(dataStackEnd - dsp) ? dsp : 0);
+	Value* const window = (runDepth != 0 || callEntered || ipsp == ipStackBase ? dsp : frameCeiling());
+	return (count <= (UInt)(dataStackEnd - window) ? window : 0);
 }
 
 inline void* Processor::getUserData() const { return userData; }

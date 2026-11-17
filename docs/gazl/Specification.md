@@ -309,8 +309,11 @@ run time and are checked against the end of the data stack (`BAD_PEEK`, `BAD_POK
 ## 9. Execution and the host
 
 The host assembles the units, creates a processor, starts a call with `enterCall`, and calls `run` until it returns
-something other than `TIME_OUT`. `enterCall` may also be called while a program is suspended: it pushes a new call
-on top, which is how a host delivers an interrupt.
+something other than `TIME_OUT`. The host writes the call's arguments and reads its results through `accessParams`,
+which gives the words that become the callee's parameters (section 8). `enterCall` may also be called while a
+program is suspended: it pushes a new call on top, which is how a host delivers an interrupt. An interrupt gets its
+own frame above the suspended function's, so the suspended program continues with its parameters, locals and
+transients unchanged.
 
 **Step budget.** `run` executes at most the budget set with `resetTimeOut`, one step per instruction (`FUNC`
 included; `NOOP` and assembly-time statements are free), then returns `TIME_OUT`. The next `run` continues exactly

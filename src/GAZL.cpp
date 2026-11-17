@@ -1653,6 +1653,7 @@ const Char* Assembler::feedLine(const Char* line) {
 					
 			case FUNC_CC_:	if (functionCount >= maxFunctionCount) throw Exception(NOT_ENOUGH_FUNCTION_SPACE);			// FUNC
 							v.t = FUNCTION_OFFSET + functionCount;
+							assert(functionCount == 0 || functionTable[functionCount - 1] < (UInt)(ip - codeBase));		// ascending, for `Processor::frameCeiling`
 							functionTable[functionCount] = (UInt)(ip - codeBase);
 							++functionCount;
 							declare(globals, labelBegin, labelEnd,
@@ -1791,7 +1792,8 @@ const Char* Assembler::feedLine(const Char* line) {
 
 Processor::Processor() : codeBase(0), functionCount(0), functionTable(0), memorySize(0), memoryBase(0)
 		, constantsSize(0), readOffset(0), rwMemorySize(0), dataStackBase(0), dataStackEnd(0), ipStackBase(0)
-		, ipStackEnd(0), natives(0), clockCyclesLeft(0), ip(0), dsp(0), ipsp(0), userData(0), resume(0) {
+		, ipStackEnd(0), natives(0), clockCyclesLeft(0), ip(0), dsp(0), ipsp(0), userData(0), resume(0), runDepth(0)
+		, callEntered(false) {
 }
 
 // C++03 cannot delegate, so this assigns the lower-level construction: the data stack runs from the globals to the guard.
@@ -1812,7 +1814,7 @@ Processor::Processor(const AssembledProgram& program, UInt rwMemorySize, UInt da
 		, dataStackBase(program.memory + constantsSize + dataStackOffset)
 		, dataStackEnd(program.memory + constantsSize + dataStackOffset + dataStackSize), ipStackBase(ipStack)
 		, ipStackEnd(ipStack + ipStackSize), natives(natives), clockCyclesLeft(0x7FFFFFFFU), ip(program.code)
-		, dsp(dataStackBase), ipsp(ipStackBase), userData(userData), resume(0) {
+		, dsp(dataStackBase), ipsp(ipStackBase), userData(userData), resume(0), runDepth(0), callEntered(false) {
 	assert(program.sizes.constsSize >= 1 && program.sizes.constsSize - 1 + rwMemorySize <= program.memorySize - 1);
 	assert(dataStackOffset + dataStackSize <= rwMemorySize);
 	assert(program.code != 0);
@@ -1840,6 +1842,7 @@ Int Processor::run() {
 	Int nativeError;
 	Int err = TIME_OUT;
 
+	++runDepth;
 	assert(ip != 0);
 	assert(dsp != 0);
 	assert(ipsp > ipStackBase && ipsp <= ipStackEnd); 	// If this blows it probably means you are trying to continue GAZL after it has returned to your native caller. You need to setup a new call with enterCall().
@@ -2004,6 +2007,8 @@ ret:
 	this->ip = ip;
 	this->dsp = dsp;
 	this->ipsp = ipsp;
+	--runDepth;
+	callEntered = false;
 	assert(ipsp >= ipStackBase && ipsp <= ipStackEnd);
 	return err;
 }
@@ -2023,12 +2028,37 @@ Status Processor::enterCall(Target target) {
 	ui = functionTable[ui];																								// ui = code offset
 	assert((codeBase + ui)->opcode == FUNC_CC_);
 	if (ipsp + 2 > ipStackEnd) return IP_STACK_OVERFLOW;
+	Value* const window = accessParams(0);
 	ipsp->ip = this->ip;
 	ipsp++->dsp = this->dsp;
 	ipsp->ip = this->ip;
 	ipsp++->dsp = 0;																									// Mark return to native caller.
 	this->ip = codeBase + ui;
+	this->dsp = window;																									// above a suspended function's frame
+	callEntered = true;
 	return OK;
+}
+
+/*
+	Function offsets ascend in `functionTable`, so the last one at or before `ip` belongs to the function `ip` is in.
+	Its transients end `p1` words above `dsp`. Before its `FUNC` has run, `dsp` is where its whole frame will start.
+*/
+Value* Processor::frameCeiling() const {
+	assert(ipsp != ipStackBase);
+	const UInt offset = (UInt)(ip - codeBase);
+	UInt ordinal = 0;
+	UInt count = functionCount;																							// binary search: the function is one of `count` from `ordinal`
+	while (count > 1) {
+		const UInt half = count / 2;
+		if (functionTable[ordinal + half] <= offset) {
+			ordinal += half;
+		}
+		count -= half;
+	}
+	const Instruction* const func = codeBase + functionTable[ordinal];
+	assert(func->opcode == FUNC_CC_ && func <= ip);
+	const UInt frameSize = (UInt)func->p1.i + (ip == func ? (UInt)func->p0.i : 0);
+	return dsp + minimum(frameSize, (UInt)(dataStackEnd - dsp));														// a frame too large for the stack leaves no room
 }
 
 /*
