@@ -24,6 +24,9 @@ bash tools/test-float-literals.sh
 # Several processors in one memory, cooperative and on threads (tools/GAZLMultiProcessorTest.cpp).
 bash tools/test-processors.sh
 
+# Calls entered from natives, and interrupts on a suspended processor (tools/GAZLEnterCallTest.cpp).
+bash tools/buildAndRunGAZLEnterCallTest.sh
+
 # Every node-only gate, shared with build.cmd so the two cannot run different subsets.
 bash tools/test-js.sh
 
