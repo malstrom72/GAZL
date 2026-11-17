@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -e -o pipefail -u
 cd "$(dirname "$0")"
-# enterCall-from-native tests (blocking + non-blocking forward), interpreter only.
+# enterCall and pushCall tests: calls from natives (blocking + non-blocking forward) and interrupts on a suspended
+# processor. Interpreter only. `beta` keeps asserts on.
 mkdir -p ../output
-bash BuildCpp.sh release native ../output/GAZLEnterCallTest -I../src GAZLEnterCallTest.cpp ../src/GAZL.cpp
+bash BuildCpp.sh beta native ../output/GAZLEnterCallTest -I../src GAZLEnterCallTest.cpp ../src/GAZL.cpp
 ../output/GAZLEnterCallTest

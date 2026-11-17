@@ -37,6 +37,9 @@
 	(order + shared-window semantics). Interpreter only. Exits non-zero on any failure.
 
 	The kernels are compiled Impala (comment-stripped); each kernel's Impala source is quoted above it.
+
+	P6 covers interrupts from the host instead: enterCall() on a processor suspended at each instruction of a function,
+	with arguments and a result passed through accessParams(), and with the interrupt handler itself interrupted.
 */
 
 #include <cstdio>
@@ -289,6 +292,62 @@ static const char* P5_SOURCE = "\n"
 		" 								POKE &gOut %0\n"
 		" 								RETU\n";
 
+/*
+	P6 interrupts from the host. Hand-written, so that `work` holds live transients at every instruction: `%0` and
+	`%1` across the whole loop, and call arguments across a GAZL call, a blocking native and a forwarding native.
+	`work` needs 10 words of data stack and `scribble`, the interrupt handler, 13: it fills its whole frame and returns
+	twice its argument. The sum is (601 + 607 + 613) + (1 + 2 + 3) + (1 + 7 + 13) = 1848.
+*/
+static const char* P6_SOURCE = "\n"
+		" 					GLOB *1\n"
+		" gOut:				DATi #0\n"
+		" scribble:			FUNC\n"
+		" 					$r:			OUTi\n"
+		" 					$x:			INPi\n"
+		" 					$a:			LOCi\n"
+		" 					$b:			LOCA *6\n"
+		" 								MOVi $a #-1\n"
+		" 								MOVi $b:0 #-1\n"
+		" 								MOVi $b:1 #-1\n"
+		" 								MOVi $b:2 #-1\n"
+		" 								MOVi $b:3 #-1\n"
+		" 								MOVi $b:4 #-1\n"
+		" 								MOVi $b:5 #-1\n"
+		" 								MOVi %0 #-1\n"
+		" 								MOVi %1 #-1\n"
+		" 								MOVi %2 #-1\n"
+		" 								MOVi %3 #-1\n"
+		" 								ADDi $r $x $x\n"
+		" 								RETU\n"
+		" helper:			FUNC\n"
+		" 					$r:			OUTi\n"
+		" 					$x:			INPi\n"
+		" 								MULi %0 $x #3\n"
+		" 								ADDi %1 %0 #1\n"
+		" 								ADDi $r %0 %1\n"
+		" 								RETU\n"
+		" work:				FUNC\n"
+		" 								PARA *1\n"
+		" 					$i:			LOCi\n"
+		" 					$sum:		LOCi\n"
+		" 								MOVi $sum #0\n"
+		" 								MOVi $i #0\n"
+		" 								MOVi %0 #3\n"
+		" 								MOVi %1 #100\n"
+		" 					.l:			ADDi %2 $i %1\n"
+		" 								MOVi %4 %2\n"
+		" 								CALL &helper %3 *2\n"
+		" 								ADDi $sum $sum %3\n"
+		" 								MOVi %3 $i\n"
+		" 								CALL ^nwait %2 *2\n"
+		" 								ADDi $sum $sum %2\n"
+		" 								MOVi %3 $i\n"
+		" 								CALL ^nfwd %2 *2\n"
+		" 								ADDi $sum $sum %2\n"
+		" 								FORi $i %0 @.l\n"
+		" 								POKE &gOut $sum\n"
+		" 								RETU\n";
+
 // --- harness (assemble + run pattern shared with GAZLJitLowerTest) ---
 
 static const int CODE_SIZE = 16384;
@@ -333,8 +392,24 @@ static Status nmark(Processor* p) {						// LIFO triple of argument-less handler
 	if (p->pushCall(gMark3) == 0) return BAD_CALL;
 	return OK;
 }
-static NativeFunc const gNatives[] = { nfwd, nblk, nchain, nmark };
-static const char* const gNativeNames[] = { "nfwd", "nblk", "nchain", "nmark" };
+
+static const Status BLOCKED = 1;
+static bool gWaitRetry = false;
+
+static Status nwait(Processor* p) {						// BLOCKS once per call; the retry returns its argument plus one
+	Value* params = p->accessParams(2);
+	if (params == 0) {
+		return DATA_STACK_OVERFLOW;
+	}
+	gWaitRetry = !gWaitRetry;
+	if (gWaitRetry) {
+		return BLOCKED;
+	}
+	params[0].i = params[1].i + 1;
+	return OK;
+}
+static NativeFunc const gNatives[] = { nfwd, nblk, nchain, nmark, nwait };
+static const char* const gNativeNames[] = { "nfwd", "nblk", "nchain", "nmark", "nwait" };
 
 static bool assemble(const char* source, Symbols& globals) {
 	std::memset(gMemory, 0, sizeof (gMemory));
@@ -392,8 +467,128 @@ static void check(const char* label, Symbols& globals, const char* fn, Int fuel,
 	if (!good) { ++failures; }
 }
 
+static Target gScribble = NULL_TARGET;
+static int gInterruptErrors = 0;
+
+/*
+	Enters `scribble(argument)` on a suspended processor and runs it to its return, one instruction per run(). With
+	`depth` above 0 it is itself interrupted at every suspension, the first of them before its `FUNC` has run. Counts
+	an error unless `accessParams` gives the same window before the call, once entered and after the return.
+*/
+static Status interrupt(Processor& p, int depth, Int argument) {
+	Value* const params = p.accessParams(2);
+	if (params == 0) {
+		return DATA_STACK_OVERFLOW;
+	}
+	params[1].i = argument;
+	Status s = p.enterCall(gScribble);
+	if (s != OK) {
+		return s;
+	}
+	const bool sameWindowEntered = (p.accessParams(2) == params);
+	Int fuel = 0;
+	do {
+		p.resetTimeOut(fuel);
+		fuel = 1;
+		s = p.run();
+		if (s == TIME_OUT && depth > 0) {
+			const Status inner = interrupt(p, depth - 1, argument + 1000);
+			if (inner != OK) {
+				return inner;
+			}
+		}
+	} while (s == TIME_OUT);
+	if (s == OK && !(sameWindowEntered && p.accessParams(2) == params && params[0].i == 2 * argument)) {
+		++gInterruptErrors;
+	}
+	return s;
+}
+
+/*
+	Runs `function` one instruction per run(), counting the suspensions in `steps`, and interrupts at suspension
+	number `interruptAt`: 0 is every suspension, -1 is none. A run of more than `MAX_STEPS` suspensions is `ABORTED`,
+	so that a corrupted loop fails the test.
+*/
+static Status runInterrupted(Processor& p, Target function, int interruptAt, int depth, int& steps) {
+	const int MAX_STEPS = 10000;
+	gWaitRetry = false;
+	steps = 0;
+	Status s = p.enterCall(function);
+	while (s == OK) {
+		p.resetTimeOut(1);
+		s = p.run();
+		if (s != TIME_OUT && s != BLOCKED) {
+			return s;
+		}
+		++steps;
+		if (steps > MAX_STEPS) {
+			return ABORTED;
+		}
+		s = (interruptAt == 0 || interruptAt == steps ? interrupt(p, depth, steps) : OK);
+	}
+	return s;
+}
+
+/*
+	One run of `work` on a data stack of `dataStackSize` words, interrupted as `runInterrupted` describes. True if it
+	ends with `wantStatus`, with the right sum when that is OK, with the right result from every interrupt, and with
+	nothing written above the data stack.
+*/
+static bool interruptedRunIsGood(Symbols& globals, UInt dataStackSize, int depth, int interruptAt, Status wantStatus
+		, int& steps) {
+	const Int WANT_OUT = 1848;
+	const UInt GUARD_COUNT = 32;
+	const Int GUARD = 0x5AFE5AFE;
+	UInt size = 0;
+	const UInt constsSize = gProgram.sizes.constsSize;
+	const UInt globalsSize = gProgram.sizes.globalsSize;
+	Value* const out = gMemory + (globals.findGlobal("gOut", size) - MEMORY_OFFSET + (constsSize - 1));
+	Value* const stackEnd = gMemory + (constsSize - 1) + globalsSize + dataStackSize;
+	out->i = 0;
+	gInterruptErrors = 0;
+	for (UInt i = 0; i < GUARD_COUNT; ++i) {
+		stackEnd[i].i = GUARD;
+	}
+	Processor p(gProgram, gProgram.memorySize - constsSize, globalsSize, dataStackSize, CALL_STACK_SIZE, gCallStack
+			, gNatives, 0);
+	const Status s = runInterrupted(p, globals.findFunction("work"), interruptAt, depth, steps);
+	bool good = (s == wantStatus && gInterruptErrors == 0 && (s != OK || out->i == WANT_OUT));
+	for (UInt i = 0; i < GUARD_COUNT; ++i) {
+		good = (good && stackEnd[i].i == GUARD);
+	}
+	return good;
+}
+
+/*
+	Runs `work` uninterrupted, then interrupted at every suspension, then once for each suspension with an interrupt
+	only there. The uninterrupted run must end OK and the others with `wantStatus`.
+*/
+static void checkInterrupts(const char* label, Symbols& globals, UInt dataStackSize, int depth, Status wantStatus) {
+	const int NO_FAILURE = -2;
+	int stepCount = 0;
+	int failedAt = NO_FAILURE;
+	if (!interruptedRunIsGood(globals, dataStackSize, depth, -1, OK, stepCount)) {
+		failedAt = -1;
+	}
+	int interruptAt = 0;
+	while (failedAt == NO_FAILURE && interruptAt <= stepCount) {
+		int steps = 0;
+		if (!interruptedRunIsGood(globals, dataStackSize, depth, interruptAt, wantStatus, steps)) {
+			failedAt = interruptAt;
+		}
+		++interruptAt;
+	}
+	std::printf("  %-36s suspensions=%-4d ", label, stepCount);
+	if (failedAt == NO_FAILURE) {
+		std::printf("OK\n");
+	} else {
+		std::printf("FAILED with the interrupt at %d (0 = every suspension, -1 = none)\n", failedAt);
+		++failures;
+	}
+}
+
 int main(int, const char**) {
-	std::printf("GAZL enterCall-from-native tests (interpreter)\n");
+	std::printf("GAZL enterCall and pushCall tests (interpreter)\n");
 
 	{
 		std::printf("P1: basics\n");
@@ -448,6 +643,17 @@ int main(int, const char**) {
 			check("2-chain: order + shared window", globals, "mainChain", 0x7FFFFFFF, 8043);
 			check("3-chain of handlers (LIFO)", globals, "mainMarks", 0x7FFFFFFF, 321);
 			check("3-chain, tiny fuel", globals, "mainMarks", 25, 321, true);
+		} else { ++failures; }
+	}
+	{
+		std::printf("P6: interrupts on a suspended processor\n");
+		Symbols globals;
+		if (assemble(P6_SOURCE, globals)) {
+			gFwdTarget = globals.findFunction("helper");
+			gScribble = globals.findFunction("scribble");
+			checkInterrupts("handler fits exactly", globals, 10 + 13, 0, OK);
+			checkInterrupts("interrupted handler fits exactly", globals, 10 + 13 + 13, 1, OK);
+			checkInterrupts("no room for the handler", globals, 10, 0, DATA_STACK_OVERFLOW);
 		} else { ++failures; }
 	}
 
