@@ -414,8 +414,8 @@ class Processor {
 	protected:	Value* dsp;
 	protected:	CallStackEntry* ipsp;
 	protected:	void* userData;
-	protected:	UInt runDepth;																							// How many `run()` calls are executing. Above 0 the host is inside a native, and `dsp` is its argument window.
-	protected:	bool callEntered;																						// A call is entered and `run()` has not been called since: `dsp` is that call's argument window.
+	protected:	UInt runDepth;																							// How many `run()` calls are executing. Above 0 the host is inside a native.
+	protected:	bool suspended;																							// `run()` returned with a call still in progress, and no call has been entered since: `accessParams` gives the words above that call's frame.
 	protected:	Value* reservationTop;																					// The first word above the host's `StackReservation`s, or `dataStackBase` while there are none.
 };
 
@@ -437,7 +437,7 @@ inline Value* Processor::accessMemory(Pointer pointer, UInt count) const {
 inline Value* Processor::accessParams(UInt count) const {
 	assert(dsp != 0);
 	assert(dsp >= dataStackBase);
-	Value* window = (runDepth != 0 || callEntered || ipsp == ipStackBase ? dsp : frameCeiling());
+	Value* window = (suspended ? frameCeiling() : dsp);
 	if (window < reservationTop) {
 		window = reservationTop;
 	}
@@ -451,7 +451,7 @@ inline void* Processor::getUserData() const { return userData; }
 	function by pointer. Create it, then write the arguments at `accessParams()` and call `enterCall()`: the call's frame
 	goes above the reserved words. Destroy it after reading the results, and before the `run()` that resumes a call that
 	was suspended when it was created (asserted). Destroy reservations in reverse order of creation. In a native, the
-	reserved words start at the native's own arguments.
+	first reserved words are the native's own arguments: reserve that many words more, and use the words after them.
 */
 class StackReservation {
 	public:		StackReservation(Processor& processor, UInt size);														// Requires (asserted) that `size` words fit: `processor.accessParams(size)` is not null.

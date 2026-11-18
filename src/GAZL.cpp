@@ -1488,7 +1488,7 @@ const Char* Assembler::feed(const Char* line) {
 Processor::Processor() : codeSize(0), codeBase(0), functionCount(0), functionTable(0), memorySize(0), memoryBase(0)
 		, constantsSize(0), readOffset(0), rwMemorySize(0), dataStackBase(0), dataStackEnd(0), ipStackBase(0)
 		, ipStackEnd(0), natives(0), clockCyclesLeft(0), ip(0), dsp(0), ipsp(0), userData(0), runDepth(0)
-		, callEntered(false), reservationTop(0) {
+		, suspended(false), reservationTop(0) {
 }
 
 Processor::Processor(UInt codeSize, const Instruction* code, UInt functionCount, const UInt* functionTable
@@ -1500,7 +1500,7 @@ Processor::Processor(UInt codeSize, const Instruction* code, UInt functionCount,
 		, dataStackBase(memory + constantsSize + dataStackOffset)
 		, dataStackEnd(memory + constantsSize + dataStackOffset + dataStackSize)
 		, ipStackBase(ipStack), ipStackEnd(ipStack + ipStackSize), natives(natives), clockCyclesLeft(0x7FFFFFFFU)
-		, ip(codeBase), dsp(dataStackBase), ipsp(ipStackBase), userData(userData), runDepth(0), callEntered(false)
+		, ip(codeBase), dsp(dataStackBase), ipsp(ipStackBase), userData(userData), runDepth(0), suspended(false)
 		, reservationTop(dataStackBase) {
 	assert(constsSize >= 1 && constsSize - 1 + rwMemorySize <= memorySize - 1);
 	assert(dataStackOffset + dataStackSize <= rwMemorySize);
@@ -1518,7 +1518,7 @@ Processor::Processor(UInt codeSize, const Instruction* code, UInt functionCount,
 		, dataStackBase(memory + constantsSize + globalsSize)
 		, dataStackEnd(memory + memorySize - 1), ipStackBase(ipStack), ipStackEnd(ipStack + ipStackSize)
 		, natives(natives), clockCyclesLeft(0x7FFFFFFFU), ip(codeBase), dsp(dataStackBase), ipsp(ipStackBase)
-		, userData(userData), runDepth(0), callEntered(false), reservationTop(dataStackBase) {
+		, userData(userData), runDepth(0), suspended(false), reservationTop(dataStackBase) {
 	assert(constsSize >= 1 && globalsSize + constsSize <= memorySize);			// `constsSize` includes the zero guard
 	assert(code != 0);
 	assert(memory != 0);
@@ -1549,9 +1549,10 @@ Int Processor::run() {
 	assert(ip != 0);
 	assert(dsp != 0);
 	assert(ipsp > ipStackBase && ipsp <= ipStackEnd); 	// If this blows it probably means you are trying to continue GAZL after it has returned to your native caller. You need to setup a new call with enterCall().
-	assert((callEntered || reservationTop <= frameCeiling())
+	assert((!suspended || reservationTop <= frameCeiling())
 			&& "destroy a `StackReservation` before resuming a call that was suspended when it was created");
-	
+	suspended = false;
+
 	while (--clockCyclesLeft >= 0) {
 		switch (ip->opcode) {
 			case FUNC_CC_:	if ((UInt)C0.i + (UInt)C1.i > (UInt)(dataStackEnd - dsp)) { err = DATA_STACK_OVERFLOW; goto ret; } dsp += (UInt)(C0.i); break;
@@ -1697,7 +1698,7 @@ ret:
 	this->dsp = dsp;
 	this->ipsp = ipsp;
 	--runDepth;
-	callEntered = false;
+	suspended = (runDepth == 0 && ipsp != ipStackBase);																	// a `run()` nested in a native returns into that native
 	assert(ipsp >= ipStackBase && ipsp <= ipStackEnd);
 	return err;
 }
@@ -1724,7 +1725,7 @@ Status Processor::enterCall(Pointer functionPointer) {
 	ipsp++->dsp = 0;																									// Mark return to native caller.
 	this->ip = codeBase + ui;
 	this->dsp = window;																									// above a suspended function's frame
-	callEntered = true;
+	suspended = false;
 	return OK;
 }
 
