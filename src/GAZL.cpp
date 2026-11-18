@@ -1787,7 +1787,8 @@ Pointer Processor::allocateStack(UInt size) {
 		return NULL_POINTER;
 	}
 	ipsp->ip = 0;
-	ipsp++->dsp = dsp;
+	ipsp->dsp = dsp;
+	++ipsp;
 	dsp = words + size;
 	suspended = false;
 	return MEMORY_OFFSET + (Pointer)(words - (memoryBase + constantsSize));
@@ -1796,7 +1797,8 @@ Pointer Processor::allocateStack(UInt size) {
 void Processor::freeStack() {
 	assert(ipsp != ipStackBase && ipsp[-1].ip == 0
 			&& "free stack allocations newest first, after the calls entered above them have returned");
-	dsp = (--ipsp)->dsp;
+	--ipsp;
+	dsp = ipsp->dsp;
 	suspended = callSuspended();
 }
 
