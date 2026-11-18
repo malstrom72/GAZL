@@ -39,7 +39,8 @@
 	The kernels are compiled Impala (comment-stripped); each kernel's Impala source is quoted above it.
 
 	P6 covers interrupts from the host instead: enterCall() on a processor suspended at each instruction of a function,
-	with arguments and a result passed through accessParams(), and with the interrupt handler itself interrupted.
+	with arguments and a result passed through accessParams(), and with the interrupt handler itself interrupted. P7
+	repeats them with a stack allocation under each interrupt, passed to GAZL by pointer, and allocates in a native.
 */
 
 #include <cstdio>
@@ -296,7 +297,8 @@ static const char* P5_SOURCE = "\n"
 	P6 interrupts from the host. Hand-written, so that `work` holds live transients at every instruction: `%0` and
 	`%1` across the whole loop, and call arguments across a GAZL call, a blocking native and a forwarding native.
 	`work` needs 10 words of data stack and `scribble`, the interrupt handler, 13: it fills its whole frame and returns
-	twice its argument. The sum is (601 + 607 + 613) + (1 + 2 + 3) + (1 + 7 + 13) = 1848.
+	twice its argument. The sum is (601 + 607 + 613) + (1 + 2 + 3) + (1 + 7 + 13) = 1848. P7 adds `peekWord`, which
+	returns the word its pointer argument points at, and `bufMain`, which passes 7 to `^nbuf`: 3 * 7 + 7 = 28.
 */
 static const char* P6_SOURCE = "\n"
 		" 					GLOB *1\n"
@@ -346,6 +348,17 @@ static const char* P6_SOURCE = "\n"
 		" 								ADDi $sum $sum %2\n"
 		" 								FORi $i %0 @.l\n"
 		" 								POKE &gOut $sum\n"
+		" 								RETU\n"
+		" peekWord:			FUNC\n"
+		" 					$r:			OUTi\n"
+		" 					$p:			INPp\n"
+		" 								PEEK $r $p\n"
+		" 								RETU\n"
+		" bufMain:			FUNC\n"
+		" 								PARA *1\n"
+		" 								MOVi %1 #7\n"
+		" 								CALL ^nbuf %0 *2\n"
+		" 								POKE &gOut %0\n"
 		" 								RETU\n";
 
 // --- harness (assemble + run pattern shared with GAZLJitLowerTest) ---
@@ -407,8 +420,47 @@ static Status nwait(Processor* p) {						// BLOCKS once per call; the retry retu
 	params[0].i = params[1].i + 1;
 	return OK;
 }
-static NativeFunc const gNatives[] = { nfwd, nblk, nchain, nmark, nwait };
-static const char* const gNativeNames[] = { "nfwd", "nblk", "nchain", "nmark", "nwait" };
+
+static Pointer gBufTarget = 0;
+
+/*
+	Allocates a word above its own two arguments, writes three times its argument there and passes the word's pointer to
+	`gBufTarget`, which must return the word. Returns that plus its argument, and `ABORTED` if `gBufTarget`'s arguments
+	were not right above the allocated word.
+*/
+static Status nbuf(Processor* p) {
+	if (p->accessParams(2 + 1 + 2) == 0) {
+		return DATA_STACK_OVERFLOW;
+	}
+	const Pointer pointer = p->allocateStack(2 + 1);
+	if (pointer == NULL_POINTER) {
+		return IP_STACK_OVERFLOW;
+	}
+	Value* const arguments = p->accessMemory(pointer, 2 + 1);
+	Value* const word = arguments + 2;
+	word->i = 3 * arguments[1].i;
+	Value* const params = p->accessParams(2);
+	params[1].p = pointer + 2;
+	Status s = p->enterCall(gBufTarget);
+	if (s != OK) {
+		return s;
+	}
+	do {
+		p->resetTimeOut(100000);
+		s = p->run();
+	} while (s == TIME_OUT);
+	if (s != OK) {
+		return s;
+	}
+	if (params != word + 1) {
+		return ABORTED;
+	}
+	arguments[0].i = params[0].i + arguments[1].i;
+	p->freeStack();
+	return OK;
+}
+static NativeFunc const gNatives[] = { nfwd, nblk, nchain, nmark, nwait, nbuf };
+static const char* const gNativeNames[] = { "nfwd", "nblk", "nchain", "nmark", "nwait", "nbuf" };
 
 static bool assemble(const char* source, Symbols& globals) {
 	std::memset(gMemory, 0, sizeof (gMemory));
@@ -472,14 +524,18 @@ static void check(const char* label, Symbols& globals, const char* fn, Int fuel,
 }
 
 static Pointer gScribble = 0;
+static Pointer gPeekWord = 0;
+static UInt gAllocationSize = 0;
 static int gInterruptErrors = 0;
+
+static Status interrupt(Processor& p, int depth, Int argument);
 
 /*
 	Enters `scribble(argument)` on a suspended processor and runs it to its return, one instruction per run(). With
 	`depth` above 0 it is itself interrupted at every suspension, the first of them before its `FUNC` has run. Counts
 	an error unless `accessParams` gives the same window before the call, once entered and after the return.
 */
-static Status interrupt(Processor& p, int depth, Int argument) {
+static Status scribbleCall(Processor& p, int depth, Int argument) {
 	Value* const params = p.accessParams(2);
 	if (params == 0) {
 		return DATA_STACK_OVERFLOW;
@@ -504,6 +560,55 @@ static Status interrupt(Processor& p, int depth, Int argument) {
 	} while (s == TIME_OUT);
 	if (s == OK && !(sameWindowEntered && p.accessParams(2) == params && params[0].i == 2 * argument)) {
 		++gInterruptErrors;
+	}
+	return s;
+}
+
+/*
+	`scribbleCall`, over a stack allocation of `gAllocationSize` words when that is above 0: then the first allocated
+	word holds three times `argument`, and once `scribble` has returned, `peekWord` must read it through the
+	allocation's pointer. Counts an error if `scribble` or a nested interrupt changed an allocated word.
+*/
+static Status interrupt(Processor& p, int depth, Int argument) {
+	const Int GUARD = 0x5AFE5AFE;
+	if (gAllocationSize == 0) {
+		return scribbleCall(p, depth, argument);
+	}
+	if (p.accessParams(gAllocationSize + 2) == 0) {
+		return DATA_STACK_OVERFLOW;
+	}
+	const Pointer pointer = p.allocateStack(gAllocationSize);
+	if (pointer == NULL_POINTER) {
+		return IP_STACK_OVERFLOW;
+	}
+	Value* const words = p.accessMemory(pointer, gAllocationSize);
+	words[0].i = 3 * argument;
+	for (UInt i = 1; i < gAllocationSize; ++i) {
+		words[i].i = GUARD;
+	}
+	Status s = scribbleCall(p, depth, argument);
+	if (s == OK) {
+		Value* const params = p.accessParams(2);
+		params[1].p = pointer;
+		s = p.enterCall(gPeekWord);
+		if (s == OK) {
+			p.resetTimeOut(0x7FFFFFFF);
+			s = p.run();
+		}
+		if (s == OK && !(p.accessParams(2) == params && params == words + gAllocationSize
+				&& params[0].i == 3 * argument)) {
+			++gInterruptErrors;
+		}
+	}
+	bool unchanged = (words[0].i == 3 * argument);
+	for (UInt i = 1; i < gAllocationSize; ++i) {
+		unchanged = (unchanged && words[i].i == GUARD);
+	}
+	if (!unchanged) {
+		++gInterruptErrors;
+	}
+	if (s == OK) {
+		p.freeStack();
 	}
 	return s;
 }
@@ -589,6 +694,55 @@ static void checkInterrupts(const char* label, Symbols& globals, UInt dataStackS
 	}
 }
 
+/*
+	An allocation on an idle processor: `peekWord` must read the allocated word through the allocation's pointer, its
+	result must be right above the allocated word, and `accessParams` must give the allocated word again once the
+	allocation is freed.
+*/
+static void checkIdleAllocation(const char* label) {
+	Processor p(CODE_SIZE, gCode, gFunctionCount, gFunctionTable, DATA_SIZE, gMemory, gGlobalsSize, gConstsSize,
+			CALL_STACK_SIZE, gCallStack, gNatives, 0);
+	const Pointer pointer = p.allocateStack(1);
+	Value* const words = p.accessMemory(pointer, 1);
+	bool good = (pointer != NULL_POINTER && words != 0);
+	if (good) {
+		words[0].i = 4711;
+		Value* const params = p.accessParams(2);
+		params[1].p = pointer;
+		Status s = p.enterCall(gPeekWord);
+		if (s == OK) {
+			p.resetTimeOut(0x7FFFFFFF);
+			s = p.run();
+		}
+		good = (s == OK && params == words + 1 && p.accessParams(2) == params && params[0].i == 4711);
+		if (s == OK) {
+			p.freeStack();
+		}
+	}
+	good = (good && p.accessParams(0) == words);
+	std::printf("  %-36s %s\n", label, good ? "OK" : "FAILED");
+	if (!good) {
+		++failures;
+	}
+}
+
+/*
+	Each stack allocation takes a call-stack entry: with room for one entry, the second allocation must fail.
+*/
+static void checkCallStackFull(const char* label) {
+	Processor p(CODE_SIZE, gCode, gFunctionCount, gFunctionTable, DATA_SIZE, gMemory, gGlobalsSize, gConstsSize, 1,
+			gCallStack, gNatives, 0);
+	const bool first = (p.allocateStack(1) != NULL_POINTER);
+	const bool good = (first && p.allocateStack(1) == NULL_POINTER);
+	if (first) {
+		p.freeStack();
+	}
+	std::printf("  %-36s %s\n", label, good ? "OK" : "FAILED");
+	if (!good) {
+		++failures;
+	}
+}
+
 int main(int, const char**) {
 	std::printf("GAZL enterCall and pushCall tests (interpreter)\n");
 
@@ -656,6 +810,25 @@ int main(int, const char**) {
 			checkInterrupts("handler fits exactly", globals, 10 + 13, 0, OK);
 			checkInterrupts("interrupted handler fits exactly", globals, 10 + 13 + 13, 1, OK);
 			checkInterrupts("no room for the handler", globals, 10, 0, DATA_STACK_OVERFLOW);
+		} else { ++failures; }
+	}
+	{
+		std::printf("P7: stack allocations\n");
+		Symbols globals;
+		if (assemble(P6_SOURCE, globals)) {
+			gFwdTarget = globals.findFunction("helper");
+			gScribble = globals.findFunction("scribble");
+			gPeekWord = globals.findFunction("peekWord");
+			checkIdleAllocation("allocated on an idle processor");
+			checkCallStackFull("no room on the call stack");
+			gBufTarget = gPeekWord;
+			check("allocated in a native", globals, "bufMain", 0x7FFFFFFF, 28);
+			check("allocated in a native, tiny fuel", globals, "bufMain", 1, 28, true);
+			gAllocationSize = 2;
+			checkInterrupts("allocated, handler fits exactly", globals, 10 + 2 + 13, 0, OK);
+			checkInterrupts("allocated twice, handlers just fit", globals, 10 + 2 + 13 + 2 + 13, 1, OK);
+			checkInterrupts("room for the allocation only", globals, 10 + 2 + 2, 0, DATA_STACK_OVERFLOW);
+			gAllocationSize = 0;
 		} else { ++failures; }
 	}
 

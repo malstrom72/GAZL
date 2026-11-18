@@ -1497,7 +1497,7 @@ const Char* Assembler::feed(const Char* line) {
 Processor::Processor() : codeSize(0), codeBase(0), functionCount(0), functionTable(0), memorySize(0), memoryBase(0)
 		, constantsSize(0), readOffset(0), rwMemorySize(0), dataStackBase(0), dataStackEnd(0), ipStackBase(0)
 		, ipStackEnd(0), natives(0), clockCyclesLeft(0), ip(0), dsp(0), ipsp(0), userData(0), runDepth(0)
-		, callEntered(false) {
+		, suspended(false) {
 }
 
 Processor::Processor(UInt codeSize, const Instruction* code, UInt functionCount, const UInt* functionTable
@@ -1509,7 +1509,7 @@ Processor::Processor(UInt codeSize, const Instruction* code, UInt functionCount,
 		, dataStackBase(memory + constantsSize + dataStackOffset)
 		, dataStackEnd(memory + constantsSize + dataStackOffset + dataStackSize)
 		, ipStackBase(ipStack), ipStackEnd(ipStack + ipStackSize), natives(natives), clockCyclesLeft(0x7FFFFFFFU)
-		, ip(codeBase), dsp(dataStackBase), ipsp(ipStackBase), userData(userData), runDepth(0), callEntered(false) {
+		, ip(codeBase), dsp(dataStackBase), ipsp(ipStackBase), userData(userData), runDepth(0), suspended(false) {
 	assert(constsSize >= 1 && constsSize - 1 + rwMemorySize <= memorySize - 1);
 	assert(dataStackOffset + dataStackSize <= rwMemorySize);
 	assert(code != 0);
@@ -1526,7 +1526,7 @@ Processor::Processor(UInt codeSize, const Instruction* code, UInt functionCount,
 		, dataStackBase(memory + constantsSize + globalsSize)
 		, dataStackEnd(memory + memorySize - 1), ipStackBase(ipStack), ipStackEnd(ipStack + ipStackSize)
 		, natives(natives), clockCyclesLeft(0x7FFFFFFFU), ip(codeBase), dsp(dataStackBase), ipsp(ipStackBase)
-		, userData(userData), runDepth(0), callEntered(false) {
+		, userData(userData), runDepth(0), suspended(false) {
 	assert(constsSize >= 1 && globalsSize + constsSize <= memorySize);			// `constsSize` includes the zero guard
 	assert(code != 0);
 	assert(memory != 0);
@@ -1557,7 +1557,9 @@ Int Processor::run() {
 	assert(ip != 0);
 	assert(dsp != 0);
 	assert(ipsp > ipStackBase && ipsp <= ipStackEnd); 	// If this blows it probably means you are trying to continue GAZL after it has returned to your native caller. You need to setup a new call with enterCall().
-	
+	assert(ipsp[-1].ip != 0 && "free a stack allocation before resuming the call that was suspended when it was made");
+	suspended = false;
+
 	while (--clockCyclesLeft >= 0) {
 		switch (ip->opcode) {
 			case FUNC_CC_:	if ((UInt)C0.i + (UInt)C1.i > (UInt)(dataStackEnd - dsp)) { err = DATA_STACK_OVERFLOW; goto ret; } dsp += (UInt)(C0.i); break;
@@ -1582,6 +1584,8 @@ Int Processor::run() {
 							this->dsp = dsp + (UInt)(C1.i);
 							this->ipsp = ipsp;
 							if ((nativeError = (*natives[C0.i])(this)) != 0) { err = nativeError; goto ret; }
+							assert((this->ipsp == ipsp || this->ipsp[-1].ip != 0)
+									&& "free a stack allocation made in a native before the native returns");
 							clockCyclesLeft = this->clockCyclesLeft;
 							if (this->ip != ip) {																		// the native called pushCall(): continue in the last-pushed callee
 								assert(this->ipsp > ipsp && this->ipsp[-1].dsp != 0);									// plain pushCall frames on top
@@ -1703,7 +1707,7 @@ ret:
 	this->dsp = dsp;
 	this->ipsp = ipsp;
 	--runDepth;
-	callEntered = false;
+	suspended = callSuspended();
 	assert(ipsp >= ipStackBase && ipsp <= ipStackEnd);
 	return err;
 }
@@ -1730,7 +1734,7 @@ Status Processor::enterCall(Pointer functionPointer) {
 	ipsp++->dsp = 0;																									// Mark return to native caller.
 	this->ip = codeBase + ui;
 	this->dsp = window;																									// above a suspended function's frame
-	callEntered = true;
+	suspended = false;
 	return OK;
 }
 
@@ -1756,6 +1760,10 @@ Value* Processor::frameCeiling() const {
 	return dsp + minimum(frameSize, (UInt)(dataStackEnd - dsp));														// a frame too large for the stack leaves no room
 }
 
+bool Processor::callSuspended() const {
+	return (runDepth == 0 && ipsp != ipStackBase && ipsp[-1].ip != 0);
+}
+
 /*
 	A frame stores its resume point minus one, because `RETU` restores it and the dispatch loop then increments `ip`.
 	The first push resumes the `^call`'s continuation; each later one resumes the previously pushed function.
@@ -1766,7 +1774,8 @@ Value* Processor::pushCall(Pointer functionPointer) {
 	if (ui >= functionCount) return 0;
 	const Instruction* func = codeBase + functionTable[ui];
 	assert(func->opcode == FUNC_CC_);
-	const bool atNativeCall = (ipsp != ipStackBase && this->ip->opcode == CALL_NVC);
+	assert((ipsp == ipStackBase || ipsp[-1].ip != 0) && "free the stack allocation before `pushCall()`");
+	const bool atNativeCall =(ipsp != ipStackBase && this->ip->opcode == CALL_NVC);
 	const bool chainedPush = (ipsp != ipStackBase && this->ip->opcode == FUNC_CC_);	// a previous pushCall in this native call
 	if (!atNativeCall && !chainedPush) return 0;				// only valid from inside a native callback
 	if (ipsp >= ipStackEnd) return 0;
@@ -1775,6 +1784,31 @@ Value* Processor::pushCall(Pointer functionPointer) {
 	ipsp++->dsp = atNativeCall ? this->dsp - this->ip->p1.i : this->dsp;
 	this->ip = func;											// this->dsp stays: the ^call's window is the argument window
 	return this->dsp;
+}
+
+/*
+	A stack allocation is a call-stack entry with a null `ip`, holding the `dsp` that `freeStack()` restores. `RETU`
+	never reaches it: an entered call returns at the entry `enterCall()` pushes above it.
+*/
+Pointer Processor::allocateStack(UInt size) {
+	Value* const words = accessParams(size);
+	if (words == 0 || ipsp >= ipStackEnd) {
+		return NULL_POINTER;
+	}
+	ipsp->ip = 0;
+	ipsp->dsp = dsp;
+	++ipsp;
+	dsp = words + size;
+	suspended = false;
+	return MEMORY_OFFSET + (Pointer)(words - (memoryBase + constantsSize));
+}
+
+void Processor::freeStack() {
+	assert(ipsp != ipStackBase && ipsp[-1].ip == 0
+			&& "free stack allocations newest first, after the calls entered above them have returned");
+	--ipsp;
+	dsp = ipsp->dsp;
+	suspended = callSuspended();
 }
 
 // Frozen memory: docs/gazl/Specification.md section 11.
