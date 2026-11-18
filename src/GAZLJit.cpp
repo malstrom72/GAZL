@@ -1005,6 +1005,7 @@ Value* JitProcessor::pushCall(Target target) {
 	if (ui >= functionCount) return 0;
 	if (nativeAfter == 0) return 0;										// only valid from inside a native callback
 	if (ipsp >= ipStackEnd) return 0;
+	assert(!stackAllocated() && "free the stack allocation before `pushCall()`");
 	const Instruction* func = codeBase + functionTable[ui];
 	if (static_cast<UInt>(func->p0.i) + static_cast<UInt>(func->p1.i) > static_cast<UInt>(dataStackEnd - this->dsp)) return 0;	// early FUNC check
 	ipsp->returnAddress = nativeAfter;									// current continuation: `after`, or an earlier-pushed entry
@@ -1017,10 +1018,12 @@ Status JitProcessor::run() {
 	typedef int (*Disp)(JitProcessor*);
 	// nativeAfter is live across a native call, and a native that nests run() would clobber it: save and restore it.
 	void* const outerNativeAfter = nativeAfter;
+	assert(!stackAllocated() && "free a stack allocation before resuming the call that was suspended when it was made");
 	++runDepth;
+	suspended = false;
 	const Status s = static_cast<Status>(reinterpret_cast<Disp>(jitDispatch)(this));
 	--runDepth;
-	callEntered = false;
+	suspended = callSuspended();
 	if (s == OK) {
 		resume = ipsp->returnAddress;																					// the frame the returning call just popped
 	}
