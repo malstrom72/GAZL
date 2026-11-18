@@ -429,7 +429,21 @@ class Processor {
 	public:		Status run();
 	public:		void* getUserData() const;
 	public:		int getClockCyclesLeft() const;
-	
+
+	/*
+		Stack allocations: words on the data stack that GAZL leaves alone while they live, e.g. a buffer to pass to a
+		function by pointer. Each one takes a call-stack entry. `allocateStack()` returns the GAZL pointer to the
+		words (read and write them with `accessMemory()`), or `NULL_POINTER` when the data stack or the call stack has
+		no room. The arguments at `accessParams()`, and the frame of a call entered after, go above the words.
+		`freeStack()` frees the newest allocation: call it after reading the entered call's results, and before the
+		`run()` that resumes a call that was suspended when the allocation was made (asserted). In a native, the first
+		allocated words are the native's own arguments: allocate that many words more, use the words after them, and
+		free the allocation before returning (asserted).
+	*/
+	public:		Pointer allocateStack(UInt size);
+	public:		void freeStack();
+
+	protected:	bool callSuspended() const;																				// A call is in progress and `run()` resumes it: not inside a native, and the newest call-stack entry is no stack allocation.
 	protected:	Value* frameCeiling() const;																			// The first word above the frame of the function `ip` is in. Requires (asserted) a call in progress.
 	protected:	const Instruction* codeBase;
 	protected:	UInt functionCount;
@@ -449,8 +463,8 @@ class Processor {
 	protected:	Value* dsp;
 	protected:	CallStackEntry* ipsp;
 	protected:	void* userData;
-	protected:	UInt runDepth;																							// How many `run()` calls are executing. Above 0 the host is inside a native, and `dsp` is its argument window.
-	protected:	bool callEntered;																						// A call is entered and `run()` has not been called since: `dsp` is that call's argument window.
+	protected:	UInt runDepth;																							// How many `run()` calls are executing. Above 0 the host is inside a native.
+	protected:	bool suspended;																							// `run()` returned with a call still in progress, and no call has been entered nor stack allocated since: `accessParams` gives the words above that call's frame.
 };
 
 inline void Processor::resetTimeOut(Int clockCycles) { clockCyclesLeft = clockCycles; }
@@ -471,7 +485,7 @@ inline Value* Processor::accessMemory(Pointer pointer, UInt count) const {
 inline Value* Processor::accessParams(UInt count) const {
 	assert(dsp != 0);
 	assert(dsp >= dataStackBase);
-	Value* const window = (runDepth != 0 || callEntered || ipsp == ipStackBase ? dsp : frameCeiling());
+	Value* const window = (suspended ? frameCeiling() : dsp);
 	return (count <= (UInt)(dataStackEnd - window) ? window : 0);
 }
 
