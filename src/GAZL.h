@@ -375,7 +375,6 @@ enum {
 
 // Processor is copyable.
 class Processor {
-	friend class StackAllocation;
 	public:		Processor(); 																							// Default-initialized processor. It's illegal to call any methods on a default constructed processor.
 	public:		Processor(UInt codeSize, const Instruction* code, UInt functionCount, const UInt* functionTable
 						, UInt memorySize, Value* memory, UInt globalsSize, UInt constsSize, UInt ipStackSize
@@ -393,7 +392,21 @@ class Processor {
 	public:		Status run();
 	public:		void* getUserData() const;
 	public:		int getClockCyclesLeft() const;
-	
+
+	/*
+		Stack allocations: words on the data stack that GAZL leaves alone while they live, e.g. a buffer to pass to a
+		function by pointer. Each one takes a call-stack entry. `allocateStack()` returns the GAZL pointer to the
+		words (read and write them with `accessMemory()`), or `NULL_POINTER` when the data stack or the call stack has
+		no room. The arguments at `accessParams()`, and the frame of a call entered after, go above the words.
+		`freeStack()` frees the newest allocation: call it after reading the entered call's results, and before the
+		`run()` that resumes a call that was suspended when the allocation was made (asserted). In a native, the first
+		allocated words are the native's own arguments: allocate that many words more, use the words after them, and
+		free the allocation before returning (asserted).
+	*/
+	public:		Pointer allocateStack(UInt size);
+	public:		void freeStack();
+
+	protected:	bool callSuspended() const;																				// A call is in progress and `run()` resumes it: not inside a native, and the newest call-stack entry is no stack allocation.
 	protected:	Value* frameCeiling() const;																			// The first word above the frame of the function `ip` is in. Requires (asserted) a call in progress.
 	protected:	UInt codeSize;
 	protected:	const Instruction* codeBase;
@@ -415,8 +428,7 @@ class Processor {
 	protected:	CallStackEntry* ipsp;
 	protected:	void* userData;
 	protected:	UInt runDepth;																							// How many `run()` calls are executing. Above 0 the host is inside a native.
-	protected:	bool suspended;																							// `run()` returned with a call still in progress, and no call has been entered since: `accessParams` gives the words above that call's frame.
-	protected:	Value* allocationTop;																					// The first word above the host's `StackAllocation`s, or `dataStackBase` while there are none.
+	protected:	bool suspended;																							// `run()` returned with a call still in progress, and no call has been entered nor stack allocated since: `accessParams` gives the words above that call's frame.
 };
 
 inline void Processor::resetTimeOut(Int clockCycles) { clockCyclesLeft = clockCycles; }
@@ -437,35 +449,11 @@ inline Value* Processor::accessMemory(Pointer pointer, UInt count) const {
 inline Value* Processor::accessParams(UInt count) const {
 	assert(dsp != 0);
 	assert(dsp >= dataStackBase);
-	Value* window = (suspended ? frameCeiling() : dsp);
-	if (window < allocationTop) {
-		window = allocationTop;
-	}
+	Value* const window = (suspended ? frameCeiling() : dsp);
 	return (count <= (UInt)(dataStackEnd - window) ? window : 0);
 }
 
 inline void* Processor::getUserData() const { return userData; }
-
-/*
-	Words on a processor's data stack, allocated to the host while this object lives, e.g. a buffer to pass to a
-	function by pointer. Check with `accessParams(size)` that the words fit, then create it, write the call's arguments
-	at `accessParams()` and call `enterCall()`: the call's frame goes above the allocated words. Destroy it after reading
-	the results, and before the `run()` that resumes a call that was suspended when it was created (asserted). Destroy
-	allocations in reverse order of creation. In a native, the first allocated words are the native's own arguments:
-	allocate that many words more, use the words after them, and destroy the allocation before returning (asserted).
-*/
-class StackAllocation {
-	public:		StackAllocation(Processor& processor, UInt size);														// Requires (asserted) that `size` words fit: `processor.accessParams(size)` is not null.
-	public:		~StackAllocation();
-	public:		Value* getWords() const { return words; }
-	public:		Pointer getPointer() const;																				// The GAZL pointer to the allocated words.
-	protected:	Processor& processor;
-	protected:	Value* const previousTop;
-	protected:	Value* const words;
-	protected:	const UInt size;
-	private:	StackAllocation(const StackAllocation&); // N/A
-	private:	StackAllocation& operator=(const StackAllocation&); // N/A
-};
 
 // Frozen memory, docs/gazl/Specification.md section 11. Freeze and thaw only between `run()` calls.
 enum MemoryLoad {

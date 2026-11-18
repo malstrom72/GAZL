@@ -40,7 +40,7 @@
 
 	P6 covers interrupts from the host instead: enterCall() on a processor suspended at each instruction of a function,
 	with arguments and a result passed through accessParams(), and with the interrupt handler itself interrupted. P7
-	repeats them with a StackAllocation under each interrupt, passed to GAZL by pointer, and allocates in a native.
+	repeats them with a stack allocation under each interrupt, passed to GAZL by pointer, and allocates in a native.
 */
 
 #include <cstdio>
@@ -432,12 +432,15 @@ static Status nbuf(Processor* p) {
 	if (p->accessParams(2 + 1 + 2) == 0) {
 		return DATA_STACK_OVERFLOW;
 	}
-	StackAllocation allocation(*p, 2 + 1);
-	Value* const arguments = allocation.getWords();
+	const Pointer pointer = p->allocateStack(2 + 1);
+	if (pointer == NULL_POINTER) {
+		return IP_STACK_OVERFLOW;
+	}
+	Value* const arguments = p->accessMemory(pointer, 2 + 1);
 	Value* const word = arguments + 2;
 	word->i = 3 * arguments[1].i;
 	Value* const params = p->accessParams(2);
-	params[1].p = allocation.getPointer() + 2;
+	params[1].p = pointer + 2;
 	Status s = p->enterCall(gBufTarget);
 	if (s != OK) {
 		return s;
@@ -453,6 +456,7 @@ static Status nbuf(Processor* p) {
 		return ABORTED;
 	}
 	arguments[0].i = params[0].i + arguments[1].i;
+	p->freeStack();
 	return OK;
 }
 static NativeFunc const gNatives[] = { nfwd, nblk, nchain, nmark, nwait, nbuf };
@@ -561,9 +565,9 @@ static Status scribbleCall(Processor& p, int depth, Int argument) {
 }
 
 /*
-	`scribbleCall`, over `gAllocationSize` words of `StackAllocation` when that is above 0: then the first allocated
-	word holds three times `argument`, and once `scribble` has returned, `peekWord` must read it through the allocation's
-	pointer. Counts an error if `scribble` or a nested interrupt changed a allocated word.
+	`scribbleCall`, over a stack allocation of `gAllocationSize` words when that is above 0: then the first allocated
+	word holds three times `argument`, and once `scribble` has returned, `peekWord` must read it through the
+	allocation's pointer. Counts an error if `scribble` or a nested interrupt changed an allocated word.
 */
 static Status interrupt(Processor& p, int depth, Int argument) {
 	const Int GUARD = 0x5AFE5AFE;
@@ -573,8 +577,11 @@ static Status interrupt(Processor& p, int depth, Int argument) {
 	if (p.accessParams(gAllocationSize + 2) == 0) {
 		return DATA_STACK_OVERFLOW;
 	}
-	StackAllocation allocation(p, gAllocationSize);
-	Value* const words = allocation.getWords();
+	const Pointer pointer = p.allocateStack(gAllocationSize);
+	if (pointer == NULL_POINTER) {
+		return IP_STACK_OVERFLOW;
+	}
+	Value* const words = p.accessMemory(pointer, gAllocationSize);
 	words[0].i = 3 * argument;
 	for (UInt i = 1; i < gAllocationSize; ++i) {
 		words[i].i = GUARD;
@@ -582,7 +589,7 @@ static Status interrupt(Processor& p, int depth, Int argument) {
 	Status s = scribbleCall(p, depth, argument);
 	if (s == OK) {
 		Value* const params = p.accessParams(2);
-		params[1].p = allocation.getPointer();
+		params[1].p = pointer;
 		s = p.enterCall(gPeekWord);
 		if (s == OK) {
 			p.resetTimeOut(0x7FFFFFFF);
@@ -599,6 +606,9 @@ static Status interrupt(Processor& p, int depth, Int argument) {
 	}
 	if (!unchanged) {
 		++gInterruptErrors;
+	}
+	if (s == OK) {
+		p.freeStack();
 	}
 	return s;
 }
@@ -687,27 +697,46 @@ static void checkInterrupts(const char* label, Symbols& globals, UInt dataStackS
 /*
 	An allocation on an idle processor: `peekWord` must read the allocated word through the allocation's pointer, its
 	result must be right above the allocated word, and `accessParams` must give the allocated word again once the
-	allocation is destroyed.
+	allocation is freed.
 */
 static void checkIdleAllocation(const char* label) {
 	Processor p(CODE_SIZE, gCode, gFunctionCount, gFunctionTable, DATA_SIZE, gMemory, gGlobalsSize, gConstsSize,
 			CALL_STACK_SIZE, gCallStack, gNatives, 0);
-	Value* words = 0;
-	bool good = false;
-	{
-		StackAllocation allocation(p, 1);
-		words = allocation.getWords();
+	const Pointer pointer = p.allocateStack(1);
+	Value* const words = p.accessMemory(pointer, 1);
+	bool good = (pointer != NULL_POINTER && words != 0);
+	if (good) {
 		words[0].i = 4711;
 		Value* const params = p.accessParams(2);
-		params[1].p = allocation.getPointer();
+		params[1].p = pointer;
 		Status s = p.enterCall(gPeekWord);
 		if (s == OK) {
 			p.resetTimeOut(0x7FFFFFFF);
 			s = p.run();
 		}
 		good = (s == OK && params == words + 1 && p.accessParams(2) == params && params[0].i == 4711);
+		if (s == OK) {
+			p.freeStack();
+		}
 	}
 	good = (good && p.accessParams(0) == words);
+	std::printf("  %-36s %s\n", label, good ? "OK" : "FAILED");
+	if (!good) {
+		++failures;
+	}
+}
+
+/*
+	Each stack allocation takes a call-stack entry: with room for one entry, the second allocation must fail.
+*/
+static void checkCallStackFull(const char* label) {
+	Processor p(CODE_SIZE, gCode, gFunctionCount, gFunctionTable, DATA_SIZE, gMemory, gGlobalsSize, gConstsSize, 1,
+			gCallStack, gNatives, 0);
+	const bool first = (p.allocateStack(1) != NULL_POINTER);
+	const bool good = (first && p.allocateStack(1) == NULL_POINTER);
+	if (first) {
+		p.freeStack();
+	}
 	std::printf("  %-36s %s\n", label, good ? "OK" : "FAILED");
 	if (!good) {
 		++failures;
@@ -791,6 +820,7 @@ int main(int, const char**) {
 			gScribble = globals.findFunction("scribble");
 			gPeekWord = globals.findFunction("peekWord");
 			checkIdleAllocation("allocated on an idle processor");
+			checkCallStackFull("no room on the call stack");
 			gBufTarget = gPeekWord;
 			check("allocated in a native", globals, "bufMain", 0x7FFFFFFF, 28);
 			check("allocated in a native, tiny fuel", globals, "bufMain", 1, 28, true);
