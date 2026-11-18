@@ -39,7 +39,8 @@
 	The kernels are compiled Impala (comment-stripped); each kernel's Impala source is quoted above it.
 
 	P6 covers interrupts from the host instead: enterCall() on a processor suspended at each instruction of a function,
-	with arguments and a result passed through accessParams(), and with the interrupt handler itself interrupted.
+	with arguments and a result passed through accessParams(), and with the interrupt handler itself interrupted. P7
+	repeats them with a StackReservation under each interrupt, passed to GAZL by pointer.
 */
 
 #include <cstdio>
@@ -296,7 +297,8 @@ static const char* P5_SOURCE = "\n"
 	P6 interrupts from the host. Hand-written, so that `work` holds live transients at every instruction: `%0` and
 	`%1` across the whole loop, and call arguments across a GAZL call, a blocking native and a forwarding native.
 	`work` needs 10 words of data stack and `scribble`, the interrupt handler, 13: it fills its whole frame and returns
-	twice its argument. The sum is (601 + 607 + 613) + (1 + 2 + 3) + (1 + 7 + 13) = 1848.
+	twice its argument. The sum is (601 + 607 + 613) + (1 + 2 + 3) + (1 + 7 + 13) = 1848. P7 adds `peekWord`, which
+	returns the word its pointer argument points at.
 */
 static const char* P6_SOURCE = "\n"
 		" 					GLOB *1\n"
@@ -346,6 +348,11 @@ static const char* P6_SOURCE = "\n"
 		" 								ADDi $sum $sum %2\n"
 		" 								FORi $i %0 @.l\n"
 		" 								POKE &gOut $sum\n"
+		" 								RETU\n"
+		" peekWord:			FUNC\n"
+		" 					$r:			OUTi\n"
+		" 					$p:			INPp\n"
+		" 								PEEK $r $p\n"
 		" 								RETU\n";
 
 // --- harness (assemble + run pattern shared with GAZLJitLowerTest) ---
@@ -472,14 +479,18 @@ static void check(const char* label, Symbols& globals, const char* fn, Int fuel,
 }
 
 static Pointer gScribble = 0;
+static Pointer gPeekWord = 0;
+static UInt gReserveSize = 0;
 static int gInterruptErrors = 0;
+
+static Status interrupt(Processor& p, int depth, Int argument);
 
 /*
 	Enters `scribble(argument)` on a suspended processor and runs it to its return, one instruction per run(). With
 	`depth` above 0 it is itself interrupted at every suspension, the first of them before its `FUNC` has run. Counts
 	an error unless `accessParams` gives the same window before the call, once entered and after the return.
 */
-static Status interrupt(Processor& p, int depth, Int argument) {
+static Status scribbleCall(Processor& p, int depth, Int argument) {
 	Value* const params = p.accessParams(2);
 	if (params == 0) {
 		return DATA_STACK_OVERFLOW;
@@ -503,6 +514,49 @@ static Status interrupt(Processor& p, int depth, Int argument) {
 		}
 	} while (s == TIME_OUT);
 	if (s == OK && !(sameWindowEntered && p.accessParams(2) == params && params[0].i == 2 * argument)) {
+		++gInterruptErrors;
+	}
+	return s;
+}
+
+/*
+	`scribbleCall`, over `gReserveSize` words of `StackReservation` when that is above 0: then the first reserved word
+	holds three times `argument`, and once `scribble` has returned, `peekWord` must read it through the reservation's
+	pointer. Counts an error if `scribble` or a nested interrupt changed a reserved word.
+*/
+static Status interrupt(Processor& p, int depth, Int argument) {
+	const Int GUARD = 0x5AFE5AFE;
+	if (gReserveSize == 0) {
+		return scribbleCall(p, depth, argument);
+	}
+	if (p.accessParams(gReserveSize + 2) == 0) {
+		return DATA_STACK_OVERFLOW;
+	}
+	StackReservation reservation(p, gReserveSize);
+	Value* const words = reservation.getWords();
+	words[0].i = 3 * argument;
+	for (UInt i = 1; i < gReserveSize; ++i) {
+		words[i].i = GUARD;
+	}
+	Status s = scribbleCall(p, depth, argument);
+	if (s == OK) {
+		Value* const params = p.accessParams(2);
+		params[1].p = reservation.getPointer();
+		s = p.enterCall(gPeekWord);
+		if (s == OK) {
+			p.resetTimeOut(0x7FFFFFFF);
+			s = p.run();
+		}
+		if (s == OK && !(p.accessParams(2) == params && params == words + gReserveSize
+				&& params[0].i == 3 * argument)) {
+			++gInterruptErrors;
+		}
+	}
+	bool unchanged = (words[0].i == 3 * argument);
+	for (UInt i = 1; i < gReserveSize; ++i) {
+		unchanged = (unchanged && words[i].i == GUARD);
+	}
+	if (!unchanged) {
 		++gInterruptErrors;
 	}
 	return s;
@@ -589,6 +643,36 @@ static void checkInterrupts(const char* label, Symbols& globals, UInt dataStackS
 	}
 }
 
+/*
+	A reservation on an idle processor: `peekWord` must read the reserved word through the reservation's pointer, its
+	result must be right above the reserved word, and `accessParams` must give the reserved word again once the
+	reservation is destroyed.
+*/
+static void checkIdleReservation(const char* label) {
+	Processor p(CODE_SIZE, gCode, gFunctionCount, gFunctionTable, DATA_SIZE, gMemory, gGlobalsSize, gConstsSize,
+			CALL_STACK_SIZE, gCallStack, gNatives, 0);
+	Value* words = 0;
+	bool good = false;
+	{
+		StackReservation reservation(p, 1);
+		words = reservation.getWords();
+		words[0].i = 4711;
+		Value* const params = p.accessParams(2);
+		params[1].p = reservation.getPointer();
+		Status s = p.enterCall(gPeekWord);
+		if (s == OK) {
+			p.resetTimeOut(0x7FFFFFFF);
+			s = p.run();
+		}
+		good = (s == OK && params == words + 1 && p.accessParams(2) == params && params[0].i == 4711);
+	}
+	good = (good && p.accessParams(0) == words);
+	std::printf("  %-36s %s\n", label, good ? "OK" : "FAILED");
+	if (!good) {
+		++failures;
+	}
+}
+
 int main(int, const char**) {
 	std::printf("GAZL enterCall and pushCall tests (interpreter)\n");
 
@@ -656,6 +740,21 @@ int main(int, const char**) {
 			checkInterrupts("handler fits exactly", globals, 10 + 13, 0, OK);
 			checkInterrupts("interrupted handler fits exactly", globals, 10 + 13 + 13, 1, OK);
 			checkInterrupts("no room for the handler", globals, 10, 0, DATA_STACK_OVERFLOW);
+		} else { ++failures; }
+	}
+	{
+		std::printf("P7: stack reservations\n");
+		Symbols globals;
+		if (assemble(P6_SOURCE, globals)) {
+			gFwdTarget = globals.findFunction("helper");
+			gScribble = globals.findFunction("scribble");
+			gPeekWord = globals.findFunction("peekWord");
+			checkIdleReservation("reserved on an idle processor");
+			gReserveSize = 2;
+			checkInterrupts("reserved, handler fits exactly", globals, 10 + 2 + 13, 0, OK);
+			checkInterrupts("reserved twice, handlers fit exactly", globals, 10 + 2 + 13 + 2 + 13, 1, OK);
+			checkInterrupts("room for the reservation only", globals, 10 + 2 + 2, 0, DATA_STACK_OVERFLOW);
+			gReserveSize = 0;
 		} else { ++failures; }
 	}
 

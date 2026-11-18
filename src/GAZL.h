@@ -375,6 +375,7 @@ enum {
 
 // Processor is copyable.
 class Processor {
+	friend class StackReservation;
 	public:		Processor(); 																							// Default-initialized processor. It's illegal to call any methods on a default constructed processor.
 	public:		Processor(UInt codeSize, const Instruction* code, UInt functionCount, const UInt* functionTable
 						, UInt memorySize, Value* memory, UInt globalsSize, UInt constsSize, UInt ipStackSize
@@ -415,6 +416,7 @@ class Processor {
 	protected:	void* userData;
 	protected:	UInt runDepth;																							// How many `run()` calls are executing. Above 0 the host is inside a native, and `dsp` is its argument window.
 	protected:	bool callEntered;																						// A call is entered and `run()` has not been called since: `dsp` is that call's argument window.
+	protected:	Value* reservationTop;																					// The first word above the host's `StackReservation`s, or `dataStackBase` while there are none.
 };
 
 inline void Processor::resetTimeOut(Int clockCycles) { clockCyclesLeft = clockCycles; }
@@ -435,11 +437,34 @@ inline Value* Processor::accessMemory(Pointer pointer, UInt count) const {
 inline Value* Processor::accessParams(UInt count) const {
 	assert(dsp != 0);
 	assert(dsp >= dataStackBase);
-	Value* const window = (runDepth != 0 || callEntered || ipsp == ipStackBase ? dsp : frameCeiling());
+	Value* window = (runDepth != 0 || callEntered || ipsp == ipStackBase ? dsp : frameCeiling());
+	if (window < reservationTop) {
+		window = reservationTop;
+	}
 	return (count <= (UInt)(dataStackEnd - window) ? window : 0);
 }
 
 inline void* Processor::getUserData() const { return userData; }
+
+/*
+	Words on a processor's data stack, reserved for the host while this object lives, e.g. a buffer to pass to a
+	function by pointer. Create it, then write the arguments at `accessParams()` and call `enterCall()`: the call's frame
+	goes above the reserved words. Destroy it after reading the results, and before the `run()` that resumes a call that
+	was suspended when it was created (asserted). Destroy reservations in reverse order of creation. In a native, the
+	reserved words start at the native's own arguments.
+*/
+class StackReservation {
+	public:		StackReservation(Processor& processor, UInt size);														// Requires (asserted) that `size` words fit: `processor.accessParams(size)` is not null.
+	public:		~StackReservation();
+	public:		Value* getWords() const { return words; }
+	public:		Pointer getPointer() const;																				// The GAZL pointer to the reserved words.
+	protected:	Processor& processor;
+	protected:	Value* const previousTop;
+	protected:	Value* const words;
+	protected:	const UInt size;
+	private:	StackReservation(const StackReservation&); // N/A
+	private:	StackReservation& operator=(const StackReservation&); // N/A
+};
 
 // Frozen memory, docs/gazl/Specification.md section 11. Freeze and thaw only between `run()` calls.
 enum MemoryLoad {

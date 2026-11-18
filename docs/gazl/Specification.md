@@ -313,7 +313,8 @@ something other than `TIME_OUT`. The host writes the call's arguments and reads 
 which gives the words that become the callee's parameters (section 8). `enterCall` may also be called while a
 program is suspended: it pushes a new call on top, which is how a host delivers an interrupt. An interrupt gets its
 own frame above the suspended function's, so the suspended program continues with its parameters, locals and
-transients unchanged.
+transients unchanged. A host can also reserve words on the data stack with a `StackReservation`, for example a
+buffer to pass to a function by pointer: a call entered while the reservation exists gets its frame above it.
 
 **Step budget.** `run` executes at most the budget set with `resetTimeOut`, one step per instruction (`FUNC`
 included; `NOOP` and assembly-time statements are free), then returns `TIME_OUT`. The next `run` continues exactly
